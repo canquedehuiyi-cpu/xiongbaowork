@@ -140,14 +140,14 @@ test("a navigation a boundary refused draws one line and no screen", async () =>
 
 test("a navigation that failed draws one line and no screen", async () => {
   const view = drawNavigation(
-    "https://openbot-check.invalid",
+    "https://xiongbao-check.invalid",
     failedComputerCall(502, {
-      error: "net::ERR_NAME_NOT_RESOLVED at https://openbot-check.invalid/",
+      error: "net::ERR_NAME_NOT_RESOLVED at https://xiongbao-check.invalid/",
     }),
   );
 
   expect(await view.findByText("打开了网页，没有成功")).toBeTruthy();
-  expect(view.getByText("openbot-check.invalid")).toBeTruthy();
+  expect(view.getByText("xiongbao-check.invalid")).toBeTruthy();
   expect(view.queryByRole("button", SCREEN)).toBeNull();
   expect(view.container.querySelector("figure")).toBeNull();
 });

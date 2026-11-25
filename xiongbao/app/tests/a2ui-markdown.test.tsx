@@ -23,8 +23,8 @@ import { settleReactWork } from "./settle-react-work";
  *
  * Since Bots answer with generated interfaces by default, a Bot asked to write code often puts it in
  * the catalog's `Code` or `Markdown` component. The SDK's `Code` is a plain `<pre>`, and its
- * `Markdown` renders through its own, older Streamdown, whose code colours OpenBot's stylesheet does
- * not carry for the dark theme. These go through OpenBot's real catalog, the provider options the app
+ * `Markdown` renders through its own, older Streamdown, whose code colours XiongBao's stylesheet does
+ * not carry for the dark theme. These go through XiongBao's real catalog, the provider options the app
  * passes, and a surface as the runtime commits it.
  */
 
@@ -143,7 +143,7 @@ async function drawn(root: HTMLElement, snippet: string) {
 }
 
 /**
- * The span Shiki drew `token` as, once it has, coloured for both themes by the classes OpenBot's
+ * The span Shiki drew `token` as, once it has, coloured for both themes by the classes XiongBao's
  * stylesheet carries. The SDK's own Streamdown colours a token too, but through classes the app's
  * Tailwind never scanned, so in the dark theme its tokens keep their light colours.
  */

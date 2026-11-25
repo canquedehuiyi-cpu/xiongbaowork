@@ -297,7 +297,7 @@ test("a badged row answers 缺什么 under the badge; full and hand-written rows
         skill("dead-skill", "阻断技能", "blocked", {
           blockedReason: "shell-command-prose",
           blockedReasonRef:
-            '正文给出可执行的 shell 命令；openbot 员工没有本地运行时。 ← "git init -q t"（共 2 处）',
+            '正文给出可执行的 shell 命令；xiongbao 员工没有本地运行时。 ← "git init -q t"（共 2 处）',
         }),
         skill("full-skill", "完整技能", "full"),
         skill("hand-written", "手写技能", null),
@@ -308,7 +308,7 @@ test("a badged row answers 缺什么 under the badge; full and hand-written rows
   await waitFor(() => expect(view.getByText("阻断技能")).toBeTruthy());
   const row = (title: string) =>
     within(view.getByText(title).closest("li") as HTMLElement);
-  expect(row("阻断技能").getByText(/openbot 员工没有本地运行时/)).toBeTruthy();
+  expect(row("阻断技能").getByText(/xiongbao 员工没有本地运行时/)).toBeTruthy();
   expect(
     (
       row("阻断技能")
@@ -716,7 +716,7 @@ test("搜索词收窄技能列表，一条都不匹配时给出清除筛选的�
  */
 test("a reason longer than the two lines on the card can be read in full there", async () => {
   const longRef =
-    '正文给出可执行的 shell 命令；openbot 员工没有本地运行时。 ← "git init -q t"（共 2 处）；正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。';
+    '正文给出可执行的 shell 命令；xiongbao 员工没有本地运行时。 ← "git init -q t"（共 2 处）；正文引用 scripts/ 下的可执行文件；xiongbao 无脚本通道。';
   const view = await renderMine(
     page(
       [
@@ -731,7 +731,7 @@ test("a reason longer than the two lines on the card can be read in full there",
   await waitFor(() => expect(view.getByText("阻断甲")).toBeTruthy());
   const row = within(view.getByText("阻断甲").closest("li") as HTMLElement);
   const reason = () =>
-    row.getByText(/openbot 员工没有本地运行时/).closest("p") as HTMLElement;
+    row.getByText(/xiongbao 员工没有本地运行时/).closest("p") as HTMLElement;
 
   expect(reason().className).toContain("line-clamp-2");
   const toggle = row.getByRole("button", { name: "展开原因" });

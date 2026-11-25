@@ -29,7 +29,7 @@ import {
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
-import { KEY_FROM_OPENBOT } from "@/components/agents/callback-token-panel";
+import { KEY_FROM_XIONGBAO } from "@/components/agents/callback-token-panel";
 import { BotResponsibilities } from "@/components/responsibilities/bot-responsibilities";
 import type { AgentProfile } from "@/lib/agents/queries";
 import type { PluginSkill, PluginsPage } from "@/lib/plugins/queries";
@@ -154,14 +154,14 @@ describe("员工设置的连接分区", () => {
 
   test("熊宝自己运行的员工说明不需要凭据，也不给生成凭据的按钮", async () => {
     const view = await connection({ ...remote, keyFromXiongBao: true });
-    expect(await view.findByText(KEY_FROM_OPENBOT)).toBeTruthy();
+    expect(await view.findByText(KEY_FROM_XIONGBAO)).toBeTruthy();
     expect(view.queryByRole("button", { name: /生成/ })).toBeNull();
   });
 
   test("别人自己托管的员工照旧提示生成凭据", async () => {
     const view = await connection(remote);
     expect(await view.findByText(/这位员工没有凭据，所以能对话/)).toBeTruthy();
-    expect(view.queryByText(KEY_FROM_OPENBOT)).toBeNull();
+    expect(view.queryByText(KEY_FROM_XIONGBAO)).toBeNull();
   });
 });
 

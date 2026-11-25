@@ -41,7 +41,7 @@ import { settleReactWork } from "./settle-react-work";
  * A Bot whose whole answer is something it drew raises the same "replied" notice a Bot that answers
  * in words does.
  *
- * Reported with the trip budget starter: OpenBot drew the budget, the person was in another app,
+ * Reported with the trip budget starter: XiongBao drew the budget, the person was in another app,
  * and no notice came, where the Bot's replies in words always raised one. The turn said nothing, so
  * the conversation told the roster nothing, and the notice is raised off what the roster is told.
  *
@@ -568,7 +568,7 @@ async function ask(away: boolean, turnRuns = 2) {
   return view;
 }
 
-test("a turn whose whole answer is an interface the Bot drew raises one notice while OpenBot is out of sight, over the interface's title", async () => {
+test("a turn whose whole answer is an interface the Bot drew raises one notice while XiongBao is out of sight, over the interface's title", async () => {
   call = { name: "generateSandboxedUi", args: BUDGET };
   await ask(true);
 
@@ -614,7 +614,7 @@ test("a turn whose whole answer is a card raises one notice, over the card's tit
   ]);
 });
 
-test("no notice for a drawn answer while the person is looking at OpenBot, though the conversation shows it as the last thing said", async () => {
+test("no notice for a drawn answer while the person is looking at XiongBao, though the conversation shows it as the last thing said", async () => {
   call = { name: "generateSandboxedUi", args: BUDGET };
   await ask(false);
 

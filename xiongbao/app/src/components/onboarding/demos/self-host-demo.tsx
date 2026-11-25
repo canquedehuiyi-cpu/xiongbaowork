@@ -14,7 +14,7 @@ export const FRAMEWORKS = WEB_HARNESSES.filter(
 
 const PRODUCT = appConfig.brand.productName;
 
-/** The three things somebody running OpenBot themselves is deciding, one picture each. */
+/** The three things somebody running XiongBao themselves is deciding, one picture each. */
 const PANELS: Array<{ id: string; caption: string; picture: () => ReactNode }> =
   [
     {

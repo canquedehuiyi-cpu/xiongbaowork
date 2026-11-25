@@ -39,7 +39,7 @@ function useTyped(text: string, active: boolean): string {
 }
 
 /**
- * Welcome's picture: OpenBot's orb listening while a request is typed, then working on it.
+ * Welcome's picture: XiongBao's orb listening while a request is typed, then working on it.
  *
  * A DRAWING OF THE COMPOSER, NOT THE COMPOSER. The real one reads its text once, when it mounts,
  * so it cannot be typed into from outside; and a live editor in a picture would be one more thing

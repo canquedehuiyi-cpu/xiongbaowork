@@ -50,7 +50,7 @@ const usage = (calls: number, totalTokens: number | null, complete = true) => ({
 
 function answer(routes: Record<string, { status: number; body: unknown }>) {
   globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = new URL(String(input), "http://openbot.local");
+    const url = new URL(String(input), "http://xiongbao.local");
     const path = `${url.pathname}${url.search}`;
     asked.push(path);
     const found = routes[url.pathname];

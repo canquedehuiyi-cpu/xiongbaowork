@@ -35,7 +35,7 @@ import { settleReactWork } from "./settle-react-work";
  * it; typing in its search box and opening its menus does not.
  *
  * 熊宝：侧栏已按上游的结构（对话列表、底部主导航、更多、账户菜单）；个人版和账户菜单里的
- * OpenBot for Business 有意不收，所以这里用团队版，测熊宝主导航和「更多」里的入口。
+ * 上游个人版的 Business 版入口有意不收，所以这里用团队版，测熊宝主导航和「更多」里的入口。
  */
 
 class OfflineWebSocket extends EventTarget {
@@ -150,7 +150,7 @@ function renderNarrowApp(start = "/channel/models") {
     bots: [],
     lastPingId: null,
   });
-  // OpenBot can run a browser here, so 教员工做事 is in the sidebar, after the main destinations.
+  // XiongBao can run a browser here, so 教员工做事 is in the sidebar, after the main destinations.
   queryClient.setQueryDefaults(browserKeys.state, { refetchInterval: false });
   queryClient.setQueryData(browserKeys.state, {
     available: true,

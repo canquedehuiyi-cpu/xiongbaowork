@@ -1841,5 +1841,101 @@
     "pattern": "(?<=\\}\\)\\.)openbot\\b",
     "until": "R2",
     "reason": "Task 10：agent-mastra 注册的 Mastra agent id（agents: { openbot }），测试按这个名字取 getLocalAgents(...) 的属性，与 agent-mastra 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/app/src/lib/recorder/bridge.ts",
+    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
+    "until": "R2",
+    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/app/tests/recorder-bridge.test.ts",
+    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
+    "until": "R2",
+    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/app/tests/recorder-page.fixture.ts",
+    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
+    "until": "R2",
+    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/app/tests/recorder-browsers.test.tsx",
+    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
+    "until": "R2",
+    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/app/tests/recorder-browsers.test.tsx",
+    "text": "\"openbot-browser\"",
+    "until": "R3",
+    "reason": "测试与 connected-browsers.tsx 已保护的连接来源 via \"openbot-browser\"（服务器存量连接记录的值）同值"
+  },
+  {
+    "file": "xiongbao/app/tests/a2ui.test.tsx",
+    "text": "\"openbot/ui@1\"",
+    "until": "R3",
+    "reason": "测试与 lib/copilot/a2ui.ts 已保护的生成式界面 id（落在对话历史里，Task 22 迁移）同值"
+  },
+  {
+    "file": "xiongbao/app/tests/acp-cards.test.tsx",
+    "pattern": "(?<=\")openbot(?=\")|/openbot\\|acp",
+    "until": "R3",
+    "reason": "服务器存的工具引用 openbot/share_private_information（审批记录里，服务器侧已保护到 R3），测试按它拼 toolRef 并断言不在界面上出现"
+  },
+  {
+    "file": "xiongbao/app/tests/tool-name.test.ts",
+    "pattern": "(?<=\")openbot(?=\")|/openbot\\|acp",
+    "until": "R3",
+    "reason": "服务器存的工具引用 openbot/share_private_information（审批记录里，服务器侧已保护到 R3），测试按它拼 toolRef 并断言不在界面上出现"
+  },
+  {
+    "file": "xiongbao/app/tests/learning-admin.test.tsx",
+    "pattern": "(?<=containerId: \")openbot(?=\")|「openbot」|创建 openbot 容器|id: \"openbot\", name: \"OpenBot\"|OpenBot \\(openbot\\)",
+    "until": "R3",
+    "reason": "学习容器 id openbot（服务器 shared/learning.ts、learning/ensure-container.ts 已保护到 R3，admin/learning.tsx 文案同），测试的服务器响应夹具与界面断言同值"
+  },
+  {
+    "file": "xiongbao/app/tests/audit-xiongbao-setup-rows.test.tsx",
+    "pattern": "(?<=defaultContainerId: \")openbot(?=\")",
+    "until": "R3",
+    "reason": "学习容器 id openbot（服务器 shared/learning.ts、learning/ensure-container.ts 已保护到 R3，admin/learning.tsx 文案同），测试的服务器响应夹具与界面断言同值"
+  },
+  {
+    "file": "xiongbao/app/tests/skin-compat.test.ts",
+    "pattern": "(?<=\")openbot(?=\")",
+    "until": "R4",
+    "reason": "默认皮肤旧 id openbot：账号偏好里的值由 Task 20 迁移，浏览器缓存里的值由 skins/store.ts 读取时映射并写回；测试证明旧值仍被正确处理，R4 随兼容代码删除"
+  },
+  {
+    "file": "xiongbao/app/tests/storage-migrate.test.ts",
+    "text": "openbot-theme",
+    "until": "R4",
+    "reason": "readMigrated 的测试用旧主题键 openbot-theme 证明旧键值会被搬到新键，R4 随兼容代码删除"
+  },
+  {
+    "file": "xiongbao/app/tests/storage-compat.test.ts",
+    "pattern": "openbot(?=[.:](?:bot-thread|reachability|voice-outbox|computer-activity-wiped))",
+    "until": "R4",
+    "reason": "测试证明改名前的旧存储键（openbot.bot-thread 等）已不再被读写，旧键就是被测对象"
+  },
+  {
+    "file": "xiongbao/app/tests/web-visible-names.test.ts",
+    "pattern": "(?<=before: \")openbot-[a-z-]+(?=\")|OpenBot couldn't reach",
+    "until": "R4",
+    "reason": "护栏测试断言源码里不再出现这些旧名，旧名就是被测对象"
+  },
+  {
+    "file": "xiongbao/app/tests/employee-detail-merged.test.tsx",
+    "text": "framework: \"OpenBot\"",
+    "until": "R3",
+    "reason": "服务器给内置员工的框架名 OpenBot（shared/harnesses.ts 已保护的 OPENBOT_HARNESS_NAME，bot-profile/setup.tsx 按它显示「<品牌>内置」），测试夹具与之同值"
+  },
+  {
+    "file": "xiongbao/app/tests/bot-summaries.test.ts",
+    "text": "framework: \"OpenBot\"",
+    "until": "R3",
+    "reason": "服务器给内置员工的框架名 OpenBot（shared/harnesses.ts 已保护的 OPENBOT_HARNESS_NAME，bot-profile/setup.tsx 按它显示「<品牌>内置」），测试夹具与之同值"
   }
 ]

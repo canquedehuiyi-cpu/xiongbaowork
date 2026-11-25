@@ -15,7 +15,7 @@ import { queryClient } from "@/query-client";
 test("what a file cached in the app's own query client is gone once its document goes", async () => {
   GlobalRegistrator.register();
   try {
-    queryClient.setQueryData(authKeys.currentUser(), { openbotVersion: null });
+    queryClient.setQueryData(authKeys.currentUser(), { xiongbaoVersion: null });
     expect(queryClient.getQueryCache().findAll()).toHaveLength(1);
 
     // Not awaited, as most files call it.

@@ -259,7 +259,7 @@ test("Create fills in what was left blank, then hands over", async () => {
     visibility: "private",
     endpoint: "",
   });
-  // It runs on OpenBot, which the server knows without being told.
+  // It runs on XiongBao, which the server knows without being told.
   expect(creates[0]).not.toHaveProperty("harness");
   // For a Bot that runs here this is its system prompt, so it has to be something it can act on.
   expect(String(creates[0]?.roleDescription)).toStartWith(
@@ -494,7 +494,7 @@ test("without hosting here, Back from the address returns to the list", async ()
   expect(view.queryByLabelText("名称")).toBeNull();
 });
 
-test("personal Bot creation hides team visibility and isolation controls, with no OpenBot for Business link", async () => {
+test("personal Bot creation hides team visibility and isolation controls, with no link to the upstream Business edition", async () => {
   const view = draw(
     <NewBotSheet open onClose={() => {}} onCreated={() => {}} />,
     "personal",
@@ -502,7 +502,7 @@ test("personal Bot creation hides team visibility and isolation controls, with n
   await view.findByLabelText("名称");
   expect(view.queryByText("谁能看到它")).toBeNull();
   expect(view.queryByRole("checkbox", { name: "独立运行" })).toBeNull();
-  // 熊宝不放 OpenBot for Business 的营销入口（上游这里有一个去 open.bot/business 的链接）。
+  // 熊宝不放上游 Business 版的营销入口（上游这里有一个去上游官网 Business 页的链接）。
   expect(view.queryByRole("link")).toBeNull();
   const user = userEvent.setup({ document: view.baseElement.ownerDocument });
   const name = view.getByLabelText("名称");

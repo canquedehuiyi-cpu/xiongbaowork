@@ -59,7 +59,7 @@ export function brokeredProvenance(provenance: string): boolean {
 }
 
 /*
- * NO VENDOR NAME IN ANY OF IT. A person connects their work apps through OpenBot, and the broker
+ * NO VENDOR NAME IN ANY OF IT. A person connects their work apps through XiongBao, and the broker
  * behind it (Composio or Arcade) is never named on a screen, the admin's included. The one vendor
  * word left is the environment variable an admin sets, because that name is the whole remedy.
  */
@@ -216,7 +216,7 @@ export function brokeredConnectionDescription(
  *
  * `personal` as above. What it says is what happens at sign-in: a consent app sends you to the
  * app's own sign-in page in your browser (`useBrokeredAccount` leaves for the broker's
- * authorization URL), so OpenBot never holds the password; a key app takes a key you paste, so
+ * authorization URL), so XiongBao never holds the password; a key app takes a key you paste, so
  * that sentence promises nothing about passwords; and an app with no account has nothing to sign
  * in to.
  *

@@ -16,7 +16,7 @@ import {
   voiceCallOwner,
 } from "./outbox";
 
-export const VOICE_CHAT_ACTIVITY = "openbot-voice-chat";
+export const VOICE_CHAT_ACTIVITY = "xiongbao-voice-chat";
 export type VoiceChatEntry = VoiceSessionRecord & {
   saveState?: "saving" | "unsaved";
   saveError?: string;

@@ -42,7 +42,7 @@ function call(
   };
 }
 
-// What Parallel's web_search sent back on OpenBot Desktop, cut to two results.
+// What Parallel's web_search sent back on XiongBao Desktop, cut to two results.
 const PARALLEL_SEARCH = JSON.stringify({
   search_id: "search_4f1c2a9e0b7d4e3f8a6b5c4d3e2f1a0b",
   results: [
@@ -230,7 +230,7 @@ test("every research provider's answer is read into the same list", () => {
 });
 
 test("a search the server cut at its result cap still opens to the pages it found", () => {
-  // Live on OpenBot Desktop: the answer stops mid-excerpt, then "[truncated: …]", so it is not JSON.
+  // Live on XiongBao Desktop: the answer stops mid-excerpt, then "[truncated: …]", so it is not JSON.
   const sources = readResearchSources(TRUNCATED_PARALLEL_SEARCH);
   // Every result that arrived whole, in order; the one the cut went through is left out.
   expect(sources?.map((source) => source.url)).toEqual([

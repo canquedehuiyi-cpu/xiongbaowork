@@ -97,11 +97,11 @@ export function withBot(search: string, bot: string | undefined): string {
 }
 
 /**
- * A view's query as the personal edition's Activity asks it: without OpenBot's own working, asked of
+ * A view's query as the personal edition's Activity asks it: without XiongBao's own working, asked of
  * the server so the page still holds a full page of rows. The export asks the same, so the file is
  * the table.
  */
-export function withoutOpenBotWorking(search: string): string {
+export function withoutXiongBaoWorking(search: string): string {
   const params = new URLSearchParams(
     search.startsWith("?") ? search.slice(1) : search,
   );
@@ -131,7 +131,7 @@ function withSkillTitles(
   });
 }
 
-/** Admin's "Why?" on a row one of OpenBot's controls decided: see `what-if/why-button.tsx`. */
+/** Admin's "Why?" on a row one of XiongBao's controls decided: see `what-if/why-button.tsx`. */
 const whyFor = (event: AuditEvent) =>
   explainable(event) ? <WhyButton event={event} /> : null;
 
@@ -199,11 +199,11 @@ export function AuditPage({
     ...auditVocabularyQueryOptions(),
     enabled: ask && vocabularyWanted,
   }).data;
-  // The stored event names and OpenBot's own working are Admin's to read; the personal edition's
+  // The stored event names and XiongBao's own working are Admin's to read; the personal edition's
   // Activity is anybody's page. Its route has the edition loaded before this draws.
   const edition = useQuery(deploymentCapabilitiesQueryOptions()).data?.edition;
   const asked = ask ? withFilters(view, chips) : withBot(view, bot);
-  const search = edition === "personal" ? withoutOpenBotWorking(asked) : asked;
+  const search = edition === "personal" ? withoutXiongBaoWorking(asked) : asked;
   const [query, setQuery] = useState("");
   // A page at a time, newest first; 「更早的记录」 under the last row asks for the next.
   /*

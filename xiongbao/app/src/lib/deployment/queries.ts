@@ -30,7 +30,7 @@ export type DeploymentCapabilities = {
    */
   selfHostBanner: boolean;
   /**
-   * Whether this is somebody trying OpenBot on their own machine rather than an organization's
+   * Whether this is somebody trying XiongBao on their own machine rather than an organization's
    * deployment: single-user mode on the server, which only a local, unreachable install can be in.
    */
   localEvaluation: boolean;

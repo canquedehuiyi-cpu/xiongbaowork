@@ -50,7 +50,7 @@ function ResultMarkdownRenderer(
   );
 }
 
-/** The packaged direct Bot chat shares the same condition as OpenBot's channel transcript. */
+/** The packaged direct Bot chat shares the same condition as XiongBao's channel transcript. */
 function ResultAssistantMessage(props: CopilotChatAssistantMessageProps) {
   const configuration = useCopilotChatConfiguration();
   const threadId = configuration?.threadId;

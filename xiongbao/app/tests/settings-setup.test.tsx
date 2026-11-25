@@ -45,7 +45,7 @@ const CHECKLIST = {
       required: true,
       status: "needs_setup",
       ready: false,
-      detail: "Without a model key, OpenBot can't answer.",
+      detail: "Without a model key, XiongBao can't answer.",
       fix: {
         kind: "env",
         names: ["OPENAI_API_KEY"],

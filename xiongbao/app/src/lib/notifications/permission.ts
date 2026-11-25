@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Whether this browser may show OpenBot's notifications: the browser's own answer, never a guess.
+ * Whether this browser may show XiongBao's notifications: the browser's own answer, never a guess.
  *
  * WHAT A NOTIFICATION IS HERE. The web app raises one when a Bot starts needing the person
  * (`AttentionNotifier` in `bot-profile/attention.tsx`), from the page itself. So it shows while
- * OpenBot is open in a tab, and not once the tab is closed: there is no web push. Onboarding's Get
+ * XiongBao is open in a tab, and not once the tab is closed: there is no web push. Onboarding's Get
  * notified step says so rather than promise more.
  *
  * ONE ANSWER FOR THE WHOLE PAGE. Onboarding's step and a Bot's page both offer to turn them on,

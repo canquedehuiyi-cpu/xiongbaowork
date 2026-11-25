@@ -28,14 +28,14 @@ const asked = process.env.OPENBOT_APP_BROWSER === "1";
 const shots = process.env.OPENBOT_APP_SHOTS;
 
 const APP = join(import.meta.dir, "..");
-const ORIGIN = "http://openbot.test";
+const ORIGIN = "http://xiongbao.test";
 
 async function bundle(): Promise<string> {
   const built = await Bun.build({
     entrypoints: [join(import.meta.dir, "a2ui-frame.fixture.tsx")],
     target: "browser",
     define: { "process.env.NODE_ENV": JSON.stringify("production") },
-    // The catalog's Map loads it on demand; OpenBot omits Map and does not ship it.
+    // The catalog's Map loads it on demand; XiongBao omits Map and does not ship it.
     external: ["maplibre-gl"],
     plugins: [
       {

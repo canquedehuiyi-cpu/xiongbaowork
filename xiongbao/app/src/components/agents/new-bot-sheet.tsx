@@ -143,8 +143,8 @@ function frameworkName(runtime: Runtime): string {
 const PRODUCT = englishName();
 
 /**
- * The subtitle under a new Bot's name: what runs it. OpenBot itself for a Bot that runs here, the
- * framework for one picked from the list. Nothing for an agent somebody already runs, since OpenBot
+ * The subtitle under a new Bot's name: what runs it. XiongBao itself for a Bot that runs here, the
+ * framework for one picked from the list. Nothing for an agent somebody already runs, since XiongBao
  * cannot know what is behind its address.
  */
 function poweredBy(runtime: Runtime): string {

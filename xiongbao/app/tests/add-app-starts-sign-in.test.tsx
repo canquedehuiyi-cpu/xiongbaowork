@@ -29,7 +29,7 @@ import { settleReactWork } from "./settle-react-work";
 /**
  * ADDING AN APP THAT SIGNS IN IS NOT THE SAME AS BEING SIGNED IN TO IT.
  *
- * Reported from OpenBot Desktop 1.0.0, the personal edition: Connections > Browse apps > Slack >
+ * Reported from XiongBao Desktop 1.0.0, the personal edition: Connections > Browse apps > Slack >
  * Add turned the row to "Added" and never signed the person in, so the Bot then said Slack wasn't
  * connected and sent them to sign in. The same happened with GitHub. The one person is also the
  * admin there, so Add now adds the app and starts their own sign-in in a new tab on the same press,

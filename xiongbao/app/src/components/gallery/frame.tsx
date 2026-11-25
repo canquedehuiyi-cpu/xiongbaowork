@@ -75,7 +75,7 @@ export function isWebAddress(url: unknown): url is string {
  *
  * Optional: with no address, or with anything but http(s), this is exactly what was drawn before,
  * `wrap` deciding whether that was a `div` with `className` or the children alone. With one, it is
- * an ordinary link opened the way a source under a chart is: a new tab, no referrer, which OpenBot
+ * an ordinary link opened the way a source under a chart is: a new tab, no referrer, which XiongBao
  * Desktop hands to the person's own browser. Named by `name`, the figure's label and value, since a
  * bar or a row read alone says neither.
  */

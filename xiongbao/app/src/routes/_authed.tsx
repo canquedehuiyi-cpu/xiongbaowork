@@ -53,7 +53,7 @@ export const Route = createFileRoute("/_authed")({
       {/* 第一次登录时把浏览器的时区记成作息时区（服务器存过的不改），交付闭环的推送和清点按它走。 */}
       <BrowserTimeZoneSync />
       {/*
-       * 上游这里还挂了 TeamFeaturesDialog（个人版「OpenBot for Business」入口打开的销售弹窗），
+       * 上游这里还挂了 TeamFeaturesDialog（个人版里上游 Business 版入口打开的销售弹窗），
        * 属于有意不收的销售入口，不挂。
        */}
       <SkinBotLook>

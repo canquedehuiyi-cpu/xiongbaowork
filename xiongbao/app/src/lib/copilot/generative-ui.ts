@@ -4,7 +4,7 @@ import { englishName } from "@/lib/brand";
  * What a Bot is told about drawing an interface it wrote itself.
  *
  * The SDK ships a default set of guidelines, and they describe shadcn/ui: rounded cards, a violet
- * accent, its own spacing scale. OpenBot does not look like that. The app's palette is deliberately
+ * accent, its own spacing scale. XiongBao does not look like that. The app's palette is deliberately
  * without colour — every token in styles.css sits at chroma zero except the destructive red and the
  * success teal — so the default guidance produces something that reads as a foreign widget dropped
  * into the transcript rather than part of it.
@@ -20,7 +20,7 @@ import { englishName } from "@/lib/brand";
  * WHY prefers-color-scheme AND NOT THIS APP'S THEME. For the same reason: the iframe is a separate
  * document and cannot see which theme the person picked. `prefers-color-scheme` is the only signal
  * that crosses, so a generated interface follows the browser rather than the app's own switch. A
- * person who has overridden their OS theme in OpenBot will see a generated interface that disagrees
+ * person who has overridden their OS theme in XiongBao will see a generated interface that disagrees
  * with the surface around it. That is a known limitation of the sandbox rather than something this
  * text can fix.
  */

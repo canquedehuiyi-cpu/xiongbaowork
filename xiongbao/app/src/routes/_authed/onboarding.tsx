@@ -90,13 +90,13 @@ export const Route = createFileRoute("/_authed/onboarding")({
 /*
  * THREE CLICKS AT MOST INTO THE APP, plus this deployment's own step. Welcome, then where the
  * person's 分身 finds their material (story F1, skippable), then the name. Upstream's Book a demo
- * step (a CopilotKit sales calendar for somebody trying OpenBot alone) is left out. Everything else
+ * step (an upstream sales calendar for somebody trying the app alone) is left out. Everything else
  * waits for the app: apps are connected when a Bot needs one, and notifications are offered once
  * the first task has started (`NotifyPrompt`), when what they are for is plain.
  */
 
 /**
- * The welcome step: one animation of what OpenBot does, and beside it the one choice worth making
+ * The welcome step: one animation of what XiongBao does, and beside it the one choice worth making
  * before the first task, whether a Bot asks before it changes anything.
  *
  * What always asks is said above the switch, so nobody reads turning it off as turning those off

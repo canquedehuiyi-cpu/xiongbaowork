@@ -268,7 +268,7 @@ test("a Bot's check-in items are counted in the words the badge and Needs you us
   expect(view.container.textContent).not.toContain("建议");
 });
 
-test("personal edition labels starter Bots as included with OpenBot", async () => {
+test("personal edition labels starter Bots as included with XiongBao", async () => {
   queryClient.setQueryData(deploymentKeys.capabilities(), {
     edition: "personal",
   });

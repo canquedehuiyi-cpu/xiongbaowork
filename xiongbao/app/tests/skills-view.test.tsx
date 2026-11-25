@@ -118,12 +118,12 @@ test("非完整可用的技能，档位和「缺什么」一起画，规则 id �
       runnable: "blocked",
       blockedReason: "shell-command-prose",
       blockedReasonRef:
-        "正文给出可执行的 shell 命令；openbot 员工没有本地运行时。",
+        "正文给出可执行的 shell 命令；xiongbao 员工没有本地运行时。",
     },
   ]);
   expect(await view.findByText("跑脚本")).toBeTruthy();
   expect(view.getByRole("status").textContent ?? "").toContain("暂不可用");
-  const reason = view.getByText(/openbot 员工没有本地运行时/) as HTMLElement;
+  const reason = view.getByText(/xiongbao 员工没有本地运行时/) as HTMLElement;
   expect(reason.title).toBe("shell-command-prose");
 });
 

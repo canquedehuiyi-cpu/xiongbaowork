@@ -198,7 +198,7 @@ test("every summary is a person's sentence", () => {
   for (const spec of ALL) {
     const { summary } = spec;
     expect(summary.length).toBeGreaterThan(0);
-    // No tool names, internals or the marks of text explaining itself (see openbot-copy).
+    // No tool names, internals or the marks of text explaining itself (see xiongbao-copy).
     expect(summary).not.toMatch(/\b(show|ask)[A-Z]\w+/);
     expect(summary).not.toMatch(/deployment|rather than|—/);
     expect(summary.split(/\s+/).length).toBeLessThanOrEqual(25);

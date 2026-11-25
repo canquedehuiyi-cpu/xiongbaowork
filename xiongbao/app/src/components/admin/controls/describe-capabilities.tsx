@@ -219,7 +219,7 @@ function mediaOf(event: AuditEvent): ReplayRow["media"] {
 }
 
 /**
- * Who the changes would change, worked out on the server by the rule OpenBot enforces: the headline,
+ * Who the changes would change, worked out on the server by the rule XiongBao enforces: the headline,
  * then each person with their permissions now and after, then the recent use of what they would lose,
  * in Audit's own cells, as a boundary's preview lists what it would stop.
  */

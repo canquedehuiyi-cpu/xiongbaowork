@@ -323,7 +323,7 @@ function IsolatedRow({
   const available = capabilities?.isolationAvailable ?? false;
   const allowed = mine?.capabilities?.isolatedComputers !== false;
   const isPublic = agent.visibility === "public";
-  // A Bot that comes with OpenBot belongs to nobody, and the switch is a person's.
+  // A Bot that comes with XiongBao belongs to nobody, and the switch is a person's.
   const editable =
     agent.canManage &&
     !agent.systemOwned &&
@@ -657,7 +657,7 @@ function ExternalConnectionSection({ agent }: { agent: AgentProfile }) {
 }
 
 /**
- * What runs it, by the name the server gives (`AgentProfile.framework`). OpenBot itself is said as
+ * What runs it, by the name the server gives (`AgentProfile.framework`). XiongBao itself is said as
  * this product; an employee connected by address with no framework named says so rather than guessing.
  */
 export function frameworkName(

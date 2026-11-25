@@ -1,5 +1,5 @@
 /**
- * A Parallel web search exactly as the transcript carried it on OpenBot Desktop (Personal Assistant,
+ * A Parallel web search exactly as the transcript carried it on XiongBao Desktop (Personal Assistant,
  * "What are three fixes in Bun 1.4.3?"): the server's untrusted-data envelope, JSON-encoded once,
  * around an answer the server cut at its result cap (`server/src/plugins/mcp.ts`), so the JSON stops
  * mid-excerpt and ends in "[truncated: the tool returned 23763 characters]".

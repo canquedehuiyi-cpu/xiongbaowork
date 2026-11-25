@@ -14,20 +14,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/voice/transcript.ts",
-    "text": "\"openbot-voice-context\"",
-    "reason": "persisted-identifier: context item id the agent side matches",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/voice/archive.ts",
-    "text": "\"openbot-voice-chat\"",
-    "reason": "persisted-identifier: activity type id stored with archived voice chats",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "app/src/lib/recorder/bridge.ts",
     "text": "type: \"openbot.",
     "reason": "persisted-identifier: message type in the Recorder extension protocol",
@@ -39,13 +25,6 @@
     "text": "\"openbot-unreachable\"",
     "reason": "persisted-identifier: error code the Recorder extension sends",
     "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/openbot-for-business.ts",
-    "text": "calendly.com/d/dwfr-k64-8d2/openbot-for-business",
-    "reason": "external-name: upstream booking link in a module nothing imports; delete with the module",
-    "category": "third-party-name",
     "plan": "keep"
   },
   {
@@ -67,13 +46,6 @@
     "text": "名为 openbot 的容器",
     "reason": "persisted-identifier: the Learning container id that is actually created",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/routes/_authed/settings/about.tsx",
-    "text": "OpenBot（MIT）",
-    "reason": "external-name: MIT attribution on the open-source notices page, required by the licence",
-    "category": "third-party-name",
     "plan": "keep"
   },
   {

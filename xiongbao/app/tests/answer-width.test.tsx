@@ -119,7 +119,7 @@ test("every skin keeps its answers and its composer in its own column", () => {
     );
   // `max-w-2xl`, read from the theme token.
   expect(rule?.[1]?.trim()).toBe("max-width: var(--container-2xl);");
-  // OpenBot's `px-4` on the composer's column is taken off again, at a specificity a skin's own
+  // XiongBao's `px-4` on the composer's column is taken off again, at a specificity a skin's own
   // padding outranks, so a skin's composer is as wide as it was drawn.
   const padding =
     /:where\(:root\[data-skin\]:where\(:not\(\[data-skin="classic"\]\)\)\)\s+\[data-slot="composer-column"\]\s*\{([^}]*)\}/.exec(

@@ -19,10 +19,10 @@ export function ReadingStatus({
   edited,
 }: {
   check: { ok: true } | { ok: false; error: string };
-  /** What a passing check means: "Compiles. OpenBot can check it on every action." */
+  /** What a passing check means: "Compiles. XiongBao can check it on every action." */
   passed: string;
   /**
-   * What a failing check means, before its error: "Doesn't compile, so OpenBot won't save it." Empty
+   * What a failing check means, before its error: "Doesn't compile, so XiongBao won't save it." Empty
    * where the error says it all.
    */
   failed: string;

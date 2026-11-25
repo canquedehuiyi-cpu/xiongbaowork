@@ -13,7 +13,6 @@ import {
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { ChannelChat } from "@/components/channels/channel-chat";
-import { Route as ChannelRoute } from "@/routes/_authed/_app/channel/$channelId";
 import {
   type AgentChannel,
   type ChannelPage,
@@ -22,6 +21,7 @@ import {
 } from "@/lib/channels/queries";
 import { applyChannelEvent } from "@/lib/channels/use-channel-events";
 import { queryClient } from "@/query-client";
+import { Route as ChannelRoute } from "@/routes/_authed/_app/channel/$channelId";
 import {
   ASKED_SO_FAR,
   ASKED_TEXT,
@@ -45,7 +45,7 @@ import {
  * reply must come out of that once, and whole.
  *
  * The real provider, ChannelChat, its history reader and the AG-UI reducer, joining through the
- * Intelligence gateway's realtime protocol as OpenBot does in every edition: a REST `/connect` for
+ * Intelligence gateway's realtime protocol as XiongBao does in every edition: a REST `/connect` for
  * credentials, then a Phoenix channel that sends the thread's events, `replay_complete`, and
  * `stream_idle` once no turn is running. Only that gateway and the HTTP boundary are stand-ins, and
  * what the gateway sends is a real captured turn (see the fixture).

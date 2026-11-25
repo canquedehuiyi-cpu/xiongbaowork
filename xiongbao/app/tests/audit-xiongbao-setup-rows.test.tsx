@@ -28,10 +28,10 @@ import { settleReactWork } from "./settle-react-work";
 /*
  * What a fresh personal install showed on Settings > Activity after one message. Seen locally:
  * "Choose a Bot for a message / Sent to the default Bot / fallback: one-candidate" on every message,
- * fifteen "Publish a component / showTable" rows and two "Start the computer" rows that OpenBot
+ * fifteen "Publish a component / showTable" rows and two "Start the computer" rows that XiongBao
  * wrote setting itself up, and ids where words belong: "showActivityReport · botActivity" over a
  * reason sending the person to an admin, "find-a-notion-page" under a skill, a key's id under
- * "Save a credential", and "Change a setting" for OpenBot setting up Learning. Admin keeps all of it
+ * "Save a credential", and "Change a setting" for XiongBao setting up Learning. Admin keeps all of it
  * as it was.
  */
 
@@ -83,7 +83,7 @@ function row(
   };
 }
 
-/** OpenBot's own working, as the server records it: what Activity no longer asks for. */
+/** XiongBao's own working, as the server records it: what Activity no longer asks for. */
 const ROUTED = row("routed", 30, {
   eventType: "channel.routed",
   targetType: "agent",

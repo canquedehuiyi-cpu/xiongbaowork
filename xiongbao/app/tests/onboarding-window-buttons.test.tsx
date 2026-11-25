@@ -7,7 +7,7 @@ import { compile } from "tailwindcss";
 import { OnboardingFrame } from "../src/components/onboarding/onboarding-frame";
 
 /**
- * Onboarding's Back stays clear of the window's buttons in OpenBot Desktop on macOS.
+ * Onboarding's Back stays clear of the window's buttons in XiongBao Desktop on macOS.
  *
  * The Mac window's close, minimise and zoom buttons sit over the page's top-left corner, 20pt in
  * and level with the sidebar header's first row (`TRAFFIC_LIGHTS` in the desktop's main.rs). The
@@ -24,7 +24,7 @@ import { OnboardingFrame } from "../src/components/onboarding/onboarding-frame";
  */
 const asked = process.env.OPENBOT_APP_BROWSER === "1";
 
-/** Where macOS draws the window's buttons over the page, as measured in OpenBot Desktop on macOS 26. */
+/** Where macOS draws the window's buttons over the page, as measured in XiongBao Desktop on macOS 26. */
 const WINDOW_BUTTONS = { left: 19, top: 25, right: 81, bottom: 41 };
 
 const frame = renderToStaticMarkup(

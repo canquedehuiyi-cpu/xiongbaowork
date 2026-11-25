@@ -129,7 +129,7 @@ test("pings get their own row, Something needs you", async () => {
   });
 });
 
-/** Who is looking: an admin, or someone running OpenBot themselves, can set channels up; anyone else can't. */
+/** Who is looking: an admin, or someone running XiongBao themselves, can set channels up; anyone else can't. */
 function draw(who: { role: string; localEvaluation: boolean } = ADMIN) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -166,7 +166,7 @@ test("only channels that are set up get a switch, and a save keeps the others as
   });
 });
 
-test("with no channel set up, it says updates stay in OpenBot, and whoever can set them up gets the way to", async () => {
+test("with no channel set up, it says updates stay in XiongBao, and whoever can set them up gets the way to", async () => {
   available = { slack: false, teams: false, sms: false, push: false };
   serving();
   const view = draw(ADMIN);
@@ -207,7 +207,7 @@ test("the section asks where updates go only above switches to choose with", asy
   expect(choosing.getByText(ASK)).toBeTruthy();
 });
 
-test("someone running OpenBot on their own computer gets the way to set channels up too", async () => {
+test("someone running XiongBao on their own computer gets the way to set channels up too", async () => {
   available = { slack: false, teams: false, sms: false, push: false };
   serving();
   const view = draw({ role: "member", localEvaluation: true });

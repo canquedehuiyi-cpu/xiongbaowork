@@ -6,8 +6,7 @@ const read = (file: string) =>
   readFileSync(join(import.meta.dir, "..", file), "utf8");
 
 // What a person's browser or a page's own markup carries must not say the upstream name. The
-// notification tag in lib/notifications/show.ts is held back: component-reply-notice.test.tsx still
-// asserts `openbot-${channel.id}` (appendix A of the gradual-rewrite plan).
+// notification tag in lib/notifications/show.ts is checked by component-reply-notice.test.tsx.
 const NAMES = [
   {
     file: "src/components/browser/learning-next.tsx",
@@ -20,7 +19,7 @@ const NAMES = [
     before: "openbot-secret",
   },
   {
-    file: "src/components/layout/openbot-version.tsx",
+    file: "src/components/layout/xiongbao-version.tsx",
     now: 'data-slot="xiongbao-version"',
     before: "openbot-version",
   },

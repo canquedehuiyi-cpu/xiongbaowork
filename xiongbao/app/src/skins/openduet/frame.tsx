@@ -20,17 +20,17 @@ const COLUMN_WIDTH = {
 } as const;
 
 /**
- * OpenDuet's frame around every OpenBot page.
+ * OpenDuet's frame around every XiongBao page.
  *
  * Chat and Tasks are one column the width of a phone, centred on a wide screen, with the header
  * floating at the top (the menu, the orb and the person's initial) and the frosted tab bar at the
- * foot. When a conversation opens its Bot's details or computer, the column grows by OpenBot's own
- * 400px pane, so the computer sits beside the conversation as it does in OpenBot. Every other page
- * opens over the app with a back disc and keeps OpenBot's own width, so a Bot's page or Admin is as
- * roomy as OpenBot made it, in OpenDuet's colours and type.
+ * foot. When a conversation opens its Bot's details or computer, the column grows by XiongBao's own
+ * 400px pane, so the computer sits beside the conversation as it does in XiongBao. Every other page
+ * opens over the app with a back disc and keeps XiongBao's own width, so a Bot's page or Admin is as
+ * roomy as XiongBao made it, in OpenDuet's colours and type.
  *
- * The pages inside are OpenBot's own, so its chat, its tools and its approvals run unchanged. The
- * frame keeps the two things OpenBot's sidebar did beyond drawing: the one socket that keeps the
+ * The pages inside are XiongBao's own, so its chat, its tools and its approvals run unchanged. The
+ * frame keeps the two things XiongBao's sidebar did beyond drawing: the one socket that keeps the
  * conversation list live, and the browser notification when a Bot starts needing the person.
  */
 export function OpenDuetFrame({ children }: { children: ReactNode }) {
@@ -56,7 +56,7 @@ export function OpenDuetFrame({ children }: { children: ReactNode }) {
       data-openduet-frame=""
     >
       {/*
-       * OpenBot's Bots badge is what sends the browser notification when a Bot starts needing the
+       * XiongBao's Bots badge is what sends the browser notification when a Bot starts needing the
        * person. The menu draws its own badge from the same count, so this one is mounted unseen,
        * only to keep that notification coming.
        */}
@@ -87,7 +87,7 @@ export function OpenDuetFrame({ children }: { children: ReactNode }) {
         <main
           className={cn(
             "flex min-h-0 flex-1 flex-col overflow-hidden",
-            // An OpenBot page ends above the tab bar, so its composer is never under it.
+            // An XiongBao page ends above the tab bar, so its composer is never under it.
             tab && !ownScreen && "pb-[92px]",
           )}
           ref={setMain}

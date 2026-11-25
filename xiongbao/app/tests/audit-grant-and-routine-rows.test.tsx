@@ -26,8 +26,8 @@ import { settleReactWork } from "./settle-react-work";
 
 /*
  * Seen on Windows after an in-app update: Activity showed two identical rows at the same second,
- * "Let a component read data / Activity report / Started by OpenBot / Can read this", one per data
- * function OpenBot Personal gave the report, neither saying which. And a Bot creating a routine
+ * "Let a component read data / Activity report / Started by XiongBao / Can read this", one per data
+ * function XiongBao Personal gave the report, neither saying which. And a Bot creating a routine
  * showed twice: "Create routine / Routines / Called on this Bot's behalf" for its call, and "Create a
  * routine / - / Allowed" for the routine, with no Bot.
  */
@@ -95,7 +95,7 @@ const ROUTINE = row("routine", 30, {
 /** As the server answers Activity: a Routines call whose routine has its own row is left out. */
 const ROWS = [
   ROUTINE,
-  // One row naming both, as OpenBot Personal now gives them.
+  // One row naming both, as XiongBao Personal now gives them.
   granted("given", 25, { functions: ["botActivity", "recentRefusals"] }),
   // As 0.3.3 recorded them: a row per function, at the same second.
   granted("given-one", 20, { function: "botActivity" }),

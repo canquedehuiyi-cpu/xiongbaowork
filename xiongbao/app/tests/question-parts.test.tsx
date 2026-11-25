@@ -50,9 +50,9 @@ test("the whole answer is a line per decision: the option, the words, or both", 
   const form = new FormData();
   form.append("part-0", "Pro");
   form.append("part-0", " but only for teams ");
-  form.append("part-1", "OpenBot 1.0 only");
+  form.append("part-1", "XiongBao 1.0 only");
   expect(partsAnswer(parts, form)).toBe(
-    "Tier name: Pro, but only for teams\nThursday: OpenBot 1.0 only",
+    "Tier name: Pro, but only for teams\nThursday: XiongBao 1.0 only",
   );
 });
 
@@ -78,12 +78,12 @@ test("each decision is shown in turn, and the last sends them all as one answer"
   await view.findByText("Question 2 of 2");
   await userEvent.type(
     view.getByRole("textbox", { name: "Thursday，用你自己的话回答" }),
-    "OpenBot 1.0 only",
+    "XiongBao 1.0 only",
   );
   fireEvent.click(view.getByRole("button", { name: "发送全部回答" }));
 
   await waitFor(() =>
-    expect(sent).toEqual(["Tier name: Pro\nThursday: OpenBot 1.0 only"]),
+    expect(sent).toEqual(["Tier name: Pro\nThursday: XiongBao 1.0 only"]),
   );
 });
 

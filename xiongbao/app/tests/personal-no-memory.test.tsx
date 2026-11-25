@@ -19,7 +19,7 @@ import { Route as SettingsMemoryRoute } from "@/routes/_authed/settings/memory";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * The personal edition offers no memory: OpenBot Desktop's local Intelligence is not licensed for
+ * The personal edition offers no memory: XiongBao Desktop's local Intelligence is not licensed for
  * it. So an address that used to open memory opens the nearest page that is there, the 员工 page.
  * The team edition keeps every one of them: memory is 能力 › 记忆与信息源 (`/capabilities/memory`,
  * as upstream has it), and `/memory`, `/settings/memory` and 能力与资源's `/resources?tab=sources`

@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authed/settings/browsers")({
   component: BrowsersPage,
 });
 
-/** Connect the OpenBot Recorder in this browser, and see or disconnect every browser connected as you. */
+/** Connect the XiongBao Recorder in this browser, and see or disconnect every browser connected as you. */
 function BrowsersPage() {
   return (
     <PageShell

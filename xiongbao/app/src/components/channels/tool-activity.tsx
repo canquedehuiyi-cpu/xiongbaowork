@@ -433,7 +433,7 @@ function inputValue(value: unknown): string {
 /**
  * The arguments a step lists when it is opened, as a person reads them.
  *
- * A folder step's `grantId` is the id OpenBot gave the folder grant ("host-grant-74138-…"), written
+ * A folder step's `grantId` is the id XiongBao gave the folder grant ("host-grant-74138-…"), written
  * for the model; the line already names the file, and Settings > Computer the folder. Listed, an
  * opened "Save a file" read "grantId  host-grant-74138-1794115092137885000" above the file's path.
  */

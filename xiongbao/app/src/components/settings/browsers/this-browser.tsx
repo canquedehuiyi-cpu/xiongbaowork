@@ -46,7 +46,7 @@ type Attempt =
   | { state: "closed" }
   | { state: "failed"; message: string };
 
-/** Whether the Recorder in this browser is installed, and connected to this OpenBot as you. `onInstallId` hears this
+/** Whether the Recorder in this browser is installed, and connected to this XiongBao as you. `onInstallId` hears this
  * browser's own copy once it is known (it answers with it only once connected: not while its Connect page waits for
  * the person, since any site can ask to connect), so the list of connected browsers can say which row is this one. */
 export function ThisBrowser({
@@ -55,7 +55,7 @@ export function ThisBrowser({
   onInstallId?: (installId: string | undefined) => void;
 } = {}) {
   const [attempt, setAttempt] = useState<Attempt>({ state: "idle" });
-  // The install id a trusted OpenBot's connect answer carried: a copy only reports its own once connected.
+  // The install id a trusted XiongBao's connect answer carried: a copy only reports its own once connected.
   const [connectedAs, setConnectedAs] = useState<string | undefined>();
   const awaiting = attempt.state === "awaiting";
   const connections = useQuery(recorderConnectionsQueryOptions({ awaiting }));
@@ -151,7 +151,7 @@ export function ThisBrowser({
       }
       setConnectedAs(answer.installId);
       if (answer.connected) {
-        // A trusted OpenBot: connected already, with no Connect page to wait on. The new connection is read before the
+        // A trusted XiongBao: connected already, with no Connect page to wait on. The new connection is read before the
         // row stops saying it is connecting, so it goes straight to Connected.
         await queryClient.invalidateQueries({ queryKey: recorderKeys.all });
         setAttempt({ state: "idle" });
@@ -207,7 +207,7 @@ export function ThisBrowser({
 
 /**
  * The Recorder's store page in this browser, in a new tab, where it is published, as the sidebar's Browser button opens
- * it (`StorePageLink`): a link, because it goes somewhere, with the same note waiting in OpenBot for when the person
+ * it (`StorePageLink`): a link, because it goes somewhere, with the same note waiting in XiongBao for when the person
  * comes back. Once they added it, coming back to this page finds it and offers Connect. Nothing where the browser has no
  * store page for it.
  */

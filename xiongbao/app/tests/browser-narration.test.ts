@@ -26,7 +26,7 @@ import {
 } from "./on-device-speech.fixture";
 
 /**
- * Narration on hosted OpenBot: the page transcribes the person with the browser's own speech recognition and stamps
+ * Narration on hosted XiongBao: the page transcribes the person with the browser's own speech recognition and stamps
  * each final phrase with when they started and stopped saying it. The rule is pinned against what Chrome 156 really
  * sent in a recorded run (browser-narration.fixture.ts), not against events written by hand.
  */

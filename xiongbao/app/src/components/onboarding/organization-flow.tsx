@@ -92,7 +92,7 @@ function Pill({ node, x, y }: { node: Node; x: number; y: number }) {
 }
 
 /**
- * How OpenBot sits inside an organization: its people sign in through the organization's own
+ * How XiongBao sits inside an organization: its people sign in through the organization's own
  * identity provider, and what comes out is its own rules, its own Bots and a record of every action.
  *
  * Built here from Tailwind and SVG, in the visual language of node-and-connector diagrams, rather

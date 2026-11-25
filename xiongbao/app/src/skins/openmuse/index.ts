@@ -6,9 +6,9 @@ import { IdeasScreen } from "./screens/ideas";
 
 /**
  * OpenMuse's look: one Bot at the centre of a single phone-shaped column and five tabs in a floating
- * pill. Its identity is the deployment's: the brand.yaml name and each Bot's own OpenBot avatar.
- * Chat is OpenBot's own conversation, and Apps is OpenBot's own Connections page. Activity, Ideas
- * and Goals put OpenBot's own sections for the centre Bot under OpenMuse's titles.
+ * pill. Its identity is the deployment's: the brand.yaml name and each Bot's own XiongBao avatar.
+ * Chat is XiongBao's own conversation, and Apps is XiongBao's own Connections page. Activity, Ideas
+ * and Goals put XiongBao's own sections for the centre Bot under OpenMuse's titles.
  */
 export const openmuse: Skin = {
   id: "openmuse",

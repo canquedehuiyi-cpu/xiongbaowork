@@ -97,7 +97,7 @@ let recordingsHeld: Promise<void> | null = null;
 let recordingsAsked = 0;
 
 /** The person's own Learning review, as Settings, Learning reads it: one space of their recordings, nothing run yet. */
-const RECORDINGS_SPACE = "openbot-person-ada";
+const RECORDINGS_SPACE = "xiongbao-person-ada";
 function freshReview(): PersonalReview {
   return {
     canReview: true,
@@ -515,7 +515,7 @@ const opens = () =>
 
 /**
  * Starts a recording of the task already named: Start recording in Record's popover above a browser in the page; on
- * OpenBot Desktop, Continue past the name, then Open browser and record.
+ * XiongBao Desktop, Continue past the name, then Open browser and record.
  */
 async function pressRecord(
   view: ReturnType<typeof draw>,
@@ -558,7 +558,7 @@ async function behindRecord(
   return view.findByRole(role, { name });
 }
 
-/** The task's name, on the page on OpenBot Desktop and in Record's popover above a browser in the page. */
+/** The task's name, on the page on XiongBao Desktop and in Record's popover above a browser in the page. */
 const taskField = (
   view: ReturnType<typeof draw>,
   user: ReturnType<typeof userEvent.setup>,
@@ -570,7 +570,7 @@ const narrationSwitch = (
   user: ReturnType<typeof userEvent.setup>,
 ) => behindRecord(view, user, "switch", "讲解");
 
-test("your recordings show even when OpenBot can't run a browser", async () => {
+test("your recordings show even when XiongBao can't run a browser", async () => {
   state = { available: false, note: "No browser here." } as BrowserApiState;
   recordingRows = [recording("Refund an order")];
   const view = draw(<BrowserPage />);
@@ -606,7 +606,7 @@ test("an empty tab shows a start page with one field to search or go to a site, 
   const field = await view.findByRole("textbox", {
     name: "搜索或前往网站",
   });
-  await user.type(field, "openbot.ai{Enter}");
+  await user.type(field, "xiongbao.ai{Enter}");
   await waitFor(() =>
     expect(
       writes.filter((write) => write.path === "/api/browser/navigate"),
@@ -614,7 +614,7 @@ test("an empty tab shows a start page with one field to search or go to a site, 
       {
         path: "/api/browser/navigate",
         method: "POST",
-        body: { url: "https://openbot.ai" },
+        body: { url: "https://xiongbao.ai" },
       },
     ]),
   );
@@ -710,7 +710,7 @@ test("a recording that stops refreshes the list under the page", async () => {
 });
 
 test("a stopped recording the Recorder held lands later, and the list under the page shows it then", async () => {
-  // OpenBot Desktop, 2026-11-07: three held recordings reached the back end minutes after Stop, and the list showed
+  // XiongBao Desktop, 2026-11-07: three held recordings reached the back end minutes after Stop, and the list showed
   // none of them until the person left Teach a Bot and came back.
   const held = {
     recordingId: "rec-1",
@@ -756,7 +756,7 @@ test("a stopped recording the Recorder held lands later, and the list under the 
   expect(await view.findByText(recordedAt.toLocaleString())).toBeTruthy();
 });
 
-test("on OpenBot Desktop arriving opens nothing: the page offers the task's name and narration", async () => {
+test("on XiongBao Desktop arriving opens nothing: the page offers the task's name and narration", async () => {
   state = { ...nativeState(), open: false, recorder: undefined };
   delete state.browser;
   const view = draw(<BrowserPage />);
@@ -771,7 +771,7 @@ test("on OpenBot Desktop arriving opens nothing: the page offers the task's name
   expect(QuietSocket.urls).toEqual([]);
 });
 
-test("on OpenBot Desktop Open browser and record opens the browser, then starts a recording named for the task, which shows its time and actions until Stop", async () => {
+test("on XiongBao Desktop Open browser and record opens the browser, then starts a recording named for the task, which shows its time and actions until Stop", async () => {
   state = { ...nativeState(), open: false };
   const view = draw(<BrowserPage />);
   const user = userEvent.setup({ document });
@@ -831,7 +831,7 @@ test("on OpenBot Desktop Open browser and record opens the browser, then starts 
   expect((again as HTMLInputElement).value).toBe("");
 });
 
-test("on OpenBot Desktop the introduction shows until a recording is saved, Continue leaves it, and Back returns to it", async () => {
+test("on XiongBao Desktop the introduction shows until a recording is saved, Continue leaves it, and Back returns to it", async () => {
   localStorage.removeItem(INTRODUCED_KEY);
   state = { ...nativeState(), open: false };
   const view = draw(<BrowserPage />);
@@ -868,7 +868,7 @@ test("on OpenBot Desktop the introduction shows until a recording is saved, Cont
   expect(localStorage.getItem(INTRODUCED_KEY)).toBe("1");
 });
 
-/** OpenBot Desktop, after Stop saved "Find my meeting": the Recorder's own report, as a reload reads it. */
+/** XiongBao Desktop, after Stop saved "Find my meeting": the Recorder's own report, as a reload reads it. */
 function savedMeeting(): BrowserApiState {
   const base = nativeState();
   return {
@@ -893,9 +893,9 @@ function linkNamed(view: ReturnType<typeof draw>, name: string) {
   return link;
 }
 
-// A teammate on OpenBot Desktop 0.3.3, after Stop: "I'm not sure what to do next. It doesn't tell me to go back."
+// A teammate on XiongBao Desktop 0.3.3, after Stop: "I'm not sure what to do next. It doesn't tell me to go back."
 // The page said only "已存进你的学习空间：6 个动作和 6 句讲解。"
-test("on OpenBot Desktop a saved recording says what happens next, Learn now starts Learning on the person's recordings, and See your skills opens Settings, Learning", async () => {
+test("on XiongBao Desktop a saved recording says what happens next, Learn now starts Learning on the person's recordings, and See your skills opens Settings, Learning", async () => {
   state = savedMeeting();
   const view = draw(<BrowserPage />);
   const user = userEvent.setup({ document });
@@ -931,7 +931,7 @@ test("on OpenBot Desktop a saved recording says what happens next, Learn now sta
   );
 });
 
-test("on OpenBot Desktop a skill learned from the saved recording says so, with Try it opening a new conversation with the task", async () => {
+test("on XiongBao Desktop a skill learned from the saved recording says so, with Try it opening a new conversation with the task", async () => {
   state = savedMeeting();
   review.sources[0] = {
     ...(review.sources[0] as PersonalReview["sources"][number]),
@@ -971,9 +971,9 @@ test("on OpenBot Desktop a skill learned from the saved recording says so, with 
   );
 });
 
-test("on OpenBot Desktop a saved recording says why Learning can't run, didn't finish, or didn't start", async () => {
+test("on XiongBao Desktop a saved recording says why Learning can't run, didn't finish, or didn't start", async () => {
   const noModel =
-    "Learning can't run on the model you signed in with. To use it, sign OpenBot in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
+    "Learning can't run on the model you signed in with. To use it, sign XiongBao in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
   state = savedMeeting();
   review.modelProblem = noModel;
   let view = draw(<BrowserPage />);
@@ -1005,7 +1005,7 @@ test("on OpenBot Desktop a saved recording says why Learning can't run, didn't f
   expect(view.getByText(noModel)).toBeTruthy();
 });
 
-/** The same saved recording where the browser is drawn in the page (OpenBot Desktop since #1306, and hosted OpenBot). */
+/** The same saved recording where the browser is drawn in the page (XiongBao Desktop since #1306, and hosted XiongBao). */
 function savedMeetingOnScreen(): BrowserApiState {
   const base = screenState();
   return {
@@ -1089,7 +1089,7 @@ test("with the browser in the page, a recording still on its way has no next ste
   expect(view.queryByText("学习会自动运行")).toBeNull();
 });
 
-test("on OpenBot Desktop a recording discarded from the Recorder's mark in the browser is said to be discarded, never saved", async () => {
+test("on XiongBao Desktop a recording discarded from the Recorder's mark in the browser is said to be discarded, never saved", async () => {
   state = {
     ...nativeState(),
     recorder: {
@@ -1231,7 +1231,7 @@ test("after a reload the page says what the last recording held as the Recorder 
 });
 
 test("a recording Intelligence refused, or one still on its way, is never said to be saved, on both shapes", async () => {
-  // OpenBot Desktop, 2026-11-06: its local Intelligence has Trajectories turned off and refused the recording's capture
+  // XiongBao Desktop, 2026-11-06: its local Intelligence has Trajectories turned off and refused the recording's capture
   // pass (TRAJECTORIES_UNAVAILABLE), and the page said “Saved … to your Learning space: 1 action.”
   for (const shape of ["native", "screen"] as const) {
     for (const [delivery, says] of [
@@ -1253,17 +1253,17 @@ test("a recording Intelligence refused, or one still on its way, is never said t
           ? "Check example.com heading正在存进你的学习空间：1 个动作。"
           : "正在把「Check example.com heading」存进你的学习空间：1 个动作。",
       ],
-      // OpenBot Desktop, 2026-11-07: the capture pass could not reach OpenBot and the Recorder retried it for half an
+      // XiongBao Desktop, 2026-11-07: the capture pass could not reach XiongBao and the Recorder retried it for half an
       // hour, while the page said "Saving" the whole time.
       [
         {
           sending: true,
           retrying:
-            "OpenBot's back end is busy or unreachable. Retrying; nothing is lost.",
+            "XiongBao's back end is busy or unreachable. Retrying; nothing is lost.",
         },
         shape === "native"
-          ? "Check example.com heading还没存进你的学习空间。OpenBot's back end is busy or unreachable. Retrying; nothing is lost."
-          : "「Check example.com heading」还没存进你的学习空间。OpenBot's back end is busy or unreachable. Retrying; nothing is lost.",
+          ? "Check example.com heading还没存进你的学习空间。XiongBao's back end is busy or unreachable. Retrying; nothing is lost."
+          : "「Check example.com heading」还没存进你的学习空间。XiongBao's back end is busy or unreachable. Retrying; nothing is lost.",
       ],
     ] as const) {
       cleanup();
@@ -1319,7 +1319,7 @@ test("an action the page has not read yet when Stop is pressed still counts: the
 });
 
 test("Record is offered while the Recorder is disconnected: the server connects it first", async () => {
-  // Disconnecting the OpenBot browser in Settings leaves the Recorder signed out until something asks again; Record is
+  // Disconnecting the XiongBao browser in Settings leaves the Recorder signed out until something asks again; Record is
   // that ask, and the server reconnects the browser before it starts.
   state = {
     ...nativeState(),
@@ -1359,7 +1359,7 @@ test("while the browser opens, the page's description names the button the page 
   expect(await view.findByRole("button", { name: "录制" })).toBeTruthy();
 });
 
-test("on hosted OpenBot Record's (i) beside Narration says what narration is for, and pressing it records nothing", async () => {
+test("on hosted XiongBao Record's (i) beside Narration says what narration is for, and pressing it records nothing", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   installChrome();
@@ -1381,7 +1381,7 @@ test("on hosted OpenBot Record's (i) beside Narration says what narration is for
   expect(view.getByRole("textbox", { name: "任务名称" })).toBeTruthy();
 });
 
-test("on hosted OpenBot the toolbar holds one Record button, which asks for the task's name in a popover", async () => {
+test("on hosted XiongBao the toolbar holds one Record button, which asks for the task's name in a popover", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   installChrome();
@@ -1418,7 +1418,7 @@ test("on hosted OpenBot the toolbar holds one Record button, which asks for the 
   expect(await view.findByRole("button", { name: "停止" })).toBeTruthy();
 });
 
-test("on hosted OpenBot the page is the browser: its tabs, its address and its live screen, driven at once", async () => {
+test("on hosted XiongBao the page is the browser: its tabs, its address and its live screen, driven at once", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   const view = draw(<BrowserPage />);
@@ -1452,7 +1452,7 @@ test("on hosted OpenBot the page is the browser: its tabs, its address and its l
   // The bar of the tab that shows now: switching tabs starts it again from that tab's own address.
   const bar = view.getByRole("textbox", { name: "地址" });
   await user.clear(bar);
-  await user.type(bar, "openbot.ai{Enter}");
+  await user.type(bar, "xiongbao.ai{Enter}");
   await user.type(bar, "how to file an expense report{Enter}");
   await waitFor(() =>
     expect(
@@ -1482,7 +1482,7 @@ test("on hosted OpenBot the page is the browser: its tabs, its address and its l
       {
         path: "/api/browser/navigate",
         method: "POST",
-        body: { url: "https://openbot.ai" },
+        body: { url: "https://xiongbao.ai" },
       },
       {
         path: "/api/browser/navigate",
@@ -1495,7 +1495,7 @@ test("on hosted OpenBot the page is the browser: its tabs, its address and its l
   );
 });
 
-test("on hosted OpenBot the page narrates a recording, and Stop sends the phrase being said before the recording ends", async () => {
+test("on hosted XiongBao the page narrates a recording, and Stop sends the phrase being said before the recording ends", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   const recognitions = installChrome();
@@ -1689,7 +1689,7 @@ function installDevices(kinds: MediaDeviceKind[]) {
 }
 
 test("on a computer with no microphone, narration says so and reads off after a relaunch, and the choice is kept", async () => {
-  // Windows with no microphone, OpenBot relaunched after a recording fell back to off: the page read "讲解已开启。"
+  // Windows with no microphone, XiongBao relaunched after a recording fell back to off: the page read "讲解已开启。"
   // with its switch on, and nothing said there was no microphone.
   state = screenState();
   openAnswer = answerFor("screen");
@@ -1722,7 +1722,7 @@ test("on a computer with no microphone, narration says so and reads off after a 
   }
 });
 
-test("on hosted OpenBot a narration the Recorder refused says why, beside the narration switch", async () => {
+test("on hosted XiongBao a narration the Recorder refused says why, beside the narration switch", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   refusals = {
@@ -1737,7 +1737,7 @@ test("on hosted OpenBot a narration the Recorder refused says why, beside the na
   expect(await view.findByText("讲解已开启，正在收录你的声音。")).toBeTruthy();
 });
 
-test("on hosted OpenBot narration that cannot hear the person shows its switch off, and turning it on tries again", async () => {
+test("on hosted XiongBao narration that cannot hear the person shows its switch off, and turning it on tries again", async () => {
   // The fourth end-to-end run: in a browser with no microphone the page said narration was off while its switch read on.
   for (const [error, sentence] of [
     ["not-allowed", "讲解已关闭。"],
@@ -1776,7 +1776,7 @@ test("on hosted OpenBot narration that cannot hear the person shows its switch o
   }
 });
 
-test("on hosted OpenBot narration whose speech service cannot be reached stays on: it tries again by itself", async () => {
+test("on hosted XiongBao narration whose speech service cannot be reached stays on: it tries again by itself", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   const chrome = installRefusingChrome();
@@ -1800,14 +1800,14 @@ test("Record and Stop the server refused say the server's sentence where the per
     openAnswer = answerFor(shape);
     refusals = {
       [browserApiPaths.recording]:
-        "This browser is no longer connected to OpenBot. Open it from OpenBot again.",
+        "This browser is no longer connected to XiongBao. Open it from XiongBao again.",
     };
     const view = draw(<BrowserPage />);
     const user = userEvent.setup({ document });
     await user.type(await taskField(view, user), "Refund an order");
     await pressRecord(view, user);
     expect((await view.findByRole("alert")).textContent).toBe(
-      "This browser is no longer connected to OpenBot. Open it from OpenBot again.",
+      "This browser is no longer connected to XiongBao. Open it from XiongBao again.",
     );
 
     // A recording the Recorder will not stop.
@@ -1835,7 +1835,7 @@ test("Record and Stop the server refused say the server's sentence where the per
   }
 });
 
-test("on hosted OpenBot a refused Record is shown even after a tab that would not close", async () => {
+test("on hosted XiongBao a refused Record is shown even after a tab that would not close", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   refusals = { [browserApiPaths.tabs]: "There is no such tab." };
@@ -1859,7 +1859,7 @@ test("on hosted OpenBot a refused Record is shown even after a tab that would no
   );
 });
 
-test("on OpenBot Desktop the narration row says what the Recorder hears, as it reports it", async () => {
+test("on XiongBao Desktop the narration row says what the Recorder hears, as it reports it", async () => {
   const recorder = (voice: NonNullable<BrowserApiState["recorder"]>["voice"]) =>
     ({
       connected: true,
@@ -1890,7 +1890,7 @@ test("on OpenBot Desktop the narration row says what the Recorder hears, as it r
   }
 });
 
-test("on hosted OpenBot in a browser with no speech recognition, the page says narration is unavailable and Record still works", async () => {
+test("on hosted XiongBao in a browser with no speech recognition, the page says narration is unavailable and Record still works", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   const view = draw(<BrowserPage />);
@@ -1923,7 +1923,7 @@ const starts = () =>
       (write.body as { action?: string }).action === "start",
   );
 
-test("Record asks whether to narrate before the first recording, keeps the answer, and tells the Recorder, on OpenBot Desktop", async () => {
+test("Record asks whether to narrate before the first recording, keeps the answer, and tells the Recorder, on XiongBao Desktop", async () => {
   narrationChoice = null;
   const view = draw(<BrowserPage />);
   const user = userEvent.setup({ document });
@@ -2032,7 +2032,7 @@ test("a choice that cannot be read records without narration and asks nothing", 
   expect(preferenceWrites()).toEqual([]);
 });
 
-test("on hosted OpenBot a yes to the narration question listens, on the person's computer, and the bar says it is listening", async () => {
+test("on hosted XiongBao a yes to the narration question listens, on the person's computer, and the bar says it is listening", async () => {
   narrationChoice = null;
   state = screenState();
   openAnswer = answerFor("screen");
@@ -2061,7 +2061,7 @@ test("on hosted OpenBot a yes to the narration question listens, on the person's
   expect((await view.findByText("正在听")).getAttribute("role")).toBe("status");
 });
 
-test("on hosted OpenBot a person who chose not to narrate is never listened to, and turning the switch on keeps the new choice", async () => {
+test("on hosted XiongBao a person who chose not to narrate is never listened to, and turning the switch on keeps the new choice", async () => {
   narrationChoice = "off";
   state = screenState();
   openAnswer = answerFor("screen");
@@ -2085,7 +2085,7 @@ test("on hosted OpenBot a person who chose not to narrate is never listened to, 
   ]);
 });
 
-test("on hosted OpenBot a language still to be downloaded is asked for on the switch's click, and narration waits for it", async () => {
+test("on hosted XiongBao a language still to be downloaded is asked for on the switch's click, and narration waits for it", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   // Chrome answers downloadable for a language this page has not asked for yet, and downloads only on a click.
@@ -2116,7 +2116,7 @@ test("on hosted OpenBot a language still to be downloaded is asked for on the sw
   });
 }, 15_000);
 
-test("on hosted OpenBot a browser that cannot keep speech on the computer never listens, and says why", async () => {
+test("on hosted XiongBao a browser that cannot keep speech on the computer never listens, and says why", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   const recognitions = installChrome(null);
@@ -2295,11 +2295,11 @@ test("with the live screen connected, the page's controls keep their keys, and t
   // An address typed into the bar goes to the page that opens, as Chrome's address bar does: the screen has the keys.
   const address = view.getByRole("textbox", { name: "地址" });
   await user.clear(address);
-  await user.type(address, "openbot.ai{Enter}");
+  await user.type(address, "xiongbao.ai{Enter}");
   expect(document.activeElement).toBe(screen);
 });
 
-/** What the server says of a person's browser that is there and not answering, on an OpenBot with sign-in. */
+/** What the server says of a person's browser that is there and not answering, on an XiongBao with sign-in. */
 const NOT_ANSWERING =
   "Your browser isn't answering. If it doesn't come back soon, ask an admin for help.";
 
@@ -2389,7 +2389,7 @@ test("arriving while the browser is not answering, the page says so rather than 
   expect(view.getByRole("button", { name: "再试一次" })).toBeTruthy();
 });
 
-test("on OpenBot Desktop a window that is not answering says so", async () => {
+test("on XiongBao Desktop a window that is not answering says so", async () => {
   state = { ...nativeState(), problem: NOT_ANSWERING };
   const view = draw(<BrowserPage />);
   expect((await view.findByRole("alert")).textContent).toBe(NOT_ANSWERING);
@@ -2435,7 +2435,7 @@ test("while the browser's state is first read, the page draws nothing, so a brow
   expect(opens()).toBe(0);
 });
 
-test("where OpenBot cannot run a browser for the person, the page says so and opens nothing", async () => {
+test("where XiongBao cannot run a browser for the person, the page says so and opens nothing", async () => {
   state = { ...nativeState(), available: false, open: false };
   const view = draw(<BrowserPage />);
   expect(
@@ -2444,7 +2444,7 @@ test("where OpenBot cannot run a browser for the person, the page says so and op
   expect(opens()).toBe(0);
 });
 
-test("on hosted OpenBot a new tab takes the focus into its address bar, as Chrome does", async () => {
+test("on hosted XiongBao a new tab takes the focus into its address bar, as Chrome does", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   tabsOpen = true;
@@ -2463,7 +2463,7 @@ test("on hosted OpenBot a new tab takes the focus into its address bar, as Chrom
   );
 });
 
-test("on hosted OpenBot narration the person turned off stays off after a reload, kept on their account", async () => {
+test("on hosted XiongBao narration the person turned off stays off after a reload, kept on their account", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   installChrome();
@@ -2473,7 +2473,7 @@ test("on hosted OpenBot narration the person turned off stays off after a reload
   await waitFor(() => expect(toggle.getAttribute("aria-checked")).toBe("true"));
   await user.click(toggle);
   expect(toggle.getAttribute("aria-checked")).toBe("false");
-  // Kept as the person's own preference, which every browser they open OpenBot in reads, not in this browser alone.
+  // Kept as the person's own preference, which every browser they open XiongBao in reads, not in this browser alone.
   await waitFor(() =>
     expect(preferenceWrites().map((write) => write.body)).toEqual([
       { narration: "off" },
@@ -2506,7 +2506,7 @@ test("where the server says why there is no browser of the person's own, the pag
   // Every Bot shares one computer here, which is no place for a person's browser: a Bot's shell there could read the
   // cookies in its profile (server/src/browser/host.ts).
   const why =
-    "This OpenBot can't open a browser of your own, because its Bots share one computer.";
+    "This XiongBao can't open a browser of your own, because its Bots share one computer.";
   state = { ...screenState(), available: false, open: false, note: why };
   const view = draw(<BrowserPage />);
   expect(await view.findByText(why)).toBeTruthy();
@@ -2560,7 +2560,7 @@ function installRefusingChrome(onDevice: OnDeviceModel = everyLanguage()) {
   return chrome;
 }
 
-test("on hosted OpenBot Clear browser data asks first in one sentence, Cancel does nothing, and Clear shows the browser fresh", async () => {
+test("on hosted XiongBao Clear browser data asks first in one sentence, Cancel does nothing, and Clear shows the browser fresh", async () => {
   state = screenState();
   openAnswer = answerFor("screen");
   const view = draw(<BrowserPage />);

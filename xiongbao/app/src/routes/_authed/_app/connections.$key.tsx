@@ -117,7 +117,7 @@ export const Route = createFileRoute("/_authed/_app/connections/$key")({
   component: RouteComponent,
   /*
    * `?linked=` is how the GitHub account-link callback reports back to GitHub's page: `github` on
-   * success, `github-taken` when that account belongs to another OpenBot user, `failed` otherwise.
+   * success, `github-taken` when that account belongs to another XiongBao user, `failed` otherwise.
    *
    * `?action=` is the verifier's redirect saying WHICH action the consent just completed was for,
    * so an app's page can land on it rather than on the app.
@@ -735,7 +735,7 @@ function AppConnectionPage({ startConnect }: { startConnect: boolean }) {
                 <>
                   {enabled ? <NotConnected /> : null}
                   {/*
-                   * The arrow says this leaves OpenBot. It does: the next thing on screen is the
+                   * The arrow says this leaves XiongBao. It does: the next thing on screen is the
                    * vendor's own consent page, and a control that navigates away should look like one.
                    */}
                   <Button

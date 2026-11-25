@@ -61,7 +61,7 @@ function rowId(computer: ComputerProfile): string {
 }
 
 /**
- * A person's own OpenBot browser, the one Teach a Bot records in. It is listed beside the Bots' browsers, under an id
+ * A person's own XiongBao browser, the one Teach a Bot records in. It is listed beside the Bots' browsers, under an id
  * that is no Bot's, so it read "A Bot no longer here" until it was named for what it is.
  */
 function isOwnBrowser(computer: ComputerProfile): boolean {
@@ -91,7 +91,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
   const queryClient = useQueryClient();
   const nameFor = useBotNames();
   /*
-   * The person's own OpenBot browser is cleared the way Teach a Bot clears it: a recording in it ends first, and its
+   * The person's own XiongBao browser is cleared the way Teach a Bot clears it: a recording in it ends first, and its
    * Recorder connection ends with the profile. A Bot's Reset does neither.
    */
   const clearOwnBrowser = useMutation(clearBrowserMutationOptions(queryClient));
@@ -486,7 +486,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
 type HostFoldersSectionProps = {
   botIds: string[];
   connected: boolean;
-  /** This OpenBot runs in OpenBot Desktop. Without it no folder can ever be chosen here. */
+  /** This XiongBao runs in XiongBao Desktop. Without it no folder can ever be chosen here. */
   desktop: boolean;
   grants: HostFolderGrant[];
   loading: boolean;
@@ -496,7 +496,7 @@ type HostFoldersSectionProps = {
   onStop: () => void;
   pending: HostAccessPendingOperation[];
   /**
-   * The personal edition, where the person reading is the one OpenBot Desktop asks. In the team
+   * The personal edition, where the person reading is the one XiongBao Desktop asks. In the team
    * edition the desktop's owner may be somebody else, so a waiting request names them instead.
    */
   personal: boolean;
@@ -704,7 +704,7 @@ function ownerLabel(grant: { ownerName?: string; ownerEmail?: string }) {
  *
  * Reading and listing need nobody's answer, so they say only what is happening. A folder, a file
  * change or a command waits for the person at the computer: in the personal edition that is the
- * person reading, so it says OpenBot Desktop is asking them, in a window. It used to say "waiting for
+ * person reading, so it says XiongBao Desktop is asking them, in a window. It used to say "waiting for
  * approval from the desktop owner" to the desktop's owner, and "Listing files from the desktop owner".
  */
 function pendingSentence(

@@ -123,7 +123,7 @@ type Highlighted = Parameters<
   NonNullable<Parameters<CodeHighlighterPlugin["highlight"]>[1]>
 >[0];
 
-/** [light, dark]: Streamdown colours each token with both and OpenBot's `.dark` class picks one. */
+/** [light, dark]: Streamdown colours each token with both and XiongBao's `.dark` class picks one. */
 const CODE_THEMES: ["github-light", "github-dark"] = [
   "github-light",
   "github-dark",

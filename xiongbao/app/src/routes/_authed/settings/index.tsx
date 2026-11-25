@@ -45,7 +45,7 @@ function RouteComponent() {
       title="偏好设置"
     >
       {/*
-       * What OpenBot and every Bot know of the person, first: their name and how they want things done. Both are free
+       * What XiongBao and every Bot know of the person, first: their name and how they want things done. Both are free
        * text, so both are a summary that opens a dialog.
        */}
       <PageSection title="关于你">

@@ -16,7 +16,7 @@ test("an address with its scheme goes as typed", () => {
 });
 
 test("a bare host, with or without a port and a path, goes as https", () => {
-  expect(addressFrom("openbot.ai")).toBe("https://openbot.ai");
+  expect(addressFrom("xiongbao.ai")).toBe("https://xiongbao.ai");
   expect(addressFrom("news.ycombinator.com/item?id=1")).toBe(
     "https://news.ycombinator.com/item?id=1",
   );

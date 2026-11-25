@@ -258,7 +258,7 @@ test("after the person decides a card, their next message is sent though the rep
 });
 
 test("a message that cannot leave the browser says so and goes back in the box", async () => {
-  // An interrupt OpenBot did not raise is still the agent's to resume, so this one holds the run.
+  // An interrupt XiongBao did not raise is still the agent's to resume, so this one holds the run.
   interrupt = {
     id: "call-send",
     reason: "human_input",

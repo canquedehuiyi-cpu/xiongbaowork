@@ -29,7 +29,7 @@ function announceServerPort(port: number): Plugin {
       ? html
       : html.replace("</head>", `    ${tag}\n  </head>`);
   return {
-    name: "openbot-announce-server-port",
+    name: "xiongbao-announce-server-port",
     transformIndexHtml(html, ctx) {
       return ctx.server ? inject(html) : html;
     },
@@ -102,11 +102,11 @@ export function thisMachineOnly(
     response.statusCode = 403;
     response.setHeader("content-type", "text/plain; charset=utf-8");
     response.end(
-      "This OpenBot only answers on the computer it runs on. Open it there.",
+      "This XiongBao only answers on the computer it runs on. Open it there.",
     );
   };
   return {
-    name: "openbot-this-machine-only",
+    name: "xiongbao-this-machine-only",
     configureServer(server) {
       server.middlewares.use(refuseOthers);
     },
@@ -174,7 +174,7 @@ function routeComponentSplitPath(id: string): string | undefined {
   return filePath.slice(routesIndex + routesMarker.length);
 }
 
-export function selectOpenBotManualChunk(id: string): string | undefined {
+export function selectXiongBaoManualChunk(id: string): string | undefined {
   const routePath = routeComponentSplitPath(id);
   if (!routePath) {
     return undefined;
@@ -206,7 +206,7 @@ export function selectOpenBotManualChunk(id: string): string | undefined {
 
 export const routeBuildRollupOutputOptions = {
   onlyExplicitManualChunks: true,
-  manualChunks: selectOpenBotManualChunk,
+  manualChunks: selectXiongBaoManualChunk,
 };
 
 export default defineConfig({

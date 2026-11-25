@@ -40,7 +40,7 @@ type ToolItem = Extract<VisibleChatItem, { kind: "tool" }>;
  * it ended is in the call's own result, and while it works the folded line says so.
  *
  * Called a subtask on screen, because that is what the person is looking at: part of what they
- * asked for, being done on its own. "Agent" is a word OpenBot keeps for software somebody brings.
+ * asked for, being done on its own. "Agent" is a word XiongBao keeps for software somebody brings.
  */
 export function SubtaskStep({
   step,

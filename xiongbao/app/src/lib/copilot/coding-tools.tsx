@@ -17,7 +17,7 @@ import { ArgumentsArrivingContext } from "@/components/gallery/streaming";
  * How a coding harness Bot's own tools read in the transcript.
  *
  * RENDER ONLY. These are Claude Code's built-in tools, run inside the Claude Agent SDK harness
- * (`agent-claude-sdk/`) on the Bot's own machine; OpenBot never runs them and offers none of them to
+ * (`agent-claude-sdk/`) on the Bot's own machine; XiongBao never runs them and offers none of them to
  * a model. `ag-ui-claude-sdk` streams each call under Claude Code's own name (`Bash`, `Edit`), with
  * Claude Code's arguments, and its result is the text Claude Code gave the model. Without these they
  * fold into the generic "Used 6 tools" line, and a Bot that wrote and ran code shows none of it.

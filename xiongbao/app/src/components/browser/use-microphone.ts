@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
  *
  * Narration on a computer with no microphone falls back to off once a recording tries it, but the page cannot remember
  * that past a relaunch: it read "Narration is on." again, with the switch on and nothing to hear with (seen on Windows,
- * in the OpenBot Desktop window). This answers before any recording, without opening the microphone.
+ * in the XiongBao Desktop window). This answers before any recording, without opening the microphone.
  */
 export function useMicrophone(): boolean | undefined {
   const [present, setPresent] = useState<boolean | undefined>(undefined);

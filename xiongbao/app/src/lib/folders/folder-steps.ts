@@ -5,7 +5,7 @@ import { shortName } from "@/lib/brand";
 /**
  * A Bot's steps on folders on the person's computer (`host_*` tools), as a person reads them.
  *
- * The tools answer the model: "Check your folders" answers JSON naming each folder by the id OpenBot
+ * The tools answer the model: "Check your folders" answers JSON naming each folder by the id XiongBao
  * gave its grant ({"connected":true,"folders":[{"grantId":"host-grant-7712-…","displayName":"share"}]}),
  * and every other step names its folder only by that id. Opened, a step showed that JSON as it came.
  * The person reads the folder's name, the file in it ("todo.txt in share"), and no JSON or id.

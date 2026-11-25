@@ -70,7 +70,7 @@ async function resetFromAdmin(target: { computer: string; botId?: string }) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(authKeys.currentUser(), {
     id: "dev-local-user",
-    email: "dev@openbot.local",
+    email: "dev@xiongbao.local",
     role: "admin",
     onboarding: null,
   });

@@ -809,7 +809,7 @@ test("a broker that authorizes per action draws the grant list", async () => {
  */
 test("a refused Connect that names an address shows it whole and lets it wrap", async () => {
   const sentence =
-    "Couldn't start connecting Gmail. Arcade would send you back somewhere else after you sign in. Ask an admin to set the custom verifier in Arcade's dashboard to https://openbotproductiondeployment.examplecompany.com/api/plugins/arcade/verify";
+    "Couldn't start connecting Gmail. Arcade would send you back somewhere else after you sign in. Ask an admin to set the custom verifier in Arcade's dashboard to https://xiongbaoproductiondeployment.examplecompany.com/api/plugins/arcade/verify";
   install({ provider: "arcade", connected: false, connectRefusal: sentence });
   const realOpen = window.open;
   window.open = (() => ({

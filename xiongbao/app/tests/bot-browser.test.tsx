@@ -486,7 +486,7 @@ test("while the Bot holds the wheel the bar shows where the Bot is, read only, a
 
 test("where the Bots share one computer, the screen says why it cannot record, and offers no Record, while the bar still works", async () => {
   recordRefused =
-    "This OpenBot can't record in a Bot's browser, because its Bots share one computer.";
+    "This XiongBao can't record in a Bot's browser, because its Bots share one computer.";
   control = heldBy(ME);
   const { dialog } = await openScreen();
   const panel = within(dialog.getByRole("region", { name: "录制任务" }));
@@ -516,7 +516,7 @@ test("taking control makes the bar live at once, and it works the Bot's browser 
   await user.click(dialog.getByRole("button", { name: "前进" }));
   await user.click(dialog.getByRole("button", { name: "刷新" }));
   await user.clear(address(dialog));
-  await user.type(address(dialog), "openbot.ai{Enter}");
+  await user.type(address(dialog), "xiongbao.ai{Enter}");
 
   await waitFor(() =>
     expect(writes()).toEqual([
@@ -553,7 +553,7 @@ test("taking control makes the bar live at once, and it works the Bot's browser 
       {
         path: botBrowserApiPaths.navigate(botId),
         method: "POST",
-        body: { url: "https://openbot.ai" },
+        body: { url: "https://xiongbao.ai" },
       },
     ]),
   );
@@ -903,12 +903,12 @@ test("a new tab takes the focus into its address bar, as Chrome does", async () 
   );
   await waitFor(() => expect(document.activeElement).toBe(address(dialog)));
   // What the person types goes to the address, not to the Bot's page.
-  await user.keyboard("openbot.ai{Enter}");
+  await user.keyboard("xiongbao.ai{Enter}");
   await waitFor(() =>
     expect(writes().at(-1)).toEqual({
       path: botBrowserApiPaths.navigate(botId),
       method: "POST",
-      body: { url: "https://openbot.ai" },
+      body: { url: "https://xiongbao.ai" },
     }),
   );
 });
@@ -1134,12 +1134,12 @@ test("taking control gives the Bot's screen the keyboard, and the bar and Record
 
   // An address typed in the bar goes there, and the keyboard goes back to the page it opens.
   await user.click(address(dialog));
-  await user.keyboard("openbot.ai{Enter}");
+  await user.keyboard("xiongbao.ai{Enter}");
   await waitFor(() =>
     expect(writes().at(-1)).toEqual({
       path: botBrowserApiPaths.navigate(botId),
       method: "POST",
-      body: { url: "https://openbot.ai" },
+      body: { url: "https://xiongbao.ai" },
     }),
   );
   await waitFor(() => expect(document.activeElement).toBe(screen));

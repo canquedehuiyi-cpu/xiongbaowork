@@ -53,7 +53,7 @@ export type ApprovalBacktest = {
 };
 
 export type ApprovalRulesPreview = {
-  /** The rules as they stand now, checked against this OpenBot's tools and Bots. */
+  /** The rules as they stand now, checked against this XiongBao's tools and Bots. */
   check: RuleRowsCheck;
   warning: string | null;
   report: ApprovalBacktest;

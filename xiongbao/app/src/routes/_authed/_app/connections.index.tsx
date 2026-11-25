@@ -84,7 +84,7 @@ export const Route = createFileRoute("/_authed/_app/connections/")({
   /*
    * `?connected=` is how the OAuth callback reports back, carrying a server key on success and
    * `failed` otherwise. `?linked=` is the same for the GitHub account-link callback: `github` on
-   * success, `github-taken` when that GitHub account belongs to another OpenBot user, `failed`
+   * success, `github-taken` when that GitHub account belongs to another XiongBao user, `failed`
    * otherwise (see linked-notice.ts). Each is the only channel available: the callback is a
    * redirect from another company's server, so there is no response body to read.
    *

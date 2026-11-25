@@ -80,14 +80,14 @@ const ADMIN: Checklist = {
       id: "intelligence",
       title: "Back end",
       required: true,
-      detail: "Keeps your conversations and what OpenBot remembers.",
+      detail: "Keeps your conversations and what XiongBao remembers.",
     }),
     ROW({
       id: "model",
       title: "AI model",
       required: true,
       ready: false,
-      detail: "Without a model key, OpenBot can't answer.",
+      detail: "Without a model key, XiongBao can't answer.",
       fix: {
         kind: "env",
         names: ["OPENAI_API_KEY"],
@@ -112,7 +112,7 @@ const ADMIN: Checklist = {
       id: "chat",
       title: "Slack and Teams",
       ready: false,
-      detail: "Without it, people can talk to OpenBot only here.",
+      detail: "Without it, people can talk to XiongBao only here.",
       fix: {
         kind: "env",
         names: ["OPENTAG_SHARED_SECRET", "OPENTAG_URL"],
@@ -168,7 +168,7 @@ test("Ready and Needs setup rows come from the server's answer", async () => {
   expect(rowOf(view, "model").getByText("必需")).not.toBeNull();
   expect(
     rowOf(view, "model").getByText(
-      "Without a model key, OpenBot can't answer.",
+      "Without a model key, XiongBao can't answer.",
     ),
   ).not.toBeNull();
   expect(
@@ -347,7 +347,7 @@ test("a key nobody has checked reads Not checked, never Ready", async () => {
   expect(view.getByText("还有 1 项没检查。")).not.toBeNull();
 });
 
-test("optional gaps alone say OpenBot is ready, and that each says how to add it", async () => {
+test("optional gaps alone say XiongBao is ready, and that each says how to add it", async () => {
   serving({
     audience: "admin",
     rows: ADMIN.rows.map((row) =>

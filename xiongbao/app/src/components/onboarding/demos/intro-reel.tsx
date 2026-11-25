@@ -16,7 +16,7 @@ const ASK: Scene = {
   draw: () => <WelcomeDemo />,
 };
 /*
- * Said so it holds however OpenBot runs its computers: one shared by every Bot on Desktop, one per
+ * Said so it holds however XiongBao runs its computers: one shared by every Bot on Desktop, one per
  * person, or one per Bot. Each of those is apart from the person's own machine, and none is promised
  * to a single Bot.
  */
@@ -32,13 +32,13 @@ const TEAM: Scene = {
 };
 
 /**
- * The welcome step's one animation: what OpenBot does, as three scenes that play in turn.
+ * The welcome step's one animation: what XiongBao does, as three scenes that play in turn.
  *
  * A PICTURE, LIKE EVERY DEMO. Each scene is a `DemoStage`, which is inert and labelled, and the
  * caption under it says the same thing in words. The dots only say which scene is showing; there
  * is nothing here to press.
  *
- * `computer` false leaves the Bot computer scene out, for an OpenBot that has none yet, so the
+ * `computer` false leaves the Bot computer scene out, for an XiongBao that has none yet, so the
  * picture never promises one. With reduced motion the reel holds its first scene, and it waits
  * while the tab is hidden.
  */

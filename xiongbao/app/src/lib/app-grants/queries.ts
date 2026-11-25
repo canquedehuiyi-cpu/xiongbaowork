@@ -40,7 +40,7 @@ export type AppGrantPreview = {
   warning: string | null;
   /** Against what the Bot holds now. */
   changes: { added: ChangedAction[]; removed: ChangedAction[] };
-  /** Null where OpenBot keeps no readable trail to replay. */
+  /** Null where XiongBao keeps no readable trail to replay. */
   report: AppGrantReplay | null;
 };
 

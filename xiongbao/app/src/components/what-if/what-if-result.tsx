@@ -35,7 +35,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 /**
- * What each of OpenBot's controls says about one action, in the order it asks them.
+ * What each of XiongBao's controls says about one action, in the order it asks them.
  *
  * One row per control, stacked, so it reads down a narrow column: the control, what it says and why,
  * and its verdict as a pill. The control that settles the action is tinted; the ones a real action

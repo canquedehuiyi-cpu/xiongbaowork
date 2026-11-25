@@ -59,7 +59,7 @@ const ALL = [
 /** Pages of the events above, `limit` after `after`, as the server answers them. */
 function serve(events: WakerFlowRunEvent[]) {
   globalThis.fetch = (async (input: unknown) => {
-    const url = new URL(String(input), "http://openbot.test");
+    const url = new URL(String(input), "http://xiongbao.test");
     asked.push(`${url.pathname}?${url.searchParams.toString()}`);
     const after = Number(url.searchParams.get("after") ?? 0);
     const limit = Number(url.searchParams.get("limit") ?? 50);
@@ -103,7 +103,7 @@ test("the timeline reads a page at a time and 加载更多 shows the rest, each 
 test("while the run goes on, a change reads only what came after the newest event shown", async () => {
   let known = ALL.slice(0, 2);
   globalThis.fetch = (async (input: unknown) => {
-    const url = new URL(String(input), "http://openbot.test");
+    const url = new URL(String(input), "http://xiongbao.test");
     asked.push(url.searchParams.get("after") ?? "");
     const after = Number(url.searchParams.get("after") ?? 0);
     return Response.json({

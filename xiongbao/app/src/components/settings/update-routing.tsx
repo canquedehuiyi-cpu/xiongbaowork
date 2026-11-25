@@ -37,7 +37,7 @@ import { queryClient } from "@/query-client";
  * 对这个人所有员工生效）。
  *
  * How each channel is turned on: Slack and Teams through an OpenTag pairing, text messages through Twilio, push through
- * the OpenBot phone app. Each is a setting where OpenBot runs, read at start-up, so the docs say what to set; the two
+ * the XiongBao phone app. Each is a setting where XiongBao runs, read at start-up, so the docs say what to set; the two
  * sections sit together there. The setup checklist links the same page for Slack and Teams: the deployment's support
  * page (brand `support_url`), and no link when it publishes none.
  */
@@ -85,7 +85,7 @@ export function UpdateRoutingSection() {
   const reach = useQuery(deliveryQueryOptions());
   const save = useMutation(setUpdateRoutingMutationOptions(queryClient));
   /*
-   * Who can turn a channel on: an admin, or the one person running OpenBot themselves (the same rule as Settings,
+   * Who can turn a channel on: an admin, or the one person running XiongBao themselves (the same rule as Settings,
    * Setup). They get the way to; anyone else is told it's their admin's to do.
    */
   const user = useQuery(currentUserQueryOptions());

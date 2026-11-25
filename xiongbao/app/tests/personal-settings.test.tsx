@@ -85,7 +85,7 @@ describe("the Computer page", () => {
         computer: "person:dev-local-user",
         kind: "person",
         personId: "dev-local-user",
-        person: { name: "dev@openbot.local", email: "dev@openbot.local" },
+        person: { name: "dev@xiongbao.local", email: "dev@xiongbao.local" },
         botId: "personal-assistant",
         running: true,
         startedAt: "2026-11-07T04:21:42.051Z",
@@ -156,7 +156,7 @@ describe("the Computer page", () => {
       .closest('[data-slot="item"]') as HTMLElement;
   }
 
-  test("in the team edition names whose OpenBot browser it is, never a Bot that is gone", async () => {
+  test("in the team edition names whose XiongBao browser it is, never a Bot that is gone", async () => {
     const view = await renderPage("team", hostAccess, {
       isolation: "per-person",
       computers: [
@@ -192,8 +192,8 @@ describe("the Computer page", () => {
       .parentElement?.parentElement as HTMLElement;
   }
 
-  // OpenBot Desktop gives its server a host, so a Bot's row offers the picker.
-  test("in OpenBot Desktop offers each Bot a folder", async () => {
+  // XiongBao Desktop gives its server a host, so a Bot's row offers the picker.
+  test("in XiongBao Desktop offers each Bot a folder", async () => {
     const view = await renderPage("team", {
       ...hostAccess,
       desktop: true,
@@ -210,7 +210,7 @@ describe("the Computer page", () => {
 
   // Started with scripts/start.sh, or anywhere but the desktop: no host will ever answer, so the
   // section says what is missing instead of offering a picker that cannot open.
-  test("outside OpenBot Desktop says the folders need it, with no picker to press", async () => {
+  test("outside XiongBao Desktop says the folders need it, with no picker to press", async () => {
     const view = await renderPage("team", {
       ...hostAccess,
       desktop: false,
@@ -292,7 +292,7 @@ describe("the Computer page", () => {
     expect(view.getByRole("heading", { name: "电脑" })).toBeTruthy();
     expect(text).toContain("COMPUTER_SUPERVISOR_URL");
     expect(text).toContain("这个部署里的电脑");
-    expect(text).toContain("dev@openbot.local · Personal Assistant");
+    expect(text).toContain("dev@xiongbao.local · Personal Assistant");
     expect(text).toContain("经 network policy filter 出网");
   });
 
@@ -325,7 +325,7 @@ describe("the Computer page", () => {
     const text = view.container.textContent ?? "";
     expect(text).toContain("COMPUTER_SUPERVISOR_URL");
     expect(text).toContain("这个部署里的电脑");
-    expect(text).toContain("dev@openbot.local · Personal Assistant");
+    expect(text).toContain("dev@xiongbao.local · Personal Assistant");
     expect(text).toContain("经 network policy filter 出网");
   });
 });

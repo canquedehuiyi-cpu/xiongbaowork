@@ -28,7 +28,7 @@ const MAX_FRAME_MS = 50;
 /**
  * How long the reveal waits for a frame before taking its step on a timer instead.
  *
- * A window nobody can see draws no frames: WebKit stops them for an OpenBot Desktop window covered
+ * A window nobody can see draws no frames: WebKit stops them for an XiongBao Desktop window covered
  * by another app, and browsers for a hidden tab. Paced by frames alone, a reply that arrived then
  * stayed cut off mid-sentence until somebody looked, and a screen reader or a glance at the window
  * read the cut. Timers still run there (throttled), so the reveal keeps going and finishes.

@@ -53,7 +53,7 @@ test("setup names where it runs", () => {
 
 /*
  * The personal edition's starter runs on the harness its one person picked at setup, at the address
- * of the container OpenBot started for it ("agent-harness:4206" on Windows). That address means
+ * of the container XiongBao started for it ("agent-harness:4206" on Windows). That address means
  * nothing to them; the framework does. A team deployment still shows the address.
  */
 test("the personal edition names what runs a Bot instead of its address", () => {

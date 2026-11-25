@@ -25,7 +25,7 @@ import { ToolLine } from "./tool-line";
  *
  * These are the Claude Agent SDK's built-in tools (`agent-claude-sdk/`), which reach the transcript
  * named as Claude Code names them, with Claude Code's arguments, and with the text Claude Code hands
- * the model as their result. The look follows Claude Code's own pieces, built from OpenBot's: the
+ * the model as their result. The look follows Claude Code's own pieces, built from XiongBao's: the
  * frame is the one a fenced code block is drawn in, so code a Bot wrote and code a Bot ran read as
  * one family.
  */
@@ -40,7 +40,7 @@ export type CodingOutcome =
  * A result, and whether the tool said it failed.
  *
  * `ag-ui-claude-sdk` has nowhere in an AG-UI result to put Claude Code's `is_error`, so while the
- * turn streams it wraps a failed result as `{"error": true, "content": "..."}`. OpenBot's harness
+ * turn streams it wraps a failed result as `{"error": true, "content": "..."}`. XiongBao's harness
  * keeps that wrapper in the history it sends when the turn ends (`agent-claude-sdk/src/adapter.py`).
  * History from before it did, or from another copy of the harness, carries the bare text, so a
  * failure is also known by Claude Code's own marks on it: a command's exit code on the first line,

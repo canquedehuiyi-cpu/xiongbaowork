@@ -10,7 +10,7 @@ import {
 import { cleanup, render } from "@testing-library/react";
 import {
   AuditPage,
-  withoutOpenBotWorking,
+  withoutXiongBaoWorking,
 } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
@@ -117,7 +117,7 @@ async function renderActivity() {
     localEvaluation: true,
     edition: "personal",
   });
-  seedAuditPage(queryClient, withoutOpenBotWorking(""), {
+  seedAuditPage(queryClient, withoutXiongBaoWorking(""), {
     events: ROWS,
   });
   queryClient.setQueryData(agentKeys.list(false), [

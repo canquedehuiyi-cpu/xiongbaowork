@@ -20,7 +20,7 @@ async function probeServingPorts(env: {
   APP_PORT?: string;
   SERVER_PORT?: string;
 }) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-serve-ports-"));
+  const directory = await mkdtemp(join(tmpdir(), "xiongbao-serve-ports-"));
   const preload = join(directory, "probe.mjs");
   try {
     // Run the real entry and API handler, stopping both boundaries before any network access.
@@ -81,7 +81,7 @@ describe("serving port configuration", () => {
       expect(result.stdout).toContain(
         'PORT_PROBE:{"port":3010,"target":"http://127.0.0.1:3001/api/port-check"}',
       );
-      expect(result.stdout).toContain("OpenBot app on http://127.0.0.1:3010");
+      expect(result.stdout).toContain("XiongBao app on http://127.0.0.1:3010");
     },
   );
 
@@ -112,7 +112,7 @@ describe("serving port configuration", () => {
           `${name} must be a whole number from 1 to 65535`,
         );
         expect(result.stdout).not.toContain("PORT_PROBE:");
-        expect(result.stdout).not.toContain("OpenBot app on");
+        expect(result.stdout).not.toContain("XiongBao app on");
       },
     );
   }
@@ -123,7 +123,7 @@ describe("serving port configuration", () => {
  *
  * The failure that made this necessary: `vite preview` under `bun --bun` dies on the first proxied
  * call with `TypeError: socket.destroySoon is not a function`, so the app served its page, exited,
- * and the shell's window went on saying "OpenBot is running" with nothing listening.
+ * and the shell's window went on saying "XiongBao is running" with nothing listening.
  */
 describe("what answers a request", () => {
   test("the server answers its own prefix, and nothing near it", () => {
@@ -260,7 +260,7 @@ function startAuthenticatedUpstream(port: number) {
       if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
         const headers = snapshotHeaders(request);
         webSocketHandshakes.push(headers);
-        if (headers.cookie !== "openbot_session=valid") {
+        if (headers.cookie !== "xiongbao_session=valid") {
           return new Response("Sign in first.", { status: 401 });
         }
         if (server.upgrade(request)) return undefined;
@@ -450,9 +450,9 @@ describe("api proxy", () => {
       new Headers({
         Authorization: "Bearer app-session",
         Connection: "Upgrade",
-        Cookie: "openbot_session=valid",
+        Cookie: "xiongbao_session=valid",
         Host: "127.0.0.1:3010",
-        Origin: "http://openbot.local",
+        Origin: "http://xiongbao.local",
         "Sec-WebSocket-Key": "client-generated",
         Upgrade: "websocket",
       }),
@@ -460,9 +460,9 @@ describe("api proxy", () => {
 
     expect(Object.fromEntries(headers)).toEqual({
       authorization: "Bearer app-session",
-      cookie: "openbot_session=valid",
+      cookie: "xiongbao_session=valid",
       host: "127.0.0.1:3010",
-      origin: "http://openbot.local",
+      origin: "http://xiongbao.local",
     });
   });
 
@@ -517,8 +517,8 @@ describe("api proxy", () => {
     try {
       const sessionHeaders = {
         Authorization: "Bearer app-session",
-        Cookie: "openbot_session=valid",
-        Origin: "http://openbot.local",
+        Cookie: "xiongbao_session=valid",
+        Origin: "http://xiongbao.local",
       };
       const httpResponse = await fetch(
         `http://127.0.0.1:${proxyPort}/api/header-check`,
@@ -526,15 +526,15 @@ describe("api proxy", () => {
       );
       expect(await httpResponse.json()).toEqual({
         authorization: "Bearer app-session",
-        cookie: "openbot_session=valid",
-        origin: "http://openbot.local",
+        cookie: "xiongbao_session=valid",
+        origin: "http://xiongbao.local",
       });
 
       const unauthorizedEvents = await failedHandshake(
         `ws://127.0.0.1:${proxyPort}/api/header-check`,
         {
           Authorization: "Bearer app-session",
-          Origin: "http://openbot.local",
+          Origin: "http://xiongbao.local",
         },
       );
       const unauthorizedHandshake = await waitForHandshake(
@@ -545,7 +545,7 @@ describe("api proxy", () => {
       expect(unauthorizedHandshake).toEqual({
         authorization: "Bearer app-session",
         cookie: null,
-        origin: "http://openbot.local",
+        origin: "http://xiongbao.local",
       });
 
       const socket = await connectWebSocket(
@@ -557,8 +557,8 @@ describe("api proxy", () => {
       socket.close();
       expect(await waitForHandshake(upstream.webSocketHandshakes, 2)).toEqual({
         authorization: "Bearer app-session",
-        cookie: "openbot_session=valid",
-        origin: "http://openbot.local",
+        cookie: "xiongbao_session=valid",
+        origin: "http://xiongbao.local",
       });
     } finally {
       upstream.server.stop(true);

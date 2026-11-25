@@ -11,7 +11,7 @@ import { notificationsAllowed } from "./permission";
 import { conversationTag, inSight, type Notice, showNotice } from "./show";
 
 /**
- * A notification when a Bot replies while OpenBot is out of sight: what the offer to turn them on
+ * A notification when a Bot replies while XiongBao is out of sight: what the offer to turn them on
  * promises with "when your Bot finishes". It comes off the roster's socket, which hears every reply
  * in every conversation the person is in, whoever started the run: this tab, another one, a routine
  * or a hand-off.
@@ -123,7 +123,7 @@ export function forgetReplies() {
 /**
  * Every event of the roster's socket passes here: a Bot's reply is held for its turn's end, and a
  * busy signal ends or starts a turn. `open` takes a browser to the conversation when the notice is
- * clicked; OpenBot Desktop opens the notice's own `path` instead.
+ * clicked; XiongBao Desktop opens the notice's own `path` instead.
  */
 export function noticeChannelEvent(
   activity: ChannelActivityEvent,
@@ -185,7 +185,7 @@ async function announce(
 ): Promise<void> {
   const key = wordsKey(activity);
   if (announced.has(key) || inSight()) return;
-  // Waits for OpenBot Desktop's answer when it is still on its way; looked at again after.
+  // Waits for XiongBao Desktop's answer when it is still on its way; looked at again after.
   if (!(await notificationsAllowed())) return;
   if (announced.has(key) || inSight()) return;
   remember(key);

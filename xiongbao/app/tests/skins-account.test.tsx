@@ -43,7 +43,7 @@ import { settleReactWork } from "./settle-react-work";
  * The skin is saved on the person's account. These drive it the way a person does: the picker on
  * Settings, a reload whose cached skin is not the account's, signing out on a shared machine, and
  * the account's skin changing under a screen only the old skin had. The API is a fake that answers
- * in the shapes OpenBot's endpoints send; the store, the sync, the picker and the routes are real.
+ * in the shapes XiongBao's endpoints send; the store, the sync, the picker and the routes are real.
  */
 
 class OfflineWebSocket extends EventTarget {
@@ -259,7 +259,7 @@ test("signing out forgets the cached skin, so the next person starts from the de
   expect(cachedSkin()).toBe("openduet");
   serve("POST /api/auth/sign-out", { success: true });
 
-  // The one sign-out every menu uses: OpenBot's sidebar and each skin's own.
+  // The one sign-out every menu uses: XiongBao's sidebar and each skin's own.
   await queryClient
     .getMutationCache()
     .build(queryClient, signOutMutationOptions(queryClient))

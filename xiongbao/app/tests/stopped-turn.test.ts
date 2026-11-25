@@ -23,8 +23,8 @@ describe("the reason a turn ended", () => {
     ).toBe("The endpoint refused the connection");
   });
 
-  test("says OpenBot couldn't reach its back end, not the raw request failure", () => {
-    // The exact text a teammate saw on OpenBot 1.0.0, built by CopilotKit's Intelligence agent when
+  test("says XiongBao couldn't reach its back end, not the raw request failure", () => {
+    // The exact text a teammate saw on XiongBao 1.0.0, built by CopilotKit's Intelligence agent when
     // the run request to the runtime fails.
     const run = stoppedReason(
       new Error(

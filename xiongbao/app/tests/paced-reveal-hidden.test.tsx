@@ -6,7 +6,7 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * A covered window draws no frames. WebKit stops `requestAnimationFrame` for a window another one
- * covers (OpenBot Desktop behind the person's other apps), and browsers do the same for a hidden
+ * covers (XiongBao Desktop behind the person's other apps), and browsers do the same for a hidden
  * tab. The reveal ran only on frames, so a reply that arrived while the window was covered stayed
  * half drawn, or not drawn at all, until somebody looked at it: a screen reader, a notification
  * or a glance at the window all read the cut-off text. Here no frame ever comes.

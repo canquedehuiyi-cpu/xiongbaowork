@@ -17,7 +17,7 @@ import { settleReactWork } from "./settle-react-work";
 /*
  * Two rows Settings > Activity showed in the personal edition that a person could not read. Seen on
  * Windows: "Choose tools for a run / 96 of 96 tools / Couldn't choose, so all were offered" on every
- * turn, OpenBot's own working; and choosing a folder for a Bot on Settings > Computer read "Change a
+ * turn, XiongBao's own working; and choosing a folder for a Bot on Settings > Computer read "Change a
  * setting" with no Bot and no folder.
  */
 

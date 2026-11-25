@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 import { AVATAR_MENU_ITEM, NAVIGATION, navigationFor } from "@/lib/navigation";
 
 /*
- * OpenBot's destinations live in one list (`lib/navigation.ts`) that every skin draws from. Admin is
+ * XiongBao's destinations live in one list (`lib/navigation.ts`) that every skin draws from. Admin is
  * in it for admins only.
  *
  * 熊宝版（M5b）按上游的页面结构排，用户拍板的清单：主导航 员工、任务看板、自主工作、@Waker、能力、连接
  * （教员工做事由 `BrowserNavItem` 另画）；「更多」组团流程；账户菜单 我的分身、套餐与用量、设置、管理。
- * 上游「侧栏照这份清单画」、个人版的 OpenBot for Business 用例不收。
+ * 上游「侧栏照这份清单画」、个人版的上游 Business 版用例不收。
  */
 
 test("Admin is in the list for admins only", () => {

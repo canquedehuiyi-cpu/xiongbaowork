@@ -121,7 +121,7 @@ function serve(endpoint: string) {
       }
       return routes.request(
         new Request(
-          `http://openbot.test${path.slice("/api/agents".length)}`,
+          `http://xiongbao.test${path.slice("/api/agents".length)}`,
           init,
         ),
       );

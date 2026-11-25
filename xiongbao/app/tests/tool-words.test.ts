@@ -133,7 +133,7 @@ test("an app's tool reads as a person would say what it does", () => {
 
 /**
  * A tool's name in a list of tools, against names as Composio publishes them for Gmail, GitHub,
- * HubSpot, Slack and Google Calendar, and OpenBot's own Routines. Each pair is the app and the stored
+ * HubSpot, Slack and Google Calendar, and XiongBao's own Routines. Each pair is the app and the stored
  * name, and what a person reads.
  */
 const NAMED: ReadonlyArray<readonly [string, string, string]> = [
@@ -188,7 +188,7 @@ const NAMED: ReadonlyArray<readonly [string, string, string]> = [
     "HUBSPOT_RETRIEVE_OWNER_BY_ID_OR_USER_ID",
     "Retrieve owner by ID or user ID",
   ],
-  // OpenBot's own Routines, as a command like every other app's tool.
+  // XiongBao's own Routines, as a command like every other app's tool.
   ["routines", "complete_goal", "完成目标"],
   ["routines", "create_goal", "新建目标"],
 ];

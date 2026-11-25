@@ -10,7 +10,7 @@ import { MuseEmpty, MuseScreen } from "../ui";
 import { NoBot } from "./activity";
 
 /**
- * Ideas: what the centre Bot's check-ins found, and its check-ins themselves. Both are OpenBot's own
+ * Ideas: what the centre Bot's check-ins found, and its check-ins themselves. Both are XiongBao's own
  * sections, so starting, hiding and running a check-in behave as on the Bot's page.
  */
 export function IdeasScreen() {

@@ -22,11 +22,11 @@ export type AuthenticatedUser = {
   /** Null means this deployment does not track onboarding, which reads as nothing to finish. */
   onboarding: OnboardingStatus | null;
   /**
-   * The OpenBot release the server runs, such as "v0.3.1", drawn small under this person's name.
+   * The XiongBao release the server runs, such as "v0.3.1", drawn small under this person's name.
    * Not the person's: /api/me carries it beside them, and it rides here so the request the
    * `_authed` gate already makes brings it. Null when the server was built without one.
    */
-  openbotVersion?: string | null;
+  xiongbaoVersion?: string | null;
 };
 
 /** Whether the gate holds: there is an onboarding to do and this person has not finished it. */
@@ -119,7 +119,7 @@ async function currentUser(): Promise<AuthenticatedUser | null> {
     user: AuthenticatedUser;
     version?: string | null;
   };
-  return { ...body.user, openbotVersion: body.version ?? null };
+  return { ...body.user, xiongbaoVersion: body.version ?? null };
 }
 
 export function currentUserQueryOptions() {

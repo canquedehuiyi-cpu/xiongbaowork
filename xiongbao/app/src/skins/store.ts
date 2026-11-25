@@ -71,13 +71,19 @@ const browserEffects: SkinEffects = {
  * `index.html` applies whatever the key holds before the first paint, without knowing which skins
  * this build ships. A stored skin that has since been removed would otherwise stay on `<html>` for
  * the rest of the visit while the app draws the default, so the app settles the attribute on load.
+ *
+ * The cache is rewritten to the skin it now draws, so the next pre-paint puts the right id on
+ * `<html>` at once: the default skin's id from before it was renamed is one such stale value.
  */
 export function reconcileSkin(
   stored: string | null,
-  effects: Pick<SkinEffects, "setRootSkin">,
+  effects: Pick<SkinEffects, "setRootSkin"> &
+    Partial<Pick<SkinEffects, "setStoredValue">>,
 ): SkinId {
   const id = parseStoredSkin(stored);
   effects.setRootSkin(id === DEFAULT_SKIN ? null : id);
+  if (stored !== null && stored !== id)
+    effects.setStoredValue?.(SKIN_STORAGE_KEY, id);
   return id;
 }
 

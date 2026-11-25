@@ -65,7 +65,7 @@ export const Route = createFileRoute("/_authed/admin/plugins/composio")({
  */
 export function matchingApps(apps: ComposioApp[]): ComposioApp[] {
   // Apps somebody signs in to before apps that take a key: most of the catalogue has no sign-in,
-  // and a person browsing expected one (upstream, reported from OpenBot Desktop 0.3.3).
+  // and a person browsing expected one (reported upstream, from its desktop app 0.3.3).
   return [...apps].sort(
     (left, right) =>
       Number(needsKey(left)) - Number(needsKey(right)) ||

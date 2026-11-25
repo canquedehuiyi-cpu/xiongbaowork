@@ -15,7 +15,7 @@ import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
  * says the same, from the same sentences); then this browser's Recorder, then every browser connected as you, the row
  * of this browser's own copy marked.
  *
- * Where a recording goes is said for the edition: an organization's OpenBot in the team edition, the person's own
+ * Where a recording goes is said for the edition: an organization's XiongBao in the team edition, the person's own
  * Learning space in the personal one, which has no organization.
  */
 export function BrowserSections() {
