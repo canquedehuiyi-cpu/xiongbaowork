@@ -1477,7 +1477,7 @@ describe("streamer", () => {
     expect(h.closed).toEqual([h.trajectoryId, second, third]);
   });
 
-  test("a rollover never pushes a trajectory past Intelligence's cap, and asks OpenBot for nothing but passes", async () => {
+  test("a rollover never pushes a trajectory past Intelligence's cap, and asks XiongBao for nothing but passes", async () => {
     const h = await setup({ eventCap: 40 });
     const s = await h.start({}, { rolloverAt: 30 });
     for (let i = 0; i < 98; i++) s.push(click(i));
@@ -1490,7 +1490,7 @@ describe("streamer", () => {
     expect(clicks(chain.flatMap((id) => h.stored(id)))).toEqual(range(98));
     for (const id of chain) expect(h.stored(id).length).toBeLessThanOrEqual(31);
     expect(h.last().events.rejected).toBe(0);
-    // Every rolled-over trajectory streams on its own pass, at once: nothing waits on OpenBot.
+    // Every rolled-over trajectory streams on its own pass, at once: nothing waits on XiongBao.
     expect([...new Set(h.grants)].sort()).toEqual([...chain].sort());
   });
 

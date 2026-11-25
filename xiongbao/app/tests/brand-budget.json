@@ -45,11 +45,6 @@
     "lines": 14
   },
   {
-    "rule": "declaration",
-    "scope": "extension/src",
-    "lines": 1
-  },
-  {
     "rule": "env-name",
     "scope": "agent-computer/src",
     "lines": 1
@@ -122,7 +117,7 @@
   {
     "rule": "identifier",
     "scope": "extension/src",
-    "lines": 174
+    "lines": 108
   },
   {
     "rule": "identifier",
@@ -171,18 +166,8 @@
   },
   {
     "rule": "import-close",
-    "scope": "extension/src",
-    "lines": 1
-  },
-  {
-    "rule": "import-close",
     "scope": "server/src",
     "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "extension/src",
-    "lines": 5
   },
   {
     "rule": "import-path",

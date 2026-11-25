@@ -11,7 +11,7 @@ export const SETUP_PAGE = "setup.html";
  * opens a tab: a recording without the microphone goes on, and its Voice row offers this page. An update, a browser
  * update or a service worker restart opens nothing.
  *
- * Nor does an OpenBot browser, which its launcher connected (launcher.ts): the launcher granted the microphone. Chrome
+ * Nor does a XiongBao browser, which its launcher connected (launcher.ts): the launcher granted the microphone. Chrome
  * forgets a Recorder loaded over the DevTools protocol when it quits, so the launcher loads it afresh at every launch,
  * an install each time, while its storage survives: from the second launch on, the launcher's connection is already
  * here. On the first, the connection arrives a moment after the install and closes the tab this opened (`setupTabId`).

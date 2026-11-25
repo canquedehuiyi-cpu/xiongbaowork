@@ -19,7 +19,7 @@ test("XiongbaoUrl alone pins the Recorder to it", async () => {
   fake.storage.setManaged({ XiongbaoUrl: "https://work.example.test" });
   expect(await readPolicy()).toEqual({
     openbotUrl: "https://work.example.test",
-    openbotUrlInvalid: false,
+    xiongbaoUrlInvalid: false,
     allowedIntelligenceUrls: null,
   });
 });
@@ -36,7 +36,7 @@ test("OpenBotUrl alone, as an older install wrote it, still pins the Recorder", 
   fake.storage.setManaged({ OpenBotUrl: "https://old.example.test" });
   expect(await readPolicy()).toEqual({
     openbotUrl: "https://old.example.test",
-    openbotUrlInvalid: false,
+    xiongbaoUrlInvalid: false,
     allowedIntelligenceUrls: null,
   });
 });
@@ -48,7 +48,7 @@ test("an invalid XiongbaoUrl refuses every connect even where a valid OpenBotUrl
   });
   expect(await readPolicy()).toMatchObject({
     openbotUrl: null,
-    openbotUrlInvalid: true,
+    xiongbaoUrlInvalid: true,
   });
 });
 

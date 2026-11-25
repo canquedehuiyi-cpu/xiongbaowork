@@ -6,19 +6,19 @@
  * mark is how they know which tabs it has, before a glance at a bank or a mailbox goes into it.
  *
  * Where it sits: on the top edge, where apps keep the least of what a person uses. A sidebar and its account row run
- * down the left (OpenBot's own account row is bottom-left), an account menu sits top-right, a chat launcher and the
+ * down the left (XiongBao's own account row is bottom-left), an account menu sits top-right, a chat launcher and the
  * 50-action notice bottom-right, and a chat's composer bottom-centre. It hangs from the middle of the top edge unless
  * something the person can use is right there (a link, a button, a field, a frame such as a chat launcher), and then
  * from the first spot that covers nothing of the kind: right of the middle, left of it, then the middle of the bottom
- * edge (`MARK_SPOTS`). OpenBot's own pages show why one fixed spot is not enough: the bar that offers help self-hosting
+ * edge (`MARK_SPOTS`). XiongBao's own pages show why one fixed spot is not enough: the bar that offers help self-hosting
  * it has its link and its close button in the middle of the top edge on a laptop's screen. The page is looked at again
  * when its size changes and every couple of seconds, since an app draws its banners and launchers late, but the mark
  * never moves while the person points at it or it has the keyboard, and never for nothing: it stays where it is while
  * it covers nothing there, or while no spot covers less.
  *
- * Drawn like the notice: OpenBot's colours copied from app/src/theme.css (notice.ts), marked `data-copilotkit-ignore` so
- * a click on it is never one of the person's steps, and acting only on trusted events, so a page script cannot press its
- * button.
+ * Drawn like the notice: XiongBao's colours copied from app/src/theme.css (notice.ts), marked with the chat library's
+ * ignore attribute so a click on it is never one of the person's steps, and acting only on trusted events, so a page
+ * script cannot press its button.
  *
  * THE PAGE CANNOT TAKE IT AWAY. It is the sign that a tab is being recorded, and it lives in the page's own DOM, so the
  * page could hide it with one CSS rule, or remove it, and nothing put it back. Now:

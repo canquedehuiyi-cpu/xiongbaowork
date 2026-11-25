@@ -18,7 +18,7 @@ import {
  *   Recorder does not know, is refused `{ ok: false, error: "invalid" }`, as the Recorder's router refuses one today.
  * - `xiongbao.state` tells a page that is not the connected XiongBao `{ connected: false }` and nothing more.
  * - `xiongbao.record` and `xiongbao.stop` answer `RecorderPageResult`; a refusal carries the Recorder's own sentence.
- * - `openbot.connect` connects a trusted XiongBao with no Connect page, answering `connected: true`, and leaves any
+ * - `xiongbao.connect` connects a trusted XiongBao with no Connect page, answering `connected: true`, and leaves any
  *   other awaiting the person's Connect click (`confirm`), answering `awaitingConfirmation` and nothing about itself,
  *   as the Recorder does.
  * - `xiongbao.connect.status` says where that connect has got to: waiting, cancelled on the Connect page (`cancel`),
@@ -38,7 +38,7 @@ export class FakeRecorder {
   awaitingConfirmation = false;
   /** Where the last connect from this page has got to, as `xiongbao.connect.status` answers it. */
   private connectWait: RecorderConnectWait = "none";
-  /** What `openbot.connect` is refused with, when it is. */
+  /** What `xiongbao.connect` is refused with, when it is. */
   refuseConnect: string | null = null;
   /** What `xiongbao.record` is refused with, when it is: the Recorder's own sentence ("Record from XiongBao's own tab."
    * when a frame inside another page asks). */
@@ -94,11 +94,11 @@ export class FakeRecorder {
   answer(raw: unknown): unknown {
     this.received.push(raw);
     const type = (raw as { type?: unknown } | null)?.type;
-    if (type === "openbot.ping")
+    if (type === "xiongbao.ping")
       return this.connected
         ? { ok: true, version: "1.0.0", installId: "c".repeat(32) }
         : { ok: true };
-    if (type === "openbot.connect") return this.connect(raw);
+    if (type === "xiongbao.connect") return this.connect(raw);
     if (this.older) return { ok: false, error: "invalid" };
     if (type === RECORDER_CONNECT_STATUS)
       return { ok: true, connect: this.connectWait };

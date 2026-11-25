@@ -20,7 +20,7 @@ beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
-const ORIGIN = "https://openbot.example.test";
+const ORIGIN = "https://xiongbao.example.test";
 let fake: ChromeFake;
 let received: {
   type: string;
@@ -70,14 +70,14 @@ afterEach(() => {
 test("shows the origin and the default name", async () => {
   const { findByText, getByText } = render(<ConnectPage />);
   expect((await findByText(ORIGIN)).className).toContain("font-mono");
-  // Any site can ask, so the page never says the request came from OpenBot.
+  // Any site can ask, so the page never says the request came from XiongBao.
   expect(
     getByText("A page at this address in this browser asked to connect."),
   ).toBeTruthy();
   expect(getByText("Google Chrome on macOS")).toBeTruthy();
 });
 
-test("a connect that would replace this browser's connection says so before the click, naming that OpenBot and the person", async () => {
+test("a connect that would replace this browser's connection says so before the click, naming that XiongBao and the person", async () => {
   pendingAnswer = {
     ok: true,
     pending: { origin: ORIGIN, via: "web" },
@@ -103,7 +103,7 @@ test("a connect that replaces nothing says nothing about replacing", async () =>
   expect(container.textContent).not.toContain("replaces");
 });
 
-test("the page says OpenBot signs the browser in, and that recordings go straight to the learning part of OpenBot's back end with a pass, as the disclosure says", async () => {
+test("the page says XiongBao signs the browser in, and that recordings go straight to the learning part of XiongBao's back end with a pass, as the disclosure says", async () => {
   const { findByText, container } = render(<ConnectPage />);
   await findByText(ORIGIN);
   expect(
@@ -114,7 +114,7 @@ test("the page says OpenBot signs the browser in, and that recordings go straigh
   expect(container.ownerDocument.body.textContent).toContain(
     RECORDER_DESTINATION,
   );
-  // The disclosure says the same, and neither says the recording passes through OpenBot, which it never does.
+  // The disclosure says the same, and neither says the recording passes through XiongBao, which it never does.
   expect(RECORDER_DISCLOSURE).toContain(RECORDER_DESTINATION);
   for (const said of [
     RECORDER_DISCLOSURE,
@@ -168,7 +168,7 @@ test("Connect asks for no permission: website access came with the install", asy
   ]);
 });
 
-test("a refusal from OpenBot shows its sentence", async () => {
+test("a refusal from XiongBao shows its sentence", async () => {
   decideAnswer = { ok: false, error: "That code has expired." };
   const { findByRole, findByText } = render(<ConnectPage />);
   fireEvent.click(await findByRole("button", { name: "Connect" }));

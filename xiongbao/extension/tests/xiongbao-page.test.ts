@@ -1,6 +1,6 @@
-// What OpenBot's own page asks the Recorder in the same browser (shared/recorder-page.ts), end to end through the
+// What XiongBao's own page asks the Recorder in the same browser (shared/recorder-page.ts), end to end through the
 // Recorder's own code: the real service worker (connection, recording, router, setup, launcher) and the real offscreen
-// document side by side over a fake OpenBot and Intelligence, driven through `externally_connectable` messages as
+// document side by side over a fake XiongBao and Intelligence, driven through `externally_connectable` messages as
 // Chrome delivers them, with the sender's origin, tab and frame as Chrome reports them. The steps are rows of the full
 // end-to-end run (fixtures/e2e-held-steps.json).
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -36,7 +36,7 @@ import { fakeMicrophone, fakeSpeech } from "./support/fake-speech";
 const EXTENSION_ID = "test";
 const ada = { id: "p1", name: "Ada", email: "ada@example.test" };
 const ORDER = "http://127.0.0.1:7420/orders/1043";
-const TOKEN = "obr_openbot-page-token";
+const TOKEN = "obr_xiongbao-page-token";
 const NOT_CONNECTED = "Connect this browser to XiongBao Work first.";
 
 const rows = JSON.parse(
@@ -60,14 +60,14 @@ async function until(check: () => boolean | Promise<boolean>, label: string) {
   }
 }
 
-// ---- The fake OpenBot and Intelligence --------------------------------------------------------
+// ---- The fake XiongBao and Intelligence --------------------------------------------------------
 
 let gateway: FakeGateway;
-/** The tokens OpenBot still knows; the codes it took, and the tokens the Recorder asked it to revoke. */
+/** The tokens XiongBao still knows; the codes it took, and the tokens the Recorder asked it to revoke. */
 let liveTokens = new Set<string>();
 let exchanged: string[] = [];
 let revokedTokens: string[] = [];
-/** OpenBot taking the code OpenBot's page handed the Recorder. */
+/** XiongBao taking the code XiongBao's page handed the Recorder. */
 async function exchange(request: Request): Promise<Response> {
   const { code } = (await request.json()) as { code: string };
   exchanged.push(code);
@@ -216,15 +216,15 @@ function startWorker(): void {
 
 // ---- The tabs, and who asks ---------------------------------------------------------------------
 
-const OPENBOT_TAB = 7;
+const XIONGBAO_TAB = 7;
 const ORDER_TAB = 8;
-const openbotPage = () => `${gateway.httpUrl}/`;
+const xiongbaoPage = () => `${gateway.httpUrl}/`;
 
-/** OpenBot in tab 7, the tab the person is on, and an order already open in tab 8 behind it. */
+/** XiongBao in tab 7, the tab the person is on, and an order already open in tab 8 behind it. */
 function openTabs(): void {
-  fake.tabs.set(OPENBOT_TAB, {
-    id: OPENBOT_TAB,
-    url: openbotPage(),
+  fake.tabs.set(XIONGBAO_TAB, {
+    id: XIONGBAO_TAB,
+    url: xiongbaoPage(),
     title: "XiongBao Work",
     active: true,
     windowId: 1,
@@ -238,18 +238,18 @@ function openTabs(): void {
   } as chrome.tabs.Tab);
 }
 
-/** OpenBot's page (OpenBot Desktop's, on its loopback address), as Chrome reports it to the Recorder: its top frame. */
-const fromOpenBot = (
+/** XiongBao's page (XiongBao Desktop's, on its loopback address), as Chrome reports it to the Recorder: its top frame. */
+const fromXiongBao = (
   overrides: Partial<chrome.runtime.MessageSender> = {},
 ): chrome.runtime.MessageSender => ({
   origin: gateway.httpUrl,
-  url: openbotPage(),
-  tab: fake.tabs.get(OPENBOT_TAB),
+  url: xiongbaoPage(),
+  tab: fake.tabs.get(XIONGBAO_TAB),
   frameId: 0,
   ...overrides,
 });
 
-/** Pages that are not the connected OpenBot, each as Chrome would report it. */
+/** Pages that are not the connected XiongBao, each as Chrome would report it. */
 const others = (): chrome.runtime.MessageSender[] => [
   {
     origin: "https://evil.example",
@@ -257,7 +257,7 @@ const others = (): chrome.runtime.MessageSender[] => [
     tab: { id: 9 } as chrome.tabs.Tab,
     frameId: 0,
   },
-  // Another server on this computer, on another port: not the OpenBot this copy is connected to.
+  // Another server on this computer, on another port: not the XiongBao this copy is connected to.
   {
     origin: "http://127.0.0.1:1",
     url: "http://127.0.0.1:1/",
@@ -271,10 +271,10 @@ const others = (): chrome.runtime.MessageSender[] => [
     tab: { id: 9 } as chrome.tabs.Tab,
     frameId: 2,
   },
-  { url: openbotPage(), tab: { id: 9 } as chrome.tabs.Tab, frameId: 0 },
+  { url: xiongbaoPage(), tab: { id: 9 } as chrome.tabs.Tab, frameId: 0 },
 ];
 
-const ask = (message: unknown, sender = fromOpenBot()) =>
+const ask = (message: unknown, sender = fromXiongBao()) =>
   fake.sendExternal(message, sender);
 const stored = () =>
   fake.storage.local.get("connection") as ConnectionRecord | undefined;
@@ -286,10 +286,10 @@ async function recorderState(): Promise<RecorderState> {
   return answer.state;
 }
 
-/** OpenBot's page connects this browser: OpenBot Desktop's own address, so with no Connect page. */
-async function connectFromOpenBot(): Promise<void> {
+/** XiongBao's page connects this browser: XiongBao Desktop's own address, so with no Connect page. */
+async function connectFromXiongBao(): Promise<void> {
   expect(
-    await ask({ type: "openbot.connect", code: "obc_from-openbot" }),
+    await ask({ type: "xiongbao.connect", code: "obc_from-xiongbao" }),
   ).toMatchObject({ ok: true, connected: true });
   await settle();
 }
@@ -298,7 +298,7 @@ beforeEach(async () => {
   saved = { indexedDB: globals.indexedDB, IDBKeyRange: globals.IDBKeyRange };
   globals.indexedDB = new IDBFactory();
   globals.IDBKeyRange = FakeIDBKeyRange;
-  databaseName = `openbot-page-${Date.now()}-${databaseCounter++}`;
+  databaseName = `xiongbao-page-${Date.now()}-${databaseCounter++}`;
   due = [];
   documentTimers = [];
   liveTokens = new Set();
@@ -309,8 +309,8 @@ beforeEach(async () => {
     extensionId: EXTENSION_ID,
     manifestVersion: "0.3.0",
   });
-  // OpenBot Desktop runs on this computer, and its native host confirms the address its OpenBot answers on
-  // (recorder_host.rs `address`): that is what makes OpenBot's page there one the Recorder connects with no click.
+  // XiongBao Desktop runs on this computer, and its native host confirms the address its XiongBao answers on
+  // (recorder_host.rs `address`): that is what makes XiongBao's page there one the Recorder connects with no click.
   fake.native.reply = (message) =>
     (message as { type?: string }).type === "address"
       ? { ok: true, openbotUrl: gateway.httpUrl }
@@ -336,10 +336,10 @@ afterEach(async () => {
   }
 }, 15_000);
 
-test("OpenBot's page connects with no Connect page, records its own tab and then a tab the person switches to, and stops", async () => {
+test("XiongBao's page connects with no Connect page, records its own tab and then a tab the person switches to, and stops", async () => {
   expect(await ask({ type: "xiongbao.state" })).toEqual({ connected: false });
-  await connectFromOpenBot();
-  expect(exchanged).toEqual(["obc_from-openbot"]);
+  await connectFromXiongBao();
+  expect(exchanged).toEqual(["obc_from-xiongbao"]);
   expect(fake.opened).toEqual([]);
   expect(stored()).toMatchObject({
     openbotUrl: gateway.httpUrl,
@@ -365,8 +365,8 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
       actions: 0,
     },
   });
-  // It records the tab OpenBot asked from, through the popup's own Record.
-  expect((await recorderState()).tabIds).toEqual([OPENBOT_TAB]);
+  // It records the tab XiongBao asked from, through the popup's own Record.
+  expect((await recorderState()).tabIds).toEqual([XIONGBAO_TAB]);
   const active = fake.storage.local.get("activeRecording") as DrainRecord;
   const trajectoryId = active.trajectoryIds[0] ?? "";
   await until(
@@ -374,7 +374,7 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
     "the recording's start in Intelligence",
   );
 
-  // The person goes to the order, open in a tab behind OpenBot's, and archives it there.
+  // The person goes to the order, open in a tab behind XiongBao's, and archives it there.
   fake.person.switchTo(ORDER_TAB);
   await until(
     async () => (await recorderState()).tabIds.includes(ORDER_TAB),
@@ -424,7 +424,7 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
     () => names(trajectoryId).filter((name) => name === "outcome").length === 2,
     "the recording stopped",
   );
-  // OpenBot's page as the recording's first tab, then the order as its second, with the click in it.
+  // XiongBao's page as the recording's first tab, then the order as its second, with the click in it.
   const steps = sent(trajectoryId).filter(
     (event) => event.name === "navigation" || event.name === "click",
   );
@@ -435,7 +435,7 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
       return [event.name, value.tab, value.to ?? value.url];
     }),
   ).toEqual([
-    ["navigation", 1, openbotPage()],
+    ["navigation", 1, xiongbaoPage()],
     ["navigation", 2, ORDER],
     ["click", 2, ORDER],
   ]);
@@ -473,27 +473,27 @@ test("any other page gets not connected and a refusal, the same whether this cop
   // Nothing connected.
   expect(await answers()).toEqual(expected);
 
-  // Connected to OpenBot, and recording from it.
-  await connectFromOpenBot();
+  // Connected to XiongBao, and recording from it.
+  await connectFromXiongBao();
   expect(
     await ask({ type: "xiongbao.record", title: "Archive order 1043" }),
   ).toMatchObject({ ok: true, state: { phase: "recording" } });
   const active = fake.storage.local.get("activeRecording") as DrainRecord;
   expect(await answers()).toEqual(expected);
-  // The recording OpenBot started runs on, untouched, and no other started.
+  // The recording XiongBao started runs on, untouched, and no other started.
   expect(fake.storage.local.get("activeRecording")).toEqual(active);
   expect(await ask({ type: "xiongbao.state" })).toMatchObject({
     connected: true,
     phase: "recording",
     title: "Archive order 1043",
   });
-  expect((await recorderState()).tabIds).toEqual([OPENBOT_TAB]);
+  expect((await recorderState()).tabIds).toEqual([XIONGBAO_TAB]);
 }, 20_000);
 
-test("OpenBot's origin in a frame of another page may read the state and stop, but records only from its own top frame", async () => {
-  await connectFromOpenBot();
-  const framed = fromOpenBot({
-    url: openbotPage(),
+test("XiongBao's origin in a frame of another page may read the state and stop, but records only from its own top frame", async () => {
+  await connectFromXiongBao();
+  const framed = fromXiongBao({
+    url: xiongbaoPage(),
     tab: { id: 9, url: "https://evil.example/" } as chrome.tabs.Tab,
     frameId: 4,
   });
@@ -509,8 +509,8 @@ test("OpenBot's origin in a frame of another page may read the state and stop, b
   });
 });
 
-test("once the person disconnects this browser, OpenBot's page is told it is not connected and can no longer record", async () => {
-  await connectFromOpenBot();
+test("once the person disconnects this browser, XiongBao's page is told it is not connected and can no longer record", async () => {
+  await connectFromXiongBao();
   expect(
     await fake.sendFromPage(
       { type: "page.disconnect" },
@@ -526,10 +526,10 @@ test("once the person disconnects this browser, OpenBot's page is told it is not
   expect(fake.storage.local.get("activeRecording")).toBeUndefined();
 });
 
-test("Record from OpenBot's page carries the person's narration choice from their account, and without one the Recorder's own", async () => {
-  // OpenBot keeps the choice on the person's account, and its own Record form passes it on; a Record from its page
+test("Record from XiongBao's page carries the person's narration choice from their account, and without one the Recorder's own", async () => {
+  // XiongBao keeps the choice on the person's account, and its own Record form passes it on; a Record from its page
   // in the person's everyday browser used to leave it out, so the Recorder went by its own setting instead.
-  await connectFromOpenBot();
+  await connectFromXiongBao();
   const voice = async () => (await recorderState()).capture.voice?.state;
   const recordAndStop = async (message: object) => {
     expect(await ask(message)).toMatchObject({ ok: true });

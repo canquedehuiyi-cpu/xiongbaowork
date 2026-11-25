@@ -58,7 +58,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     );
   });
 
-  test("row 4: OpenBot's not found is parked: the recording belongs to another person", () => {
+  test("row 4: XiongBao's not found is parked: the recording belongs to another person", () => {
     const b = body(
       404,
       "NOT_FOUND",
@@ -108,7 +108,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     );
   });
 
-  test("row 8: could not connect to OpenBot's back end is retried", () => {
+  test("row 8: could not connect to XiongBao's back end is retried", () => {
     const b = body(
       502,
       "CONNECTION_FAILED",
@@ -252,7 +252,7 @@ describe("classifyGrantError, one assertion per pass row of the table", () => {
     expect(retry(classifyGrantError(500, null)).reason).toBe(BUSY);
   });
 
-  test("row 21: a network failure, an OpenBot 5xx and a body that is not JSON retry", () => {
+  test("row 21: a network failure, a XiongBao 5xx and a body that is not JSON retry", () => {
     expect(retry(classifyGrantError(null, null)).reason).toBe(BUSY);
     expect(retry(classifyGrantError(502, null)).reason).toBe(BUSY);
   });
@@ -432,7 +432,7 @@ describe("fetchGrant", () => {
     expect((await failure()).kind).toBe("retry");
   });
 
-  test("an unreachable OpenBot retries (row 21)", async () => {
+  test("an unreachable XiongBao retries (row 21)", async () => {
     const url = `http://127.0.0.1:${await reservePort()}`;
     try {
       await fetchGrant({ openbotUrl: url, token: "t" }, id);

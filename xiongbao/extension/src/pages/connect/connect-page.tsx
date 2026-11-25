@@ -44,14 +44,14 @@ type Phase =
   | { kind: "cancelled" };
 
 /** Who asked. Any site can ask to connect, so a web request is said to come from a page at the address shown, never
- * from OpenBot: confirming that it is OpenBot is what the person is asked to do. */
+ * from XiongBao: confirming that it is XiongBao is what the person is asked to do. */
 const SOURCE = {
   web: "A page at this address in this browser asked to connect.",
   desktop: "XiongBao Work Desktop on this computer asked.",
 } as const;
 
 /**
- * The page that asks the person to confirm the OpenBot address before this browser signs in to it.
+ * The page that asks the person to confirm the XiongBao address before this browser signs in to it.
  * The address is the decision, so it is the first row, read only, in the monospace face.
  */
 export function ConnectPage() {
@@ -86,7 +86,7 @@ export function ConnectPage() {
   const connect = async (pending: Pending) => {
     setBusy(true);
     setMessage(null);
-    // No permission to ask for: the install granted access to every site, this OpenBot's included.
+    // No permission to ask for: the install granted access to every site, this XiongBao's included.
     const answer = await ask({
       type: "page.connect.decide",
       approve: true,

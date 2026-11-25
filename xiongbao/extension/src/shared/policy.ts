@@ -1,23 +1,23 @@
 import { isAllowedGatewayUrl, normaliseXiongBaoOrigin } from "./origin";
 
-/** `openbotUrlInvalid`: the policy names an address normaliseXiongBaoOrigin refuses; every connect is then refused. */
+/** `xiongbaoUrlInvalid`: the policy names an address normaliseXiongBaoOrigin refuses; every connect is then refused. */
 export type RecorderPolicy = {
   openbotUrl: string | null;
-  openbotUrlInvalid: boolean;
+  xiongbaoUrlInvalid: boolean;
   allowedIntelligenceUrls: string[] | null;
 };
 
-function openbotUrlFrom(
+function xiongbaoUrlFrom(
   value: unknown,
-): Pick<RecorderPolicy, "openbotUrl" | "openbotUrlInvalid"> {
+): Pick<RecorderPolicy, "openbotUrl" | "xiongbaoUrlInvalid"> {
   if (value === undefined)
-    return { openbotUrl: null, openbotUrlInvalid: false };
+    return { openbotUrl: null, xiongbaoUrlInvalid: false };
   const checked =
     typeof value === "string" ? normaliseXiongBaoOrigin(value.trim()) : null;
   // The bad string is dropped here, so no surface can show or parse it.
   return checked?.ok
-    ? { openbotUrl: checked.origin, openbotUrlInvalid: false }
-    : { openbotUrl: null, openbotUrlInvalid: true };
+    ? { openbotUrl: checked.origin, xiongbaoUrlInvalid: false }
+    : { openbotUrl: null, xiongbaoUrlInvalid: true };
 }
 
 /** Absent: no restriction. Present: only the valid wss:// entries (ws:// for a loopback IP); none left refuses every pass.
@@ -38,7 +38,7 @@ function allowedUrlsFrom(value: unknown): string[] | null {
 function policyFrom(managed: Record<string, unknown>): RecorderPolicy {
   return {
     // The key IT writes is XiongbaoUrl; a browser still configured with the older key keeps its address (L1-23).
-    ...openbotUrlFrom(managed.XiongbaoUrl ?? managed.OpenBotUrl),
+    ...xiongbaoUrlFrom(managed.XiongbaoUrl ?? managed.OpenBotUrl),
     allowedIntelligenceUrls: allowedUrlsFrom(managed.AllowedIntelligenceUrls),
   };
 }
@@ -48,9 +48,12 @@ export async function readPolicy(): Promise<RecorderPolicy> {
 }
 
 /** Whether the policy lets this browser connect to (and stay connected to) `origin`: never under an invalid policy,
- * and only to the pinned OpenBot when one is pinned. */
-export function allowsOpenBot(policy: RecorderPolicy, origin: string): boolean {
-  if (policy.openbotUrlInvalid) return false;
+ * and only to the pinned XiongBao when one is pinned. */
+export function allowsXiongBao(
+  policy: RecorderPolicy,
+  origin: string,
+): boolean {
+  if (policy.xiongbaoUrlInvalid) return false;
   if (policy.openbotUrl === null) return true;
   const checked = normaliseXiongBaoOrigin(origin);
   return checked.ok && checked.origin === policy.openbotUrl;

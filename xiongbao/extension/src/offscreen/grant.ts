@@ -4,7 +4,7 @@ import {
   recorderPaths,
   type TrajectoryGrant,
 } from "@xiongbao/shared/recorder-api";
-import { openbotRaw } from "../shared/openbot-client";
+import { xiongbaoRaw } from "../shared/xiongbao-client";
 
 /** The table's verdicts for the pass stage (rows 1-23a). Every one keeps every queued event; signed-out keeps them for the
  * person who recorded them until they connect this browser again (Decision 19). */
@@ -176,7 +176,7 @@ export function classifyGrantError(
   // Row 22: any other 401.
   if (status === 401) return stop("hold", "UNAUTHORIZED");
   /*
-   * Row 23b: the proxy this browser goes through asked for its credentials. On an OpenBot computer that is the egress
+   * Row 23b: the proxy this browser goes through asked for its credentials. On a XiongBao computer that is the egress
    * filter, which answers 407 until the browser holds them, and the computer has the browser take them as it launches
    * (agent-computer's `holdFilterCredentials`). A pass sent in the moment before (one a browser start resends) gets the
    * 407, and the next, seconds later, goes with them: so a few quick passes rather than the five-minute hold of row 23a,
@@ -202,7 +202,7 @@ function isGrant(value: unknown): value is TrajectoryGrant {
   );
 }
 
-/** Where a pass is asked for: the connected OpenBot and the recorder bearer. No Bot: the recording is the person's. */
+/** Where a pass is asked for: the connected XiongBao and the recorder bearer. No Bot: the recording is the person's. */
 type GrantTarget = { openbotUrl: string; token: string };
 
 /** Asks the runtime's `trajectory/connect` for a one-time capture pass, which joins the trajectory to the person's own
@@ -213,7 +213,7 @@ export async function fetchGrant(
 ): Promise<TrajectoryGrant> {
   let response: Response;
   try {
-    response = await openbotRaw(
+    response = await xiongbaoRaw(
       target,
       recorderPaths.trajectoryConnect(trajectoryId),
       {
@@ -236,7 +236,7 @@ export async function fetchGrant(
     // A body that is not JSON carries no code.
     unparsable = true;
   }
-  // Row 21: a page that is not JSON on a 2xx is OpenBot or the network
+  // Row 21: a page that is not JSON on a 2xx is XiongBao or the network
   // misbehaving, not an answer the Recorder does not know (row 23a).
   if (response.ok && unparsable) {
     throw new GrantError(classifyGrantError(null, null));

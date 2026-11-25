@@ -18,7 +18,7 @@ export type ConnectionRecord = {
   via: RecorderConnectVia;
   connectedAt: number;
   /** Who hears the person, for a connection the Recorder's launcher made (launcher.ts): `external` when the browser has
-   * no microphone and OpenBot passes each phrase in. Absent: the Recorder hears the microphone itself, as always. */
+   * no microphone and XiongBao passes each phrase in. Absent: the Recorder hears the microphone itself, as always. */
   narration?: Narration;
 };
 /** What a stopped recording's streamer reported when it stopped with events kept (Decision 19, Task 11's offscreen.kept),
@@ -36,7 +36,7 @@ export type KeptEvents = {
 export type DrainRecord = {
   recordingId: string;
   title: string;
-  /** The OpenBot that hands out its capture passes. */
+  /** The XiongBao that hands out its capture passes. */
   openbotUrl: string;
   /** The person who recorded it: its events are sent only while that person is connected to `openbotUrl` (Decision 19). */
   userId: string;
@@ -50,7 +50,7 @@ export type DrainRecord = {
    * again; cleared on offscreen.done. */
   kept?: KeptEvents;
   /** Why its events are not going out right now while the document keeps retrying the back end (from the second
-   * failure in a row, the streamer's own sentence), so OpenBot can say it is not saved yet rather than "Saving" for the
+   * failure in a row, the streamer's own sentence), so XiongBao can say it is not saved yet rather than "Saving" for the
    * half hour before a retry streak turns into a hold. Cleared once they go out again. */
   retrying?: string;
   /** The steps its service worker still held when the browser quit (`heldSteps`), as they are sent: the document that
@@ -86,7 +86,7 @@ type LocalState = {
   drains?: DrainRecord[]; // stopped recordings still sending; removed on offscreen.done
   heldSteps?: HeldSteps; // the live recording's held steps and agent context; absent while it holds neither
   notice?: RecorderNotice;
-  /** When the organization-session keep-alive last reached OpenBot (Decision 2, Task 8). */
+  /** When the organization-session keep-alive last reached XiongBao (Decision 2, Task 8). */
   lastKeepAliveAt?: number;
   /** Whether the person narrates their recordings, as they chose on the setup page or in the Record form: the Recorder
    * opens the microphone only when it is `on`. Absent until they chose, which leaves it closed. */
@@ -97,7 +97,7 @@ type LocalState = {
 export type PendingConnect = {
   origin: string;
   code: string;
-  /** Only a page or OpenBot Desktop asks to connect; the launcher's connection is never pending. */
+  /** Only a page or XiongBao Desktop asks to connect; the launcher's connection is never pending. */
   via: "web" | "desktop";
   requestedAt: number;
   tabId?: number;
@@ -107,7 +107,7 @@ type SessionState = {
   pendingConnect?: PendingConnect;
   stream?: StreamSession; // so a restarted service worker can resume the offscreen document
   me?: { value: RecorderMe; fetchedAt: number };
-  /** The person's own Learning space as OpenBot last described it to the popup, and the connection it was asked with:
+  /** The person's own Learning space as XiongBao last described it to the popup, and the connection it was asked with:
    * Record copies it into the recording's state. Chrome stops a service worker idle for 30 s, so the one that answers
    * Record is often not the one the popup asked; it takes this up for the same connection only. */
   learning?: { value: LearningSpaceState; connectionId: string };
@@ -118,12 +118,12 @@ type SessionState = {
   /** The digests of what the person typed into sensitive fields in each followed tab (by tab id), latest last: a save
    * from that tab whose body held one carries their values. Kept as `digests` are, and cleared with them. */
   typedSecrets?: [number, string[]][];
-  /** openbot.connect requests per origin in the last 10 minutes (timestamps), for Decision 22's limit (Task 8). */
+  /** xiongbao.connect requests per origin in the last 10 minutes (timestamps), for Decision 22's limit (Task 8). */
   connectRequests?: Record<string, number[]>;
   /** The last web connect the person cancelled on the Connect page, so the page that asked hears so
    * (`xiongbao.connect.status`); gone once that origin asks to connect again. */
   cancelledConnect?: { origin: string; at: number };
-  /** The setup tab the install opened (setup.ts), so the launcher's connection can close it: a browser OpenBot opened
+  /** The setup tab the install opened (setup.ts), so the launcher's connection can close it: a browser XiongBao opened
    * has its microphone granted already and is never shown a setup step. */
   setupTabId?: number;
 };
@@ -295,7 +295,7 @@ export function installSecret(): Promise<string> {
   });
   return pendingSecret;
 }
-/** This copy's install id for one OpenBot origin: the first 32 hex digits of SHA-256(installSecret + "\n" + origin),
+/** This copy's install id for one XiongBao origin: the first 32 hex digits of SHA-256(installSecret + "\n" + origin),
  * so it is stable per (copy, origin) and links nothing across sites (Decision 18). */
 export async function installIdFor(origin: string): Promise<string> {
   const secret = await installSecret();

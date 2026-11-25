@@ -1843,30 +1843,6 @@
     "reason": "Task 10：agent-mastra 注册的 Mastra agent id（agents: { openbot }），测试按这个名字取 getLocalAgents(...) 的属性，与 agent-mastra 同一 PR 改名，届时删除本条目"
   },
   {
-    "file": "xiongbao/app/src/lib/recorder/bridge.ts",
-    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
-    "until": "R2",
-    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/app/tests/recorder-bridge.test.ts",
-    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
-    "until": "R2",
-    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/app/tests/recorder-page.fixture.ts",
-    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
-    "until": "R2",
-    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/app/tests/recorder-browsers.test.tsx",
-    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
-    "until": "R2",
-    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
-  },
-  {
     "file": "xiongbao/app/tests/recorder-browsers.test.tsx",
     "text": "\"openbot-browser\"",
     "until": "R3",
@@ -1937,5 +1913,35 @@
     "text": "framework: \"OpenBot\"",
     "until": "R3",
     "reason": "服务器给内置员工的框架名 OpenBot（shared/harnesses.ts 已保护的 OPENBOT_HARNESS_NAME，bot-profile/setup.tsx 按它显示「<品牌>内置」），测试夹具与之同值"
+  },
+  {
+    "text": "Could not connect to OpenBot's back end",
+    "file": "xiongbao/extension/src/offscreen/grant.ts",
+    "until": "R4",
+    "reason": "Intelligence 网关在 CONNECTION_FAILED 时回的原文（服务器 trajectory-connect.ts 原样转发 TrajectoryConnectionError 的 message），扩展 grant.ts 按子串匹配决定重试；对端不归本仓库，改字面量会失配"
+  },
+  {
+    "text": "Could not connect to OpenBot's back end",
+    "file": "xiongbao/extension/tests/grant.test.ts",
+    "until": "R4",
+    "reason": "Intelligence 网关在 CONNECTION_FAILED 时回的原文（服务器 trajectory-connect.ts 原样转发 TrajectoryConnectionError 的 message），扩展 grant.ts 按子串匹配决定重试；对端不归本仓库，改字面量会失配"
+  },
+  {
+    "text": "Could not connect to OpenBot's back end",
+    "file": "xiongbao/extension/tests/streamer.test.ts",
+    "until": "R4",
+    "reason": "Intelligence 网关在 CONNECTION_FAILED 时回的原文（服务器 trajectory-connect.ts 原样转发 TrajectoryConnectionError 的 message），扩展 grant.ts 按子串匹配决定重试；对端不归本仓库，改字面量会失配"
+  },
+  {
+    "file": "xiongbao/extension/tests/launcher.test.ts",
+    "text": "\"openbot-browser\"",
+    "until": "R3",
+    "reason": "测试与 launcher.ts 已保护的连接来源 via \"openbot-browser\"（扩展 chrome.storage.local 的 connection.via 与服务器 recorder_connections.via 存量值）同值"
+  },
+  {
+    "file": "xiongbao/extension/tests/recorder-marks-compat.test.ts",
+    "pattern": "openbot\\.recorder\\.(?:configure|stop)\\b|openbot\\.recorder\"",
+    "until": "R2",
+    "reason": "旧版录制扩展注入页面主世界的 Symbol.for 名（页面里旧版 page-network 留下的钩子），测试证明新版回退只调 xb.recorder.* 而不碰旧名；与同文件已保护的旧 DOM 标记 openbot-recorder-* 一起归任务 17 处理"
   }
 ]

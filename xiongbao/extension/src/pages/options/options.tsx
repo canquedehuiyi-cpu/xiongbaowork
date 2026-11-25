@@ -52,7 +52,7 @@ function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-/** The Recorder's one settings page: which OpenBot this browser is connected to, and how to disconnect it; whether the
+/** The Recorder's one settings page: which XiongBao this browser is connected to, and how to disconnect it; whether the
  * person narrates their recordings; and the sites they keep out of them, each with Record again. */
 export function Options({ deps }: { deps?: Partial<OptionsDeps> }) {
   const ask = deps?.ask ?? askBackground;

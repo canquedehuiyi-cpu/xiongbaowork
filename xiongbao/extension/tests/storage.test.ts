@@ -25,7 +25,7 @@ describe("storage helpers", () => {
     const current = {
       recordingId: "rec-1",
       title: "T",
-      openbotUrl: "https://openbot.example.test",
+      openbotUrl: "https://xiongbao.example.test",
       userId: "u1",
       userName: "Ada",
       trajectoryIds: ["t-1"],
@@ -35,7 +35,7 @@ describe("storage helpers", () => {
     const old = {
       demonstrationId: "demo-1",
       title: "T",
-      openbotUrl: "https://openbot.example.test",
+      openbotUrl: "https://xiongbao.example.test",
       userId: "u1",
       userName: "Ada",
       trajectoryIds: ["t-0"],

@@ -58,14 +58,14 @@ const capturedEvent = (name: string, value: unknown): CapturedEvent => ({
   value: value as CapturedEvent["value"],
 });
 
-// ---- The fake OpenBot -------------------------------------------------------------------------
+// ---- The fake XiongBao -------------------------------------------------------------------------
 //
-// Nothing a restart finishes asks OpenBot anything: every request is recorded so the tests can say so. A restarted worker
-// tells OpenBot what it is doing again (activity.ts), which holds nothing recorded, so `asked` leaves those reports out.
+// Nothing a restart finishes asks XiongBao anything: every request is recorded so the tests can say so. A restarted worker
+// tells XiongBao what it is doing again (activity.ts), which holds nothing recorded, so `asked` leaves those reports out.
 
-const openbot = { calls: [] as string[] };
+const xiongbao = { calls: [] as string[] };
 const asked = () =>
-  openbot.calls.filter((call) => call !== "POST /api/recorder/activity");
+  xiongbao.calls.filter((call) => call !== "POST /api/recorder/activity");
 
 let server: ReturnType<typeof Bun.serve>;
 let origin = "";
@@ -75,7 +75,7 @@ beforeAll(() => {
     hostname: "127.0.0.1",
     port: 0,
     fetch(request) {
-      openbot.calls.push(`${request.method} ${new URL(request.url).pathname}`);
+      xiongbao.calls.push(`${request.method} ${new URL(request.url).pathname}`);
       return Response.json({ error: "Not found." }, { status: 404 });
     },
   });
@@ -214,7 +214,7 @@ function doubles(): Partial<RecordingDeps> {
     },
     readPolicy: async () => ({
       openbotUrl: null,
-      openbotUrlInvalid: false,
+      xiongbaoUrlInvalid: false,
       allowedIntelligenceUrls: pinnedIntelligenceUrls,
     }),
     hasHostPermission: async () => true,
@@ -349,7 +349,7 @@ beforeEach(() => {
   docPoll = setInterval(answerAsDocument, 1);
   timers = [];
   now = 1_800_000_000_000;
-  openbot.calls = [];
+  xiongbao.calls = [];
   network = {
     resumed: [],
     previous: [],
@@ -669,7 +669,7 @@ test("a discard that cannot finish because the document never reconnects does no
   expect(drains().map((drain) => drain.recordingId)).toEqual(["rec-gone"]);
 });
 
-test("a service-worker restart mid-recording goes on checking the connection with OpenBot every 30 s", async () => {
+test("a service-worker restart mid-recording goes on checking the connection with XiongBao every 30 s", async () => {
   startWorker();
   await startRecording(7);
   await restartWorker();
@@ -679,10 +679,10 @@ test("a service-worker restart mid-recording goes on checking the connection wit
   expect(asked()).toEqual([]);
   await advance(30_000);
   await until(
-    () => openbot.calls.includes("GET /api/recorder/me"),
+    () => xiongbao.calls.includes("GET /api/recorder/me"),
     "the check after the restart",
   );
-  // OpenBot's answer here says nothing about the connection: the recording goes on.
+  // XiongBao's answer here says nothing about the connection: the recording goes on.
   expect((await state()).phase).toBe("recording");
 });
 

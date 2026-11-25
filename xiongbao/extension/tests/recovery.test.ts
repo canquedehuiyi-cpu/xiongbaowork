@@ -41,11 +41,11 @@ const bea = { id: "p2", name: "Bea", email: "bea@example.test" };
 const DEAL = "https://crm.example.test/deals/42";
 const KEPT_SIGNED_OUT = "This browser was disconnected from XiongBao Work.";
 
-// ---- The fake OpenBot -------------------------------------------------------------------------
+// ---- The fake XiongBao -------------------------------------------------------------------------
 //
-// Recovery asks OpenBot nothing: every request is recorded so the tests can say so.
+// Recovery asks XiongBao nothing: every request is recorded so the tests can say so.
 
-const openbot = { calls: [] as string[] };
+const xiongbao = { calls: [] as string[] };
 
 let server: ReturnType<typeof Bun.serve>;
 let origin = "";
@@ -55,7 +55,7 @@ beforeAll(() => {
     hostname: "127.0.0.1",
     port: 0,
     fetch(request) {
-      openbot.calls.push(`${request.method} ${new URL(request.url).pathname}`);
+      xiongbao.calls.push(`${request.method} ${new URL(request.url).pathname}`);
       return Response.json({ error: "Not found." }, { status: 404 });
     },
   });
@@ -148,7 +148,7 @@ function doubles(): Partial<RecordingDeps> {
     acceptPageNetworkEvent: () => null,
     readPolicy: async () => ({
       openbotUrl: null,
-      openbotUrlInvalid: false,
+      xiongbaoUrlInvalid: false,
       allowedIntelligenceUrls: pinnedIntelligenceUrls,
     }),
     hasHostPermission: async () => true,
@@ -172,7 +172,7 @@ async function restartBrowser() {
   fake.offscreen.open = false;
   doc = null;
   timers = [];
-  openbot.calls = [];
+  xiongbao.calls = [];
 }
 
 function connect(user = ada, token = "obr_one") {
@@ -240,7 +240,7 @@ beforeEach(() => {
   timers = [];
   pinnedIntelligenceUrls = null;
   now = 1_800_000_000_000;
-  openbot.calls = [];
+  xiongbao.calls = [];
   connect();
   startWorker();
 });
@@ -258,7 +258,7 @@ test("a browser restart mid-recording hands the recording to a new document, whi
   startWorker();
   await recoverInterruptedRecording();
 
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
   expect(fake.storage.local.get("activeRecording")).toBeUndefined();
   expect(fake.storage.local.get("notice")).toEqual({
     kind: "interrupted",
@@ -360,7 +360,7 @@ test("a recovered recording whose pass is answered signed out waits for its pers
     }),
   );
   expect(drains()[0]?.kept).toBeUndefined();
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
 });
 
 test("recovery runs once when index.ts and runtime.onStartup both start it", async () => {
@@ -409,7 +409,7 @@ test("a Start over interrupted by a restart sends both recordings: the one it le
   await until(() => drains().length === 1, "the first drain forgotten");
   doc?.postMessage({ type: "offscreen.done", recordingId: second });
   await until(() => drains().length === 0, "every drain forgotten");
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
 });
 
 // ---- Drains whose person is not the one connected --------------------------------------------
@@ -456,10 +456,10 @@ test("a drain of another person waits for that person and nothing of it is sent;
       drains: [parked],
     },
   ]);
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
 });
 
-test("a recording that has waited for its person longer than OpenBot keeps anyone signed in is deleted unsent at the next start, its outbox with it, and one within that time waits on", async () => {
+test("a recording that has waited for its person longer than XiongBao keeps anyone signed in is deleted unsent at the next start, its outbox with it, and one within that time waits on", async () => {
   await restartBrowser();
   const waiting = (id: string, since: number) =>
     storedDrain(id, bea, {
@@ -501,7 +501,7 @@ test("a recording that has waited for its person longer than OpenBot keeps anyon
     name: "Bea",
     recordings: 1,
   });
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
 
   // A day later the other one has waited as long, and goes at the next start too.
   await restartBrowser();
@@ -543,7 +543,7 @@ test("after a browser restart with nobody connected, the interrupted recording w
     expect.objectContaining({ token: "obr_two" }),
   );
   expect(drains().map((drain) => drain.kept)).toEqual([undefined]);
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
 });
 
 // ---- A recording the person discarded is never sent -------------------------------------------
@@ -557,7 +557,7 @@ function storeDiscardingDrain(id: string, extra: Partial<DrainRecord> = {}) {
 
 async function expectDiscardFinished(id: string) {
   await until(() => drains().length === 0, "the discarded drain cleared");
-  expect(openbot.calls).toEqual([]);
+  expect(xiongbao.calls).toEqual([]);
   expect(sentToDocument("offscreen.recover")).toEqual([]);
   expect(sentToDocument("offscreen.discard")).toEqual([
     { type: "offscreen.discard", recordingIds: [id] },

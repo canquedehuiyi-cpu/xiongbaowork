@@ -55,7 +55,7 @@ type RecordingActions = {
 
 /**
  * Where "See it on Teach a Bot" goes: the page's list of recordings, which opens no browser on arrival (`?recordings`).
- * Resolved relative to OpenBot's address, so a path prefix on it is kept.
+ * Resolved relative to XiongBao's address, so a path prefix on it is kept.
  */
 function teachABotUrl(openbotUrl: string): string {
   const base = openbotUrl.endsWith("/") ? openbotUrl : `${openbotUrl}/`;

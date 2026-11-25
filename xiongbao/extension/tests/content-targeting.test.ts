@@ -218,8 +218,8 @@ test("Wikipedia's generated ids are never a selector: run 2's click on Charles B
   expect(JSON.stringify(targeting.selectors)).not.toContain("mwEw");
 });
 
-test("OpenBot's new-chat link, an icon with no name, is found by its address before its position; a volatile address never is", () => {
-  // The sidebar header as OpenBot renders it (app-sidebar.tsx: a Base UI Button rendered as the router's Link to
+test("XiongBao's new-chat link, an icon with no name, is found by its address before its position; a volatile address never is", () => {
+  // The sidebar header as XiongBao renders it (app-sidebar.tsx: a Base UI Button rendered as the router's Link to
   // /channel/new, holding Tabler's IconPlus with no title), clicked in the CopilotKit-site end-to-end run 3, row 044:
   // its one selector was its position.
   document.body.innerHTML = `

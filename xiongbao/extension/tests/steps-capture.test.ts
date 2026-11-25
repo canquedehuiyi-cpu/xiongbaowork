@@ -14,7 +14,7 @@ import {
 import { type ChromeFake, installChromeFake } from "./support/chrome-fake";
 import { CARD_AND_PIN_CLOCK, leakedSecrets } from "./support/recorded-text";
 
-const OPENBOT = "https://openbot.example.test";
+const XIONGBAO = "https://xiongbao.example.test";
 /** When each test begins, in seconds since the epoch: the pinned clock, from which the steps' own clock runs on. */
 const CLICK = CARD_AND_PIN_CLOCK / 1000;
 /** The steps' timing, shortened so a test runs in a moment; every rule is the same. */
@@ -74,7 +74,7 @@ beforeEach(() => {
   });
   capture = createNetworkCapture(
     {
-      openbotUrl: () => OPENBOT,
+      openbotUrl: () => XIONGBAO,
       call: (call) => steps.call(call),
       writeStarted: (id, tabId, startedAt) =>
         steps.writeStarted(id, tabId, startedAt),

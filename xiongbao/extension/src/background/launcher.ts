@@ -5,9 +5,9 @@
 // Reachable only by code running in this service worker itself: the launcher evaluates it over the DevTools protocol
 // (Runtime.evaluate in the worker's target). There is no chrome.runtime message route to it, internal or external, so
 // no web page, content script or other extension can reach it, and none of the Recorder's own pages does either: each
-// of them is its own global scope. A connection taken here is checked as a Connect would check it (the OpenBot address
+// of them is its own global scope. A connection taken here is checked as a Connect would check it (the XiongBao address
 // rule and the organization's policy), and every command goes through the same paths the popup's own do. A revoke
-// OpenBot tells it of goes through the path a signed-out answer from OpenBot takes.
+// XiongBao tells it of goes through the path a signed-out answer from XiongBao takes.
 
 import {
   joinedLearningContainer,
@@ -23,9 +23,8 @@ import {
   type Narration,
 } from "@xiongbao/shared/xiongbao-browser";
 import type { PageResponse, RecorderState } from "../protocol/messages";
-import { OpenBotError, openbotJson } from "../shared/openbot-client";
 import { normaliseXiongBaoOrigin } from "../shared/origin";
-import { allowsOpenBot, readPolicy } from "../shared/policy";
+import { allowsXiongBao, readPolicy } from "../shared/policy";
 import { narrationLanguage } from "../shared/speech-language";
 import {
   type ConnectionRecord,
@@ -33,6 +32,7 @@ import {
   writeLocal,
   writeSession,
 } from "../shared/storage";
+import { XiongBaoError, xiongbaoJson } from "../shared/xiongbao-client";
 import { showBadge } from "./badge";
 import {
   type ConnectionLoss,
@@ -58,7 +58,7 @@ type LauncherDeps = {
   now: () => number;
 };
 
-/** How long a connection waits on OpenBot to say who it is for: it is stored either way, and the keep-alive asks again. */
+/** How long a connection waits on XiongBao to say who it is for: it is stored either way, and the keep-alive asks again. */
 const ME_WAIT_MS = 5_000;
 const TITLE_MAX = 200;
 const PHRASE_MAX = 4_000;
@@ -188,9 +188,9 @@ function voiceOf(state: RecorderState): NonNullable<LauncherState["voice"]> {
 }
 
 /** The recording Stop ended last, by name and with what it held, once it went to Intelligence (a Disconnect or a
- * failed send leaves none), and not when the person's own Learning space is known not to take it: OpenBot confirms it
- * went there, or says it held nothing. One stopped by an earlier build, which did not count, is not reported: OpenBot
- * would say it held nothing. OpenBot's own page reads it the same way (openbot-page.ts). */
+ * failed send leaves none), and not when the person's own Learning space is known not to take it: XiongBao confirms it
+ * went there, or says it held nothing. One stopped by an earlier build, which did not count, is not reported: XiongBao
+ * would say it held nothing. XiongBao's own page reads it the same way (xiongbao-page.ts). */
 export function lastStopped(
   state: RecorderState,
 ): LauncherState["lastStopped"] {
@@ -275,8 +275,8 @@ export function createLauncher(
     };
   }
 
-  /** Who OpenBot says a connection is for, as the popup would ask when it opens, asked BEFORE the connection is taken:
-   * `signed-out` when OpenBot revoked it already, `unknown` when OpenBot cannot answer for now (the connection is taken,
+  /** Who XiongBao says a connection is for, as the popup would ask when it opens, asked BEFORE the connection is taken:
+   * `signed-out` when XiongBao revoked it already, `unknown` when XiongBao cannot answer for now (the connection is taken,
    * and the keep-alive asks again). */
   async function ask(connection: ConnectionRecord): Promise<
     | { kind: "ok"; value: RecorderMe }
@@ -287,7 +287,7 @@ export function createLauncher(
     | { kind: "unknown" }
   > {
     try {
-      const value = await openbotJson<RecorderMe>(
+      const value = await xiongbaoJson<RecorderMe>(
         connection,
         recorderPaths.me,
         {
@@ -296,7 +296,7 @@ export function createLauncher(
       );
       return { kind: "ok", value };
     } catch (error) {
-      if (error instanceof OpenBotError && error.signedOut)
+      if (error instanceof XiongBaoError && error.signedOut)
         return { kind: "signed-out", reason: error.body?.reason ?? "revoked" };
       return { kind: "unknown" };
     }
@@ -336,8 +336,8 @@ export function createLauncher(
         const checked = normaliseXiongBaoOrigin(connection.openbotUrl);
         if (!checked.ok) return refuse(SENTENCES.address);
         const policy = await deps.readPolicy();
-        if (policy.openbotUrlInvalid) return refuse(SENTENCES.policyInvalid);
-        if (!allowsOpenBot(policy, checked.origin))
+        if (policy.xiongbaoUrlInvalid) return refuse(SENTENCES.policyInvalid);
+        if (!allowsXiongBao(policy, checked.origin))
           return refuse(SENTENCES.pinnedElsewhere);
         const record: ConnectionRecord = {
           openbotUrl: checked.origin,
@@ -354,7 +354,7 @@ export function createLauncher(
          * Asked before it is taken. Two opens of one browser can cross, and the older one's connection, revoked by the
          * newer one's, can arrive last: taking it first would sign out the connection that stands and stop its
          * recording. A revoked connection is refused and the one held stays; with none held (or this one), it ends as
-         * OpenBot's own signed-out answer does, with the notice.
+         * XiongBao's own signed-out answer does, with the notice.
          */
         const asked = await ask(record);
         if (asked.kind === "signed-out") {
@@ -426,7 +426,7 @@ export function createLauncher(
               title: input.title.trim(),
               tabId,
               language,
-              // Whether the person narrates, as OpenBot's own Record form asked them.
+              // Whether the person narrates, as XiongBao's own Record form asked them.
               ...(typeof input.narrate === "boolean"
                 ? { narrate: input.narrate }
                 : {}),
@@ -468,11 +468,11 @@ export function createLauncher(
       () => refuse(SENTENCES.failed),
     ),
 
-    // OpenBot revoked this browser's connection (the person disconnected it in Settings, Browsers) and says so now,
-    // rather than leaving the Recorder to hear it on its next call to OpenBot, which on a quiet browser is the keep-alive,
-    // hours away. It goes the way OpenBot answering that the token is gone goes: the connection is forgotten with the
+    // XiongBao revoked this browser's connection (the person disconnected it in Settings, Browsers) and says so now,
+    // rather than leaving the Recorder to hear it on its next call to XiongBao, which on a quiet browser is the keep-alive,
+    // hours away. It goes the way XiongBao answering that the token is gone goes: the connection is forgotten with the
     // signed-out notice, a recording under it stops as signed out and is kept for its person, and the next connection
-    // the launcher hands in sends it. OpenBot has revoked the token already, so it is not asked to again.
+    // the launcher hands in sends it. XiongBao has revoked the token already, so it is not asked to again.
     disconnect: guarded(
       async (): Promise<LauncherResult> => {
         const connection = await currentConnection();

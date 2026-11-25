@@ -1,7 +1,7 @@
 import { RECORDER_NATIVE_HOST } from "@xiongbao/shared/recorder-extension";
 
 export type DesktopHandoff = { openbotUrl: string; code: string };
-/** Why OpenBot Desktop did not hand over a connect code: the host's own error code (`not-running`, `not-signed-in` and
+/** Why XiongBao Desktop did not hand over a connect code: the host's own error code (`not-running`, `not-signed-in` and
  * the rest), `no-answer` when the host is missing or did not answer in time, or `handoff-failed` for a reply of
  * another shape. */
 export type DesktopRefusal = { error: string };
@@ -31,7 +31,7 @@ async function ask(
 /** The host answers a ping within its own 2 s deadline (DEADLINES in desktop/src-tauri/src/recorder_host.rs); the
  * extension waits a little longer. */
 const PING_TIMEOUT_MS = 3_000;
-/** The host answers a handoff, its request to the local OpenBot for a connect code included, within its own 7 s
+/** The host answers a handoff, its request to the local XiongBao for a connect code included, within its own 7 s
  * deadline (DEADLINES in recorder_host.rs); the extension waits a little longer. */
 const HANDOFF_TIMEOUT_MS = 8_000;
 
@@ -47,11 +47,11 @@ export async function desktopAvailable(
 }
 
 /**
- * The address OpenBot Desktop's own OpenBot answers on, on this computer, as its native host confirms it once that
- * deployment's own processes are proved to hold its ports. Null when there is no OpenBot Desktop here, it runs no
- * OpenBot, or it did not answer (an OpenBot Desktop from before this message answers `unknown-message`). It mints
+ * The address XiongBao Desktop's own XiongBao answers on, on this computer, as its native host confirms it once that
+ * deployment's own processes are proved to hold its ports. Null when there is no XiongBao Desktop here, it runs no
+ * XiongBao, or it did not answer (a XiongBao Desktop from before this message answers `unknown-message`). It mints
  * nothing and carries nothing secret. Any program on this computer can serve a page on a loopback port, so this, and
- * never the page's own address, is what makes a loopback page OpenBot Desktop's.
+ * never the page's own address, is what makes a loopback page XiongBao Desktop's.
  */
 export async function desktopAddress(
   timeoutMs = ADDRESS_TIMEOUT_MS,
@@ -63,7 +63,7 @@ export async function desktopAddress(
 }
 
 /** The host's handoff, or why there is none. A good ping does not promise a good handoff: the ping is cheap, and only
- * the handoff checks that OpenBot answers and that the organization sign-in can be handed over. */
+ * the handoff checks that XiongBao answers and that the organization sign-in can be handed over. */
 export async function askDesktopForHandoff(
   timeoutMs = HANDOFF_TIMEOUT_MS,
 ): Promise<DesktopHandoff | DesktopRefusal> {

@@ -14,20 +14,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/recorder/bridge.ts",
-    "text": "type: \"openbot.",
-    "reason": "persisted-identifier: message type in the Recorder extension protocol",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/recorder/bridge.ts",
-    "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: error code the Recorder extension sends",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
     "file": "app/src/lib/copilot/a2ui.ts",
     "text": "\"openbot/ui@1\"",
     "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
@@ -637,27 +623,6 @@
     "plan": "keep"
   },
   {
-    "file": "extension/src/protocol/messages.ts",
-    "text": "\"openbot.ping\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/protocol/messages.ts",
-    "text": "\"openbot.connect\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/protocol/messages.ts",
-    "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
     "file": "extension/src/content/notice.ts",
     "text": "\"data-copilotkit-ignore\"",
     "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements",
@@ -707,41 +672,6 @@
     "plan": "keep"
   },
   {
-    "file": "extension/src/background/network/index.ts",
-    "text": "(!openbot)",
-    "reason": "persisted-identifier: local variable holding the connected origin",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/background/network/index.ts",
-    "text": "new URL(openbot)",
-    "reason": "persisted-identifier: local variable holding the connected origin",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/background/connection.ts",
-    "text": "\"openbot.ping\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/background/connection.ts",
-    "text": "\"openbot.connect\"",
-    "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/background/connection.ts",
-    "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: Desktop connect reason code, mapped to a sentence in desktop-sentence.ts and never shown itself",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
     "file": "extension/src/background/connection.ts",
     "text": "\"openbot-browser\"",
     "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back",
@@ -752,13 +682,6 @@
     "file": "extension/src/pages/options/options.tsx",
     "text": "\"openbot-browser\":",
     "reason": "persisted-identifier: object key for the stored connection `via` value; the label beside it is already rebranded",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/pages/popup/desktop-sentence.ts",
-    "text": "\"openbot-unreachable\"",
-    "reason": "persisted-identifier: Desktop connect reason code used as an object key; its sentence is already rebranded",
     "category": "peer-protocol",
     "plan": "keep"
   },

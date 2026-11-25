@@ -36,12 +36,6 @@
     "note": "界面与控制台文字、关于页 MIT 署名；Task 8"
   },
   {
-    "word": "OpenBotError",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "扩展内部错误类名"
-  },
-  {
     "word": "OpenBotUrl",
     "category": "legacy-compat",
     "plan": "remove",
@@ -71,12 +65,6 @@
   },
   {
     "word": "_.openbotUrl:null",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
-    "word": "_.openbotUrlInvalid",
     "category": "peer-protocol",
     "plan": "keep",
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
@@ -124,12 +112,6 @@
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
-    "word": "invalid:_.openbotUrlInvalid",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
     "word": "null:_.openbotUrl",
     "category": "peer-protocol",
     "plan": "keep",
@@ -146,24 +128,6 @@
     "category": "persisted-data",
     "plan": "keep",
     "note": "扩展 IndexedDB 名，永久残留（第 9 问）"
-  },
-  {
-    "word": "openbot-unreachable",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.connect",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.ping",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
   },
   {
     "word": "openbotUrl:",
@@ -197,12 +161,6 @@
   },
   {
     "word": "openbotUrl:null",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
-    "word": "openbotUrlInvalid:",
     "category": "peer-protocol",
     "plan": "keep",
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"

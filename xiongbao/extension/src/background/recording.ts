@@ -1,8 +1,8 @@
 // The recording controller: Record, the tabs a recording follows, the 50-action notice, Stop, Start over and the
 // drains that keep sending after it. A recording goes to Intelligence only: Record takes a new trajectory id, the
-// offscreen document asks OpenBot for a capture pass (the trajectory joins the person's own Learning space) and streams
+// offscreen document asks XiongBao for a capture pass (the trajectory joins the person's own Learning space) and streams
 // every event to Intelligence, and
-// Stop queues the outcome and lets the outbox drain. OpenBot hears nothing of the recording itself, only what the
+// Stop queues the outcome and lets the outbox drain. XiongBao hears nothing of the recording itself, only what the
 // Recorder is doing (its phase, the recording's title and how many actions so far, activity.ts), for the Browser
 // button's red dot. The phase lives in a
 // reducer (`reduceRecorder`), persisted to storage.session after every transition so a restarted service worker finds
@@ -46,10 +46,9 @@ import {
   KEPT_FOR_PERSON_MS,
   RECORDER_ACTION_NOTICE_AT,
 } from "../shared/limits";
-import { OpenBotError, openbotJson } from "../shared/openbot-client";
 import { isRecordablePage } from "../shared/origin";
 import {
-  allowsOpenBot,
+  allowsXiongBao,
   onPolicyChanged,
   type RecorderPolicy,
   readPolicy,
@@ -69,6 +68,7 @@ import {
   writeLocal,
   writeSession,
 } from "../shared/storage";
+import { XiongBaoError, xiongbaoJson } from "../shared/xiongbao-client";
 import { createActivityReport } from "./activity";
 import {
   type AgentEvents,
@@ -132,8 +132,8 @@ export type RecordingDeps = {
 
 /** Called by the router after Task 8's handler answered: `connected` after a successful `page.connect.decide` (web or Desktop),
  * `disconnected` after `page.disconnect` (the person's own Disconnect). `connectionLost` is connection.ts's: the
- * keep-alive's signed-out answer, the organization's policy moving the Recorder away from the connection's OpenBot, or a
- * connection to another OpenBot, or for another person, replacing it. */
+ * keep-alive's signed-out answer, the organization's policy moving the Recorder away from the connection's XiongBao, or a
+ * connection to another XiongBao, or for another person, replacing it. */
 type ConnectionEvents = {
   connected(): Promise<void>;
   disconnected(): Promise<void>;
@@ -193,7 +193,7 @@ export function recordingRecovery(): RecordingRecovery | null {
 const READY_TIMEOUT_MS = 5_000;
 const STOP_WATCHDOG_MS = 120_000;
 const ME_FRESH_MS = 60_000;
-/** How often a running recording asks OpenBot whether its connection still stands. */
+/** How often a running recording asks XiongBao whether its connection still stands. */
 const CONNECTION_CHECK_MS = 30_000;
 /** While the offscreen port is down, content events wait here; beyond either cap the oldest go, counted (Decision 19). */
 const QUEUE_EVENTS = 2_000;
@@ -274,8 +274,8 @@ const SENTENCES = {
 } as const;
 
 type SignedOutReason = "revoked" | "removed" | "organization";
-/** Why a connection went without the person's Disconnect: OpenBot signed it out, the policy moved the Recorder, or the
- * person connected this browser to another OpenBot, or as another person, on the Connect page. */
+/** Why a connection went without the person's Disconnect: XiongBao signed it out, the policy moved the Recorder, or the
+ * person connected this browser to another XiongBao, or as another person, on the Connect page. */
 type LostReason = SignedOutReason | "policy" | "replaced";
 
 /** The sentences that say a stopped recording is kept until something happens: a Disconnect discards it, so they go. */
@@ -304,7 +304,7 @@ const keptSentence = (reason: LostReason): string =>
         ? SENTENCES.keptReplaced
         : SENTENCES.keptSignedOut;
 
-/** Record found the policy no longer allows the connection's OpenBot (connection.ts forgets it in a moment). */
+/** Record found the policy no longer allows the connection's XiongBao (connection.ts forgets it in a moment). */
 const POLICY_REFUSED = new Error(
   "The policy does not allow this XiongBao Work.",
 );
@@ -567,14 +567,14 @@ type StopMode =
   | { kind: "discard" }; // the person's Stop on the recording mark, answered Discard: discarded right after
 
 const signedOutReason = (error: unknown): SignedOutReason | null =>
-  error instanceof OpenBotError && error.signedOut
+  error instanceof XiongBaoError && error.signedOut
     ? (error.body?.reason ?? "revoked")
     : null;
 
-/** What the popup says when OpenBot refused a request: the Recorder's own sentence for what OpenBot answered, never the
+/** What the popup says when XiongBao refused a request: the Recorder's own sentence for what XiongBao answered, never the
  * text in its answer, which the popup would show in the Recorder's own voice. */
 const sentenceFor = (error: unknown, fallback: string): string => {
-  if (!(error instanceof OpenBotError)) return fallback;
+  if (!(error instanceof XiongBaoError)) return fallback;
   if (error.body?.code === RECORDER_AUTHORITY_UNAVAILABLE)
     return SENTENCES.authorityUnavailable;
   return error.status === 403 ? SENTENCES.forbidden : fallback;
@@ -613,7 +613,7 @@ export function installRecording(
    * most): a save whose body held one carries what they entered, though it reads [redacted] (network/index.ts). Kept as
    * `digests` are. */
   const typedSecrets = new Map<number, string[]>();
-  /** The person's own Learning space as OpenBot last described it: a recording starts with it, for its popup line. Kept
+  /** The person's own Learning space as XiongBao last described it: a recording starts with it, for its popup line. Kept
    * in storage.session too (`learning`), so a service worker that started after the popup asked still has it. */
   let learningSpace: LearningSpaceState | undefined;
   /** The live recording's narration when its launcher passes it in (`external`): the language its phrases are in, and
@@ -668,7 +668,7 @@ export function installRecording(
    * network capture and the tab's script Record starts are there for the stop to end.
    *
    * `pageChanges` holds the page changes of the tab Record starts in that come while it starts: the tab is the person's
-   * from the moment they press Record, and OpenBot's own address bar or a link can take it to a website before the
+   * from the moment they press Record, and XiongBao's own address bar or a link can take it to a website before the
    * recording is live. Record reads the tab's address once, early, and they would otherwise be neither its first page
    * nor a step of it; it records them as steps once the recording is live, and starts on the page they reached. */
   let starting: {
@@ -689,7 +689,7 @@ export function installRecording(
    * trajectory (a recording Start over replaced, still draining) leaves that capture alone. */
   let shown: { recordingId: string; trajectoryIds: Set<string> } | null = null;
 
-  /** What this browser is recording, told to OpenBot whenever the phase or the recording changes and every 30 s while
+  /** What this browser is recording, told to XiongBao whenever the phase or the recording changes and every 30 s while
    * one runs (activity.ts): with the live recording's connection, else the stored one, whatever made it. A signed-out
    * answer goes the way the connection check's does. */
   const activity = createActivityReport({
@@ -803,7 +803,7 @@ export function installRecording(
     for (const [tabId, typed] of (await readSession("typedSecrets")) ?? [])
       typedSecrets.set(tabId, typed);
     // The popup asks when it opens, and Chrome may stop this worker before the person presses Record: the next one takes
-    // up what OpenBot said, while the connection that asked is still the one connected.
+    // up what XiongBao said, while the connection that asked is still the one connected.
     const space = await readSession("learning");
     if (
       space &&
@@ -830,7 +830,7 @@ export function installRecording(
     openSteps(live.recordingId, takeRestored(live.recordingId));
   })();
   ready.catch(report("loading the recorder state"));
-  // A service worker that restarted while a recording runs tells OpenBot again, and goes on every 30 s.
+  // A service worker that restarted while a recording runs tells XiongBao again, and goes on every 30 s.
   void ready.then(
     () => {
       if (state.phase !== "idle") activity.changed();
@@ -1666,8 +1666,8 @@ export function installRecording(
       saved = true;
       const policy = await deps.readPolicy();
       if (attempt.cancelled) throw CANCELLED;
-      if (!allowsOpenBot(policy, connection.openbotUrl)) throw POLICY_REFUSED;
-      // The microphone opens only for a person who chose to narrate: OpenBot says so with the Record it passes on (its
+      if (!allowsXiongBao(policy, connection.openbotUrl)) throw POLICY_REFUSED;
+      // The microphone opens only for a person who chose to narrate: XiongBao says so with the Record it passes on (its
       // own Record form asked them), anything else goes by the choice made in the Recorder, and none yet is no.
       const narrate =
         message.narrate ?? (await readLocal("narration")) === "on";
@@ -1899,7 +1899,7 @@ export function installRecording(
         : {
             type: "offscreen.stop",
             outcome: "failed",
-            // Only OpenBot signs a connection out; a policy move and a replaced connection disconnect it here.
+            // Only XiongBao signs a connection out; a policy move and a replaced connection disconnect it here.
             reason:
               mode.kind === "discard"
                 ? "discarded"
@@ -1969,7 +1969,7 @@ export function installRecording(
       type: "finished",
       // A recording a Disconnect stops is discarded right after: what it had not sent yet never goes to Intelligence, so
       // the popup does not say it was sent (what it streamed live is there, ended with a failed outcome). One the person
-      // discarded is named, so OpenBot can say it was discarded.
+      // discarded is named, so XiongBao can say it was discarded.
       lastStopped:
         mode.kind === "disconnect" ||
         (failed !== undefined && mode.kind !== "discard")
@@ -1978,7 +1978,7 @@ export function installRecording(
               recordingId,
               ...(state.title !== undefined ? { title: state.title } : {}),
               stoppedAt: deps.now(),
-              // What it held, for OpenBot to say: the badge's count and the phrases placed, both final now.
+              // What it held, for XiongBao to say: the badge's count and the phrases placed, both final now.
               actions: state.actions,
               phrases: state.phrases ?? 0,
               ...(mode.kind === "discard" ? { discarded: true } : {}),
@@ -2025,10 +2025,10 @@ export function installRecording(
 
   // ---- The connection check while recording -------------------------------------------------
 
-  /** While a recording runs, OpenBot is asked every 30 s whether the connection it records under still stands: a
-   * browser revoked in OpenBot's Settings, or a connection OpenBot signed out, would otherwise go on streaming until the
+  /** While a recording runs, XiongBao is asked every 30 s whether the connection it records under still stands: a
+   * browser revoked in XiongBao's Settings, or a connection XiongBao signed out, would otherwise go on streaming until the
    * popup or the 12-hour keep-alive asked. A signed-out answer ends the recording through the sign-out path (a failed
-   * outcome, reason signed-out, its streams halted, everything kept for its person). OpenBot not answering, or
+   * outcome, reason signed-out, its streams halted, everything kept for its person). XiongBao not answering, or
    * answering anything else, says nothing about the connection: the recording goes on through an outage, and the next
    * check asks again. */
   let connectionCheck: unknown = null;
@@ -2049,7 +2049,7 @@ export function installRecording(
     const current = live;
     if (!current || state.phase !== "recording") return;
     try {
-      await openbotJson<RecorderMe>(
+      await xiongbaoJson<RecorderMe>(
         { openbotUrl: current.openbotUrl, token: current.token },
         recorderPaths.me,
       );
@@ -2063,7 +2063,7 @@ export function installRecording(
           current.openbotUrl,
         );
     }
-    // Still recording (OpenBot answered, could not answer, or the person connected again first): asked again later.
+    // Still recording (XiongBao answered, could not answer, or the person connected again first): asked again later.
     if (live && state.phase === "recording" && connectionCheck === null)
       watchConnection();
   }
@@ -2121,8 +2121,8 @@ export function installRecording(
     );
   }
 
-  /** OpenBot answered that the connection a request used is gone: forget it (only if it is still the stored one), stop
-   * a recording that used it, and keep everything for its person on that OpenBot (their drains on another OpenBot are
+  /** XiongBao answered that the connection a request used is gone: forget it (only if it is still the stored one), stop
+   * a recording that used it, and keep everything for its person on that XiongBao (their drains on another XiongBao are
    * another connection's). */
   async function handleSignedOut(
     reason: SignedOutReason,
@@ -2147,7 +2147,7 @@ export function installRecording(
 
   /** The live recording's person connected this browser again: connecting revoked the token its passes were asked
    * with, so it takes the new one, as do the stored session (for a reopened document) and the document's stream.
-   * Resolves true when it switched; a recording of another person, or on another OpenBot, keeps its own token. */
+   * Resolves true when it switched; a recording of another person, or on another XiongBao, keeps its own token. */
   async function adoptConnection(): Promise<boolean> {
     const connection = await currentConnection();
     const current = live;
@@ -2190,10 +2190,10 @@ export function installRecording(
     await markWaiting((drain) => ownedBy(drain, connection), reason);
   }
 
-  /** The organization's policy moved the Recorder away from this connection's OpenBot (connection.ts forgot it), or a
-   * connection to another OpenBot, or for another person, replaced it (connection.ts `endReplaced`, which revokes its
+  /** The organization's policy moved the Recorder away from this connection's XiongBao (connection.ts forgot it), or a
+   * connection to another XiongBao, or for another person, replaced it (connection.ts `endReplaced`, which revokes its
    * token next): the live recording that used it stops, the document stops sending with its token, and everything is
-   * kept for its person on that OpenBot, as a sign-out keeps it. */
+   * kept for its person on that XiongBao, as a sign-out keeps it. */
   async function connectionEnded(
     connection: ConnectionRecord,
     reason: "policy" | "replaced",
@@ -2405,7 +2405,7 @@ export function installRecording(
   }
 
   /** The person who recorded kept drains is connected again (or, `recovering`, the browser started): the document
-   * sends everything their drains still hold. Drains of another person, or of another OpenBot, keep waiting: they are
+   * sends everything their drains still hold. Drains of another person, or of another XiongBao, keep waiting: they are
    * never sent under someone else's connection, and recovery marks them waiting for their person. */
   async function sendDrains(options: { recovering: boolean }): Promise<void> {
     await finishDiscards();
@@ -2620,7 +2620,10 @@ export function installRecording(
     )
       return cached.value;
     try {
-      const value = await openbotJson<RecorderMe>(connection, recorderPaths.me);
+      const value = await xiongbaoJson<RecorderMe>(
+        connection,
+        recorderPaths.me,
+      );
       await writeSession("me", { value, fetchedAt: deps.now() });
       return value;
     } catch (error) {
@@ -2636,7 +2639,7 @@ export function installRecording(
         );
         return null;
       }
-      // OpenBot cannot answer for now: the last answer for this connection, if any.
+      // XiongBao cannot answer for now: the last answer for this connection, if any.
       return cached?.value.connectionId === connection.connectionId
         ? cached.value
         : null;
@@ -2667,7 +2670,7 @@ export function installRecording(
       me: connection ? me : null,
       policy: {
         openbotUrl: policy.openbotUrl,
-        invalid: policy.openbotUrlInvalid,
+        invalid: policy.xiongbaoUrlInvalid,
       },
       notice,
       narration: (await readLocal("narration")) ?? null,
@@ -2680,7 +2683,7 @@ export function installRecording(
     const connection = await currentConnection();
     if (!connection) return { ok: false, error: SENTENCES.noConnection };
     try {
-      const answer = await openbotJson<RecorderLearningResponse>(
+      const answer = await xiongbaoJson<RecorderLearningResponse>(
         connection,
         recorderPaths.learning,
       );
@@ -3020,7 +3023,7 @@ export function installRecording(
   //
   // A recording follows every tab the person uses while it runs (David, 2026-10-22), in any window: the tab Record
   // started in, a tab a followed tab opened (onCreatedTarget above), any tab they switch to and any tab they open. A tab
-  // is used when it becomes the active tab of its window (tabs.onActivated: a click on it, a keyboard switch, OpenBot's
+  // is used when it becomes the active tab of its window (tabs.onActivated: a click on it, a keyboard switch, XiongBao's
   // own tab strip), when its window comes to the front (windows.onFocusChanged: the active tab of the window the person
   // moved to is the one they now use), and when it is opened (tabs.onCreated: the new-tab button, a bookmark opened in
   // the background). A tab that was open before Record and that the person never goes to is never followed.

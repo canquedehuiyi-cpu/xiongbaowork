@@ -114,12 +114,12 @@ beforeEach(() => {
           return;
         }
         const type = (message as { type: string }).type;
-        if (type === "openbot.connect") recorder.exchange?.();
+        if (type === "xiongbao.connect") recorder.exchange?.();
         if (type === "xiongbao.connect.status") {
           reply({ ok: true, connect: recorder.wait ?? "waiting" });
           return;
         }
-        reply(type === "openbot.ping" ? recorder.ping : recorder.connect);
+        reply(type === "xiongbao.ping" ? recorder.ping : recorder.connect);
       },
     },
   };
@@ -193,7 +193,7 @@ test("Connect sends the code to the detected Recorder and asks for confirmation 
   });
   expect(messages).toContainEqual({
     id: EXTENSION_ID,
-    message: { type: "openbot.connect", code: "obc_x" },
+    message: { type: "xiongbao.connect", code: "obc_x" },
   });
 });
 

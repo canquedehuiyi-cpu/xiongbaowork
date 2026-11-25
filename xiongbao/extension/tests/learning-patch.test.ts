@@ -1,6 +1,6 @@
 // The Recorder's clicks and typing come from CopilotKit's own capture code, @copilotkit/learning. Its 0.0.1 on npm
 // predated the masking the Recorder relies on, so a Bun patch named in the root package.json's patchedDependencies
-// swapped CopilotKit main's build in. The release OpenBot installs now carries that build as published, and the patch
+// swapped CopilotKit main's build in. The release XiongBao installs now carries that build as published, and the patch
 // is gone. The masking: the name the collector gives a clicked control (`target.label`) has every URL, email address,
 // token and typed password taken out before it leaves the page. Bun applies a patch only to the exact version it names,
 // and a bump to any other version installs that version unpatched without a word. These tests break CI when that

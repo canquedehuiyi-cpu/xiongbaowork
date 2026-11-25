@@ -304,7 +304,7 @@ async function recordInWorker(firstPage: string) {
     }),
     readPolicy: async () => ({
       openbotUrl: null,
-      openbotUrlInvalid: false,
+      xiongbaoUrlInvalid: false,
       allowedIntelligenceUrls: null,
     }),
     hasHostPermission: async () => true,

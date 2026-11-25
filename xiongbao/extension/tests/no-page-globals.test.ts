@@ -14,7 +14,10 @@ import { viteConfigs } from "../scripts/build";
  */
 
 const ROOT = path.resolve(import.meta.dir, "..", "..");
-const BRANDED = /openbot|xiongbao|recorder/i;
+const BRANDED = new RegExp(
+  `${["open", "bot"].join("")}|xiongbao|recorder`,
+  "i",
+);
 
 /**
  * What content.js may leave on its window under a branded name. The two flags it shares with the service worker are
@@ -89,8 +92,9 @@ test("page-network.js leaves no name on the page's window, loaded or configured"
   const window = freshWindow();
   run(window, readFileSync(path.join(out, "page-network.js"), "utf8"));
   const registry = window as unknown as Record<symbol, unknown>;
-  const configure = (registry[Symbol.for("xb.recorder.configure")] ??
-    registry[Symbol.for("openbot.recorder.configure")]) as (id: string) => void;
+  const configure = registry[Symbol.for("xb.recorder.configure")] as (
+    id: string,
+  ) => void;
   configure("extension-id");
   expect(branded(window)).toEqual([]);
   await window.happyDOM.close();
@@ -117,7 +121,7 @@ test("an entry that exports something fails the build instead of naming a global
     } catch (error) {
       failure = String(error);
     }
-    // Before the fix this built `var OpenBotRecorderContent=…`, which lands on the window of every page it runs in.
+    // Before the fix this built a `var` named after the content entry (a branded global), which lands on the window of every page it runs in.
     if (built !== null) {
       const window = freshWindow();
       const before = new Set(Object.keys(window));

@@ -101,7 +101,7 @@ type Stream = {
   /** Recordings it still sends; one leaves when it is done, replaced by Start over, or discarded. */
   recordings: Set<string>;
   signedOut: boolean;
-  /** The bearer the pass OpenBot answered "signed out" to used. */
+  /** The bearer the pass XiongBao answered "signed out" to used. */
   failedToken?: string;
   streamer?: Streamer;
 };
@@ -256,7 +256,7 @@ export function createOffscreenController(deps: OffscreenControllerDeps): void {
   const streams: Stream[] = [];
   /** Which recording each trajectory belongs to; kept in memory, since a discard clears the meta. */
   const owners = new Map<string, string>();
-  /** Tokens OpenBot answered "signed out" for, with the guard's reason: nothing more is sent with them. */
+  /** Tokens XiongBao answered "signed out" for, with the guard's reason: nothing more is sent with them. */
   const signedOutTokens = new Map<string, SignedOutReason>();
   let live: Live | null = null;
   let work: Promise<void> = Promise.resolve();
@@ -312,7 +312,7 @@ export function createOffscreenController(deps: OffscreenControllerDeps): void {
     }
   }
 
-  /** A token OpenBot already signed out: the request is refused here, without reaching OpenBot. */
+  /** A token XiongBao already signed out: the request is refused here, without reaching XiongBao. */
   function signedOutReason(
     stream: Stream,
     token: string,
@@ -910,7 +910,7 @@ export function createOffscreenController(deps: OffscreenControllerDeps): void {
   }
 
   /** The service worker says this token's connection is gone: no stream sends with it any more, and a pass asked
-   * with it is refused here, so nothing reaches OpenBot or Intelligence for it. The events stay in the outbox. */
+   * with it is refused here, so nothing reaches XiongBao or Intelligence for it. The events stay in the outbox. */
   async function halt(token: string): Promise<void> {
     if (!signedOutTokens.has(token)) signedOutTokens.set(token, "revoked");
     const halting: Promise<void>[] = [];
