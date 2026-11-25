@@ -63,7 +63,7 @@ afterEach(() => cleanup());
 afterAll(() => GlobalRegistrator.unregister());
 
 describe("channel history notice", () => {
-  test("failed history retrieval does not claim the CopilotKit project changed", () => {
+  test("failed history retrieval does not claim the project changed", () => {
     const notice = channelHistoryNotice({
       restoring: false,
       messageCount: 0,
@@ -73,7 +73,7 @@ describe("channel history notice", () => {
     });
 
     expect(notice).toContain("暂时读不到");
-    expect(notice).not.toContain("different CopilotKit project");
+    expect(notice).not.toMatch(/different .*project/);
     expect(notice).not.toContain("fresh history");
   });
 
@@ -87,7 +87,7 @@ describe("channel history notice", () => {
     });
 
     expect(notice).toContain("有一条更早的消息读不出来");
-    expect(notice).not.toContain("different CopilotKit project");
+    expect(notice).not.toMatch(/different .*project/);
   });
 
   test("a malformed successful history response renders the unavailable notice", async () => {
@@ -103,7 +103,7 @@ describe("channel history notice", () => {
         expect((await view.findByRole("status")).textContent).toContain(
           "更早的消息暂时读不到",
         );
-        expect(view.queryByText(/different CopilotKit project/)).toBeNull();
+        expect(view.queryByText(/different .*project/)).toBeNull();
       },
     );
   });
@@ -135,7 +135,7 @@ describe("channel history notice", () => {
     });
 
     expect(notice).toContain("暂时读不到");
-    expect(notice).not.toContain("different CopilotKit project");
+    expect(notice).not.toMatch(/different .*project/);
   });
 
   test("valid empty history in a used channel has no project-change notice", () => {

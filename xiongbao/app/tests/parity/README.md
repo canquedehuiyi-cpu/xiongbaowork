@@ -43,8 +43,8 @@ bun tests/parity/capture.ts \
 
 - 用 `addInitScript` 写入 `localStorage["xiongbao-theme"]`（`dark` 或 `light`）；
 - 把页面时钟固定在 `2026-11-07T10:00:00+08:00`（`page.clock.setFixedTime`），时区 `Asia/Shanghai`，语言 `zh-CN`；
-- 注入 CSS 关闭动画、过渡与光标闪烁，并隐藏 CopilotKit 在开发模式下挂出的 `<cpk-web-inspector>` 浮层（生产构建没有它）；
-- 拦截所有对外部域名的请求（例如 CopilotKit 的公告源），本地返回 `{}`，记录在 `externalRequests`；
+- 注入 CSS 关闭动画、过渡与光标闪烁，并隐藏运行时库在开发模式下挂出的 `<cpk-web-inspector>` 浮层（生产构建没有它）；
+- 拦截所有对外部域名的请求（例如运行时库的公告源），本地返回 `{}`，记录在 `externalRequests`；
 - 等待网络空闲、`document.fonts.ready`，再等 500ms；`deviceScaleFactor` 为 1，只截视口范围。
 
 输出结构：

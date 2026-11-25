@@ -337,8 +337,8 @@ test("generated UI actions run the actual channel agent and thread with edited v
   });
 });
 /*
- * CopilotKit 1.83 wrote A2UI 1.0's version as "v1.0", and every interface a Bot drew on it is stored
- * that way. 1.84 reads only "1.0" (CopilotKit #8155), so a conversation from before the upgrade lost
+ * The agent SDK 1.83 wrote A2UI 1.0's version as "v1.0", and every interface a Bot drew on it is stored
+ * that way. 1.84 reads only "1.0" (agent SDK issue #8155), so a conversation from before the upgrade lost
  * its interfaces when it was reopened, and the next run in it took them away again.
  */
 test("an interface a Bot drew before the upgrade draws when its conversation is reopened, and stays through the next run", async () => {
@@ -426,7 +426,7 @@ test.each([
       content: "Later local turn",
     });
     expect(view.getByText(unavailable)).toBeTruthy();
-    expect(view.queryByText(/different CopilotKit project/)).toBeNull();
+    expect(view.queryByText(/different .*project/)).toBeNull();
   },
 );
 

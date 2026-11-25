@@ -49,7 +49,7 @@ const CONVERSATIONS = [
   {
     id: `goal-conversation-releases-${suite}`,
     threadId: `goal-conversation-releases-thread-${suite}`,
-    title: "CopilotKit XiongBao release tracking",
+    title: "XiongBao release tracking",
   },
   {
     id: `goal-conversation-other-${suite}`,

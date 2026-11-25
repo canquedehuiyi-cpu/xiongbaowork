@@ -44,7 +44,7 @@ const search = (id = "search", result = '"Results"') =>
   call(id, "mcp__exa__web_search_exa", { query: "top 5 GDP 2025" }, result);
 const fetch = (urls: string[], id = "fetch") =>
   call(id, "mcp__exa__web_fetch_exa", { urls }, '"Page text"');
-// The names this app draws itself, as CopilotKit's renderer registry would list them.
+// The names this app draws itself, as the agent SDK's renderer registry would list them.
 const drawn = (name: string) =>
   name === "showBarChart" || name === "computer_request_help";
 const text = (id: string): VisibleChatItem => ({
@@ -195,7 +195,7 @@ test("a tool step is named in words and counted as tools", () => {
   ).toBe("搜索了网络，用了 2 个工具");
 });
 
-test("the tools CopilotKit has a renderer for are the ones the app draws", () => {
+test("the tools the agent SDK has a renderer for are the ones the app draws", () => {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <CopilotKitContext.Provider
       value={

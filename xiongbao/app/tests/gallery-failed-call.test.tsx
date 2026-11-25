@@ -72,7 +72,7 @@ const CLAUDE_CODE_REFUSED = JSON.stringify({
     "<tool_use_error>InputValidationError: mcp__ag_ui__showTable was called with input that could not be parsed as JSON</tool_use_error>",
 });
 
-/** CopilotKit's own answer to a call whose arguments it couldn't parse (`executeToolHandler`). */
+/** The agent SDK's own answer to a call whose arguments it couldn't parse (`executeToolHandler`). */
 const BROWSER_REFUSED = `Error: Unexpected token ',', ..."s":"Event","When","... is not valid JSON`;
 
 const UNREADABLE = FAILED_UNREADABLE;

@@ -199,6 +199,53 @@ describe("findLeftovers", () => {
     );
   });
 
+  test("命名空间成员与 @copilotkit 模块替身第一层的键算导入的名字；别的模块替身与嵌套键不算", () => {
+    const names = copilotkitImportedNames(
+      [
+        'import * as Core from "@copilotkit/react-core/v2";',
+        'const spy = spyOn(Core, "useCopilotKit");',
+        "type R = typeof Core.useFrontendTool;",
+        'const real = await import("@copilotkit/shared");',
+        "real.CopilotKitError;",
+        'mock.module("@copilotkit/react-core/v2", () => ({',
+        "  ...original,",
+        "  useCopilotKitMocked: () => ({ copilotkitNested: 1 }),",
+        "  useAgent: (input: { CopilotKitArg: string }) => input,",
+        "}));",
+        'mock.module("@copilotkit/react-core/v2", () => original);',
+        'mock.module("./local", () => ({ CopilotKitLocal: 1 }));',
+        "Other.CopilotKitOther;",
+      ].join("\n"),
+    );
+    expect([...names].sort()).toEqual(
+      [
+        "Core",
+        "CopilotKitError",
+        "useAgent",
+        "useCopilotKit",
+        "useCopilotKitMocked",
+        "useFrontendTool",
+      ].sort(),
+    );
+  });
+
+  test("测试替身里依赖导出的名字放行，局部变量名里带同一串字的不放行", () => {
+    put(
+      "xiongbao/app/tests/stub.test.tsx",
+      [
+        'import * as Core from "@copilotkit/react-core/v2";',
+        'const spy = spyOn(Core, "useCopilotKit");',
+        'const useCopilotKitSpy = spyOn(Core, "useAgent");',
+        "// The CopilotKit provider is not drawn here.",
+      ].join("\n"),
+    );
+    expect(
+      findLeftovers(["xiongbao/app/tests/stub.test.tsx"], "R1", root).map(
+        (hit) => hit.line,
+      ),
+    ).toEqual([3, 4]);
+  });
+
   test("依赖的线上名逐个放行，名单外的带 copilotkit 的名字与公司名不放行", () => {
     put(
       "xiongbao/server/src/wire.ts",
@@ -209,6 +256,8 @@ describe("findLeftovers", () => {
         "process.env.COPILOTKIT_OPENAI_API = 1;",
         "const w = { __copilotkit_other__: 1 };",
         'const s = "CopilotKit Intelligence";',
+        "const e = { copilotkit_format: 3, copilotkit_contextSent: false };",
+        "const f = { copilotkit_formats: 3 };",
       ].join("\n"),
     );
     put("xiongbao/app/src/s.css", ".copilotKitInput { color: red; }\n");
@@ -216,7 +265,7 @@ describe("findLeftovers", () => {
       findLeftovers(["xiongbao/server/src/wire.ts"], "R1", root).map(
         (hit) => hit.line,
       ),
-    ).toEqual([5, 6]);
+    ).toEqual([5, 6, 8]);
     expect(findLeftovers(["xiongbao/app/src/s.css"], "R1", root)).toEqual([]);
   });
 
@@ -229,14 +278,17 @@ describe("findLeftovers", () => {
         "props.copilotkit.ui;",
         "const { copilotkit: _ns, ...rest } = props;",
         "const next = { ...rest, copilotkit };",
+        'type C = ReturnType<typeof hook>["copilotkit"];',
         'const label = "copilotkit is the runtime";',
+        "  copilotkit: { ui: envelope },",
+        "  copilotkit is the runtime: yes",
       ].join("\n"),
     );
     expect(
       findLeftovers(["xiongbao/app/src/member.ts"], "R1", root).map(
         (hit) => hit.line,
       ),
-    ).toEqual([2, 6]);
+    ).toEqual([2, 7, 9]);
   });
 
   test("注释里的 @copilotkit/<包> 包名放行；字符串里的包名与注释里的公司名不放行", () => {

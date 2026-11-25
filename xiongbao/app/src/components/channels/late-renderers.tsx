@@ -1,6 +1,6 @@
 import { createContext, useEffect, useRef, useState } from "react";
 
-/** The part of the CopilotKit core this needs: its activity renderers, and a way to hear it connect. */
+/** The part of the agent SDK core this needs: its activity renderers, and a way to hear it connect. */
 type RendererCore = {
   readonly renderActivityMessages: readonly unknown[];
   subscribe(subscriber: { onRuntimeConnectionStatusChanged?: () => void }): {

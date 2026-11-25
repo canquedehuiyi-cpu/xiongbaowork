@@ -2010,7 +2010,7 @@ const ToolRow = memo(function ToolRow({
  * Named from the reader's side: what was done, against which server, with the server's own words
  * behind a disclosure. The identifier the model was offered never reaches the screen.
  *
- * Exported for its tests, which draw it without the CopilotKit provider `ToolCallBody` needs.
+ * Exported for its tests, which draw it without the agent SDK provider `ToolCallBody` needs.
  */
 export function ServerToolLine({
   name,
@@ -2383,11 +2383,11 @@ function TranscriptRenderersWatch({
 }: {
   onVersion: (version: number) => void;
 }) {
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   const { data: capabilities } = useQuery(deploymentCapabilitiesQueryOptions());
   return (
     <LateRenderersWatch
-      core={copilotkit}
+      core={copilotCore}
       onVersion={onVersion}
       settled={capabilities?.generativeUi}
     />

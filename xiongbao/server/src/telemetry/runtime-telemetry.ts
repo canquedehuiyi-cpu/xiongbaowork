@@ -1,7 +1,7 @@
 import type { CopilotRuntimeOptions } from "@copilotkit/runtime/v2";
 
 /**
- * The CopilotKit runtime reports usage to its vendor by default: every runtime builds a capture
+ * The agent runtime reports usage to its vendor by default: every runtime builds a capture
  * scope over `lambdaClient.send` (`@copilotkit/runtime` 1.85.0,
  * `dist/v2/runtime/telemetry/telemetry-client.mjs:61-80`), and the only switches it reads are two
  * environment variables (same file, line 8), one of them the common `DO_NOT_TRACK`, which is the one set here.

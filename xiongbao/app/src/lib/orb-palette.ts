@@ -14,7 +14,7 @@ export type OrbColors = {
 const BG = "var(--background)";
 
 /**
- * Eight palettes, all inside the CopilotKit family: mint, violet, periwinkle, sky, orange, red,
+ * Eight palettes, all inside one colour family: mint, violet, periwinkle, sky, orange, red,
  * lilac and teal. The order is part of the contract: a Bot's color is its index here, so
  * reordering or inserting would recolor every Bot.
  */

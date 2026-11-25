@@ -321,7 +321,7 @@ function render(t: Theme): string {
     weight: 700,
     fill: t.ink,
   });
-  text(svX + 22, svY + 58, "CopilotKit runtime, auth, roles, coworkers", {
+  text(svX + 22, svY + 58, "agent runtime, auth, roles, coworkers", {
     size: 13,
     fill: t.muted,
   });
@@ -427,22 +427,6 @@ function render(t: Theme): string {
     19,
   );
 
-  const intX = 622;
-  box(intX, dbY, 226, 118, t, { stroke: t.ink });
-  text(intX + 18, dbY + 32, "CopilotKit Intelligence", {
-    size: 14.5,
-    weight: 650,
-    fill: t.ink,
-  });
-  lines(
-    intX + 18,
-    dbY + 58,
-    ["durable threads", "memory", "external service"],
-    t,
-    12.5,
-    19,
-  );
-
   // ---- the wiring --------------------------------------------------------
   // you -> server, and the answer back
   arrow(youX + youW + 6, youY + 76, svX - 8, youY + 76, { colour: t.ink });
@@ -510,13 +494,6 @@ function render(t: Theme): string {
   });
   label(gX + 72, (svY + svH + dbY) / 2 + 4, "always", t.gate, "end");
 
-  // threads and memory, both ways
-  arrow(intX + 113, svY + svH + 8, intX + 113, dbY - 8, {
-    colour: t.ink,
-    dashed: true,
-    tailHead: true,
-  });
-
   // the supervisor builds each computer
   arrow(supX + 150, supY - 8, cX + 150, cY + 2 * 100 + 92, {
     colour: t.ink,
@@ -531,8 +508,8 @@ function render(t: Theme): string {
       `the Bot makes returns through the gateway, which resolves the target, decides it against the ` +
       `configured policy, records an audit row, and only then acts, or refuses and names the rule. ` +
       `Allowed actions reach that Bot's own computer, one container each holding its own Chromium, ` +
-      `logins and workspace, created by the supervisor. Every decision lands in PostgreSQL; threads ` +
-      `and memory live in CopilotKit Intelligence.</desc>`,
+      `logins and workspace, created by the supervisor. Every decision, thread and memory lands in ` +
+      `PostgreSQL.</desc>`,
     ...out,
     `</svg>`,
   ].join("\n");

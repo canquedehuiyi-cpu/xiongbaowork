@@ -34,7 +34,7 @@ import { settleReactWork } from "./settle-react-work";
 type Registered = Parameters<typeof ReactCoreV2.useFrontendTool>[0];
 const registered: Registered[] = [];
 const stopped: unknown[] = [];
-const useCopilotKitSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
+const coreHookSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
   () =>
     ({
       copilotkit: { stopAgent: (input: unknown) => stopped.push(input) },
@@ -51,7 +51,7 @@ const useFrontendToolSpy = spyOn(
   "useFrontendTool",
 ).mockImplementation(register);
 afterAll(() => {
-  useCopilotKitSpy.mockRestore();
+  coreHookSpy.mockRestore();
   useFrontendToolSpy.mockRestore();
 });
 

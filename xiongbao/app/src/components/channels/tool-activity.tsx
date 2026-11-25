@@ -200,27 +200,27 @@ function foldable(item: ToolItem, isDrawn: (name: string) => boolean): boolean {
 const NOTHING_DRAWN: readonly { name: string }[] = [];
 
 /**
- * Whether the app draws a tool itself, read from CopilotKit's own renderer registry.
+ * Whether the app draws a tool itself, read from the agent SDK's own renderer registry.
  *
  * Read from the registry rather than kept as a list here, because every `useRenderTool` and
  * `useFrontendTool` already registers its name there, and a list would fall behind the first tool
- * added without it. Taken from the context directly, not through `useCopilotKit`, because that
+ * added without it. Taken from the context directly, not through the provider's hook, because that
  * throws outside a provider and the transcript is drawn without one in places. With no provider
  * nothing is drawn. A `*` renderer draws every tool it is asked about, so nothing outside MCP folds.
  */
 export function useDrawnTool(): (name: string) => boolean {
-  const copilotkit = useContext(CopilotKitContext)?.copilotkit;
+  const copilotCore = useContext(CopilotKitContext)?.copilotkit;
   const subscribe = useCallback(
     (onChange: () => void) =>
-      copilotkit
-        ? copilotkit.subscribe({ onRenderToolCallsChanged: onChange })
+      copilotCore
+        ? copilotCore.subscribe({ onRenderToolCallsChanged: onChange })
             .unsubscribe
         : () => {},
-    [copilotkit],
+    [copilotCore],
   );
   const renderers = useSyncExternalStore(
     subscribe,
-    () => copilotkit?.renderToolCalls ?? NOTHING_DRAWN,
+    () => copilotCore?.renderToolCalls ?? NOTHING_DRAWN,
   );
   return useMemo(() => {
     const names = new Set(renderers.map((renderer) => renderer.name));

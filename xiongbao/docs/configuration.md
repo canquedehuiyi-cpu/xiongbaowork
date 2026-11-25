@@ -151,7 +151,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `OPENBOT_BROKER_PROVIDER` | unset (chosen by which key is set) | `composio` or `arcade`: which broker is live when both `COMPOSIO_API_KEY` and `ARCADE_API_KEY` are set. Any other value refuses to start, and so does naming a provider whose key is unset, or setting both keys with this unset. See [Choosing the provider](plugins/arcade.md#choosing-the-provider). |
 
 **`OPENBOT_GENERATIVE_UI`** enables generated interfaces by default: streamed HTML/CSS/JavaScript
-in a sandboxed iframe, and A2UI 1.0 interfaces built from CopilotKit's standard catalog (every
+in a sandboxed iframe, and A2UI 1.0 interfaces built from the agent SDK's standard catalog (every
 standard component except Map, Favicon, LinkCard and Citation), plus XiongBao Work's own Breakdown:
 editable amounts that add up to a total, each in its own colour, with a bar of how the total splits.
 Their buttons send their named action and the values entered back to the current conversation's Bot.

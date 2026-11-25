@@ -45,7 +45,7 @@ import { settleReactWork } from "./settle-react-work";
  * and no notice came, where the Bot's replies in words always raised one. The turn said nothing, so
  * the conversation told the roster nothing, and the notice is raised off what the roster is told.
  *
- * End to end in the app: the real chat running the turn through the app's own CopilotKit provider,
+ * End to end in the app: the real chat running the turn through the app's own agent SDK provider,
  * against a runtime that streams what the real one does for a drawn interface (the call and the
  * activity the middleware makes of it), and the real roster socket and notifier, with the server's
  * part played at its boundary: what a conversation reports is announced back on the socket, as

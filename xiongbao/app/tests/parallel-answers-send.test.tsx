@@ -32,7 +32,7 @@ import {
  * no result: the surface was interrupted before it could answer" for each of the 9, and the Bot told
  * them 9 of its lookups had failed, for no reason it could find.
  *
- * The real chat, its history reader and the CopilotKit core, against a runtime that answers as the
+ * The real chat, its history reader and the agent SDK core, against a runtime that answers as the
  * real one does over SSE. Only the HTTP boundary is a stand-in.
  */
 

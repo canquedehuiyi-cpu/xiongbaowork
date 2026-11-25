@@ -28,7 +28,7 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * A Bot asking the person to take over its browser, end to end in the app: the real chat, the real computer tools
- * and the CopilotKit core running them, against a runtime and a computer that answer as the real ones do. The Bot's
+ * and the agent SDK core running them, against a runtime and a computer that answer as the real ones do. The Bot's
  * runs are streamed AG-UI events; its help request is the real frontend tool, which raises the request on the computer
  * and waits on it; handing back completes the request as the computer's own release does; and the Bot's next run is
  * the one the core starts with the tool's answer, stored in the thread as the runtime stores it.

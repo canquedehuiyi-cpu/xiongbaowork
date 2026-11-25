@@ -26,7 +26,7 @@ import { ComputerTools } from "@/lib/copilot/computer-tools";
 
 type Registered = Parameters<typeof ReactCoreV2.useFrontendTool>[0];
 const registered: Registered[] = [];
-const useCopilotKitSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
+const coreHookSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
   () => ({ copilotkit: { stopAgent: () => undefined } }) as never,
 );
 const useFrontendToolSpy = spyOn(
@@ -70,7 +70,7 @@ beforeAll(() => {
 afterEach(cleanup);
 afterAll(() => {
   globalThis.fetch = originalFetch;
-  useCopilotKitSpy.mockRestore();
+  coreHookSpy.mockRestore();
   useFrontendToolSpy.mockRestore();
   GlobalRegistrator.unregister();
 });

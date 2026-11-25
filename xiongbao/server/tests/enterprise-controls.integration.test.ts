@@ -222,7 +222,7 @@ function appFor(actor: { id: string; email: string; role: "admin" | "user" }) {
   app.post("/api/channels/:id/compact", (context) =>
     context.json({ compacted: true }),
   );
-  // Mounted the way app.ts mounts the CopilotKit runtime: a basePath sub-app that takes every path
+  // Mounted the way app.ts mounts the agent runtime: a basePath sub-app that takes every path
   // under it. The runtime then matches a run by its TRAILING segments (fetch-router `matchSegments`:
   // `.../agent/<id>/run` anywhere under the base), so this stub answers whatever path reaches it.
   app.route(

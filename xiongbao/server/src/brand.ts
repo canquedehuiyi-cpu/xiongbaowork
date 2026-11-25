@@ -63,7 +63,7 @@ export function supportUrl(): string | undefined {
   return current.supportUrl;
 }
 
-// The upstream CopilotKit line stays fixed: its MIT licence requires the notice to be kept.
+// The upstream line stays fixed: its MIT licence requires the notice to be kept.
 export function copyrightLine(year = 2026): string {
   return `Copyright (c) ${year} ${companyName()}; portions Copyright (c) 2026 CopilotKit (MIT)`;
 }

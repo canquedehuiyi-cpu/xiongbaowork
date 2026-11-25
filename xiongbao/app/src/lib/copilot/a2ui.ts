@@ -29,7 +29,7 @@ export const OMITTED_STANDARD_COMPONENTS = [
 ] as const;
 
 /**
- * The components a Bot can draw an interface from: CopilotKit's standard catalog, which carries the
+ * The components a Bot can draw an interface from: the agent SDK's standard catalog, which carries the
  * A2UI 1.0 basic components under their A2UI names, less the ones above. These are declarative
  * primitives, not the separately granted XiongBao gallery components.
  *

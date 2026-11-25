@@ -246,9 +246,9 @@ import { holdsOwnWebSearch, webResearchGuidance } from "./web/guidance";
 import { withBrowserWireCodeRunner } from "./wire-codes";
 
 /**
- * The CopilotKit runtime, in one of two thread backends.
+ * The agent runtime, in one of two thread backends.
  *
- * Package-declared built-in Bots run as CopilotKit `BuiltInAgent` instances. External Bots are
+ * Package-declared built-in Bots run as the agent SDK's `BuiltInAgent` instances. External Bots are
  * reached over AG-UI as `HttpAgent` instances, so anything that speaks the protocol remains a Bot
  * with no framework adapter here: LangGraph, Pydantic-AI, CrewAI, Mastra, ADK, or a hand-written
  * server.
@@ -690,7 +690,7 @@ export function runtimeModelForEnvironment(
  * The OpenAI API the built-in Bots' model is called on, where `OPENAI_BASE_URL` points somewhere: `responses` when
  * that model takes tools only there, and nothing otherwise. Returns what it set.
  *
- * The CopilotKit runtime decides by host since 1.79: OpenAI and Azure get the Responses API, and any other host gets
+ * The agent runtime decides by host since 1.79: OpenAI and Azure get the Responses API, and any other host gets
  * Chat Completions, because most OpenAI-compatible servers serve only `/chat/completions`. A gateway or a proxy in
  * front of OpenAI (LiteLLM, Portkey, a company's own proxy) is any other host, and on Chat Completions
  * `gpt-5.6-terra`, the model the built-in Bots run on by default, refuses every function tool: every turn of every
@@ -699,7 +699,7 @@ export function runtimeModelForEnvironment(
  * runtime's rule, so a server that serves only Chat Completions, or serves it better (Groq's `/responses` refuses
  * tool calls), is asked as it always was.
  *
- * Set on the environment because `COPILOTKIT_OPENAI_API` is the runtime library's own switch, read whenever a Bot's
+ * Set on the environment because the runtime library's own switch is an environment variable, read whenever a Bot's
  * model is resolved, and a deployment runs its built-in Bots on one model, decided once at boot. An operator decides
  * with `XIONGBAO_OPENAI_API` (`responses` or `chat`), copied onto the library's switch here; one who set the library's
  * switch directly has decided too. Either stands, `chat` included.
@@ -3172,7 +3172,7 @@ function withoutForgedServerEvents(transport: AbstractAgent): AbstractAgent {
  * the run reaches this transport, turns it into the `render_ui` tool and the generative UI guide in
  * `context`, and checks every `render_ui` call against it on the way back. The endpoint gets that
  * tool and that guide either way, so the envelope was the same catalog a second time, on every turn,
- * and was most of what a turn sent. No agent XiongBao runs reads it. The rest of `copilotkit` stays.
+ * and was most of what a turn sent. No agent XiongBao runs reads it. The rest of `forwardedProps.copilotkit` stays.
  */
 function withoutGenerativeUIEnvelope(transport: AbstractAgent): AbstractAgent {
   const run = transport.run.bind(transport);
@@ -3186,12 +3186,12 @@ function withoutGenerativeUIEnvelope(transport: AbstractAgent): AbstractAgent {
         !Object.hasOwn(props.copilotkit, "ui")
       )
         return run(input);
-      const { ui: _envelope, ...copilotkit } = props.copilotkit;
+      const { ui: _envelope, ...kept } = props.copilotkit;
       const { copilotkit: _namespace, ...rest } = props;
       return run({
         ...input,
         forwardedProps:
-          Object.keys(copilotkit).length > 0 ? { ...rest, copilotkit } : rest,
+          Object.keys(kept).length > 0 ? { ...rest, copilotkit: kept } : rest,
       });
     },
     clone: () => withoutGenerativeUIEnvelope(clone() as AbstractAgent),
@@ -4186,7 +4186,7 @@ export type HoldsTools = (input: RunAgentInput) => boolean;
 /**
  * Where a run says somebody asked for it: on its forwardedProps, written by {@link markAskedRun}.
  *
- * The CopilotKit runtime also runs a Bot for itself, on the same agents. It names a new conversation
+ * The agent runtime also runs a Bot for itself, on the same agents. It names a new conversation
  * by building the conversation's Bot again and running it in-process on a title prompt, with
  * forwardedProps of its own making (`{}`), and it answers `agent/<id>/suggest` by running the Bot on
  * whatever the caller sent. Nobody asked for either run and nobody sees either, so neither may hold
@@ -4382,7 +4382,7 @@ export type MountedCopilotRuntime = {
 };
 
 /**
- * Mount the CopilotKit endpoint onto the host Hono app.
+ * Mount the agent SDK endpoint onto the host Hono app.
  *
  * `agents` is a factory rather than a fixed map so a Bot registered while the server is running is
  * reachable on the next request. Resolving once at boot would mean every new Bot needed a restart,

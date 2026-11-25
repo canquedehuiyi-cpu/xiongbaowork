@@ -82,7 +82,7 @@ export const SCENARIOS: readonly Scenario[] = ["data", "empty"];
 
 /**
  * One answer. `body` is sent as JSON unless `contentType` is given, in which case it must be the raw
- * string to send (used for CopilotKit's server-sent event stream).
+ * string to send (used for the agent SDK's server-sent event stream).
  */
 export type FixtureResponse = {
   status: number;
@@ -1305,7 +1305,7 @@ const CAPABILITIES: CapabilitiesBody = {
 };
 
 /**
- * CopilotKit's runtime identification (`GET /api/runtime/info`), the subset of `RuntimeInfo` from
+ * The agent SDK's runtime identification (`GET /api/runtime/info`), the subset of `RuntimeInfo` from
  * `@copilotkit/shared` that `@copilotkit/core` reads. `agents` must be an object: core calls
  * `Object.entries(runtimeInfo.agents)`, which is the "Cannot convert undefined or null to object"
  * error a bare `[]`/`{}` body produces.
@@ -1809,7 +1809,7 @@ const FLOW_MODEL_CHOICES: FlowModelChoice[] = [
 ];
 
 /* ------------------------------------------------------------------------------------------------ */
-/* The Bot's conversation (CopilotKit / AG-UI)                                                       */
+/* The Bot's conversation (the agent SDK / AG-UI)                                                       */
 /* ------------------------------------------------------------------------------------------------ */
 
 const BOT_THREAD_ID = "thread-bot-demo";
@@ -1907,7 +1907,7 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   ],
   ["GET", /^\/api\/runtime\/info$/, (c) => ok(copilotInfo(list(c, AGENTS)))],
   [
-    // CopilotKit's single-route transport: the same identification, asked as `{ method: "info" }`.
+    // The agent SDK's single-route transport: the same identification, asked as `{ method: "info" }`.
     "POST",
     /^\/api\/runtime$/,
     (c) =>

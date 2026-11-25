@@ -196,7 +196,7 @@ type ThreadHistoryMessage = {
  * The platform client, named by the methods this file calls and nothing else.
  *
  * Narrow and structural on purpose. It is what lets the tests drive every exit path without a
- * gateway, and it is the honest documentation of how much of `CopilotKitIntelligence` a headless turn
+ * gateway, and it is the honest documentation of how much of the platform client a headless turn
  * depends on. The real client satisfies it; see the seam note above about the `ɵ` shapes being
  * restatements rather than imports.
  */

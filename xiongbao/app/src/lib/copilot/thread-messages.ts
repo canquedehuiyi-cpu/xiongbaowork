@@ -114,17 +114,17 @@ function withoutNullAssistantContent(turn: unknown): unknown {
 }
 
 /**
- * The A2UI version CopilotKit reads, and the spelling of the same version that CopilotKit 1.83 wrote.
+ * The A2UI version the agent SDK reads, and the spelling of the same version that the agent SDK 1.83 wrote.
  *
  * 1.84 spells A2UI 1.0 `"1.0"`, as Google's A2UI SDKs do, and refuses an operation that says
- * `"v1.0"` (CopilotKit #8155, which migrates nothing). Every interface a Bot drew on 1.83 is stored
+ * `"v1.0"` (agent SDK issue #8155, which migrates nothing). Every interface a Bot drew on 1.83 is stored
  * with `"v1.0"`, so a conversation from before the upgrade drew none of them when it was reopened.
  */
 const A2UI_VERSION = "1.0";
 const STORED_A2UI_VERSION = "v1.0";
 
 /**
- * A generated interface written in 1.83's spelling, in the one CopilotKit reads now.
+ * A generated interface written in 1.83's spelling, in the one the agent SDK reads now.
  *
  * Only a surface activity's operations that say `"v1.0"` change, and only their `version`: both
  * spellings name the same version, so nothing else about the interface does. Any other turn, and a

@@ -185,18 +185,6 @@
     "reason": "品牌白名单：xiongbao/server/src/plugins/shared-accounts.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"openbot-learning-\"",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-learning\"",
-    "file": "xiongbao/server/src/learning/model-endpoint.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/model-endpoint.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "\"openbot-model-call\"",
     "file": "xiongbao/server/src/routing/model.ts",
     "until": "R3",
@@ -219,12 +207,6 @@
     "file": "xiongbao/server/src/db/apply-migrations.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/db/apply-migrations.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:learned-skills\"",
-    "file": "xiongbao/server/src/learning/remote.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/remote.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:personal-defaults\"",
@@ -305,12 +287,6 @@
     "reason": "品牌白名单：xiongbao/server/src/auth/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"x-copilotkit-ei-service-token\"",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "(?:openbot-)?(agent-",
     "file": "xiongbao/shared/harnesses.ts",
     "until": "R3",
@@ -385,18 +361,6 @@
     "reason": "品牌白名单：xiongbao/shared/openbot-actor.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "Automatic Learning: no credential here could create the openbot container",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "Automatic Learning: the openbot container is",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
     "file": "xiongbao/shared/learning.ts",
     "until": "R3",
@@ -427,18 +391,6 @@
     "reason": "品牌白名单：xiongbao/server/src/tenant-package-path.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "Created an openbot container",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "creates the openbot Learning container",
-    "file": "xiongbao/server/src/config.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/config.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "DEFAULT_NAMESPACE = \"openbot\"",
     "file": "xiongbao/supervisor/src/names.ts",
     "until": "R3",
@@ -457,21 +409,9 @@
     "reason": "品牌白名单：xiongbao/server/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "id: \"openbot\",",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "images.openbot",
     "until": "R3",
     "reason": "发行记录里的镜像键（工作流里读取）"
-  },
-  {
-    "text": "Learning container with ID \"openbot\"",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
@@ -727,24 +667,6 @@
     "reason": "品牌白名单：xiongbao/app/src/components/approvals/describe-rules.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "The openbot container exists",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "the openbot Learning container with the configured runtime key",
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "名为 openbot 的容器",
-    "file": "xiongbao/app/src/routes/_authed/admin/learning.tsx",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/routes/_authed/admin/learning.tsx 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "pattern": "--username[= ][\"']?openbot\\b",
     "until": "R4",
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：--username 参数"
@@ -913,6 +835,72 @@
     "reason": "MIT 许可证署名（只在许可证文件里）"
   },
   {
+    "file": "xiongbao/server/src/brand.ts",
+    "text": "portions Copyright (c) 2026 CopilotKit (MIT)",
+    "until": "R4",
+    "reason": "MIT 许可证署名在产品版权串里（关于页/桌面端 copyright）；是否只留在许可证文件里待 R4 前裁定（Task 14 报告疑虑）"
+  },
+  {
+    "file": "xiongbao/server/tests/brand.test.ts",
+    "text": "portions Copyright (c) 2026 CopilotKit (MIT)",
+    "until": "R4",
+    "reason": "MIT 许可证署名在产品版权串里（关于页/桌面端 copyright）；是否只留在许可证文件里待 R4 前裁定（Task 14 报告疑虑）"
+  },
+  {
+    "file": "xiongbao/desktop-device/src-tauri/tauri.conf.json",
+    "text": "portions Copyright (c) 2026 CopilotKit (MIT)",
+    "until": "R4",
+    "reason": "MIT 许可证署名在产品版权串里（关于页/桌面端 copyright）；是否只留在许可证文件里待 R4 前裁定（Task 14 报告疑虑）"
+  },
+  {
+    "file": "xiongbao/desktop-device/tests/brand-icons.test.ts",
+    "text": "portions Copyright (c) 2026 CopilotKit (MIT)",
+    "until": "R4",
+    "reason": "MIT 许可证署名在产品版权串里（关于页/桌面端 copyright）；是否只留在许可证文件里待 R4 前裁定（Task 14 报告疑虑）"
+  },
+  {
+    "file": "xiongbao/app/tests/settings-about.test.tsx",
+    "pattern": "Copyright \\(c\\) 2026 CopilotKit|/CopilotKit/|依赖清单里有 CopilotKit 一行|github\\.com/CopilotKit",
+    "until": "R4",
+    "reason": "关于页依赖清单里 CopilotKit 一行（Task 8 裁定保留的 MIT 署名）及其反向断言；随许可证署名一起在 R4 前裁定"
+  },
+  {
+    "file": "xiongbao/biome.json",
+    "text": "\"@copilotkit/**\"",
+    "until": "forever",
+    "reason": "lint 规则里依赖包 @copilotkit/* 的路径通配，不是品牌"
+  },
+  {
+    "file": "xiongbao/app/tests/a2ui-frame.test.tsx",
+    "text": "\"@copilotkit/react-core/v2/styles.css\"",
+    "until": "forever",
+    "reason": "依赖包 @copilotkit/* 的模块路径（按包名解析依赖文件），不是品牌"
+  },
+  {
+    "file": "xiongbao/app/tests/a2ui-markdown.test.tsx",
+    "pattern": "\"@copilotkit/(?:react-core/v2|shared)/generative-ui\"",
+    "until": "forever",
+    "reason": "依赖包 @copilotkit/* 的模块路径（按包名解析依赖文件），不是品牌"
+  },
+  {
+    "file": "xiongbao/app/tests/router.test.ts",
+    "text": "/node_modules/.bun/@copilotkit+react-core@1.70.1/node_modules/@copilotkit/react-core/dist/index.js",
+    "until": "forever",
+    "reason": "依赖包 @copilotkit/* 的模块路径（按包名解析依赖文件），不是品牌（分包规则对 node_modules 路径的判断）"
+  },
+  {
+    "file": "xiongbao/scripts/acceptance/i18n-scan.ts",
+    "text": "|copilotkit|",
+    "until": "forever",
+    "reason": "界面文案扫描器的品牌词表：要能认出这个词才能拦住它，不是品牌"
+  },
+  {
+    "file": "xiongbao/tests/upstream-integration.test.ts",
+    "text": "not.toContain(\"ghcr.io/copilotkit/\")",
+    "until": "R4",
+    "reason": "守卫：断言发布流程不再指向上游镜像（Task 27 收尾时随上游同步一起处理）"
+  },
+  {
     "pattern": "(?i:copilotkit/(?:charts/)?openbot[\\w.-]*)",
     "until": "R4",
     "reason": "上游自有地址，删除而不改名（Task 14/27）：github.com/CopilotKit/OpenBot、仓库名 CopilotKit/openbot、镜像 ghcr.io/copilotkit/openbot-…；机械改名会指向不存在的地址"
@@ -1002,18 +990,6 @@
     "pattern": "openbot-component-|openbot\\.sender|openbot\\.working",
     "until": "R3",
     "reason": "测试引用 delivery/opentag.ts 已保护的对端名（OpenTag 上下文键、事件名、工具调用 id 前缀）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-remote.test.ts",
-    "pattern": "openbot:learned-skills",
-    "until": "R3",
-    "reason": "测试引用 learning/remote.ts 已保护的目录 id（存于 Intelligence）"
-  },
-  {
-    "file": "xiongbao/server/tests/memory-runtime.test.ts",
-    "pattern": "openbot:learned-skills",
-    "until": "R3",
-    "reason": "测试引用 learning/remote.ts 已保护的目录 id（存于 Intelligence）"
   },
   {
     "file": "xiongbao/server/tests/delivery-routes.test.ts",
@@ -1135,73 +1111,7 @@
     "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
   },
   {
-    "file": "xiongbao/server/tests/intelligence-expected-answers.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-auto-assign.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-ensure-container.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-model-endpoint.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-personal-skills.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-personal-space-missing.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
     "file": "xiongbao/server/tests/learning-personal-space.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-review.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-routes.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-runtime.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-settings.integration.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/server/tests/support/intelligence-learning.ts",
     "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
     "until": "R3",
     "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
@@ -1267,12 +1177,6 @@
     "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
   },
   {
-    "file": "xiongbao/server/tests/learning-personal-skills.test.ts",
-    "pattern": "(?<![\\w.-])openbot(?=: )",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（按容器 id 分组的发布表）"
-  },
-  {
     "file": "xiongbao/server/tests/dev-actor-email.test.ts",
     "pattern": "admin@openbot\\.local",
     "until": "R4",
@@ -1295,36 +1199,6 @@
     "pattern": "/openbot\\|acp",
     "until": "R3",
     "reason": "断言卡片文字不泄露内部 ref（含已保护的 openbot/share_private_information）"
-  },
-  {
-    "file": "xiongbao/server/src/config.ts",
-    "pattern": "(?<=`)openbot(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
-  },
-  {
-    "file": "xiongbao/server/src/index.ts",
-    "pattern": "(?<=`)openbot(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
-  },
-  {
-    "file": "xiongbao/server/src/intelligence-startup.ts",
-    "pattern": "(?<=`)openbot(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
-  },
-  {
-    "file": "xiongbao/server/src/learning/auto-assign.ts",
-    "pattern": "(?<=`)openbot(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
-  },
-  {
-    "file": "xiongbao/server/src/learning/ensure-container.ts",
-    "pattern": "(?<=`)openbot(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
   },
   {
     "file": "xiongbao/server/src/plugins/personal-defaults.ts",
@@ -1397,12 +1271,6 @@
     "pattern": "(?<=\")openbot(?=\")|/openbot\\|acp",
     "until": "R3",
     "reason": "服务器存的工具引用 openbot/share_private_information（审批记录里，服务器侧已保护到 R3），测试按它拼 toolRef 并断言不在界面上出现"
-  },
-  {
-    "file": "xiongbao/app/tests/learning-admin.test.tsx",
-    "pattern": "(?<=containerId: \")openbot(?=\")|「openbot」|创建 openbot 容器|id: \"openbot\", name: \"OpenBot\"|OpenBot \\(openbot\\)",
-    "until": "R3",
-    "reason": "学习容器 id openbot（服务器 shared/learning.ts、learning/ensure-container.ts 已保护到 R3，admin/learning.tsx 文案同），测试的服务器响应夹具与界面断言同值"
   },
   {
     "file": "xiongbao/app/tests/audit-xiongbao-setup-rows.test.tsx",
@@ -1591,12 +1459,6 @@
     "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/server/src/learning/remote.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
     "file": "xiongbao/server/src/memory/tools.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
@@ -1609,12 +1471,6 @@
     "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/server/tests/learning-remote.test.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
     "file": "xiongbao/server/tests/memory-runtime.test.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
@@ -1622,12 +1478,6 @@
   },
   {
     "file": "xiongbao/server/tests/tool-selection.integration.test.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/tests/learning_harness_contract.py",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
     "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
@@ -1651,82 +1501,10 @@
     "reason": "持久卷上的已有库，R4 基线化时改"
   },
   {
-    "file": "xiongbao/charts/xiongbao/values.yaml",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/charts/xiongbao/README.md",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/charts/xiongbao/templates/validation.yaml",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/charts/xiongbao/templates/intelligence/secrets.yaml",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/chart-bundled-intelligence.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/chart-model-keys.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/chart-vanilla-secrets.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/chart-database-wait.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/chart-routines.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/chart-aws-attribution.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
-    "file": "xiongbao/tests/promote-kubernetes-helm.test.ts",
-    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
-    "until": "R4",
-    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
-  },
-  {
     "file": "xiongbao/charts/xiongbao/README.md",
     "pattern": "openbot_rls_enforce",
     "until": "R2",
     "reason": "链接锚点指向 docs/configuration.md 里 OPENBOT_RLS_ENFORCE 标题，随 Task 15 一起改"
-  },
-  {
-    "file": "xiongbao/tests/chart-bundled-intelligence.test.ts",
-    "pattern": "toContain\\(\"openbot\"\\)",
-    "until": "R3",
-    "reason": "断言 Learning 容器 id openbot，该 id 落在 Intelligence 库里，已保护"
   },
   {
     "file": "xiongbao/tests/chart-database-wait.test.ts",
@@ -1906,12 +1684,6 @@
     "reason": "断言根 README.md 的 Windows 手动块原文，README 归 Task 13；Task 13 改 README 时同改本测试并删除本条目"
   },
   {
-    "file": "xiongbao/tests/learning_harness_contract.py",
-    "text": "openbot:learned-skills",
-    "until": "R3",
-    "reason": "服务器写的系统行 id（server/src/learning/remote.ts 已保护），契约测试与之同值"
-  },
-  {
     "file": "xiongbao/scripts/e2e/artifact-reachability.ts",
     "pattern": "(?<=\")openbot(?=\")",
     "until": "R4",
@@ -1922,42 +1694,6 @@
     "text": "Self-host OpenBot",
     "until": "R4",
     "reason": "断言镜像里的网页不含上游横幅文案：旧文案就是被测对象"
-  },
-  {
-    "file": "xiongbao/scripts/self-hosted-learning.ts",
-    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
-    "until": "R3",
-    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
-  },
-  {
-    "file": "xiongbao/scripts/self-hosted-learning.test.ts",
-    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
-    "until": "R3",
-    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
-  },
-  {
-    "file": "xiongbao/scripts/setup-learning.ts",
-    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
-    "until": "R3",
-    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
-  },
-  {
-    "file": "xiongbao/scripts/setup-learning.test.ts",
-    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
-    "until": "R3",
-    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
-  },
-  {
-    "file": "xiongbao/scripts/start.sh",
-    "text": "project's `openbot` container",
-    "until": "R3",
-    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
-  },
-  {
-    "file": "xiongbao/scripts/start-restart-guard.test.ts",
-    "text": "The server assigns `openbot` once it exists",
-    "until": "R3",
-    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
   },
   {
     "file": "xiongbao/server/tests/config.test.ts",
@@ -1982,36 +1718,6 @@
     "pattern": "openbot_rls_enforce",
     "until": "R2",
     "reason": "链接锚点指向 docs/configuration.md 里 OPENBOT_RLS_ENFORCE 标题，随 Task 15 一起改"
-  },
-  {
-    "file": "xiongbao/charts/xiongbao/README.md",
-    "pattern": "`openbot`(?= (?:Learning )?container\\b)",
-    "until": "R3",
-    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/README.md",
-    "pattern": "`openbot`(?= Learning container| in that key's project| exists)",
-    "until": "R3",
-    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/docs/automatic-learning.md",
-    "pattern": "`openbot`|\\bopenbot container\\b",
-    "until": "R3",
-    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/docs/configuration.md",
-    "pattern": "`openbot`(?: Learning)? container\\b",
-    "until": "R3",
-    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
-  },
-  {
-    "file": "xiongbao/docs/development.md",
-    "pattern": "`openbot`(?= Learning container| before minting)",
-    "until": "R3",
-    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
   },
   {
     "file": "xiongbao/docs/configuration.md",
@@ -2084,12 +1790,6 @@
     "text": "`openbot` 是超级用户",
     "until": "R4",
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
-  },
-  {
-    "file": "xiongbao/prompt.txt",
-    "pattern": "openbot(?= Learning container)|(?<=creates or reuses )openbot\\b",
-    "until": "R3",
-    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
   },
   {
     "file": "xiongbao/docs/configuration.md",

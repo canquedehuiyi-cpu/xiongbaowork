@@ -96,17 +96,17 @@ describe("createRequestActor", () => {
   test("a request with no session throws, and so does identifyUser", async () => {
     const { resolveRequestActor, identifyUser } = actorFor({});
     await expect(resolveRequestActor(request())).rejects.toThrow(
-      "A CopilotKit run requires a signed-in user.",
+      "An agent run requires a signed-in user.",
     );
     await expect(identifyUser(request())).rejects.toThrow(
-      "A CopilotKit run requires a signed-in user.",
+      "An agent run requires a signed-in user.",
     );
   });
 
   test("a user with no authorized role throws", async () => {
     const { resolveRequestActor } = actorFor({ user: { id: "u6" }, roles: [] });
     await expect(resolveRequestActor(request())).rejects.toThrow(
-      "A CopilotKit run requires an authorized user.",
+      "An agent run requires an authorized user.",
     );
   });
 
@@ -184,7 +184,7 @@ describe("createRequestActor", () => {
           "/api/runtime/trajectory/%E0%A4%A/connect",
         ]) {
           await expect(resolveRequestActor(passRequest(path))).rejects.toThrow(
-            "A CopilotKit run requires a signed-in user.",
+            "An agent run requires a signed-in user.",
           );
           expect(await identifyActor(passRequest(path))).toEqual({
             id: "",
@@ -207,7 +207,7 @@ describe("createRequestActor", () => {
           resolveRecorder: async () => resolution,
         });
         await expect(resolveRequestActor(passRequest())).rejects.toThrow(
-          "A CopilotKit run requires a signed-in user.",
+          "An agent run requires a signed-in user.",
         );
       }
     });
@@ -226,7 +226,7 @@ describe("createRequestActor", () => {
         user: { id: "u1", role: "admin" },
       });
       await expect(resolveRequestActor(passRequest())).rejects.toThrow(
-        "A CopilotKit run requires a signed-in user.",
+        "An agent run requires a signed-in user.",
       );
     });
   });

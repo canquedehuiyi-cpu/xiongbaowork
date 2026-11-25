@@ -396,7 +396,7 @@ body {
 }
 
 /*
- * An interface a Bot draws inside a Card has one frame, not two. CopilotKit draws a frame of its own
+ * An interface a Bot draws inside a Card has one frame, not two. The agent SDK draws a frame of its own
  * around every interface in a chat (a border and 12px of padding), and the catalog's Card draws a
  * border as well, so a Card on top, the shape most interfaces take, came out as a box inside a box.
  * When the top component is a Card that draws a box, the frame gives up its border and padding and
@@ -425,7 +425,7 @@ body {
 
 /*
  * Markdown and code in an interface a Bot generates are drawn by a reply's renderer (see
- * lib/copilot/a2ui-markdown.tsx), inside a surface that also carries CopilotKit's own stylesheet.
+ * lib/copilot/a2ui-markdown.tsx), inside a surface that also carries the agent SDK's own stylesheet.
  * That stylesheet is in no layer, so its heading sizes, and the `color: inherit` it gives every
  * button inside a Card, outrank Tailwind's utilities however specific those are: headings came out
  * smaller than in a reply and the copy buttons lost their muted colour. `revert-layer` hands exactly
@@ -442,7 +442,7 @@ body {
 }
 
 /*
- * The frame CopilotKit draws around an interface in the conversation has a fixed light grey border,
+ * The frame the agent SDK draws around an interface in the conversation has a fixed light grey border,
  * which in the dark theme was a bright ring around the card. It takes the app's border colour.
  */
 [data-generative-ui-chat-surface] {

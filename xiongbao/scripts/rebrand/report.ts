@@ -104,15 +104,22 @@ export const DEPENDENCY_WIRE_NAMES: readonly string[] = [
   "copilotKitInput",
   // @copilotkit/runtime 读的环境变量：选 OpenAI 的哪套 API（对外的名字是 XIONGBAO_OPENAI_API）。
   "COPILOTKIT_OPENAI_API",
+  // 依赖的 A2UI 信封里 metadata.extensions 的键（@copilotkit/shared 的 a2ui-envelope）。
+  "copilotkit_transport",
+  "copilotkit_action",
+  "copilotkit_format",
+  "copilotkit_targets",
+  "copilotkit_surfaces",
+  "copilotkit_contextSent",
 ];
 
 /**
  * `useCopilotKit()` 与 `CopilotKitContext` 返回对象上的成员名 `copilotkit`，以及浏览器发来的
- * `forwardedProps.copilotkit`：依赖的对象键。只在属性访问（`.copilotkit`）、解构与对象键（`{ copilotkit`、
- * `copilotkit }`、`copilotkit:`、`copilotkit,`）的位置放行，句子里的 copilotkit 不放行。
+ * `forwardedProps.copilotkit`：依赖的对象键。只在属性访问（`.copilotkit`、`["copilotkit"]`）、解构与对象键
+ * （`{ copilotkit`、`copilotkit }`、`copilotkit:`、`copilotkit,`，以及一行开头的对象键 `copilotkit:`）的位置放行，句子里的 copilotkit 不放行。
  */
 const DEPENDENCY_MEMBER =
-  /(?<=\.)copilotkit\b|(?<=[{,]\s*)copilotkit\b(?=\s*[,}:=])|(?<=[{,]\s*\.\.\.)copilotkit\b/g;
+  /(?<=\.)copilotkit\b|(?<=[{,]\s*)copilotkit\b(?=\s*[,}:=])|(?<=[{,]\s*\.\.\.)copilotkit\b|(?<=\[["'])copilotkit(?=["']\])|(?<=^\s*)copilotkit(?=\s*:)/g;
 
 /** 注释里指代依赖包的包名写法 `@copilotkit/<包>[/<子路径>]`。 */
 const PACKAGE_NAME = /@copilotkit\/[\w.-]+(?:\/[\w.-]+)*/g;
@@ -147,7 +154,59 @@ export function copilotkitImportedNames(text: string): Set<string> {
         if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
     }
   }
+  // 命名空间（`* as X`，或 `const X = await import("@copilotkit/…")`）上取的成员：`X.name`、`spyOn(X, "name")`。
+  const namespaces = new Set<string>();
+  for (const match of text.matchAll(
+    /\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["']@copilotkit\//g,
+  ))
+    namespaces.add(match[1] as string);
+  for (const match of text.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?import\s*\(\s*["']@copilotkit\//g,
+  ))
+    namespaces.add(match[1] as string);
+  for (const namespace of namespaces) {
+    const escaped = namespace.replace(/\$/g, "\\$");
+    const member = new RegExp(
+      `(?<![\\w$])${escaped}\\s*(?:\\.\\s*|,\\s*["'])([A-Za-z_$][\\w$]*)`,
+      "g",
+    );
+    for (const match of text.matchAll(member)) names.add(match[1] as string);
+  }
+  // 模块替身 `mock.module("@copilotkit/…", () => ({ … }))` 第一层的键：替的是依赖自己导出的名字。
+  for (const match of text.matchAll(
+    /\bmock\.module\s*\(\s*["']@copilotkit\/[^"']*["']\s*,\s*(?:async\s*)?\(\s*\)\s*=>\s*\(\s*\{/g,
+  ))
+    for (const key of topLevelKeys(text, (match.index ?? 0) + match[0].length))
+      names.add(key);
   return names;
+}
+
+/** 从 `{` 之后的位置读到配对的 `}`，返回第一层 `键:` 的键名（展开 `...x` 与嵌套里的键不算）。 */
+function topLevelKeys(text: string, from: number): string[] {
+  const keys: string[] = [];
+  let depth = 1;
+  let start = from;
+  const take = (end: number) => {
+    for (const key of text
+      .slice(start, end)
+      .matchAll(/(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:/g))
+      keys.push(key[1] as string);
+  };
+  for (let at = from; at < text.length; at++) {
+    const char = text[at];
+    if (char === "{" || char === "(" || char === "[") {
+      if (depth === 1) take(at);
+      depth++;
+    } else if (char === "}" || char === ")" || char === "]") {
+      depth--;
+      if (depth === 0) {
+        take(at);
+        break;
+      }
+      if (depth === 1) start = at + 1;
+    }
+  }
+  return keys;
 }
 
 function wordSpans(word: string, line: string, extra = ""): Span[] {

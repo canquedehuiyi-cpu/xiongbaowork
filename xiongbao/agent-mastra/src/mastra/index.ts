@@ -6,8 +6,8 @@
  * serves its agents over its own API, and XiongBao dials that API through `@ag-ui/mastra`, the bridge
  * Mastra and AG-UI maintain between them. See `remoteTransport` in server/src/copilot.ts.
  *
- * SO THERE IS NO AG-UI ROUTE HERE, deliberately. An earlier version mounted `registerCopilotKit`
- * from `@ag-ui/mastra/copilotkit`, which serves the CopilotKit Runtime protocol rather than AG-UI:
+ * SO THERE IS NO AG-UI ROUTE HERE, deliberately. An earlier version mounted the runtime-protocol
+ * route `@ag-ui/mastra` ships, which serves the runtime library's own protocol rather than AG-UI:
  * a different wire format that answers a run with a complaint about a missing `method` field. The
  * translation belongs on XiongBao's side, in one place, where every remote Bot is governed the same
  * way — not in each harness.

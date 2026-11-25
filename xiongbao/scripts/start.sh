@@ -512,8 +512,8 @@ const agents = Object.keys(info.agents ?? {});
  * An SSE-mode runtime — which is every deployment of this shape, threads and all living in the
  * project's own PostgreSQL — sends no `licenseStatus` at all, because there is no platform to be
  * licensed into. Requiring the field here stopped a perfectly healthy stack at step 3/4 while the
- * very next line was about to print its registered Bots, and the advice it printed (`copilotkit
- * login`, an Intelligence key) was for a mode this build no longer has.
+ * very next line was about to print its registered Bots, and the advice it printed (a vendor
+ * login, an Intelligence key) was for a mode this build no longer has.
  */
 if (status !== undefined && status !== "valid") {
   console.log(`\x1b[31m  licence is '${status}', not 'valid'.\x1b[0m`);

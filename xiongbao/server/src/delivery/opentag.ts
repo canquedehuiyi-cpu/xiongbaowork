@@ -1,7 +1,7 @@
 /**
  * The OpenTag pairing: XiongBao's Slack and Microsoft Teams reachability.
  *
- * OpenTag (CopilotKit's open-source Slack/Teams front on the Channels SDK) calls one AG-UI agent at
+ * OpenTag (an open-source Slack/Teams front on the Channels SDK) calls one AG-UI agent at
  * `AGENT_URL` with `Authorization: AGENT_AUTH_HEADER`. XiongBao is that agent: the shared secret is
  * checked in constant time, OpenTag's structured sender context names the Slack/Teams person, and the
  * person's authenticated delivery binding decides which owner, Bot and canonical thread the turn runs

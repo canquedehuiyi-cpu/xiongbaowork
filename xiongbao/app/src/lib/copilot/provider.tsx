@@ -26,7 +26,7 @@ import { SignInTool } from "./sign-in-tool";
 import { SkillTools } from "./skill-tools";
 
 /**
- * The CopilotKit client, wrapped once for the whole authenticated app.
+ * The agent SDK client, wrapped once for the whole authenticated app.
  *
  * `credentials: "include"` is the load-bearing part. XiongBao authenticates with a Better Auth
  * session cookie, and the runtime endpoint sits behind the same guard as every other API route, so

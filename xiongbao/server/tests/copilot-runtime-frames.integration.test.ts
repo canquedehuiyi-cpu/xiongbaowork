@@ -30,7 +30,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /*
- * G01-E P16f: the CopilotKit runtime through the wiring `index.ts` gives it — `mountCopilotRuntime`
+ * G01-E P16f: the agent runtime through the wiring `index.ts` gives it — `mountCopilotRuntime`
  * over the real roster loader, the real thread runner, the vault's deployment-key read and the plugin
  * store's grants, mounted into `createApp` — answers every route in the frame of the person asking.
  *
@@ -200,8 +200,7 @@ function mountApp(runner: PostgresAgentRunner): ReturnType<typeof createApp> {
     }),
     async (request) => {
       const actor = await identifyActor(request);
-      if (!actor.id)
-        throw new Error("A CopilotKit run requires a signed-in user.");
+      if (!actor.id) throw new Error("An agent run requires a signed-in user.");
       return { id: actor.id, name: actor.id };
     },
     identifyActor,

@@ -28,7 +28,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
- * The runs the CopilotKit runtime makes for itself on a Bot hold none of the Bot's tools.
+ * The runs the agent runtime makes for itself on a Bot hold none of the Bot's tools.
  *
  * The runtime names a new conversation by building the conversation's Bot again and running it
  * in-process on a title prompt, and it answers `agent/<id>/suggest` by running the Bot on whatever
@@ -583,7 +583,7 @@ test("a turn sends the endpoint the component catalog once, as the guide, and no
     ),
   ).toBe(true);
   // And the catalog only that once: the envelope it was built from stays with the runtime.
-  expect(Object.hasOwn(turn.forwardedProps, "copilotkit")).toBe(false);
+  expect(turn.forwardedProps).not.toHaveProperty(["copilotkit"]);
   expect(body.split(marker).length - 1).toBe(1);
 });
 

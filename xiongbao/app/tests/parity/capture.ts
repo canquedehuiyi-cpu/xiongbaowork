@@ -107,7 +107,7 @@ const DEFAULT_OUT =
   "/tmp/claude-0/-home-user-xiongbaowork/87ff88c2-019b-516c-a0cd-6b2b65a63f7a/scratchpad/parity-shots";
 
 /**
- * No motion, no caret, and no CopilotKit dev inspector: in a Vite dev build CopilotKit mounts its
+ * No motion, no caret, and no agent SDK dev inspector: in a Vite dev build the agent SDK mounts its
  * `<cpk-web-inspector>` launcher over the top-right corner, which a production build never shows.
  */
 const FREEZE_CSS =
@@ -313,7 +313,7 @@ export async function newContext(
   }, FREEZE_CSS);
   const origin = new URL(options.base).origin;
   /*
-   * Nothing leaves the machine: a request to another host (CopilotKit's announcement feed, say) gets
+   * Nothing leaves the machine: a request to another host (the agent SDK's announcement feed, say) gets
    * an empty JSON object and is recorded, so a capture never depends on, or leaks to, the internet.
    */
   await context.route(

@@ -22,7 +22,7 @@ const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR cu
 /**
  * 自动学习的部署级设置（recovery overlay 0154，上游 0046 重建）。
  *
- * 只有接入 CopilotKit Intelligence 的部署会读写；与 `text_translations` 一样不带租户列、不开行级
+ * 只有接入托管学习后端的部署读写过（R1 删了读写代码，表先留着）；与 `text_translations` 一样不带租户列、不开行级
  * 安全，写入口只有管理员路由。
  */
 export const learningSettings = pgTable(

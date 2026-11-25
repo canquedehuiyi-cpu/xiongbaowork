@@ -41,7 +41,7 @@ import { settleReactWork } from "./settle-react-work";
  * gate with its conversation.
  *
  * End to end in the app, as `help-handback.test.tsx` is: the real chat, the real tools and the
- * CopilotKit core running them, against a runtime and a server that answer as the real ones do. The
+ * The agent SDK core running them, against a runtime and a server that answer as the real ones do. The
  * Bot's run is held until the person has gone, then streams its one call.
  */
 
@@ -458,7 +458,7 @@ type Place = "conversation" | "elsewhere" | "another Bot";
 
 /**
  * The signed-in app around one place: the crm Bot's conversation, a page with none, or another Bot's.
- * The app's own CopilotKit provider, with every tool it registers.
+ * The app's own agent SDK provider, with every tool it registers.
  */
 function app(place: Place) {
   return (
@@ -485,7 +485,7 @@ function app(place: Place) {
   );
 }
 
-/** The CopilotKit core the app runs, to reach a conversation's agent from outside the screen. */
+/** The agent SDK core the app runs, to reach a conversation's agent from outside the screen. */
 let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
 function Capture() {
   core = useCopilotKit().copilotkit;

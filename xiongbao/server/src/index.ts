@@ -1263,7 +1263,7 @@ await startupLifecycle.run(async (startup) => {
     organizationAuth ??
     (betterAuth && entra ? withEntraBearer(betterAuth, entra) : betterAuth);
   /*
-   * Who is asking, for a CopilotKit request: one resolver, because a run has two questions to answer
+   * Who is asking, for an agent runtime request: one resolver, because a run has two questions to answer
    * about the same person, whose threads and memory these are and which coworkers they may run.
    *
    * Asked of the identity tables, which are the deployment's, before there is anybody to act as:

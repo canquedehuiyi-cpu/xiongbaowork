@@ -39,9 +39,9 @@ describe("third-party notices", () => {
     const root = join(temp, "a");
     install(
       root,
-      "@copilotkit/react-core",
+      "@example/react-core",
       { version: "1.2.3", license: "MIT", dependencies: { zeta: "^1" } },
-      { LICENSE: "copilotkit license text" },
+      { LICENSE: "example license text" },
     );
     install(root, "zeta", { version: "2.0.0", license: "ISC" });
     install(root, "alpha", { version: "0.1.0" });
@@ -49,15 +49,15 @@ describe("third-party notices", () => {
 
     const notices = collectThirdPartyNotices({
       roots: [join(root, "node_modules")],
-      dependencies: ["zeta", "alpha", "@copilotkit/react-core", "zeta"],
+      dependencies: ["zeta", "alpha", "@example/react-core", "zeta"],
     });
 
     expect(notices).toEqual([
       {
-        name: "@copilotkit/react-core",
+        name: "@example/react-core",
         version: "1.2.3",
         license: "MIT",
-        licenseText: "copilotkit license text",
+        licenseText: "example license text",
       },
       { name: "alpha", version: "0.1.0", license: "UNKNOWN" },
       { name: "zeta", version: "2.0.0", license: "ISC" },

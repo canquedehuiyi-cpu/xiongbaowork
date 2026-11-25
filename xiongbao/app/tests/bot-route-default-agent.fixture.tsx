@@ -43,7 +43,7 @@ mock.module("@/lib/copilot/stopped-turn", () => ({
   useStoppedTurn: () => null,
 }));
 
-// Reads the same shared agent `useStoppedTurn` does, which needs the CopilotKit provider this page is drawn without.
+// Reads the same shared agent `useStoppedTurn` does, which needs the agent SDK provider this page is drawn without.
 mock.module("@/lib/copilot/bot-activity", () => ({
   useBotActivity: () => {},
 }));

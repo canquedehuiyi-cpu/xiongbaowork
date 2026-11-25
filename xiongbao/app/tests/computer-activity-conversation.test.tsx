@@ -44,7 +44,7 @@ import { settleReactWork } from "./settle-react-work";
  * for a month.
  *
  * So these drive the app as it runs: the real chat, the real computer tools behind the real approval wrapper, and the
- * CopilotKit core executing them, against a runtime and a gate that answer as the real ones do. The runtime streams
+ * The agent SDK core executing them, against a runtime and a gate that answer as the real ones do. The runtime streams
  * AG-UI events and stores the thread; the gate answers 200 `{ result }` when it runs the step at once, or 202 when a
  * person has to allow it, and then the result reaches the conversation the way the server's continuation puts it
  * there: stored in the thread, announced on the channel, read back by the open conversation.

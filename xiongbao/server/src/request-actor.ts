@@ -38,7 +38,7 @@ export function actorName(user: {
 }
 
 /**
- * Who is asking, for a CopilotKit request.
+ * Who is asking, for an agent runtime request.
  *
  * One resolver, because a run has two questions to answer about the same person: whose threads and
  * memory these are, and which coworkers they may run. Answering them from different places is how
@@ -69,7 +69,7 @@ export function createRequestActor(deps: {
           return { id: actor.id, name: actorName(actor), role: actor.role };
         }
       }
-      throw new Error("A CopilotKit run requires a signed-in user.");
+      throw new Error("An agent run requires a signed-in user.");
     }
     if (deps.singleUser) {
       return { id: DEV_ACTOR.id, name: DEV_ACTOR.email, role: DEV_ACTOR.role };
@@ -77,11 +77,11 @@ export function createRequestActor(deps: {
     const session = await deps.getSession(request.headers);
     const user = session?.user;
     if (!user) {
-      throw new Error("A CopilotKit run requires a signed-in user.");
+      throw new Error("An agent run requires a signed-in user.");
     }
     const roles = user.role ? [user.role] : await deps.rolesForUser(user.id);
     if (!roles.includes("admin") && !roles.includes("user")) {
-      throw new Error("A CopilotKit run requires an authorized user.");
+      throw new Error("An agent run requires an authorized user.");
     }
     return {
       id: user.id,

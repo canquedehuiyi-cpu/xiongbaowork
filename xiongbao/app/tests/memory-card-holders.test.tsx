@@ -1,17 +1,12 @@
 /**
  * A memory in 能力与资源 › 信息源与记忆 says who formed it, and offers only what its holder can do.
  *
- * A memory CopilotKit Intelligence holds for the person keeps only its words there: the server can
- * rewrite or forget it, and refuses to pause or confirm it. The card used to offer 停用 and 确认 on
- * it all the same, and both failed. A memory an employee formed names that employee by name.
+ * A memory an employee formed names that employee by name.
  */
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  render,
-} from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { MemoryCard, memoryStatus } from "@/components/memory/memory-screen";
 import type { MemoryRecord } from "@/lib/memory";
 import { queryClient } from "@/query-client";

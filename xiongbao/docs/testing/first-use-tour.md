@@ -1,6 +1,6 @@
 # First-use starter tasks
 
-The tour uses CopilotKit's suggestion component. It is offered before the first new conversation
+The tour uses the agent SDK's suggestion component. It is offered before the first new conversation
 with `picked-harness` or `personal-assistant`, including for existing users after updating.
 Both IDs share one account-level record. The suggestions stay in that conversation;
 other conversations do not show them. There is no dismiss control. The saved conversation ID does
@@ -13,12 +13,12 @@ unchanged. The conversation introduction is unchanged. The tour is a separate co
 ## Automated and browser checks
 
 Development base: `a1dfffcd227bfa4450f06e09395200d8a1f9b912`, with the starter-tour change.
-Host: macOS Apple silicon. Bun 1.4.2. App build uses CopilotKit React Core 1.85.0.
+Host: macOS Apple silicon. Bun 1.4.2. App build uses the agent SDK React Core 1.85.0.
 
 - PostgreSQL integration tests exercise simultaneous claims from separate connections, preservation
   of other preferences, account isolation and explicit cleanup of an empty failed conversation.
   Ordinary deletion keeps the claim even when the activity timestamp is missing.
-- Component tests use the real CopilotKit suggestion view with HTTP fixtures. They cover both IDs,
+- Component tests use the real agent SDK suggestion view with HTTP fixtures. They cover both IDs,
   every message, later conversations, busy turns, double clicks, failed sends and
   unavailable interactive UI. Browser tasks are not blocked by stale or failed setup checks.
 - Route tests use the real home/new-conversation routes and ChannelChat. They check the selected

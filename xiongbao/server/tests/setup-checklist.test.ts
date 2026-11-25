@@ -374,7 +374,6 @@ describe("where the model key comes from", () => {
 /** Every secret this server reads from its environment, each set to a value no row may contain. */
 const SENTINELS = {
   INTELLIGENCE_API_KEY: "sentinel-intelligence-key-0f3a",
-  COPILOTKIT_LICENSE_TOKEN: "sentinel-licence-token-91bc",
   OPENAI_API_KEY: "sentinel-openai-key-7d21",
   ANTHROPIC_API_KEY: "sentinel-anthropic-key-4e88",
   COMPOSIO_API_KEY: "sentinel-composio-key-2b6f",

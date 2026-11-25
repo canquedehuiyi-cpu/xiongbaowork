@@ -258,15 +258,15 @@ async function announce(at: string, text: string) {
 /**
  * Where the join is held: after it has emptied the transcript to rebuild it and before its replay
  * starts. That span is the gateway's client being set up, and a history read can land in it; here
- * CopilotKit's own "a run is starting" notice, which the join awaits in that span, holds it open.
+ * The agent SDK's own "a run is starting" notice, which the join awaits in that span, holds it open.
  */
 let joinHeld: Promise<void> | null = null;
 let joinReached: () => void = () => {};
 
 function HoldJoin() {
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   useEffect(() => {
-    const subscription = copilotkit.subscribe({
+    const subscription = copilotCore.subscribe({
       onAgentRunStarted: async () => {
         if (!joinHeld) return;
         joinReached();
@@ -274,7 +274,7 @@ function HoldJoin() {
       },
     });
     return () => subscription.unsubscribe();
-  }, [copilotkit]);
+  }, [copilotCore]);
   return null;
 }
 

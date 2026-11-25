@@ -4,7 +4,7 @@ import { markdownComponents, markdownPlugins } from "@/lib/markdown";
 /**
  * Markdown and code a Bot draws in an interface, drawn the way its reply draws them.
  *
- * WHY NOT THE STANDARD ONES. CopilotKit's `Code` is a plain `<pre>`: no highlighting and no copy
+ * WHY NOT THE STANDARD ONES. The agent SDK's `Code` is a plain `<pre>`: no highlighting and no copy
  * button. Its `Markdown` renders through the SDK's own, older Streamdown, whose markup XiongBao's
  * stylesheet was never built from: its code blocks keep their light colours in the dark theme, where
  * they are close to unreadable, its tables and code blocks are a different design, and a link to a

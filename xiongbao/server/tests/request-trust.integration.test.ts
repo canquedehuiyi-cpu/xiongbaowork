@@ -28,7 +28,7 @@ import { testEnvironment } from "./support/environment";
 
 /*
  * Who this server trusts, through the real thing: the app index.ts builds, on the real front door
- * (startHttpServer) on a real port, with the real CopilotKit runtime mounted, and real requests and
+ * (startHttpServer) on a real port, with the real agent runtime mounted, and real requests and
  * real WebSocket handshakes carrying the headers a browser, another machine, a rebinding page, a Bot
  * and the worker each send. Only what sits behind the routes is a stand-in: the conversation a Bot
  * turn would run in, the computer a live screen shows, the tool a Bot calls.

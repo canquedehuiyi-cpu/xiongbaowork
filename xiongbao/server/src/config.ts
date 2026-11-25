@@ -376,7 +376,7 @@ export type DeploymentConfig = {
   appUrl: string | undefined;
   tenantPackageDirectory: string;
   runtime: RuntimeCapabilities;
-  /** Connected CopilotKit Intelligence, or undefined (the default): see {@link IntelligenceSettings}. */
+  /** The Recorder's back end, or undefined (the default): see {@link IntelligenceSettings}. */
   intelligence?: IntelligenceSettings;
   /**
    * How long a Bot's stream may say nothing before this deployment ends the turn, in milliseconds.

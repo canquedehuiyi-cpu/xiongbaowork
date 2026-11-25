@@ -626,7 +626,7 @@ async function linesOf(
   });
   /*
    * 伪装根 = `_authed` 那一层：真树里 `routes/_authed.tsx` 把 `<Outlet/>` 包在 `CopilotProvider` 里，
-   * 会话页读 CopilotKit 的上下文（`useCopilotKit must be used within CopilotKitProvider`）。不包这一层，
+   * 会话页读运行时库的上下文（缺了外层 Provider 会直接抛错）。不包这一层，
    * 频道/群组两页在「读完了」态崩成路由错误组件——那不是产品的问题，是伪装根比真根浅了一层。
    */
   const root = createRootRoute({

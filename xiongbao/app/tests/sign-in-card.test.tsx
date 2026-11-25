@@ -79,20 +79,20 @@ type Handler = (args: unknown, context: unknown) => Promise<unknown>;
  * consumers when a tool is added, so a read at render time sees the registry before the tool did.
  */
 class Registry {
-  copilotkit?: ReturnType<typeof useCopilotKit>["copilotkit"];
+  copilotCore?: ReturnType<typeof useCopilotKit>["copilotkit"];
   get renderer() {
-    return this.copilotkit?.renderToolCalls.find(
+    return this.copilotCore?.renderToolCalls.find(
       (candidate) => candidate.name === "computer_request_sign_in",
     )?.render as Renderer | undefined;
   }
   get handler() {
-    return this.copilotkit?.getTool({ toolName: "computer_request_sign_in" })
+    return this.copilotCore?.getTool({ toolName: "computer_request_sign_in" })
       ?.handler as Handler | undefined;
   }
 }
 
 function Capture({ kept }: { kept: Registry }) {
-  kept.copilotkit = useCopilotKit().copilotkit;
+  kept.copilotCore = useCopilotKit().copilotkit;
   return null;
 }
 

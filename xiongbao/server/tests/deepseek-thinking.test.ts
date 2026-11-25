@@ -143,7 +143,7 @@ describe("真实的 AI SDK 客户端也经过这一层", () => {
     globalThis.fetch = original;
   });
 
-  /** 内置员工（CopilotKit 按 `openai/<模型>` 建的 chat 模型）和员工绑定的模型（openai-compatible）两条路。 */
+  /** 内置员工（运行时库按 `openai/<模型>` 建的 chat 模型）和员工绑定的模型（openai-compatible）两条路。 */
   test("openai chat 模型与 openai-compatible 模型发往 DeepSeek 的请求都带上 thinking disabled", async () => {
     const { createOpenAI } = await import("@ai-sdk/openai");
     const { createOpenAICompatible } = await import(

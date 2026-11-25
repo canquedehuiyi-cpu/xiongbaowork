@@ -12,7 +12,7 @@
 
 ## 0. 一条硬约束
 
-代码、数据卷、依赖、构建产物一律留在 D 盘仓库内。Windows 侧不执行 `bun`/`node` 的编译产物之外的事：**跑测试和任何会 `import @ai-sdk/*` / `@copilotkit/*` 的脚本必须进容器**（原生 Windows Bun 在导入链上无输出挂死，见 §5）。仓库里的 `tools/bun/bun.exe` 只用于不碰这些链的脚本（drizzle-kit、代码小工具）。
+代码、数据卷、依赖、构建产物一律留在 D 盘仓库内。Windows 侧不执行 `bun`/`node` 的编译产物之外的事：**跑测试和任何会 `import @ai-sdk/*` 或 `@copilotkit/runtime`、`@copilotkit/react-core` 这类依赖包的脚本必须进容器**（原生 Windows Bun 在导入链上无输出挂死，见 §5）。仓库里的 `tools/bun/bun.exe` 只用于不碰这些链的脚本（drizzle-kit、代码小工具）。
 
 ## 1. 数据库（PostgreSQL，宿主端口 5433）
 
@@ -177,7 +177,7 @@ done
     openbot-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
   docker rm -f xiongbao-g2-app xiongbao-g2-server   # 收摊
   ```
-- **`INTELLIGENCE_MODE` 现在是"会被读、会被拒"而不是"必须给"**：给 `local` 或不给都行；给 `managed` 会在启动时报 `INTELLIGENCE_MODE must be "local" or unset: this deployment keeps its threads in its own PostgreSQL…` 并拒绝起来。**旧的"不给平台三件套就拒启"（`CopilotKit Intelligence is required and is not configured`）随 034 一起删掉了**——会话存的本机 `threads`/`thread_runs`/`thread_run_events`，`INTELLIGENCE_API_URL`/`_GATEWAY_WS_URL`/`_API_KEY` 与 `COPILOTKIT_LICENSE_TOKEN` **根本不被读**，留着只是让 `.env` 说假话。上面配方里的 `-e INTELLIGENCE_MODE=local` 因此可以删（保留也无害，只是把模式说明写在命令行上）。
+- **`INTELLIGENCE_MODE` 现在是"会被读、会被拒"而不是"必须给"**：给 `local` 或不给都行；给 `managed` 会在启动时报 `INTELLIGENCE_MODE must be "local" or unset: this deployment keeps its threads in its own PostgreSQL…` 并拒绝起来。**旧的"不给平台三件套就拒启"（启动时报「托管后端是必需的、却没有配置」）随 034 一起删掉了**——会话存的本机 `threads`/`thread_runs`/`thread_run_events`，`INTELLIGENCE_API_URL`/`_GATEWAY_WS_URL`/`_API_KEY` 与旧的许可证令牌变量**根本不被读**，留着只是让 `.env` 说假话。上面配方里的 `-e INTELLIGENCE_MODE=local` 因此可以删（保留也无害，只是把模式说明写在命令行上）。
 - **改了 `server/src` 要用 `docker rm -f` 重建，不能 `docker restart`**。`xiongbao-g2-app`/`xiongbao-echo-bot`/`xiongbao-g2-computer` 都以 `--network container:xiongbao-g2-server` 寄生在 server 的网络命名空间里，而**重启会换一个命名空间**：2026-10-07 实测 `docker restart xiongbao-g2-server` 之后 —— app 的 vite 代理 `ECONNREFUSED`（`/api/...` 全 000）、`/api/computers/<id>/control` 一律 503、server 日志刷 `egress-policy-push-on-wake-failed`、`computer` 容器尽管显示 healthy 其实挂在**已死的旧沙箱**上（`docker inspect -f '{{.HostConfig.NetworkMode}}'` 里那串 container id 与当前 server 的 `{{.Id}}` 不一致就是这个病）。三个寄生容器必须按上面的命令**逐个重建**。诊断口令：`docker inspect -f '{{.HostConfig.NetworkMode}}' xiongbao-g2-computer` 对比 `docker inspect -f '{{.Id}}' xiongbao-g2-server`。
 - 本机浏览器工具**没有可见 surface**（`take_screenshot` 报 `NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`，`visibilityState=hidden`），`take_snapshot` 可用。走查记录只能靠结构快照，不能靠截图。
 
