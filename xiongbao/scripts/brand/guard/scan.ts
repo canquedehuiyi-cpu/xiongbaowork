@@ -149,7 +149,7 @@ export const RULES: Rule[] = [
   },
   {
     id: "runtime-path",
-    pattern: /\/api\/runtime\b/gi,
+    pattern: /\/api\/copilotkit\b/gi,
     reason: "runtime endpoint path shared with the upstream client",
   },
   {

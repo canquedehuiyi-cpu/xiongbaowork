@@ -1602,11 +1602,6 @@
     "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
   },
   {
-    "text": ".env.openbot-installation-id",
-    "until": "R3",
-    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
-  },
-  {
     "pattern": "(?<![\\w.-])\\.openbot(?![\\w.-])",
     "until": "R3",
     "reason": "检出目录下的 .openbot 目录（开发 compose 挂进容器、存模型登录 model-oauth.json；update-local.ts 视为本机文件），已有机器上就是这个名字，改名需迁移"

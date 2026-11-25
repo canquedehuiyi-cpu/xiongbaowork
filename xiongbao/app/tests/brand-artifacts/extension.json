@@ -6,28 +6,10 @@
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
   },
   {
-    "word": "/api/runtime/trajectory/$",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "库约定路径，品牌去痕决定保留"
-  },
-  {
-    "word": "/copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "库约定路径，品牌去痕决定保留"
-  },
-  {
     "word": ":_.openbotUrl",
     "category": "peer-protocol",
     "plan": "keep",
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
-    "word": "CopilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "OpenBot",

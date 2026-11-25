@@ -12,7 +12,7 @@
 
 ## 0. 一条硬约束
 
-代码、数据卷、依赖、构建产物一律留在 D 盘仓库内。Windows 侧不执行 `bun`/`node` 的编译产物之外的事：**跑测试和任何会 `import @ai-sdk/*` 或 `@copilotkit/runtime`、`@copilotkit/react-core` 这类依赖包的脚本必须进容器**（原生 Windows Bun 在导入链上无输出挂死，见 §5）。仓库里的 `tools/bun/bun.exe` 只用于不碰这些链的脚本（drizzle-kit、代码小工具）。
+代码、数据卷、依赖、构建产物一律留在 D 盘仓库内。Windows 侧不执行 `bun`/`node` 的编译产物之外的事：**跑测试和任何会 `import @ai-sdk/*` 或运行时库依赖包的脚本必须进容器**（原生 Windows Bun 在导入链上无输出挂死，见 §5）。仓库里的 `tools/bun/bun.exe` 只用于不碰这些链的脚本（drizzle-kit、代码小工具）。
 
 ## 1. 数据库（PostgreSQL，宿主端口 5433）
 

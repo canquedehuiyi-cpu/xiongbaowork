@@ -54,24 +54,6 @@
     "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
   },
   {
-    "word": "@copilotkit/",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "第三方产品自己的名字、变量或地址"
-  },
-  {
-    "word": "COPILOTKIT_LICENSE_TOKEN",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "第三方产品自己的名字、变量或地址"
-  },
-  {
-    "word": "CopilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "第三方产品自己的名字、变量或地址"
-  },
-  {
     "word": "OPENBOT_",
     "category": "operator-visible",
     "plan": "rewrite",

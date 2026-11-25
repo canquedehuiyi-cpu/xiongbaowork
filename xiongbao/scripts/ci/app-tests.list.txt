@@ -355,11 +355,6 @@ tests/join-thread.test.ts
 tests/key-only-apps-directory.test.tsx
 tests/knowledge-screen.test.tsx
 tests/late-renderers.test.tsx
-tests/learned-skill-dialog.test.tsx
-tests/learned-skill-readable.test.tsx
-tests/learning-admin.test.tsx
-tests/learning-review.test.tsx
-tests/learning-sharing.test.tsx
 tests/legacy-agent-routes.test.ts
 tests/live-screen-app-shortcuts.test.tsx
 tests/live-screen-keyboard.test.tsx
@@ -460,7 +455,6 @@ tests/resources-aggregate.test.tsx
 tests/resources-entry-cards.test.tsx
 tests/resources-mine.test.tsx
 tests/resources-parity.test.tsx
-tests/result-consumption.test.tsx
 tests/role-templates.test.tsx
 tests/root-drop-guard.test.tsx
 tests/route-error.test.tsx
@@ -507,7 +501,6 @@ tests/sign-in-code-after-password.test.tsx
 tests/sign-out-unfinished.test.tsx
 tests/sign-resume.test.tsx
 tests/skill-creator-slug.test.ts
-tests/skill-files.test.tsx
 tests/skill-form.test.ts
 tests/skill-group-grant.test.tsx
 tests/skill-proposal.test.ts

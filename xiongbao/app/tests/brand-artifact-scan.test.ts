@@ -150,7 +150,7 @@ describe("image and deb scans (Task 5)", () => {
         "/etc/hosts",
         "/app/shared/openbot-actor.ts",
         "/usr/src/openbot/x.js",
-        "/app/toolkit/src/runtime/agents.ts",
+        "/app/toolkit/src/copilotkit/agents.ts",
         "/usr/local/sbin/openbot-apt",
         "",
       ].join("\n"),
