@@ -95,7 +95,7 @@ function scriptText(path: string): string[] {
 
 function shown(): string[] {
   const found = [
-    ...["app/src", "server/src", "extension/src"].flatMap((root) => [
+    ...["app/src", "server/src"].flatMap((root) => [
       ...files(join(REPO, root), /\.tsx?$/),
     ]),
     join(REPO, "shared/recorder-disclosure.ts"),

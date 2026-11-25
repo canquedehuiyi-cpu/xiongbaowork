@@ -10,8 +10,7 @@
     "worker",
     "runner",
     "shared",
-    "toolkit",
-    "extension"
+    "toolkit"
   ],
   "scripts": {
     "build": "bun run generate:app-config && bun run --filter '*' build",

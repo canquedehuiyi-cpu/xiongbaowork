@@ -287,8 +287,8 @@ jobs:
           name: wp32-status-shots
           path: ${{ runner.temp }}/wp32-shots
 
-  # Scan what the customer is given (spec 5.1): the built web app, the recorder extension and the
-  # runner sidecar are checked against the word lists in xiongbao/app/tests/brand-artifacts, and the
+  # Scan what the customer is given (spec 5.1): the built web app and the runner sidecar are
+  # checked against the word lists in xiongbao/app/tests/brand-artifacts, and the
   # rewrite gauge goes into the job summary.
   brand-artifacts:
     runs-on: ubuntu-latest
@@ -304,8 +304,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build the web app
         run: bun run generate:app-config && bun run --cwd app build
-      - name: Build the extension
-        run: bun run --cwd extension build
       # Only to have the runner binary to scan below: this is not a package build. It never runs
       # `tauri build`, so no installer ships from here, no third-party notices are needed, and the
       # device bundle builds counted in desktop-device/tests/brand-icons.test.ts do not include it.
@@ -314,8 +312,6 @@ jobs:
           bun desktop-device/scripts/build-sidecar.ts
       - name: Scan the web app
         run: bun scripts/brand/scan-artifact.ts --kind web --input app/dist --allowlist app/tests/brand-artifacts/web.json --summary "$GITHUB_STEP_SUMMARY"
-      - name: Scan the extension
-        run: bun scripts/brand/scan-artifact.ts --kind extension --input extension/dist --allowlist app/tests/brand-artifacts/extension.json --summary "$GITHUB_STEP_SUMMARY"
       - name: Scan the runner
         run: bun scripts/brand/scan-artifact.ts --kind runner --input desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu --allowlist app/tests/brand-artifacts/runner.json --summary "$GITHUB_STEP_SUMMARY"
       - name: Rewrite gauge
@@ -714,7 +710,7 @@ jobs:
             own-lockfile: true
             root-install: true
           # Root workspace since upstream v1.0.0 (its own package.json: zod, happy-dom for the
-          # recorder and rule tests), so it needs the root install like worker and runner.
+          # rule tests), so it needs the root install like worker and runner.
           - pkg: shared
             own-lockfile: false
             root-install: true
@@ -726,12 +722,6 @@ jobs:
           # Root workspace (typechecked by static). Its tests need the root install: runner/src reaches
           # yaml through agent-computer, and the package test serves the server's own runner routes.
           - pkg: runner
-            own-lockfile: false
-            root-install: true
-          # Root workspace (typechecked by static, its tests included by its tsconfig). Run from its
-          # own directory like the others, so extension/bunfig.toml repeats the root preload: without
-          # it Base UI's dialogs never mount and every test that opens one fails.
-          - pkg: extension
             own-lockfile: false
             root-install: true
           # Root workspace. static's typecheck reads its src only (tsconfig include), not its tests.

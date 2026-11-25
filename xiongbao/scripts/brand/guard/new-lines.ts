@@ -156,14 +156,11 @@ const SCOPES = [
   "supervisor/src/",
   "worker/src/",
   "desktop-device/src-tauri/",
-  "extension/src/",
   "mobile/",
 ];
 const inScope = (file: string): boolean =>
   file === "Dockerfile" ||
   file === "app/index.html" ||
-  file === "extension/scripts/build.ts" ||
-  file === "extension/public/managed_schema.json" ||
   (file.startsWith("docker/") && !file.startsWith("docker/tests/")) ||
   (SCOPES.some((s) => file.startsWith(s)) &&
     (TEXT_FILE.test(file) || file.startsWith("docker/")));

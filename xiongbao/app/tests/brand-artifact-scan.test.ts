@@ -90,7 +90,7 @@ describe("scan-artifact", () => {
   });
 
   test("the lists in the repo match the committed baselines' shape", () => {
-    for (const name of ["web", "extension", "runner"]) {
+    for (const name of ["web", "runner"]) {
       const list = JSON.parse(
         readFileSync(
           new URL(`./brand-artifacts/${name}.json`, import.meta.url),

@@ -28,7 +28,7 @@ function packagesStartedBy(script: string, workspaces: string[]): string[] {
 }
 
 describe("XiongBao workspace", () => {
-  test("defines the app, server, worker, runner, shared, toolkit and extension packages", () => {
+  test("defines the app, server, worker, runner, shared and toolkit packages", () => {
     const manifest = rootManifest();
     const names: Record<string, string> = {
       app: "app",
@@ -37,7 +37,6 @@ describe("XiongBao workspace", () => {
       runner: "runner",
       shared: "@xiongbao/shared",
       toolkit: "@xiongbao/toolkit",
-      extension: "@xiongbao/recorder-extension",
     };
 
     expect(manifest.workspaces).toEqual(Object.keys(names));
