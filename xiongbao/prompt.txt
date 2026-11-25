@@ -1,4 +1,4 @@
-You are helping somebody set up OpenBot on their own machine.
+You are helping somebody set up XiongBao Work on their own machine.
 
 Read this whole file before running anything. Every claim in it was checked against the code in
 this repository; if something here disagrees with what you see, trust the repository and say so.
@@ -8,18 +8,10 @@ ASK THIS BEFORE YOU DO ANYTHING ELSE
 There are two supported paths, and they are different jobs:
 
   A. They want a server/container deployment. Use the published Docker image and an env file.
-  B. They want to try OpenBot on their own machine, change OpenBot itself, or edit a tenant package
+  B. They want to try XiongBao Work on their own machine, change XiongBao Work itself, or edit a tenant package
      from source. Use the clone.
 
-There is also a desktop app, OpenBot Personal Edition, for somebody who only wants to use OpenBot
-on their own computer, not deploy it or change it. It runs the workspace and CopilotKit
-Intelligence locally. Send them to its installer instead of either path below:
-
-  Mac (Apple silicon)  https://downloads.copilotkit.ai/latest/OpenBot-mac-arm64.dmg
-  Mac (Intel)          https://downloads.copilotkit.ai/latest/OpenBot-mac-x64.dmg
-  Windows (x64)        https://downloads.copilotkit.ai/latest/OpenBot-windows-x64-setup.exe
-
-OpenBot is a template to make your own and white-label, not a hosted product somebody signs up for.
+XiongBao Work is a template to make your own and white-label, not a hosted product somebody signs up for.
 The container runs it as released; the clone is for running it locally and for changing the
 product, tenant package, Bots, channels, skills, or branding.
 
@@ -28,8 +20,8 @@ A. SERVER OR ONE-CONTAINER DEPLOYMENT
 Use this when they are deploying a container.
 
   docker run -p 3001:3001 --env-file .env \
-    -e EMBEDDED_POSTGRES=on -v openbot-data:/var/lib/postgresql \
-    ghcr.io/copilotkit/openbot:latest
+    -e EMBEDDED_POSTGRES=on -v xiongbao-data:/var/lib/postgresql \
+    ghcr.io/canquedehuiyi-cpu/xiongbaowork:latest
 
 One port. The app is on 3001 as well, so open http://localhost:3001, not 3010. `latest` is the most
 recent release; a version tag such as `:v0.0.15` pins one.
@@ -49,9 +41,9 @@ starts. Leave MANAGED_AGENT_AG_UI_URL unset unless a Bot endpoint is actually re
 container. If their `.env` still has the laptop default `http://localhost:4201/ag-ui`, unset it for
 this path. See docs/deployment.md for platform notes, sizing and migrations.
 
-B. CLONE: RUN OPENBOT LOCALLY, CHANGE IT, OR EDIT A TENANT PACKAGE
+B. CLONE: RUN XIONGBAO WORK LOCALLY, CHANGE IT, OR EDIT A TENANT PACKAGE
 
-Use this to run OpenBot from source on their machine, or to edit code or configuration.
+Use this to run XiongBao Work from source on their machine, or to edit code or configuration.
 
 Requirements for the clone path:
 - Bun 1.4.3. The repository pins it in package.json.
@@ -88,8 +80,8 @@ bun scripts/setup-learning.ts after bun install; skip the managed npx commands. 
 must be installed. Sign in through the isolated browser window and choose an accessible project;
 the helper creates or reuses openbot and writes that project's new runtime key and assignment.
 Existing key-only setups use authenticated Intelligence administration to create a container and
-assign it in OpenBot Admin. Automatic Learning defaults on;
-collection and delivery require an assigned container. OpenBot starts and chats without one. Administrators
+assign it in XiongBao Work Admin. Automatic Learning defaults on;
+collection and delivery require an assigned container. XiongBao Work starts and chats without one. Administrators
 can assign a default container, override or exclude individual Bots, or pause Learning at
 Admin → Automatic Learning. Open Intelligence to review and publish proposed skills. Containers
 belong to the same project; changing a mapping applies to new threads and does not move or backfill
@@ -101,14 +93,14 @@ for management (a runtime project key cannot authorize those writes). See docs/a
 To run Intelligence on their own Mac instead of the managed service, point them at
 https://docs.copilotkit.ai/intelligence/self-hosting-local. It is a preview for macOS with Docker
 Desktop, not a production installation, and the free Developer plan qualifies. They run, from the
-OpenBot root where `.env` is:
+`xiongbao/` directory where `.env` is:
 
   npx copilotkit@latest login
   npx copilotkit@latest local setup
   npx copilotkit@latest local connect --approve-connection
 
 `local connect` writes INTELLIGENCE_API_URL, INTELLIGENCE_GATEWAY_WS_URL and
-CPK_INTELLIGENCE_API_KEY to `.env`. OpenBot reads those values directly; do not copy or rename
+CPK_INTELLIGENCE_API_KEY to `.env`. XiongBao Work reads those values directly; do not copy or rename
 the key. INTELLIGENCE_API_KEY remains a legacy fallback when the CLI key is empty or absent.
 When both are set, the non-empty CLI key takes precedence. The local licence lasts 30 days;
 `npx copilotkit@latest local renew` renews it as often as needed while the account is in good

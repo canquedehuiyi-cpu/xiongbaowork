@@ -37,22 +37,21 @@ reachable from another's.
 
 ### Automatic project setup
 
-In OpenBot Desktop, once you sign in to CopilotKit, OpenBot connects this installation's apps.
+In XiongBao Work Desktop, once you sign in to CopilotKit, XiongBao Work connects this installation's apps.
 The CopilotKit CLI bundled with the app uses its own sign-in to create or reuse the installation's
 isolated Composio project. The app saves the project key in protected local storage and supplies it
-to the server when you start or restart OpenBot. No terminal or key copying is needed. If it fails,
+to the server when you start or restart XiongBao Work. No terminal or key copying is needed. If it fails,
 the Account step offers Connect apps to try again or Continue without apps, and every Start tries
-again by itself; OpenBot starts with apps unavailable until it succeeds. An installation that
+again by itself; XiongBao Work starts with apps unavailable until it succeeds. An installation that
 signed in with an earlier release gets its key on its next Start. A `COMPOSIO_API_KEY` you put in
-`.env` or the environment always wins over a provisioned key, and OpenBot never moves or removes
+`.env` or the environment always wins over a provisioned key, and XiongBao Work never moves or removes
 it. Individual apps still require their own account consent after an administrator enables them.
-See [Desktop install](../desktop-install.md#apps-through-composio) for where each part lives.
 
 The source-checkout flow below requires a compatible published CopilotKit CLI.
 
 After `npx --yes copilotkit@latest login`, `bash scripts/start.sh` provisions Composio before
 starting services. This step is best-effort, like Learning setup. If it cannot complete,
-`start.sh` prints the helper's reason and starts OpenBot with apps unavailable. To prepare only
+`start.sh` prints the helper's reason and starts XiongBao Work with apps unavailable. To prepare only
 this connection, or to retry, run:
 
 ```sh
@@ -62,7 +61,7 @@ bun run setup:composio
 The helper persists a fresh `OPENBOT_INSTALLATION_ID` UUID in private, ignored
 `.env.openbot-installation-id` before invoking the CLI. The CLI uses your existing sign-in to
 create or reuse one isolated Composio project for that installation and writes its project key to
-`.env` as `COMPOSIO_API_KEY`. It prints only completion metadata; OpenBot reloads the saved key.
+`.env` as `COMPOSIO_API_KEY`. It prints only completion metadata; XiongBao Work reloads the saved key.
 Retries reuse the same UUID and project, including when a request finished remotely but the local
 process was interrupted. Concurrent setup attempts share one identity; the CLI serializes its
 environment write and an overlapping attempt may ask you to retry. If an interrupted CLI leaves
@@ -75,9 +74,9 @@ uses `DEPLOYMENT_ID`, whose packaged default can be shared by multiple clones.
 
 A supplied `COMPOSIO_API_KEY` is left intact. `OPENBOT_BROKER_PROVIDER=arcade`, or an Arcade key
 without an explicit Composio selection, also skips provisioning. Learning setup and container
-creation are independent. No parent Composio organization credential is stored in OpenBot; its
+creation are independent. No parent Composio organization credential is stored in XiongBao Work; its
 runtime receives only the provisioned project's key. That key is still deployment-wide: this does
-not create a separate Composio project for each OpenBot organization or person. Enabling an app
+not create a separate Composio project for each XiongBao Work organization or person. Enabling an app
 continues to create or reuse that project's app authorization config.
 
 **Source-checkout launch dependency:** publish a CopilotKit CLI supporting `integrations composio
@@ -286,7 +285,7 @@ for.
 ### A secret the person already holds
 
 This is most of the catalogue, and it is the kind that has no consent screen in it. **Connect** on a
-key app does not leave OpenBot: it asks Composio what the app wants, draws those boxes, and the
+key app does not leave XiongBao Work: it asks Composio what the app wants, draws those boxes, and the
 press after that carries what was typed in them.
 
 The boxes are the app's own. Their names, labels, help text, defaults and which of them are secret
@@ -534,7 +533,7 @@ the deployment's account.
 
 At `/connections`, a brokered app appears beside the OAuth connectors once an
 administrator has enabled it. Open it and press **Connect**. On a consent app — and on one whose
-OAuth client registers itself, which is the same trip from here — that leaves OpenBot for Composio's
+OAuth client registers itself, which is the same trip from here — that leaves XiongBao Work for Composio's
 consent screen and returns to the same page, or, for an administrator who started from the app's own
 page under `/admin/plugins`, back to that page, because leaving a page mid-task and being returned
 to a different one is the round trip this exists to remove. On an app whose secret the person

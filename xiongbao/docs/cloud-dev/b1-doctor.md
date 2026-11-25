@@ -25,7 +25,7 @@ otherwise "pass" -> 0 (optional blocked/skipped/unverified never block).
 
 | check | required | what it verifies |
 | --- | --- | --- |
-| `repo_layout_openbot_package_json` | yes | `xiongbao/package.json` (workspace root) exists |
+| `repo_layout_xiongbao_package_json` | yes | `xiongbao/package.json` (workspace root) exists |
 | `repo_layout_root_package_json_absent` | yes | no `package.json` at repo root |
 | `package_manager_declaration` | yes | `packageManager == bun@1.3.14` in `xiongbao/package.json` |
 | `bun_lock_identity` | yes | `xiongbao/bun.lock` size 453991B and pinned SHA256 |

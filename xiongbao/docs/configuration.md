@@ -1,6 +1,6 @@
 # Configuration
 
-OpenBot is configured with environment variables and a tenant package. The API server validates both at startup.
+XiongBao Work is configured with environment variables and a tenant package. The API server validates both at startup.
 
 ## Environment setup
 
@@ -86,23 +86,23 @@ Conversations are not sent to Intelligence as learning evidence; see
 
 The browser opens the Intelligence gateway's socket itself, at the address the server gives it. Where
 the server reaches the gateway somewhere a browser cannot, two variables cover it.
-`INTELLIGENCE_BROWSER_GATEWAY_WS_URL` names a second address for the same gateway (OpenBot Desktop's
+`INTELLIGENCE_BROWSER_GATEWAY_WS_URL` names a second address for the same gateway (XiongBao Work Desktop's
 container uses it). `INTELLIGENCE_GATEWAY_PROXY=on` has the server carry the socket itself, at
 `/api/intelligence/client` on its own address, for an Intelligence nobody outside the cluster can
 reach: the Helm chart sets it when it installs Intelligence itself (`intelligence.enabled`, off by
-default in this fork), so one port-forward or one Ingress host is enough. The socket needs a signed-in session, and the gateway still checks the join token on
+default), so one port-forward or one Ingress host is enough. The socket needs a signed-in session, and the gateway still checks the join token on
 it. Set one of the two, not both; `off` or unset is neither. With the proxy on and no
 `OPENBOT_PUBLIC_URL`, the page is told the socket as a path and resolves it against itself. The
-OpenBot Recorder is not on the page, so its capture pass names the socket on the address the
-Recorder reached OpenBot at, and only where that is this machine's loopback, as over
-`kubectl port-forward`. A Recorder that reaches OpenBot any other way needs `OPENBOT_PUBLIC_URL`.
+XiongBao Work Recorder is not on the page, so its capture pass names the socket on the address the
+Recorder reached XiongBao Work at, and only where that is this machine's loopback, as over
+`kubectl port-forward`. A Recorder that reaches XiongBao Work any other way needs `OPENBOT_PUBLIC_URL`.
 
 With Intelligence connected, `COPILOTKIT_LICENSE_TOKEN` is optional: managed Intelligence issues no
 licence token, and a self-hosted Intelligence that has one sets this and has it forwarded to the runtime. That
 Intelligence needs the same licence on its own deployment as well, or it refuses memory and the
-other licensed features while conversations carry on. OpenBot asks Intelligence at boot and logs
+other licensed features while conversations carry on. XiongBao Work asks Intelligence at boot and logs
 `intelligence-entitlement-not-ready`, naming the fix, when the answer is not ready. An
-Intelligence still starting, as one installed beside OpenBot is while its migrations run, is asked
+Intelligence still starting, as one installed beside XiongBao Work is while its migrations run, is asked
 again for up to ten minutes, with one `intelligence-entitlement-waiting` line; only one still not
 answering then is logged as `intelligence-entitlement-unreadable`. A refused key is logged at once.
 
@@ -144,7 +144,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | `PORT`               | `3001`                             | API server port. `SERVER_PORT` names the same port; set either, or both to the same value, or the server refuses to start. |
 | `VAULT_REQUIRE_AAD`  | unset (off)                        | `1` or `true` refuses stored credentials that are not bound to their row. Set it only after `scripts/reseal-credentials.ts` exits `0`; see [above](#binding-stored-credentials-to-their-row-vault_require_aad). |
-| `OPENBOT_EDITION`    | `team`                             | `personal` runs OpenBot for one person with no sign-in, one computer and no Admin. See [personal-edition.md](personal-edition.md). Any value other than `team` or `personal` refuses to start. |
+| `OPENBOT_EDITION`    | `team`                             | `personal` runs XiongBao Work for one person with no sign-in, one computer and no Admin. See [personal-edition.md](personal-edition.md). Any value other than `team` or `personal` refuses to start. |
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
 | `TENANT_PACKAGE_DIR` | `../examples/xiongbao`            | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database (and a shared Intelligence project, when one is connected). |
@@ -170,7 +170,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `WORKER_SHARED_SECRET` | unset; `start.sh` uses a fixed local default; the Helm chart generates one | The secret the routines worker presents to fire a due routine. Without it the server refuses every handoff, whether or not a worker exists to send one. |
 | `OPENBOT_GENERATIVE_UI` | unset (capability on)               | Set `false` or `0` to stop Bots from answering with generated interfaces. |
 | `OPENBOT_SELF_HOST_BANNER` | unset (banner off)              | Set `true` to show the support bar. It also needs the tenant `support_url` in brand.yaml, and each person can close it for themselves. |
-| `OPENBOT_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming OpenBot on the analytics the runtime already sends. |
+| `OPENBOT_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming XiongBao Work on the analytics the runtime already sends. |
 | `COMPOSIO_API_KEY`   | provisioned during desktop sign-in or local setup when no broker is configured | One project key for the whole deployment. Desktop sign-in saves a provisioned key in native protected storage and supplies it on Start/restart. A key in `.env` or the environment always wins and is never moved. `start.sh` / `bun run setup:composio` uses the existing CLI login; supplied keys are preserved. Direct server/container launches still need the prepared key. See [Composio](plugins/composio.md). |
 | `COMPOSIO_<SLUG>_CLIENT_ID`, `COMPOSIO_<SLUG>_CLIENT_SECRET` | unset | This deployment's own OAuth client for one Composio app that connects with a server-to-server grant (`S2S_OAUTH2`), such as `COMPOSIO_SHOPIFY_CLIENT_ID`. Both or neither. Set, the app can be enabled and connected as one shared account; unset, it stays hidden. Read only when the app is enabled; see [rotating the client](#rotating-a-composio-apps-own-client). See [Composio](plugins/composio.md#the-56-that-are-not-offered). |
 | `OPENBOT_INSTALLATION_ID` | a fresh private UUID in `.env.openbot-installation-id` | Stable Composio provisioning identity, persisted before a request. Optional explicit UUID for first setup; later values must match the saved file. Retain it for retries and restarts, and generate a fresh identity for a new installation. It never falls back to `DEPLOYMENT_ID`. |
@@ -179,7 +179,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 
 **`OPENBOT_GENERATIVE_UI`** enables generated interfaces by default: streamed HTML/CSS/JavaScript
 in a sandboxed iframe, and A2UI 1.0 interfaces built from CopilotKit's standard catalog (every
-standard component except Map, Favicon, LinkCard and Citation), plus OpenBot's own Breakdown:
+standard component except Map, Favicon, LinkCard and Citation), plus XiongBao Work's own Breakdown:
 editable amounts that add up to a total, each in its own colour, with a bar of how the total splits.
 Their buttons send their named action and the values entered back to the current conversation's Bot.
 Set `OPENBOT_GENERATIVE_UI=false` or `0` to disable both. `true`, `1`, an empty value, or an unset
@@ -231,7 +231,7 @@ all. See [routines.md](routines.md) for what a deployment with no worker at all 
 Routines page says so when nothing has swept.
 
 Unlike `AGENT_TOOL_TOKEN`, `start.sh` does not generate and persist this one. It supplies a fixed
-local default, `openbot-dev-worker-secret`, the same value every clone of this repository gets. That
+local default, `xiongbao-dev-worker-secret`, the same value every clone of this repository gets. That
 is fine here not because of where the server listens — it binds no hostname, so the port itself is
 reachable like any other — but because this is a dev-only default on a machine's own dev stack, and
 the endpoint it guards accepts nothing but an unguessable `routine_run_<uuid>` id: the server
@@ -254,14 +254,14 @@ in-cluster Service address.
 
 `COMPOSIO_<SLUG>_CLIENT_ID` and `COMPOSIO_<SLUG>_CLIENT_SECRET` are read when an administrator
 enables the app. Enabling creates an authorization config at Composio named after the app with
-`(OpenBot)` at the end, such as `Shopify (OpenBot)`, and saves the client on it. Composio then uses
+`(XiongBao Work)` at the end, such as `Shopify (XiongBao Work)`, and saves the client on it. Composio then uses
 that saved client for every token. While that config stands, enabling never replaces it, so changing
 either variable later and restarting changes nothing at Composio.
 
 To rotate the secret, do one of these:
 
 - **Update the config at Composio.** In the Composio dashboard, under Auth Configs, open the
-  `(OpenBot)` config for the app and replace the client secret. The shared account, its grants and
+  `(XiongBao Work)` config for the app and replace the client secret. The shared account, its grants and
   every Bot that uses it stay as they are. Set the new value in the environment as well, so a config
   created later carries it.
 - **Turn the app off and on again.** Set the new values, restart, then on the app's Plugins page
@@ -365,13 +365,13 @@ Most gateways publish a model list, which is the way to check a name before conf
 
 Two things are worth knowing before pointing a deployment at any gateway. Not every catalogue entry accepts tools, and a Bot without tool calling cannot drive its computer; the model list says which do. And `BOT_RESPONSES_API=true` needs an endpoint that implements the Responses API, not only chat completions.
 
-The built-in Bots call a gateway's Chat Completions API (`/chat/completions`), which every OpenAI-compatible endpoint serves, unless their model takes tools only through the Responses API: `gpt-5.6` and later, the `-pro` models and `gpt-5.3-codex`, under a gateway's `openai/` name too. For those they call `/responses`, which a gateway or a proxy in front of OpenAI also serves. `COPILOTKIT_OPENAI_API=responses` or `chat` picks one API for every model instead. When OpenBot picks `/responses` itself, the server logs `openai-api` once at start-up, naming the model; a value you set is never changed, `chat` included, and any other value is an error when a built-in Bot runs.
+The built-in Bots call a gateway's Chat Completions API (`/chat/completions`), which every OpenAI-compatible endpoint serves, unless their model takes tools only through the Responses API: `gpt-5.6` and later, the `-pro` models and `gpt-5.3-codex`, under a gateway's `openai/` name too. For those they call `/responses`, which a gateway or a proxy in front of OpenAI also serves. `COPILOTKIT_OPENAI_API=responses` or `chat` picks one API for every model instead. When XiongBao Work picks `/responses` itself, the server logs `openai-api` once at start-up, naming the model; a value you set is never changed, `chat` included, and any other value is an error when a built-in Bot runs.
 
 ## The model list
 
-The model picker in a Bot's composer offers the models the deployment's credential can use, and how hard each one can think, per conversation and turn by turn: a change applies to the next message. It applies to built-in Bots and to the harness picked in setup when it is OpenBot's own LangGraph or Claude Agent SDK harness; a Bot on any other framework picks its own model.
+The model picker in a Bot's composer offers the models the deployment's credential can use, and how hard each one can think, per conversation and turn by turn: a change applies to the next message. It applies to built-in Bots and to the harness picked in setup when it is XiongBao Work's own LangGraph or Claude Agent SDK harness; a Bot on any other framework picks its own model.
 
-Who decides what is offered depends on who uses the deployment. With `OPENBOT_SINGLE_USER=true` (OpenBot Desktop among them), the one person is offered every model the credential lists, and no allowlist narrows it. In a team, people pick among the models an admin allows in Admin, Providers; until an admin allows one, people get the default and see no picker. An allowed model the provider stops listing drops out on its own, and a pick saved on it runs on the default. "Only allowed models" in the same place also refuses runs on any other model, a remote Bot's own included.
+Who decides what is offered depends on who uses the deployment. With `OPENBOT_SINGLE_USER=true` (XiongBao Work Desktop among them), the one person is offered every model the credential lists, and no allowlist narrows it. In a team, people pick among the models an admin allows in Admin, Providers; until an admin allows one, people get the default and see no picker. An allowed model the provider stops listing drops out on its own, and a pick saved on it runs on the default. "Only allowed models" in the same place also refuses runs on any other model, a remote Bot's own included.
 
 | Signed in with | Models listed from | Thinking levels from |
 | -------------- | ------------------ | -------------------- |
@@ -383,9 +383,9 @@ Who decides what is offered depends on who uses the deployment. With `OPENBOT_SI
 | Claude plan | `GET https://api.anthropic.com/v1/models` with the plan's token | Anthropic's own `capabilities.effort` |
 | Any other `OPENAI_BASE_URL` | the endpoint's `/models`, as it is | models.dev, for names it knows |
 
-The default, when nobody has picked, is the operator's model: `BOT_MODEL`, or the model chosen on the Desktop setup screen, while the credential lists it. When nobody named one, or the named one is not in the credential's list (a ChatGPT plan given `gpt-5.5`, say), the default is the middle of the provider's current line: the newest model of each line still current, ordered by price, and the one in the middle (GPT-6.1 Terra, Claude Sonnet, Gemini Flash). A gateway keeps the model its operator named while it lists it. Nothing in OpenBot names a model on the operator's behalf: `docker-compose.yml` leaves `BOT_MODEL` empty when unset, and the Desktop writes it only for a model the person chose. A model nothing describes yet is still listed, and runs on its own default effort.
+The default, when nobody has picked, is the operator's model: `BOT_MODEL`, or the model chosen on the Desktop setup screen, while the credential lists it. When nobody named one, or the named one is not in the credential's list (a ChatGPT plan given `gpt-5.5`, say), the default is the middle of the provider's current line: the newest model of each line still current, ordered by price, and the one in the middle (GPT-6.1 Terra, Claude Sonnet, Gemini Flash). A gateway keeps the model its operator named while it lists it. Nothing in XiongBao Work names a model on the operator's behalf: `docker-compose.yml` leaves `BOT_MODEL` empty when unset, and the Desktop writes it only for a model the person chose. A model nothing describes yet is still listed, and runs on its own default effort.
 
-Nothing in this is a table OpenBot ships. The listing and the capability data are read at start-up and then every six hours in the background, never on a message. A refresh that fails keeps the last good list. When a provider refuses a model as unknown or unsupported, the list is read again at once, at most once a minute, so a retired model drops out without waiting. Set `OPENBOT_MODEL_CAPABILITIES_URL` to a mirror of models.dev, or `off`.
+Nothing in this is a table XiongBao Work ships. The listing and the capability data are read at start-up and then every six hours in the background, never on a message. A refresh that fails keeps the last good list. When a provider refuses a model as unknown or unsupported, the list is read again at once, at most once a minute, so a retired model drops out without waiting. Set `OPENBOT_MODEL_CAPABILITIES_URL` to a mirror of models.dev, or `off`.
 
 ## Voice dictation
 
@@ -417,7 +417,7 @@ The browser stops recording at two minutes. Uploads are limited to 10 MiB, and p
 time out after 60 seconds. There is at most one active transcription per user and eight per server
 process. These are concurrency limits, not a distributed usage quota; deployments requiring spend
 quotas should also enforce them at their audio gateway. Provider failures never switch to another
-service. OpenBot keeps audio in memory only, retaining a failed recording in the browser for retry
+service. XiongBao Work keeps audio in memory only, retaining a failed recording in the browser for retry
 until cancellation or navigation. Your configured provider's retention policy still applies.
 
 Dictation is separate from live voice calls and does not enable them automatically.
@@ -444,7 +444,7 @@ separately from AG-UI messages; ordinary voice conversation does not trigger an 
 
 The browser temporarily keeps unconfirmed transcripts in a local outbox scoped to the signed-in
 user, so a failed save or closing the tab can be recovered on returning to the channel. Confirmed
-saves are removed from that outbox. No call audio is recorded by OpenBot.
+saves are removed from that outbox. No call audio is recorded by XiongBao Work.
 
 | Variable | Meaning |
 | --- | --- |
@@ -453,8 +453,8 @@ saves are removed from that outbox. No call audio is recorded by OpenBot.
 | `VOICE_API_KEY` | Required server credential. Set explicitly; no chat or dictation credential is inherited. Bun `.env` files can explicitly reference `$OPENAI_API_KEY` or `$XAI_API_KEY`. |
 | `VOICE_NAME` | Provider voice name; defaults to `marin` for OpenAI or `ara` for Grok. |
 
-OpenAI uses WebRTC, with an authenticated OpenBot endpoint exchanging the browser's SDP offer
-using server-owned session configuration. Grok uses WebSocket PCM audio at 24 kHz; OpenBot mints
+OpenAI uses WebRTC, with an authenticated XiongBao Work endpoint exchanging the browser's SDP offer
+using server-owned session configuration. Grok uses WebSocket PCM audio at 24 kHz; XiongBao Work mints
 a short-lived client credential and returns the configured session. Permanent keys stay on the
 server. Microphone audio travels directly between the browser and the chosen voice provider.
 These are separate transports behind one call interface; an OpenAI-compatible transcription API
@@ -472,7 +472,7 @@ calls after fifteen minutes; this is a UX limit, not an enforceable provider spe
 
 Configuration enables the voice call button but does not prove provider/model availability. Connection
 failures appear in the widget while text chat remains available. The call endpoint verifies channel
-membership and limits connection attempts. OpenBot does not record call audio; provider retention
+membership and limits connection attempts. XiongBao Work does not record call audio; provider retention
 policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc) and
 [Grok Voice](https://docs.x.ai/developers/model-capabilities/audio/speech-to-speech).
 
@@ -507,8 +507,8 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 | `MICROSOFT_OAUTH_CLIENT_ID`  | Microsoft Entra ID application id.                                                     |
 | `MICROSOFT_OAUTH_CLIENT_SECRET` | Microsoft Entra ID client secret.                                                   |
 | `MICROSOFT_OAUTH_TENANT_ID`  | Directory to admit. `common` by default, which admits personal accounts too; a GUID admits one directory. |
-| `MICROSOFT_OAUTH_API_SCOPE`  | OpenBot's own API in Entra, as a scope. `api://<client id>/.default` by default. See [Company systems behind Microsoft Entra](#company-systems-behind-microsoft-entra). |
-| `MICROSOFT_OAUTH_ALLOWED_CLIENTS` | The apps that may call OpenBot with a person's Entra token, as client ids separated by commas. Unset, no app may. See [Company systems behind Microsoft Entra](#company-systems-behind-microsoft-entra). |
+| `MICROSOFT_OAUTH_API_SCOPE`  | XiongBao Work's own API in Entra, as a scope. `api://<client id>/.default` by default. See [Company systems behind Microsoft Entra](#company-systems-behind-microsoft-entra). |
+| `MICROSOFT_OAUTH_ALLOWED_CLIENTS` | The apps that may call XiongBao Work with a person's Entra token, as client ids separated by commas. Unset, no app may. See [Company systems behind Microsoft Entra](#company-systems-behind-microsoft-entra). |
 | `OKTA_OAUTH_CLIENT_ID`       | Okta client id.                                                                        |
 | `OKTA_OAUTH_CLIENT_SECRET`   | Okta client secret.                                                                    |
 | `OKTA_OAUTH_ISSUER`          | Which Okta, for example `https://example.okta.com/oauth2/default`.                     |
@@ -519,11 +519,11 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 | `OPENBOT_PUBLIC_URL`         | Public address of this API. Defaults to `BETTER_AUTH_URL`.                              |
 | `OPENBOT_APP_URL`            | Where the browser app is served. Defaults to the first `TRUSTED_ORIGINS` entry.          |
 | `SIGNIN_ALLOWED_EMAIL_DOMAINS` | Comma-separated email domains admitted at sign-in. Empty means no opinion. Exact, no wildcards. |
-| `OPENBOT_ORGANIZATION_AUTH_URL` | An OpenBot deployment that verifies employee identity and roles. Decides sign-in ahead of `OPENBOT_SINGLE_USER`. |
-| `OPENBOT_RECORDER_EXTRA_EXTENSION_IDS` | Extra extension ids OpenBot trusts besides the Recorder's own, for a fork or a build signed with another key. Comma separated, each 32 letters from a to p, or the server refuses to start. Unset trusts only the Recorder's own id. |
+| `OPENBOT_ORGANIZATION_AUTH_URL` | A XiongBao Work deployment that verifies employee identity and roles. Decides sign-in ahead of `OPENBOT_SINGLE_USER`. |
+| `OPENBOT_RECORDER_EXTRA_EXTENSION_IDS` | Extra extension ids XiongBao Work trusts besides the Recorder's own, for a fork or a build signed with another key. Comma separated, each 32 letters from a to p, or the server refuses to start. Unset trusts only the Recorder's own id. |
 
 **Some variables belong to the desktop app, not to you.** A desktop installation runs the
-[personal edition](personal-edition.md#openbot-desktop), so it writes `OPENBOT_EDITION=personal`,
+[personal edition](personal-edition.md#xiongbao-work-desktop), so it writes `OPENBOT_EDITION=personal`,
 `TENANT_PACKAGE_DIR=../examples/personal` and `COMPUTER_PERSON_ID=personal`, and writes
 `COMPUTER_SUPERVISOR_URL` and `COMPUTER_SUPERVISOR_CONTAINER_URL` empty. It also writes these into
 its own deployment's `.env` and owns their values: `OPENBOT_MODEL_OAUTH_FILE`, `CHATGPT_AUTH_FILE`,
@@ -533,9 +533,9 @@ its own deployment's `.env` and owns their values: `OPENBOT_MODEL_OAUTH_FILE`, `
 `PICKED_HARNESS_IMAGE` and `PICKED_HARNESS_URL` to hand that Bot `MANAGED_AGENT_TOKEN`, and refuses to
 start when they are set without it. It hands the server `OPENBOT_DESKTOP_HOST_TOKEN` too, minted on every
 Start and never written to `.env`: its folder worker answers the server with it, and without it the
-server has no desktop host, so Settings → Computer says folders need OpenBot Desktop (see
+server has no desktop host, so Settings → Computer says folders need XiongBao Work Desktop (see
 [Folders on this computer](personal-edition.md#folders-on-this-computer)). When a model provider is connected by OAuth rather than by key, the
-desktop also points `OPENAI_BASE_URL` at OpenBot's own loopback route and sets `OPENAI_API_KEY` to a
+desktop also points `OPENAI_BASE_URL` at XiongBao Work's own loopback route and sets `OPENAI_API_KEY` to a
 local proxy credential rather than a provider key, so those two do not mean what the table above says
 in that mode. A server you configure yourself is unaffected by all of this.
 
@@ -556,10 +556,10 @@ it.
 **And only to this machine, unless you name more.** The administrator is admitted only for a request
 addressed to one of this machine's own names (`localhost`, `127.0.0.1`, `[::1]`) or the host of a
 configured URL, so a web page whose name was pointed at your machine is not it. Where the server runs
-on your own machine (OpenBot Desktop, `scripts/start.sh`, `bun run dev`) and no address beyond it is
+on your own machine (XiongBao Work Desktop, `scripts/start.sh`, `bun run dev`) and no address beyond it is
 configured, it is admitted only for a caller on this machine, and the app's own servers
 (`app/serve.ts`, the Vite dev server) answer only this machine too. To open it from another machine
-on your network, set `OPENBOT_APP_URL` (or `TRUSTED_ORIGINS`) to the address they use. OpenBot's
+on your network, set `OPENBOT_APP_URL` (or `TRUSTED_ORIGINS`) to the address they use. XiongBao Work's
 container images set `OPENBOT_IN_CONTAINER=true`, because there every caller arrives through the
 container engine: `server/Dockerfile` as an ENV, the one-container image through its defaults file
 (`docker/defaults.env`, written into each service's environment at start unless you set the name).
@@ -568,7 +568,7 @@ that containers and services call back on (Bots' tool calls, the model proxy, th
 prove themselves with their own secrets and are not affected.
 
 **A single-user deployment has its own identity at Composio or Arcade.** Both keep accounts apart
-by a user id OpenBot sends, and the one person of every single-user deployment is `dev-local-user`,
+by a user id XiongBao Work sends, and the one person of every single-user deployment is `dev-local-user`,
 so two of them on the same `COMPOSIO_API_KEY` or `ARCADE_API_KEY` used to share one set of
 connections: one deployment's Gmail, or its consent to Google, was used by the other, and a
 disconnect in one ended it for both. Now each is given its own user id at its broker,
@@ -588,8 +588,8 @@ account as its own. So at that start the deployment removes its own records of c
 cached for them in `brokered_accounts`), logs the apps it removed as
 `single-user-connections-retired`, and asks the broker nothing. Each app then reads as not connected
 and one Connect files it under the new id. The accounts themselves stay at the broker under
-`dev-local-user`, because another OpenBot on the same key may still be using them. If this was the
-only OpenBot on its key, remove them there: they are Composio's connected accounts for user id
+`dev-local-user`, because another XiongBao Work on the same key may still be using them. If this was the
+only XiongBao Work on its key, remove them there: they are Composio's connected accounts for user id
 `dev-local-user`, and Arcade's user connections for `user_id=dev-local-user`
 (`GET /v1/admin/user_connections`).
 
@@ -611,12 +611,12 @@ or `consumers`), because there the address the list is checked against is one th
 writes for itself. A production deployment that names no domains and leaves the tenant multi-tenant
 is warned rather than refused.
 
-**`OPENBOT_ORGANIZATION_AUTH_URL` names an authority, not a provider.** It must be an HTTPS OpenBot
+**`OPENBOT_ORGANIZATION_AUTH_URL` names an authority, not a provider.** It must be an HTTPS XiongBao Work
 origin, or HTTP on loopback, and a bare origin: a username, password, query, fragment or any path
 other than `/` is refused at start-up. Naming one settles sign-in by itself, ahead of
 `OPENBOT_SINGLE_USER`.
 
-**A browser connected with the OpenBot Recorder is signed in as its person, and only while they
+**A browser connected with the XiongBao Work Recorder is signed in as its person, and only while they
 are.** Its connection ends after a week unused, as a session does, or, with
 `OPENBOT_ORGANIZATION_AUTH_URL`, when the organization session cookie it was connected with expires.
 It ends at once when the person signs out, when their sessions are ended any other way (signing out
@@ -625,11 +625,11 @@ ending the session), and when they are removed. A sign-out that cannot end their
 does not happen: the person is told to try again, still signed in, and a `recorder.sign_out_failed`
 row goes on the audit trail.
 
-**Recordings cannot be deleted from OpenBot yet.** A recording goes from the person's browser to
+**Recordings cannot be deleted from XiongBao Work yet.** A recording goes from the person's browser to
 Intelligence, into their own Learning space (see [Automatic Learning](automatic-learning.md));
-OpenBot keeps only which recordings are whose. Intelligence has no API a server credential can call
+XiongBao Work keeps only which recordings are whose. Intelligence has no API a server credential can call
 to delete a recording, or a Learning space that still holds one, so nobody can delete a recording
-from OpenBot, and a person's recordings stay in Intelligence after they are removed from OpenBot.
+from XiongBao Work, and a person's recordings stay in Intelligence after they are removed from XiongBao Work.
 
 **Any one provider turns sign-in on**, and several may be configured at once. Each provider's id and
 secret must be set together, Okta additionally needs its issuer, and any of them requires
@@ -679,17 +679,17 @@ POST /api/plugins/servers/custom
 
 Each call then goes out with a token Entra issues for the person asking, through Microsoft's
 on-behalf-of exchange (`requested_token_use=on_behalf_of`) with that scope. The token it exchanges
-is the person's token to OpenBot's own API: the one their app sent, or, for work nobody is watching
-(routines, check-ins), one OpenBot gets from their stored Microsoft sign-in. Tokens are reused until
+is the person's token to XiongBao Work's own API: the one their app sent, or, for work nobody is watching
+(routines, check-ins), one XiongBao Work gets from their stored Microsoft sign-in. Tokens are reused until
 a few minutes before they expire. A person who has not signed in with Microsoft, whose sign-in has
-expired, or whose admin has not granted OpenBot access to the system or to OpenBot's own API is told
+expired, or whose admin has not granted XiongBao Work access to the system or to XiongBao Work's own API is told
 so in those words.
 Marking a server this way needs Microsoft sign-in configured. Adding the same server again without
 `entraScope` keeps the mark; send `"entraScope": null` to reach it on a token again. The server's
 page under Plugins shows the mark and its scope.
 
-**In this fork the scope is bound to the server's address.** A delegated token is only as safe as
-the place it is sent, so an OpenBot admin cannot mark a server with just any scope:
+**The scope is bound to the server's address.** A delegated token is only as safe as
+the place it is sent, so a XiongBao Work admin cannot mark a server with just any scope:
 
 - The deployment registers each company system in `MICROSOFT_OAUTH_OBO_RESOURCES`, as
   `<resource>=<host>` pairs separated by commas, for example
@@ -700,15 +700,15 @@ the place it is sent, so an OpenBot admin cannot mark a server with just any sco
   URL is `https:` at exactly the registered host (a subdomain is another host). Each call checks
   this again before any token is asked for, so withdrawing a registration stops it at once, and a
   marked row at a plain `http:` address is never sent a token.
-- OpenBot's own API (its client id, `api://<client id>` and anything under it, and the resource of
+- XiongBao Work's own API (its client id, `api://<client id>` and anything under it, and the resource of
   `MICROSOFT_OAUTH_API_SCOPE`) and Microsoft's first-party resources (Microsoft Graph, SharePoint,
   Exchange, Azure and the rest) are refused, whether as a scope or in the registration, where they
   stop the server at start-up. A bare permission such as `User.Read` means Graph to Entra and is
   refused too.
-- `MICROSOFT_OAUTH_ALLOWED_CLIENTS` may not list OpenBot's own client id: tokens OpenBot mints on a
-  person's behalf name it as `azp`, and listed, they could be replayed back into OpenBot.
+- `MICROSOFT_OAUTH_ALLOWED_CLIENTS` may not list XiongBao Work's own client id: tokens XiongBao Work mints on a
+  person's behalf name it as `azp`, and listed, they could be replayed back into XiongBao Work.
 
-Three more differences from upstream. A marked server cannot be moved to another address, nor
+Three more rules. A marked server cannot be moved to another address, nor
 marked while moving: to move it, remove it and add it again; the check is repeated under the row
 lock when the change is written, so two admins at once cannot get round it. On a Team Bot someone
 else published, a marked server is the asker's own account: they get the consent card first, and it
@@ -720,21 +720,21 @@ account, so it does not reach a marked server; routines do. What the person is t
 work is in Chinese.
 
 The Microsoft refresh token a routine's token is minted from is Better Auth's sign-in record,
-encrypted by Better Auth under `BETTER_AUTH_SECRET`, not a credential in OpenBot's own vault, so it
+encrypted by Better Auth under `BETTER_AUTH_SECRET`, not a credential in XiongBao Work's own vault, so it
 follows that secret's rotation rather than `KEY_ENCRYPTION_KEY`'s. Tokens Entra issues on a
 person's behalf are kept in memory only.
 
-**Apps can call OpenBot with an Entra token.** An app that signed somebody in with Entra asks for a
+**Apps can call XiongBao Work with an Entra token.** An app that signed somebody in with Entra asks for a
 token to `MICROSOFT_OAUTH_API_SCOPE` and sends it as `Authorization: Bearer <token>` on any API or
 agent request. It is checked against the directory's published keys, its issuer (the directory
 `MICROSOFT_OAUTH_TENANT_ID` names, so this needs the GUID rather than `common`), its audience
-(OpenBot's client id or the scope's `api://` identifier) and its expiry, and the request runs as
-that person exactly as a signed-in browser does. Somebody OpenBot has not seen before is signed in
+(XiongBao Work's client id or the scope's `api://` identifier) and its expiry, and the request runs as
+that person exactly as a signed-in browser does. Somebody XiongBao Work has not seen before is signed in
 the way Microsoft sign-in signs them in, under the same SSO, domain and removal rules.
 
-**Only the apps you list can do this.** Entra issues a token for OpenBot's API to any app that a
+**Only the apps you list can do this.** Entra issues a token for XiongBao Work's API to any app that a
 person or an admin consents to, including other companies' multi-tenant apps if your tenant lets
-people consent to apps themselves. So OpenBot also checks the token's `azp` claim, the client id of
+people consent to apps themselves. So XiongBao Work also checks the token's `azp` claim, the client id of
 the app the token was issued to, against `MICROSOFT_OAUTH_ALLOWED_CLIENTS`. A token from any other
 app is refused, and the server logs `entra-token-client-not-allowed` with that app's client id.
 With the setting unset, no app can call in. Routines and check-ins still reach marked servers from
@@ -742,23 +742,23 @@ each person's stored Microsoft sign-in.
 
 **Routines need a browser sign-in once.** A token from a person's app lasts 60 to 90 minutes and
 is kept in memory only, so it can't stand in for them later. Work nobody is watching (routines,
-check-ins) uses their stored Microsoft sign-in, which only signing in to OpenBot in the browser
-with Microsoft creates. Someone who has only ever used OpenBot through an app is asked to do that
+check-ins) uses their stored Microsoft sign-in, which only signing in to XiongBao Work in the browser
+with Microsoft creates. Someone who has only ever used XiongBao Work through an app is asked to do that
 once, in the message their routine leaves.
 
-In Entra, on OpenBot's app registration:
+In Entra, on XiongBao Work's app registration:
 
 1. **Expose an API** (an Application ID URI such as `api://<client id>` and a delegated scope such
    as `access_as_user`), and set `requestedAccessTokenVersion` to `2` in the manifest so its tokens
    name the directory's v2.0 issuer. Then add that scope to the registration's own API permissions
-   (under My APIs) and grant admin consent: OpenBot asks Entra for a token to its own API from each
+   (under My APIs) and grant admin consent: XiongBao Work asks Entra for a token to its own API from each
    person's stored sign-in, and without the consent Entra refuses with `AADSTS65001`.
-2. **Add a delegated API permission for each company system** to OpenBot's app registration, and
+2. **Add a delegated API permission for each company system** to XiongBao Work's app registration, and
    grant admin consent.
-3. **Let the company's apps request tokens for OpenBot's API**: add them as authorized client
+3. **Let the company's apps request tokens for XiongBao Work's API**: add them as authorized client
    applications of the scope from step 1, or have them request it with consent.
 4. **List those apps' client ids in `MICROSOFT_OAUTH_ALLOWED_CLIENTS`.** Step 3 decides which apps
-   Entra issues tokens to. This setting decides which of those tokens OpenBot takes.
+   Entra issues tokens to. This setting decides which of those tokens XiongBao Work takes.
 
 ### SCIM provisioning
 
@@ -773,7 +773,7 @@ A directory such as Okta or Entra ID can create, update and remove people throug
 
 A person the directory creates gets the `user` role, or `admin` when their address is in
 `INITIAL_ADMIN_EMAILS`, and still signs in through the company's identity provider: SCIM creates no
-password. Their directory groups become their OpenBot groups, which per-group capability switches
+password. Their directory groups become their XiongBao Work groups, which per-group capability switches
 and network policies read. Deactivating or deleting someone in the directory ends their sessions,
 deny-lists the address, retires the connector credentials they granted and their linked accounts
 (see Linked accounts), and stops their Bots' computers. Reactivating them lifts a deny-list entry
@@ -801,21 +801,21 @@ then is a row nothing will read.
 
 ## Slack and Microsoft Teams (OpenTag pairing)
 
-OpenBot reaches people in Slack and Teams through [OpenTag](https://github.com/CopilotKit/OpenTag),
-the open-source Channels SDK front. OpenTag calls OpenBot as its AG-UI agent; OpenBot does not hold a
+XiongBao Work reaches people in Slack and Teams through [OpenTag](https://github.com/CopilotKit/OpenTag),
+the open-source Channels SDK front. OpenTag calls XiongBao Work as its AG-UI agent; XiongBao Work does not hold a
 Slack app of its own.
 
 | Variable                        | Meaning                                                                                                                                                                           |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPENTAG_SHARED_SECRET`         | Enables the pairing. At least 32 characters. OpenTag must send `Authorization: Bearer <secret>` (its `AGENT_AUTH_HEADER`), and OpenBot sends the same header on proactive posts. |
+| `OPENTAG_SHARED_SECRET`         | Enables the pairing. At least 32 characters. OpenTag must send `Authorization: Bearer <secret>` (its `AGENT_AUTH_HEADER`), and XiongBao Work sends the same header on proactive posts. |
 | `OPENTAG_URL`                   | OpenTag's base URL, for messages sent when no Slack turn is open (replies after an approval, responsibility progress, questions). Without it those sends fail visibly in the outbox, and Slack triggers are refused because channel membership cannot be checked. |
 | `OPENTAG_BOT_ICON_URL_TEMPLATE` | Optional `https` PNG URL with `{seed}` (the Bot's avatar seed) or `{agentId}`, used as the Bot's Slack icon on proactive posts.                                                    |
 
 Point OpenTag's `AGENT_URL` at `<public URL>/api/delivery/webhooks/opentag/agent`. A person links
-their Slack or Teams identity from a Bot's page, under **Reaching you**: OpenBot shows a one-time `link <code>` message,
+their Slack or Teams identity from a Bot's page, under **Reaching you**: XiongBao Work shows a one-time `link <code>` message,
 valid for ten minutes, which they send to the OpenTag app in a direct message. On Slack, a code posted
 in a shared channel is cancelled, because whoever sends it first is linked to that Bot. After that, only that person's messages
-reach their chosen Bot, in their own OpenBot conversation, with governance, approvals and audit on
+reach their chosen Bot, in their own XiongBao Work conversation, with governance, approvals and audit on
 every turn. Anyone unlinked is told how to link and nothing runs. Approval requests appear
 as OpenTag approval cards (allow once, always allow, cancel) and are decided through the approvals
 service as the linked owner; a reply to a Bot's question answers that question.
@@ -825,26 +825,26 @@ The former direct Slack settings (`SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLA
 
 SMS through Twilio honours Advanced Opt-Out: `STOP` (and Twilio's other opt-out keywords) marks the
 number opted out, later messages show `opted_out` in the delivery history instead of being sent, and
-`START` resumes. Twilio sends the confirmation reply itself, so OpenBot does not.
+`START` resumes. Twilio sends the confirmation reply itself, so XiongBao Work does not.
 
 ## Linked accounts
 
-OpenBot keeps a record of a person's accounts at outside providers, such as their GitHub account
+XiongBao Work keeps a record of a person's accounts at outside providers, such as their GitHub account
 or their Slack user. Each provider is a row on `/connections`, beside the apps, listed when the
 person has linked it or this deployment can link it. The row opens the provider's own page
 (`/connections/github`, `/connections/slack`), whose **Your account** section shows the link with a
 **Disconnect** button, or **Connect** where it can be linked. GitHub's page also lists the
 repositories whose events can start a responsibility, and links to a Composio GitHub app where one is
 enabled, which is then left out of the list so GitHub appears once. Disconnecting removes the link and revokes
-OpenBot's stored copy of any token kept with it, and is audited. For GitHub, the grant itself stays
+XiongBao Work's stored copy of any token kept with it, and is audited. For GitHub, the grant itself stays
 at GitHub until the person revokes it under GitHub, Settings, Applications.
 
 See "Linking Slack and GitHub accounts" below for setting up each provider. An integration proves an
-account in one of two ways: by the provider's own sign-in, or by a one-time code that OpenBot issues
+account in one of two ways: by the provider's own sign-in, or by a one-time code that XiongBao Work issues
 to the signed-in person and that they send from their chat account. Whoever sends the code gets that
 chat account linked to the person it was issued to, so treat it like a password and do not share it.
 It is valid for ten minutes and works once, and issuing a new code for the same provider invalidates
-the earlier one. An outside account links to one OpenBot user at most. Linking a new account at a
+the earlier one. An outside account links to one XiongBao Work user at most. Linking a new account at a
 provider and workspace replaces the person's earlier link there and revokes its token.
 
 Removing a person, whether an administrator does it or a SCIM deactivation does, retires their
@@ -858,7 +858,7 @@ link is recorded in the audit trail.
 Slack is offered only where the OpenTag Slack webhook is set up (the pairing above, so
 `OPENTAG_SHARED_SECRET` must be set) and the server can redeem identity codes. The person clicks
 **Connect** on Slack's page, which shows a message of the form `link <code>`, and sends it to the
-OpenBot app in a direct message within ten minutes. A code sent in a channel is refused and stays
+XiongBao Work app in a direct message within ten minutes. A code sent in a channel is refused and stays
 valid until it expires. Teams cannot be linked this way.
 
 GitHub uses a GitHub App. Create one under GitHub Settings, Developer settings, GitHub Apps, and set:
@@ -870,7 +870,7 @@ GitHub uses a GitHub App. Create one under GitHub Settings, Developer settings, 
 - A client secret, generated on the App's page.
 
 Then set `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`; set both or neither. People
-then use **Connect** on GitHub's page while signed in to OpenBot in the same browser. The GitHub
+then use **Connect** on GitHub's page while signed in to XiongBao Work in the same browser. The GitHub
 user token is stored encrypted with the link.
 
 After GitHub, the browser is sent back to GitHub's page under Connections, at `OPENBOT_APP_URL`, else the first `TRUSTED_ORIGINS` entry,
@@ -889,16 +889,16 @@ some of a provider's variables and not all of them stops the server at start-up 
 
 | Variable                    | Meaning                                                                                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DELIVERY_PUBLIC_URL`       | The public origin providers call back on, such as a tunnel or an ingress. Twilio signs each request over the URL it was given, so this has to be the address Twilio was configured with. Unset, OpenBot uses `OPENBOT_PUBLIC_URL`, then `BETTER_AUTH_URL`. It must be an `http(s)` URL or the server does not start. |
+| `DELIVERY_PUBLIC_URL`       | The public origin providers call back on, such as a tunnel or an ingress. Twilio signs each request over the URL it was given, so this has to be the address Twilio was configured with. Unset, XiongBao Work uses `OPENBOT_PUBLIC_URL`, then `BETTER_AUTH_URL`. It must be an `http(s)` URL or the server does not start. |
 | `TWILIO_ACCOUNT_SID`        | Twilio account SID. One of the four SMS settings, which are set together.                                                                                                                                                                          |
 | `TWILIO_AUTH_TOKEN`         | Twilio auth token. Used to send and to check the signature on every request Twilio makes.                                                                                                                                                         |
 | `TWILIO_VERIFY_SERVICE_SID` | The Twilio Verify service that texts the code a person enters under a Bot's **Reaching you** to confirm their number.                                                                                                                            |
-| `TWILIO_FROM_NUMBER`        | The Twilio number OpenBot sends from.                                                                                                                                                                                                              |
-| `EXPO_PROJECT_ID`           | The native app's EAS project id, a UUID. Switches on push notifications and sign-in from the native app (without it, the server does not trust the app's `openbotmobile://` sign-in redirect). A device registers only when the app reports this same project id; any other value is refused. A value that is not a UUID stops the server at start-up.                  |
+| `TWILIO_FROM_NUMBER`        | The Twilio number XiongBao Work sends from.                                                                                                                                                                                                              |
+| `EXPO_PROJECT_ID`           | The native app's EAS project id, a UUID. Switches on push notifications and sign-in from the native app (without it, the server does not trust the app's `xiongbao://` sign-in redirect). A device registers only when the app reports this same project id; any other value is refused. A value that is not a UUID stops the server at start-up.                  |
 | `EXPO_ACCESS_TOKEN`         | Optional. Sent as `Authorization: Bearer` on every request to Expo's push service; without it those requests carry no token.                                                                                                                       |
 
 With SMS on, point the Twilio number's incoming-message webhook at
-`<DELIVERY_PUBLIC_URL>/api/delivery/webhooks/sms`. OpenBot passes
+`<DELIVERY_PUBLIC_URL>/api/delivery/webhooks/sms`. XiongBao Work passes
 `<DELIVERY_PUBLIC_URL>/api/delivery/webhooks/sms/status` to Twilio as the status callback on each
 message it sends.
 
@@ -910,8 +910,8 @@ credentials or query string), and `EXPO_PUBLIC_EAS_PROJECT_ID`, the same project
 ## Inbound email triggers
 
 An email trigger gets its own address, `trigger-<triggerId>@<OPENBOT_INBOUND_EMAIL_DOMAIN>`. Mail
-reaches OpenBot through Amazon SES receiving: a receipt rule for the whole domain publishes to an
-SNS topic, and that topic has an HTTPS subscription to `<public URL>/api/events/email/sns`. OpenBot
+reaches XiongBao Work through Amazon SES receiving: a receipt rule for the whole domain publishes to an
+SNS topic, and that topic has an HTTPS subscription to `<public URL>/api/events/email/sns`. XiongBao Work
 checks each SNS message's AWS signature and refuses any topic not listed, because a valid signature
 proves AWS sent the message, not that the topic is yours. It confirms the subscription itself when
 SNS asks.
@@ -939,8 +939,8 @@ them, including a saved off. See [automatic-learning.md](automatic-learning.md).
 | `OPENBOT_LEARNING_AUTO_ASSIGN`           | `false` or `0` stops the server assigning the project's `openbot` container automatically. On otherwise. Stands aside for a `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` the configured Intelligence has. |
 | `INTELLIGENCE_SERVICE_TOKEN`             | An Intelligence service token that creates the `openbot` Learning container (local evaluation installs only; see [Creating the container](automatic-learning.md#creating-the-container)). Requires `INTELLIGENCE_PROJECT_ID`. |
 | `INTELLIGENCE_PROJECT_ID`                | The numeric ID of the runtime key's Intelligence project, where the service token creates the container. Set both or neither, or the server refuses to start. |
-| `OPENBOT_MEMORY_SOURCE_DEFAULTS`         | `false` or `0` stops OpenBot making each app a person connected into a memory source for the Bots they talk to. On otherwise. Existing sources are left as they are. |
-| `OPENBOT_PROACTIVE_DEFAULTS`             | `true` or `1` switches on an hourly check-in on everything a Bot can read the first time a person talks to it alone, as OpenBot did before. Off otherwise: a Bot offers a check-in on one thing in the conversation, and it runs only once the person accepts. Existing settings are left as they are. |
+| `OPENBOT_MEMORY_SOURCE_DEFAULTS`         | `false` or `0` stops XiongBao Work making each app a person connected into a memory source for the Bots they talk to. On otherwise. Existing sources are left as they are. |
+| `OPENBOT_PROACTIVE_DEFAULTS`             | `true` or `1` switches on an hourly check-in on everything a Bot can read the first time a person talks to it alone, as XiongBao Work did before. Off otherwise: a Bot offers a check-in on one thing in the conversation, and it runs only once the person accepts. Existing settings are left as they are. |
 
 ## OpenTelemetry export
 
@@ -953,10 +953,10 @@ is still the record.
 | Variable                           | Meaning                                                                                                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | Where log records go, used exactly as written. Takes precedence over the next one.                    |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`      | Collector base URL; OpenBot appends `/v1/logs`. Setting either endpoint switches export on.           |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`      | Collector base URL; XiongBao Work appends `/v1/logs`. Setting either endpoint switches export on.           |
 | `OTEL_EXPORTER_OTLP_LOGS_HEADERS`  | Headers for the logs endpoint, as `key=value` pairs separated by commas (for a collector's API key).  |
 | `OTEL_EXPORTER_OTLP_HEADERS`       | The same, used when `OTEL_EXPORTER_OTLP_LOGS_HEADERS` is unset.                                        |
-| `OTEL_SERVICE_NAME`                | The `service.name` on every record. Defaults to `openbot`.                                             |
+| `OTEL_SERVICE_NAME`                | The `service.name` on every record. Defaults to `xiongbao`.                                             |
 | `OPENBOT_OTEL_EXPORT`              | `off` turns export off while an endpoint is still set.                                                 |
 
 ## Computer and supervisor
@@ -970,20 +970,20 @@ is still the record.
 | `COMPUTER_BROWSER_IDLE_MS`           | How long an untouched browser is kept. 30 minutes by default; `0` keeps them resident. A person's cloud browser takes the same rule: the Browser page touches it every second while it is open, so it closes once nobody is on that page. A person's native window (a host-side computer of people's browsers) is never closed for being idle. |
 | `COMPUTER_MEMORY_HIGH_PERCENT`       | At what share of its memory limit a computer starts closing browsers nobody is using, least recently used first and one at a time, until it is ten points under that share (75% at the default). `85` by default; `0` switches it off. Memory is the container's working set, as the kubelet reads it (usage less the inactive page cache), checked before every launch and every minute, one pass at a time however many launches arrive together. It is a check, not a guarantee: a page that grows between two checks can still run the container out of memory. A container with no limit is measured against the machine's memory; a computer outside a container (the local Chrome helper) closes nothing for memory. Never closed for memory: the browser being launched, the most recently used one, any used in the last minute, a person's own browser (cloud or native), and a Bot's whose wheel a person holds or has been asked to take. In the all-in-one image the share counts the database and the API server as well as the browsers, on purpose: the kernel's out-of-memory kill counts them too and can take the database down, and closing a browser first is how the database is protected. Each close logs `computer-browser-closed-for-memory` with the working set and the limit in bytes. |
 | `COMPUTER_TAB_IDLE_MS`               | How long a Bot's background tab may sit untouched before it is closed. 10 minutes by default; `0` keeps them. A Bot is always on its newest page, so an older tab (the page a sign-in popup opened from, a link opened in a new tab) is one it cannot go back to. Navigating, being acted on, or being in front counts as use. Never closed: the page the Bot is on, a person's own browser, and any tab of a Bot whose wheel a person holds. |
-| `OPENBOT_RECORDER_DIR`               | The built OpenBot Recorder (`extension/dist` after `bun run build`), absolute. Every person's browser the computer opens has it loaded and connected. Every Bot's browser has it loaded too (except in local Chrome), disconnected and silent until a person holding the Bot's control presses Record. Without it, or pointed at anything that is not a built Recorder, the computer still serves Bots, whose browsers then launch without it and cannot record, and refuses to open a person's browser, saying why. The computer image sets it to the Recorder it carries. |
+| `OPENBOT_RECORDER_DIR`               | The built XiongBao Work Recorder (`extension/dist` after `bun run build`), absolute. Every person's browser the computer opens has it loaded and connected. Every Bot's browser has it loaded too (except in local Chrome), disconnected and silent until a person holding the Bot's control presses Record. Without it, or pointed at anything that is not a built Recorder, the computer still serves Bots, whose browsers then launch without it and cannot record, and refuses to open a person's browser, saying why. The computer image sets it to the Recorder it carries. |
 | `COMPUTER_PEOPLE_ONLY`               | `on` for a computer that runs people's own browsers and no Bot (a host-side computer, as `scripts/start.sh` starts one for the personal edition); it refuses every Bot. A person's browser runs only on a computer of its own: this one, or one started for it alone (`COMPUTER_BOT_ID`, as the supervisor and a Sandbox start each computer). The shared computer refuses it, and so does the server, whose Browser page says why, because a Bot's shell there could read the person's logins off the disk. The personal edition's one computer is the exception (`COMPUTER_PERSON_ID` with `OPENBOT_EDITION=personal`): every Bot on it is the one person's, so their browser runs there too, shown in the page. |
 | `COMPUTER_PERSON_ID`                 | The one person a computer carries every Bot of, as the supervisor and a Sandbox start one per person and the personal edition starts its one computer (`personal`). Record runs in those Bots' browsers there. With `OPENBOT_EDITION=personal` the person's own browser runs there too; otherwise it does not. Compose hands the shared computer both. |
-| `COMPUTER_LOOPBACK_RELAYS`           | Ports the computer listens on at its own loopback and passes to another address, as `<port>=<host>:<port>`, comma-separated. The Recorder reaches OpenBot only at https or at loopback, so on a laptop a browser is handed `http://127.0.0.1:<port>`, which inside a container is the container. OpenBot Desktop relays its app's and server's ports to `server:3001` and a local Intelligence gateway's to `host.docker.internal`. Unset relays nothing. A setting it cannot read stops the computer at start, naming the entry. |
+| `COMPUTER_LOOPBACK_RELAYS`           | Ports the computer listens on at its own loopback and passes to another address, as `<port>=<host>:<port>`, comma-separated. The Recorder reaches XiongBao Work only at https or at loopback, so on a laptop a browser is handed `http://127.0.0.1:<port>`, which inside a container is the container. XiongBao Work Desktop relays its app's and server's ports to `server:3001` and a local Intelligence gateway's to `host.docker.internal`. Unset relays nothing. A setting it cannot read stops the computer at start, naming the entry. |
 | `COMPUTER_BROWSER_BACKEND`           | `managed` by default (full bundled Chromium); `local-chrome` opts into installed Chrome with dedicated profiles and a loopback API. |
 | `COMPUTER_BROWSER_MODE`              | Managed defaults to `headed` on Linux, which is every hosted computer (a container, a pod, the desktop app's engine): full Chromium on the computer's own Xvfb display. A computer run directly on macOS or Windows defaults to `headless`, where headed would open windows on the desktop. `headless` is full Chromium's new headless mode. Local Chrome requires `headed`. See [Getting past bot checks](#getting-past-bot-checks). |
 | `WEB_BOT_AUTH`                       | `on` or `off`. Unset means off. `on` needs an https public URL. See [Web Bot Auth](#web-bot-auth). |
 | `WEB_BOT_AUTH_KEY`                   | The Web Bot Auth signing key, an Ed25519 private JWK. Unset derives one from `KEY_ENCRYPTION_KEY`. Never logged. |
-| `OPENBOT_LOCAL_COMPUTER_DIR`         | Local startup helper's absolute data root. Defaults to the platform's OpenBot user-data directory; contains `profiles/` and `workspace/`. |
+| `OPENBOT_LOCAL_COMPUTER_DIR`         | Local startup helper's absolute data root. Defaults to the platform's XiongBao Work user-data directory; contains `profiles/` and `workspace/`. |
 | `COMPUTER_SUPERVISOR_URL`            | Supervisor URL for per-Bot computers. If absent, Bots share `AGENT_COMPUTER_URL`.         |
 | `SUPERVISOR_TOKEN`                   | Bearer token required by the supervisor.                                                  |
 | `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` | Local-only private-host browsing when `true`. A deployment running with `NODE_ENV=production` refuses to start while it is set. Cloud metadata addresses are refused either way. |
 | `AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated; unset (none) by default. Host, optionally with a port. Exact match; no wildcards. Never-allowed addresses cannot be named. |
-| `OPENBOT_THIS_MACHINE_HOST`          | For a server in a container on the person's own machine: the host name that container reaches the machine by. An agent registered at a loopback address (`localhost`, `127.x`, `[::1]`) is dialled through it; the address as typed is what is checked and stored. OpenBot Desktop sets `host.docker.internal`. Unset (the default) dials addresses as written. |
+| `OPENBOT_THIS_MACHINE_HOST`          | For a server in a container on the person's own machine: the host name that container reaches the machine by. An agent registered at a loopback address (`localhost`, `127.x`, `[::1]`) is dialled through it; the address as typed is what is checked and stored. XiongBao Work Desktop sets `host.docker.internal`. Unset (the default) dials addresses as written. |
 | `AGENT_COMPUTER_POLICY`              | JSON action policy: `{"mode":"enforce","deny":[...],"allow":[...]}`.                      |
 | `COMPUTER_RUNTIME`                   | Set to `runsc` to run supervised computers under gVisor.                                  |
 | `COMPUTER_SANDBOX`                   | Set to `on` to enable Chromium's own sandbox where the host permits user namespaces. Which way it went is printed at start-up. |
@@ -1087,7 +1087,7 @@ Set `OPENBOT_LOCAL_COMPUTER_DIR` to an absolute, dedicated app-owned directory t
 Do not point it at your personal Chrome data. Each Bot uses a separate persistent subdirectory under
 `profiles/`; no existing Chrome session is attached, and no TCP debugging endpoint is exposed.
 Native Chrome retains its process sandbox and OS credential store. File tools remain confined to
-the helper's `workspace/`, and shell execution is refused: use OpenBot's separately approved host
+the helper's `workspace/`, and shell execution is refused: use XiongBao Work's separately approved host
 access tools for host commands. Native Chrome runs with your OS account's network access; this mode
 is not a container or an OS network sandbox. Keep the API's private-host browsing opt-in off unless
 you intentionally need it for your local deployment.
@@ -1097,15 +1097,15 @@ selectors, and restart the API. Unset `COMPUTER_BROWSER_BACKEND` (or set `manage
 computer process; choose `headless` or `headed` as before. Local Chrome profiles remain in the local
 data root, separate from managed computer volumes.
 
-#### OpenBot Desktop
+#### XiongBao Work Desktop
 
-OpenBot Desktop does not run this helper. Its person's browser runs on the personal edition's one
-computer and shows inside the OpenBot window, as on hosted OpenBot (see
-[Personal edition](personal-edition.md#openbot-desktop)), so it writes no `OPENBOT_BROWSER_URL`, and
+XiongBao Work Desktop does not run this helper. Its person's browser runs on the personal edition's one
+computer and shows inside the XiongBao Work window, as on hosted XiongBao Work (see
+[Personal edition](personal-edition.md#xiongbao-work-desktop)), so it writes no `OPENBOT_BROWSER_URL`, and
 a Start takes out the `OPENBOT_BROWSER_URL`, `OPENBOT_BROWSER_CONTAINER_URL`, `BROWSER_PORT` and
 `OPENBOT_BROWSER_ABSENT` an earlier version wrote. Earlier versions ran this helper as a host-side
 browser, a separate Chrome or Edge window, with its profile in the data root above; uninstalling
-OpenBot Desktop still removes that data root and the Recorder's native messaging host manifests on
+XiongBao Work Desktop still removes that data root and the Recorder's native messaging host manifests on
 Windows and from the .deb and .rpm packages. On macOS, and for an AppImage, it stays until removed
 by hand.
 
@@ -1241,7 +1241,7 @@ for when none of them is enough.
    residential or ISP proxy changes it. See [Residential or ISP proxy](#residential-or-isp-proxy).
 4. **The handoff, which is the designed fallback.** When a site still challenges (a "Verify you are
    human" check, a CAPTCHA, a sign-in), the Bot asks for help, the person takes control in the live
-   screen, solves it, and hands back. OpenBot never solves a challenge on anyone's behalf. The page
+   screen, solves it, and hands back. XiongBao Work never solves a challenge on anyone's behalf. The page
    survives a computer restart: the handoff reopens it rather than showing a blank browser.
 
 #### Web Bot Auth
@@ -1259,7 +1259,7 @@ Cloudflare's signed-agent scheme, built on HTTP Message Signatures (RFC 9421). W
   still Chromium's own, cookies are unchanged, and no CORS preflight is added.
 
 **When it is on.** Only when `WEB_BOT_AUTH=on` (on Helm, `config.webBotAuth: "on"`). Unset or `off`
-means off, whatever the address. An OpenBot deployment is private by design, and signing announces
+means off, whatever the address. A XiongBao Work deployment is private by design, and signing announces
 it: every site a Bot visits sees the deployment's URL, and Cloudflare will only register a key
 directory it can fetch from the internet. So it is a deliberate choice, made by an operator whose
 public URL is reachable and who wants sites to know their Bots. `on` needs `OPENBOT_PUBLIC_URL` (or
@@ -1277,7 +1277,7 @@ it. Rotate by setting a new `WEB_BOT_AUTH_KEY` and registering again.
 **Registering with Cloudflare (manual, once).** Signing earns nothing until Cloudflare knows the key:
 
 1. Check the directory answers from the internet:
-   `curl -i https://openbot.example.com/.well-known/http-message-signatures-directory` shows `200`,
+   `curl -i https://xiongbao.example.com/.well-known/http-message-signatures-directory` shows `200`,
    the content type above, `Signature` and `Signature-Input` headers, and one key.
 2. In the [Cloudflare dashboard](https://dash.cloudflare.com/), choose your account, then
    **Manage Account** > **Configurations** > **Bot Submission Form**.
@@ -1379,7 +1379,7 @@ Teams. They are read from `GET /api/setup`, and `POST /api/setup/check` asks aga
   the provider's answer for the key in use now. A computer is Ready when every running one took its
   network policy; with none running it reads "not checked". More apps and Slack and Teams read Ready
   when they are configured.
-- **Who reads it decides what it says.** An admin, and somebody running OpenBot alone
+- **Who reads it decides what it says.** An admin, and somebody running XiongBao Work alone
   (`OPENBOT_SINGLE_USER`), is shown the page or the variable that closes each gap. Everybody else sees
   whether it works and "Your admin sets this up.", and their response carries no variable name.
   Only those who can act on it get the Settings page.
@@ -1482,7 +1482,7 @@ changing the package, so it does not trigger a re-synchronise.
 ```yaml
 tenant:
   id: openbot
-  product_name: OpenBot
+  product_name: XiongBao Work
 ```
 
 `tenant.id` owns the Bots and channels the package seeds, and names the deployment when
@@ -1492,7 +1492,7 @@ tenant:
 tenant:
   id: openbot
   former_ids: [personal]
-  product_name: OpenBot
+  product_name: XiongBao Work
 ```
 
 A deployment set up under a former id keeps that name, and its Bots and channels move to the new id

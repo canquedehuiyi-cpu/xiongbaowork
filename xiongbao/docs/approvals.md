@@ -50,9 +50,8 @@ a form, and only you have it, so no answer of yours can stand in for it. It is h
 needs you.** You do it yourself and mark it done, or tell the Bot not to. A credential an app's own
 tool changes (rotating an API key, say) asks like everything else.
 
-This reverses [#998](https://github.com/CopilotKit/OpenBot/pull/998), which made deleting, sending,
-sharing and posting ask every time with Allow once and Deny only, and handed payments and account
-changes to you. OpenBot opens these by default; closing them is the organisation's call.
+Deleting, sending, sharing and posting do not ask every time with Allow once and Deny only, and
+payments and account changes are not handed to you. XiongBao Work opens these by default; closing them is the organisation's call.
 
 ## What an admin can close
 
@@ -68,10 +67,10 @@ A team rule that asks or hands off also beats anything a member allowed, saved o
 conversation. Turning **Let members set personal rules** off turns off members' conversation answers
 too. Each change is on the audit trail.
 
-You are asked once. A Bot OpenBot runs is told that OpenBot asks before these, so it doesn't put
-its own approval card in front of OpenBot's (`APPROVAL_GUIDANCE` in `shared/bot-prompt.ts`). A tool
+You are asked once. A Bot XiongBao Work runs is told that XiongBao Work asks before these, so it doesn't put
+its own approval card in front of XiongBao Work's (`APPROVAL_GUIDANCE` in `shared/bot-prompt.ts`). A tool
 its app marks destructive can be called anything, so its description, as the Bot is offered it, also
-says that OpenBot asks before it runs (`DESTRUCTIVE_TOOL_NOTE`). A remote Bot is not told so, because
+says that XiongBao Work asks before it runs (`DESTRUCTIVE_TOOL_NOTE`). A remote Bot is not told so, because
 its own tools don't go through this policy.
 
 They are recognised by what the action is called, never by what it carries. A document that says
@@ -88,7 +87,7 @@ Archive asks as deleting because some apps call their delete that: HubSpot delet
 
 An app can also say a tool destroys something, whatever it is named: an MCP server with the tool's
 `destructiveHint` annotation, and Composio with the same tag.
-OpenBot records that when it lists the app's tools (`destructive` on `mcp_tools`), and such a tool
+XiongBao Work records that when it lists the app's tools (`destructive` on `mcp_tools`), and such a tool
 asks as deleting does. Composio tags `HUBSPOT_ARCHIVE_CONTACT` this way. An action a broker says
 nothing about (no label from Composio) is not destructive: it is an ordinary
 change, which asks only when Always ask before making changes or a rule says so.
@@ -108,7 +107,7 @@ this, one routine could wake four computers at 3am and nobody would know until t
 
 A Bot's own computer is its scratch space. Writing, reading and deleting files there, and the
 commands it runs there, are not account actions and don't ask unless Always ask before making changes,
-Auto-review or a rule says so. A folder on your own computer is different: the OpenBot desktop app
+Auto-review or a rule says so. A folder on your own computer is different: the XiongBao Work desktop app
 asks before every edit or command in it, and **Commands on your computer** in Settings → Approvals
 can refuse commands there altogether. Settings → Approvals says this above its switches.
 

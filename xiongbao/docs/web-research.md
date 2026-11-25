@@ -1,6 +1,6 @@
 # Public-web research
 
-OpenBot ships three public-web research providers in the plugin catalogue: **Parallel**, **Exa** and **Firecrawl**. Each one gives a Bot a search tool, which finds sources for a query, and a fetch tool, which reads pages by URL. A Bot holding both tools from one provider is told how to research with them. None of this uses the Bot's browser. In the team edition no Bot gets new access automatically. The personal edition turns on Parallel Search once, the first time it starts, and every Bot gets its two tools (see [Personal edition](personal-edition.md#web-search-is-on-from-the-start)).
+XiongBao Work ships three public-web research providers in the plugin catalogue: **Parallel**, **Exa** and **Firecrawl**. Each one gives a Bot a search tool, which finds sources for a query, and a fetch tool, which reads pages by URL. A Bot holding both tools from one provider is told how to research with them. None of this uses the Bot's browser. In the team edition no Bot gets new access automatically. The personal edition turns on Parallel Search once, the first time it starts, and every Bot gets its two tools (see [Personal edition](personal-edition.md#web-search-is-on-from-the-start)).
 
 | Catalogue entry           | Search tool        | Fetch tool         | Credential                                           |
 | ------------------------- | ------------------ | ------------------ | ---------------------------------------------------- |

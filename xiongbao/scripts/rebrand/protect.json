@@ -2003,7 +2003,7 @@
   },
   {
     "file": "xiongbao/docs/configuration.md",
-    "pattern": "`openbot` container\\b",
+    "pattern": "`openbot`(?: Learning)? container\\b",
     "until": "R3",
     "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
   },
@@ -2054,5 +2054,77 @@
     "pattern": "openbot",
     "until": "R4",
     "reason": "历史验收记录，保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/delivery-acceptance-2026-10-09.md",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "历史验收记录，保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/track-b-delivery-evidence.md",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "历史验收记录，保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/contracts/track-b-delivery.md",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "历史验收记录，保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/development-environment-xiongbao.md",
+    "pattern": "(?i:dev@openbot\\.local)",
+    "until": "R4",
+    "reason": "开发环境笔记里引用的历史启动日志与接口回包原文：旧演示账号邮箱（server/src/auth/dev-actor-email.ts 的 LEGACY_DEV_ACTOR_EMAILS 仍识别，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/docs/development-environment-xiongbao.md",
+    "text": "`openbot` 是超级用户",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
+  },
+  {
+    "file": "xiongbao/prompt.txt",
+    "pattern": "openbot(?= Learning container)|(?<=creates or reuses )openbot\\b",
+    "until": "R3",
+    "reason": "文档引用已保护的 Learning 容器 id openbot（shared/learning.ts AUTOMATIC_LEARNING_CONTAINER_ID、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/docs/configuration.md",
+    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
+    "until": "R3",
+    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），文档写的是实际路径；改名需带迁移"
+  },
+  {
+    "file": "xiongbao/docs/personal-edition.md",
+    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
+    "until": "R3",
+    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），文档写的是实际路径；改名需带迁移"
+  },
+  {
+    "file": "xiongbao/docs/configuration.md",
+    "text": "label=openbot.namespace=openbot",
+    "until": "R3",
+    "reason": "电脑容器与卷上的标签：supervisor/src/names.ts 的 NAMESPACE_LABEL openbot.namespace 与 DEFAULT_NAMESPACE openbot（已保护到 R3），存量容器与卷带着它，文档里的清理命令须与之同值"
+  },
+  {
+    "file": "xiongbao/docs/personal-edition.md",
+    "text": ".openbot-carried-over/",
+    "until": "R3",
+    "reason": "supervisor/src/docker.ts 在电脑卷里写的搬迁标记目录名，已有卷里就是这个名字，改名需迁移"
+  },
+  {
+    "file": "xiongbao/docs/personal-edition.md",
+    "text": "`openbot` tenant id",
+    "until": "R3",
+    "reason": "文档引用已保护的租户 id openbot（examples/personal/brand.yaml 的 id: openbot），已落在库里"
+  },
+  {
+    "file": "xiongbao/docs/development-environment-xiongbao.md",
+    "pattern": "(?<=:5433/)openbot(?:_test)?\\b|openbot-postgres-1|`openbot_test`|`openbot`(?= 是开发库)|(?<=for DB in )openbot openbot_test",
+    "until": "R3",
+    "reason": "这台开发机上已有的开发库、测试库与 PostgreSQL 容器（开发 compose 改名前建的旧卷），开发笔记写的是机器上的实际名字；R3 随库名迁移"
   }
 ]

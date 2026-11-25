@@ -8,7 +8,7 @@
 
 # 部署与本地起服（QoderWake 复刻，全部落 D 盘）
 
-面向"在这台 Windows 机器上把它跑起来并测一遍"的人。上游 `xiongbao/README.md` 与 `xiongbao/docs/deployment.md` 讲的是通用自托管；这一份只讲本仓库改完之后的实际形状，命令都是本会话真跑过的。
+面向"在这台 Windows 机器上把它跑起来并测一遍"的人。`xiongbao/README.md` 与 `xiongbao/docs/deployment.md` 讲的是通用自托管；这一份只讲本仓库改完之后的实际形状，命令都是本会话真跑过的。
 
 ## 0. 一条硬约束
 
@@ -93,7 +93,7 @@ MSYS_NO_PATHCONV=1 docker run --rm \
   -v $B/server/src:/app/server/src -v $B/server/tests:/app/server/tests \
   -v $B/server/drizzle:/app/server/drizzle -v $B/server/scripts:/app/server/scripts \
   -v $B/shared:/app/shared -v $B/examples:/app/examples -v $B/.env:/app/.env \
-  openbot-dev \
+  xiongbao-dev \
   bash -lc "cd /app/server && bunx tsc --noEmit && bun test tests/<file>.test.ts"
 ```
 
@@ -114,7 +114,7 @@ app 侧对应 `-v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests`（凡 
 docker run --rm -v $B/server/scripts:/app/server/scripts -v $B/server/src:/app/server/src \
   -v $B/shared:/app/shared \
   -e DATABASE_URL="postgres://openbot:openbot@host.docker.internal:5433/openbot_test" \
-  openbot-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
+  xiongbao-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
 ```
 
 全量套件约 7–8 分钟；期间**别再开第二个碰同一个库的容器**，也别跑吃 CPU 的任务——那族参数化用例会被拖慢，制造出并不存在的"回归"。
@@ -123,7 +123,7 @@ docker run --rm -v $B/server/scripts:/app/server/scripts -v $B/server/src:/app/s
 
 ## 6. 已知端口冲突
 
-这台机器上 **3000 端口不是 OpenBot**（是"熊宝音乐工作室"SPA）。要在浏览器里验收，把 dev server 起在别的端口并确认 `/api` 代理目标跟着改；`docker-compose.yml` 的映射同理会随宿主占用变化。
+这台机器上 **3000 端口不是熊宝**（是"熊宝音乐工作室"SPA）。要在浏览器里验收，把 dev server 起在别的端口并确认 `/api` 代理目标跟着改；`docker-compose.yml` 的映射同理会随宿主占用变化。
 
 ## 7. 还没有的部分（别按"部署完成"理解这份文档）
 
@@ -149,7 +149,7 @@ done
 
 ## 8. G2（单用户全栈）在本机的实测状态（2026-10-07，容器路线）
 **结论：全栈起得来，走查还没走通。** 已证实的事实（不是"应该能跑"）：
-- server 容器起来并打印 `OpenBot server listening on http://127.0.0.1:3001`；app 容器 `VITE ready`，`http://localhost:3010/` 回 **200**，`/src/main.tsx` 与 `/src/routes/__root.tsx` 都 **200**（模块图能编译，不是 500 白屏）。
+- server 容器起来并打印 `XiongBao Work server listening on http://127.0.0.1:3001`；app 容器 `VITE ready`，`http://localhost:3010/` 回 **200**，`/src/main.tsx` 与 `/src/routes/__root.tsx` 都 **200**（模块图能编译，不是 500 白屏）。
 - `.env` 里 `OPENBOT_SINGLE_USER=true` 已开、`OPENBOT_ORGANIZATION_AUTHORITY` 是注释掉的（按 `auth/dev-actor.ts` 的口径，此时访客即管理员）。
 - **但**：`curl http://localhost:3001/api/tasks` 回 **401**，而浏览器里 `/tasks` 的 DOM 只有空的 `RootWebArea`（React 没挂载完）。所以 **G2 的"跑通"这件事目前没有证据**，卡点在这两条之一：单用户 actor 需要先拿到 dev session cookie，或前端 boot 依赖某个请求没回来。**下一步就从这条查起**，别看别的。
 - 三个必须踩的坑（每个都对应我这次真实撞上的现象）：
@@ -159,7 +159,7 @@ done
 - 起法（`docker compose up --build` 那条路**我没走**，因为它会重建你机器上正在用的 `openbot-postgres-1`）：
   ```bash
   B="D:/AI编程库/项目库/进行中的项目/xiongbaoshuziyuangong/xiongbao"
-  MSYS_NO_PATHCONV=1 docker run -d --name openbot-g2-server \
+  MSYS_NO_PATHCONV=1 docker run -d --name xiongbao-g2-server \
     -e DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot" \
     -e BETTER_AUTH_SECRET=<openssl rand -base64 32> -e BETTER_AUTH_URL=http://localhost:3001 \
     -e KEY_ENCRYPTION_KEY=<openssl rand -base64 32> -e INITIAL_ADMIN_EMAILS=admin@example.test \
@@ -168,17 +168,17 @@ done
     -v $B/server/src:/app/server/src -v $B/server/drizzle:/app/server/drizzle \
     -v $B/server/scripts:/app/server/scripts -v $B/shared:/app/shared \
     -v $B/examples:/app/examples -v $B/.env:/app/.env \
-    openbot-dev bash -lc "cd /app/server && bun --env-file=../.env src/index.ts"
+    xiongbao-dev bash -lc "cd /app/server && bun --env-file=../.env src/index.ts"
   # app 必须与 server 共享网络命名空间：vite 的代理目标是字面量 http://localhost:${SERVER_PORT}
-  MSYS_NO_PATHCONV=1 docker run -d --name openbot-g2-app --network container:openbot-g2-server \
+  MSYS_NO_PATHCONV=1 docker run -d --name xiongbao-g2-app --network container:xiongbao-g2-server \
     -e SERVER_PORT=3001 -e APP_PORT=3010 \
     -v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests -v $B/shared:/app/shared \
     -v $B/server/src:/app/server/src -v $B/examples:/app/examples -v $B/scripts:/app/scripts -v $B/.env:/app/.env \
-    openbot-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
-  docker rm -f openbot-g2-app openbot-g2-server   # 收摊
+    xiongbao-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
+  docker rm -f xiongbao-g2-app xiongbao-g2-server   # 收摊
   ```
 - **`INTELLIGENCE_MODE` 现在是"会被读、会被拒"而不是"必须给"**：给 `local` 或不给都行；给 `managed` 会在启动时报 `INTELLIGENCE_MODE must be "local" or unset: this deployment keeps its threads in its own PostgreSQL…` 并拒绝起来。**旧的"不给平台三件套就拒启"（`CopilotKit Intelligence is required and is not configured`）随 034 一起删掉了**——会话存的本机 `threads`/`thread_runs`/`thread_run_events`，`INTELLIGENCE_API_URL`/`_GATEWAY_WS_URL`/`_API_KEY` 与 `COPILOTKIT_LICENSE_TOKEN` **根本不被读**，留着只是让 `.env` 说假话。上面配方里的 `-e INTELLIGENCE_MODE=local` 因此可以删（保留也无害，只是把模式说明写在命令行上）。
-- **改了 `server/src` 要用 `docker rm -f` 重建，不能 `docker restart`**。`openbot-g2-app`/`openbot-echo-bot`/`openbot-g2-computer` 都以 `--network container:openbot-g2-server` 寄生在 server 的网络命名空间里，而**重启会换一个命名空间**：2026-10-07 实测 `docker restart openbot-g2-server` 之后 —— app 的 vite 代理 `ECONNREFUSED`（`/api/...` 全 000）、`/api/computers/<id>/control` 一律 503、server 日志刷 `egress-policy-push-on-wake-failed`、`computer` 容器尽管显示 healthy 其实挂在**已死的旧沙箱**上（`docker inspect -f '{{.HostConfig.NetworkMode}}'` 里那串 container id 与当前 server 的 `{{.Id}}` 不一致就是这个病）。三个寄生容器必须按上面的命令**逐个重建**。诊断口令：`docker inspect -f '{{.HostConfig.NetworkMode}}' openbot-g2-computer` 对比 `docker inspect -f '{{.Id}}' openbot-g2-server`。
+- **改了 `server/src` 要用 `docker rm -f` 重建，不能 `docker restart`**。`xiongbao-g2-app`/`xiongbao-echo-bot`/`xiongbao-g2-computer` 都以 `--network container:xiongbao-g2-server` 寄生在 server 的网络命名空间里，而**重启会换一个命名空间**：2026-10-07 实测 `docker restart xiongbao-g2-server` 之后 —— app 的 vite 代理 `ECONNREFUSED`（`/api/...` 全 000）、`/api/computers/<id>/control` 一律 503、server 日志刷 `egress-policy-push-on-wake-failed`、`computer` 容器尽管显示 healthy 其实挂在**已死的旧沙箱**上（`docker inspect -f '{{.HostConfig.NetworkMode}}'` 里那串 container id 与当前 server 的 `{{.Id}}` 不一致就是这个病）。三个寄生容器必须按上面的命令**逐个重建**。诊断口令：`docker inspect -f '{{.HostConfig.NetworkMode}}' xiongbao-g2-computer` 对比 `docker inspect -f '{{.Id}}' xiongbao-g2-server`。
 - 本机浏览器工具**没有可见 surface**（`take_screenshot` 报 `NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`，`visibilityState=hidden`），`take_snapshot` 可用。走查记录只能靠结构快照，不能靠截图。
 
 ## 9. **G2 单用户已经真跑通了**（2026-10-07，附可复现证据）
@@ -189,11 +189,11 @@ done
 - **首屏有一道真实门禁**：`onboarding.completedAt === null` 会把 `/tasks` 弹回 `/onboarding`（`app/src/lib/auth/queries.ts:27`）。浏览器里点 Continue 没生效，走产品自己的端点才过：`POST /api/me/onboarding {"completed":true}` ⇒ `completedAt` 落值（`{"step":99,"completedAt":"2026-10-07T04:22:29.580Z"}`）。**走查任何页面之前先过这道**，否则每条都只会看到 onboarding。
 - **A1 实测通过**（结构快照，本机浏览器没有可见 surface，截不了图）：`/tasks` 渲染出 `heading "任务看板"`、副标题「从工作本身出发：员工做了什么、什么需要你、什么等你查收。」、筛选「全部/进行中/需要操作/查收结果/已完成/失败」、`region "需要关注"` 里两个计数页签「需要操作 (0)」「查收结果 (0)」与 A7 的原句「暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里」、空态「看板上还没有任务——和员工说句话，工作就会出现在这里。」、设备筛选出现「studio-pc · 休眠」，URL 带 `?machineId=&crew=`（与 CONTEXT.md 记的两轴口径一致）。
 - **A1 与 spec 字面有一处差异要认**：spec 写的是"统计条：任务总数/进行中/需要操作/已结束"，实屏是**筛选页签 + 需要关注区的双计数**，没有并列的四个总数。0 任务时也不见周期选择器（一周/一月/全部）。**这是渲染分支还是缺功能，下一轮要用有数据的库验**，别现在写成已符合。
-- **白标的一处真缺陷（已定位、属配置不属代码）**：跑起来后页面顶部挂着上游推广条「Self-host OpenBot for your organization. → https://copilotkit.ai/talk-to-an-engineer?ref=openbot_app」。它是**能力位控制的**（`self-host-banner.tsx:30` 读 `capabilities.selfHostBanner`），开关是 `OPENBOT_SELF_HOST_BANNER=false`，`.env.example:54` 的注释正好写着"为自己组织跑 OpenBot 的 fork 可以给所有人关掉"。**本部署现已带上这个开关**，`/api/capabilities` 回 `selfHostBanner:false`。
-- 另一处品牌残留（**未修**）：`app/index.html:6` 的 `<title>OpenBot</title>` 是硬编码，浏览器标签与 `RootWebArea "OpenBot"` 都是它；而 `appConfig.brand.productName`（生成物 `src/lib/generated/application-config.ts` 里已是「熊宝数字员工」）已经被侧栏、登录页、onboarding 用了三处。走查时页面标题仍是 OpenBot，属 024 未完项。
+- **白标的一处真缺陷（已定位、属配置不属代码）**：跑起来后页面顶部挂着一条英文的自托管推广条（链到外部的联系工程师页面）。它是**能力位控制的**（`self-host-banner.tsx:30` 读 `capabilities.selfHostBanner`），开关是 `OPENBOT_SELF_HOST_BANNER=false`，`.env.example:54` 的注释正好写着"为自己组织部署时可以给所有人关掉"。**本部署现已带上这个开关**，`/api/capabilities` 回 `selfHostBanner:false`。
+- 另一处品牌残留（**未修**）：`app/index.html:6` 的 `<title>` 硬编码了英文产品名，浏览器标签与 `RootWebArea` 的名字都是它；而 `appConfig.brand.productName`（生成物 `src/lib/generated/application-config.ts` 里已是「熊宝数字员工」）已经被侧栏、登录页、onboarding 用了三处。走查时页面标题仍是上游英文名，属 024 未完项。
 
 ## 10. D1（数字员工页）实测 + 走查工具的本机限制（2026-10-07）
-- **白标那条推广条确实没了**：带上 `OPENBOT_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有 `complementary "Self-host OpenBot"`，`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
+- **白标那条推广条确实没了**：带上 `OPENBOT_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有那条自托管推广条（`complementary`），`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
 - **D1 成立**：`heading "数字员工"` + 双页签「员工 / 小组」（小组 = D3 的入口已存在）+ 状态筛选带计数「全部 (16) / 运行中 (0) / 待命 (16) / 已停用 (0)」，卡片「打开」链到 `/agents?agent=<id>`（D5 的入口）。
 - **品牌包真的同步进来了**：16 位员工里有 `后端工程师/Backend Engineer`、`代码审核员/Code Reviewer`、`运营助手/Operations`、`测试工程师/QA Engineer`、`我的分身/个人分身`（当时以为是 CONTEXT.md 里 `avatar-<tenant>` 那位；**更正（2026-11-06）**：这张卡其实是品牌包的公共员工 `general-assistant`，它和本人的分身同名。现在它叫「通用助手/General Assistant」，默认对话「我的分身」由本人的 `avatar-<tenant>` 接，见 #283）。
 - ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是上游英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/xiongbao/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。
@@ -232,14 +232,14 @@ done
 - 技能区里 **6 条上游英文技能**（`Check a claim against a source`、`Find a document`、`Find a Notion page`、`Research the public web`、`What changed recently`、`Who owns this`）与 **5 条品牌包中文技能**（代码审阅 / 在我电脑上跑 / 派活 / 造员工 / 造技能）并存 ⇒ **品牌包确实把技能同步进去了**（这是 024/003 的正向证据），但上游默认技能目录没有跟着本地化。
 - 组件区 11 个 `published` 条目全英文名（Activity report、Checklist、Data table、Headline figures、Notice、Quotation、Record、Area/Bar/Donut/Line chart）——同一条纹：目录是平台的，`examples/xiongbao` 没覆盖它。
 - `/plans` 的额度行也是英文拼出来的：`coworkers · tasks a month · machines · the deployment's models only`，而这一屏的标题/说明/按钮已是中文。
-- `app/index.html:6` 的 `<title>OpenBot</title>` 依旧（每个页面的 RootWebArea 名字都是 `OpenBot`）。
+- `app/index.html:6` 的 `<title>` 依旧是英文产品名（每个页面的 RootWebArea 名字都是它）。
 
 ## 14. 「点回声测试员没反应」的结论：**不是缺陷**，是旧标签页（附实测证据链）
 排查顺序与结果（都在跑着的栈上实测，不是读代码猜）：
 1. `agent-card.tsx:58` 用的是 `<Button render={<Link to="/agents" search={{agent}} />} />`；本仓 `ui/button.tsx:47` 确实实现 `render`（还有 `nativeButton` 的修正注释），所以不是"render 没生效变成裸 button"。
 2. 页面里实测该节点的**真实 DOM**：`tag=A`、`href=/agents?agent=agent_a5fd297f-…`、`role=button`；`elementFromPoint` 在卡片名行/中部都命中这个 `A`（`::after` 覆盖层 `absolute/0px` 生效）⇒ **链接挂着、可命中、地址正确**。
 3. `anchor.click()` 程序化触发后：URL 变 `…?agent=agent_a5fd297f-…`，`[role=dialog]` 数量 1，弹窗标题就是「回声测试员」。**导航与弹窗都是好的。**
-⇒ 所以"点了没反应"的原因在我这边造成的环境状态：这一轮我把 `openbot-g2-server`/`openbot-g2-app` **重建过三次**，旧标签页的 vite HMR socket 与懒加载 chunk 指向已死的服务端，路由切换会**静默失败**。**刷新一次即正常**（Ctrl+R，或直连 http://localhost:3010/agents）。
+⇒ 所以"点了没反应"的原因在我这边造成的环境状态：这一轮我把 `xiongbao-g2-server`/`xiongbao-g2-app` **重建过三次**，旧标签页的 vite HMR socket 与懒加载 chunk 指向已死的服务端，路由切换会**静默失败**。**刷新一次即正常**（Ctrl+R，或直连 http://localhost:3010/agents）。
 - **教训（对本机走查通用）**：容器重启之后，先让用户/自己刷新页面再判"界面坏了"。不然会把环境状态报成产品缺陷——我这次差一点就这么写进工单了。
 
 ### 顺带拿到的验收证据：这一个弹窗覆盖 D5/D6/H2/C4/授权

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 592" width="920" height="592" role="img" aria-labelledby="arch-title arch-desc" font-family="Arial, Helvetica, sans-serif">
-<title id="arch-title">OpenBot architecture</title>
-<desc id="arch-desc">OpenBot frontends (Mac, Windows, Web, iOS, Android, Slack and Teams) connect to the OpenBot backend. Inside your infrastructure, deployed on Kubernetes with Helm, the backend provides the workspace API, identity and permissions, policy and approvals, and audit, enforced at its API. CopilotKit Intelligence is deployed separately alongside it and provides durable conversations, memory, learning and enterprise governance services. The backend connects to three lanes, each with an option inside your infrastructure and a bring-your-own option outside it. Agents use AG-UI: Built-in Bots run in-process in the OpenBot server, and your agents run on any agent execution platform; either or both can serve the same workspace. Computers use the computer provider interface: Kubernetes by default, providing browser, files and shell, or your own sandbox provider through an adapter, for example Daytona, E2B or Modal. Tools share a common interface: built-in tools such as Routines, MCP servers and hubs, and other adapters. On a laptop, setup runs this stack locally.</desc>
+<title id="arch-title">XiongBao Work architecture</title>
+<desc id="arch-desc">XiongBao Work frontends (Mac, Windows, Web, iOS, Android, Slack and Teams) connect to the XiongBao Work backend. Inside your infrastructure, deployed on Kubernetes with Helm, the backend provides the workspace API, identity and permissions, policy and approvals, and audit, enforced at its API. CopilotKit Intelligence is deployed separately alongside it and provides durable conversations, memory, learning and enterprise governance services. The backend connects to three lanes, each with an option inside your infrastructure and a bring-your-own option outside it. Agents use AG-UI: Built-in Bots run in-process in the XiongBao Work server, and your agents run on any agent execution platform; either or both can serve the same workspace. Computers use the computer provider interface: Kubernetes by default, providing browser, files and shell, or your own sandbox provider through an adapter, for example Daytona, E2B or Modal. Tools share a common interface: built-in tools such as Routines, MCP servers and hubs, and other adapters. On a laptop, setup runs this stack locally.</desc>
 <!-- Platform icons: Tabler Icons, https://tabler.io/icons
 MIT License
 
@@ -31,7 +31,7 @@ SOFTWARE.
 <rect x="328" y="336" width="264" height="240" rx="12" fill="#241e31" stroke="#352c46" stroke-width="1"/>
 <rect x="620" y="336" width="264" height="240" rx="12" fill="#241e31" stroke="#352c46" stroke-width="1"/>
 <rect x="16" y="128" width="888" height="342" rx="14" fill="none" stroke="#7b69b0" stroke-width="1.25" stroke-dasharray="7 5"/>
-<text x="460" y="28" font-size="11.5" fill="#bba8ee" font-weight="700" text-anchor="middle" letter-spacing="1.2">OPENBOT FRONTENDS</text>
+<text x="460" y="28" font-size="11.5" fill="#bba8ee" font-weight="700" text-anchor="middle" letter-spacing="1.2">XIONGBAO WORK FRONTENDS</text>
 <rect x="53.439" y="40" width="108.446" height="34" rx="8" fill="#211b2c" stroke="#6f5e9c" stroke-width="1.25"/>
 <g transform="translate(83.547 49.5) scale(0.625)" fill="none" stroke="#b19be9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.286 7.008c-3.216 0 -4.286 3.23 -4.286 5.92c0 3.229 2.143 8.072 4.286 8.072c1.165 -.05 1.799 -.538 3.214 -.538c1.406 0 1.607 .538 3.214 .538s4.286 -3.229 4.286 -5.381c-.03 -.011 -2.649 -.434 -2.679 -3.23c-.02 -2.335 2.589 -3.179 2.679 -3.228c-1.096 -1.606 -3.162 -2.113 -3.75 -2.153c-1.535 -.12 -3.032 1.077 -3.75 1.077c-.729 0 -2.036 -1.077 -3.214 -1.077"/><path d="M12 4a2 2 0 0 0 2 -2a2 2 0 0 0 -2 2"/></g>
 <text x="104.547" y="62" font-size="14" fill="#f0ebff" font-weight="700">Mac</text>
@@ -63,9 +63,9 @@ SOFTWARE.
 <text x="224.062" y="157.5" font-size="14" fill="#f0ebff" font-weight="700">Kubernetes + Helm</text>
 <text x="884" y="157" font-size="13" fill="#9a93ab" text-anchor="end">On a laptop, setup runs this stack locally</text>
 <rect x="36" y="176" width="556" height="112" rx="11" fill="#211b2c" stroke="#6f5e9c" stroke-width="1.5"/>
-<text x="54" y="209" font-size="18" fill="#f0ebff" font-weight="700">OpenBot backend</text>
+<text x="54" y="209" font-size="18" fill="#f0ebff" font-weight="700">XiongBao Work backend</text>
 <text x="54" y="236" font-size="13.5" fill="#f0ebff">Workspace API · identity &amp; permissions · policy &amp; approvals · audit</text>
-<text x="54" y="258" font-size="13" fill="#b8b1c9">Controls enforced at the OpenBot API</text>
+<text x="54" y="258" font-size="13" fill="#b8b1c9">Controls enforced at the XiongBao Work API</text>
 <rect x="620" y="176" width="264" height="112" rx="11" fill="#211b2c" stroke="#6f5e9c" stroke-width="1.25"/>
 <text x="636" y="209" font-size="17" fill="#f0ebff" font-weight="700">CopilotKit Intelligence</text>
 <text x="636" y="229" font-size="13" fill="#b8b1c9">Deployed separately</text>
@@ -82,7 +82,7 @@ SOFTWARE.
 <text x="284" y="363.5" font-size="13.5" fill="#a3e6cc" font-weight="700" text-anchor="end">AG-UI</text>
 <rect x="48" y="378" width="240" height="62" rx="8" fill="#211b2c" stroke="#3f8d73" stroke-width="1.25"/>
 <text x="62" y="404" font-size="15" fill="#f0ebff" font-weight="700">Built-in Bots</text>
-<text x="62" y="424" font-size="13" fill="#b8b1c9">In-process in the OpenBot server</text>
+<text x="62" y="424" font-size="13" fill="#b8b1c9">In-process in the server</text>
 <rect x="48" y="500" width="240" height="62" rx="8" fill="#211b2c" stroke="#3f8d73" stroke-width="1.25"/>
 <text x="62" y="526" font-size="15" fill="#f0ebff" font-weight="700">Your agents</text>
 <text x="62" y="546" font-size="13" fill="#b8b1c9">Any agent execution platform</text>

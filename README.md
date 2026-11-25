@@ -230,5 +230,5 @@ docker build -f Dockerfile -t xiongbao-digital-employee:local .
 
 ## 开源许可
 
-本产品包含以 MIT 许可发布的开源代码，版权声明 `Copyright (c) 2026 CopilotKit` 与许可全文见
+本产品包含以 MIT 许可发布的开源代码，其版权声明与许可全文见
 [xiongbao/LICENSE](xiongbao/LICENSE)。第三方依赖、品牌素材和模型服务的许可或服务条款各自适用。

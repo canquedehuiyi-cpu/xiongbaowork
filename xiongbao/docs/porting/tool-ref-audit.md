@@ -24,7 +24,7 @@
   （system_prompt 有 1000 字符上限合同，降级说明由 persona 技能承载）；②正文引用的附件按**文件级**核对后
   并不在包内（规则 `missing-asset-references`）。规则表的 `hasBundledReferences` 是个布尔值，
   「目录在、其中若干文件缺」它一律判 full，所以这一类只有账本看得见。
-- `blocked`：正文真调用 shell / 引用可执行 scripts。openbot 员工没有 shell，**不 shim**，改写层
+- `blocked`：正文真调用 shell / 引用可执行 scripts。熊宝员工没有 shell，**不 shim**，改写层
   只插入降级说明、原样保留调用证据。宿主专属技能（`host-specific-skill`）另计：正文里没有可命中的调用，
   拒绝理由由 `port:verdict-refresh` 的名单逐条写明。
 
@@ -67,7 +67,7 @@
 | skill | `windows-pc-tuneup` | blocked | `executable-scripts` | L10（行内代码）：`4. **出建议或交付 bat**：建议逐条过 references 清单 §5 自检门禁后再输出；bat 以 `templates/tuneup-template.bat` 为骨架填充，交付前必跑 ` | 1 |
 | skill | `wiring-and-coverage-audit` | blocked | `shell-command-prose` | L42（代码块内命令）：`npx tsc --noEmit --listFiles > /tmp/before.txt     # 记录基线` | 2 |
 | skill | `workbuddy-safe-delete-guard` | blocked | `shell-command-prose` | L40（代码块内命令）：`python - <<'EOF'` | 2 |
-| skill | `workbuddy-market-export` | blocked | `host-specific-skill` | 包内记录（名单理由）：正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接口、workbuddy_marketplace_* 工具、市场目录结构。openbot 没有这三个市场、没有这些接口与工具，每一步都落空。 ← `workbuddy_marketplace_skill` | 1 |
+| skill | `workbuddy-market-export` | blocked | `host-specific-skill` | 包内记录（名单理由）：正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接口、workbuddy_marketplace_* 工具、市场目录结构。熊宝没有这三个市场、没有这些接口与工具，每一步都落空。 ← `workbuddy_marketplace_skill` | 1 |
 | skill | `awesome-design-md` | degraded | `missing-asset-references` | 包内记录（文件级账本）：文件 references/voltagent.md 未入包，正文引用 references/voltagent.md | 1 |
 | skill | `canvasflow-ppt` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 assets 未入包，正文引用 assets/template.html | 1 |
 | skill | `engineering-workflow` | degraded | `missing-asset-references` | 包内记录（文件级账本）：目录 reference 未入包，正文引用 reference/api-and-interface-design.md、reference/browser-testing-with-devtools.md、reference/ci-cd-and-automation.md 等 23 个 | 1 |

@@ -1,9 +1,9 @@
 ---
 name: xiongbao-screen-layout
-description: The default layout for every OpenBot configuration screen — PageShell and its prose/wide widths, PageSection and PageRows, Item row composition, the settings-row pattern where a summary and a chevron open a dialog, and the size and variant vocabulary. This is what a new screen looks like unless an instruction says otherwise. Use when adding or changing a screen under app/src/routes, adding a row to an admin or settings page, choosing a Button or Item size, picking between a bordered and a filled row, laying out a dialog, or reviewing a diff that adds max-w-*, a hand-drawn card, or a new spacing scale under app/src. Don't use for where the data comes from (that is xiongbao-data-access), for the gallery components under components/gallery that a Bot draws, for the chat and channel surfaces, or for editing the primitives under components/ui themselves.
+description: The default layout for every XiongBao Work configuration screen — PageShell and its prose/wide widths, PageSection and PageRows, Item row composition, the settings-row pattern where a summary and a chevron open a dialog, and the size and variant vocabulary. This is what a new screen looks like unless an instruction says otherwise. Use when adding or changing a screen under app/src/routes, adding a row to an admin or settings page, choosing a Button or Item size, picking between a bordered and a filled row, laying out a dialog, or reviewing a diff that adds max-w-*, a hand-drawn card, or a new spacing scale under app/src. Don't use for where the data comes from (that is xiongbao-data-access), for the gallery components under components/gallery that a Bot draws, for the chat and channel surfaces, or for editing the primitives under components/ui themselves.
 ---
 
-# OpenBot Screen Layout
+# XiongBao Work Screen Layout
 
 ## When To Use
 

@@ -51,7 +51,7 @@
 
 ## 6. 交付与验证口径
 
-- 本包＝两 NEW 路径：`openbot/app/tests/tasks-workbench-a7-contracts.test.tsx` 与本文档；0 生产逻辑改动、0 新依赖、不改 route／components／旧 45 例／现有 helper 公共导出。
+- 本包＝两 NEW 路径：`xiongbao/app/tests/tasks-workbench-a7-contracts.test.tsx` 与本文档；0 生产逻辑改动、0 新依赖、不改 route／components／旧 45 例／现有 helper 公共导出。
 - test 件身份与创建补丁见 51679193 叶内身份块：after 19580 B／LF478／sha256 `62be007b…`／blob `801bbd55…`；creation 20152 B／blob `5668c146…`；本侧正逆重组逐字成立，`git apply` 的二次应用负控归 Root 云端。
 - **5 defs／0 run**：本文件不声称任何测试通过，也不声称 tsc／Biome 通过；实跑（容器内 bun 为唯一执行器）、中央集成与商业验收都还是空的。
 - C2（焦点去向）按票面留在 UNKNOWN，等真实浏览器或 BaseUI 渲染层证据；要补它得另开口子，不在本包内伪造。

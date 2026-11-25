@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="88 -18 915 835" width="1098" height="1002" fill="none" role="img" aria-labelledby="stack-title stack-desc">
-  <title id="stack-title">OpenBot: your workspace, your stack</title>
-  <desc id="stack-desc">An exploded stack with an OpenBot workspace, built-in or AG-UI agents, your models, MCP tools, modular MCP and sandbox capabilities, and your infrastructure. Deploy on a laptop or Kubernetes with Helm. The workspace provides enterprise governance and controls.</desc>
-  <!-- Adapted from CopilotKit/openbot.co src/components/composable-stack.tsx. Self-contained SVG; no external assets or fonts. -->
+  <title id="stack-title">XiongBao Work: your workspace, your stack</title>
+  <desc id="stack-desc">An exploded stack with a XiongBao Work workspace, built-in or AG-UI agents, your models, MCP tools, modular MCP and sandbox capabilities, and your infrastructure. Deploy on a laptop or Kubernetes with Helm. The workspace provides enterprise governance and controls.</desc>
+  <!-- Self-contained SVG; no external assets or fonts. -->
   <rect x="88" y="-18" width="915" height="835" rx="12" fill="#17131f" />
   <defs>
     <radialGradient id="wash">
@@ -158,7 +158,7 @@
     <path d="M549 107 h12 L571 39 H580" />
     <circle cx="549" cy="107" r="3" fill="#b19be9" stroke="none" />
     <svg viewBox="0 0 256 256" width="29" height="29" fill="none" x="592" y="25">
-      <title>OpenBot orb</title>
+      <title>XiongBao Work orb</title>
       <defs>
         <radialGradient id="g0" gradientUnits="userSpaceOnUse" cx="186.880" cy="128.000" r="89.600">
           <stop offset="0" stop-color="#0ad7ed" stop-opacity="0.8500" />
@@ -276,14 +276,14 @@
         <circle cx="128.0" cy="128.0" r="127.500" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1" />
       </g>
     </svg>
-    <text x="630" y="48" fill="#f0ebff" stroke="none" font-size="26" font-weight="600" letter-spacing="-.4">OpenBot workspace</text>
+    <text x="630" y="48" fill="#f0ebff" stroke="none" font-size="26" font-weight="600" letter-spacing="-.4">XiongBao Work workspace</text>
     <text x="592" y="77" fill="#b8b1c9" stroke="none" font-size="20">Federates agents to your users</text>
     <text x="592" y="104" fill="#b8b1c9" stroke="none" font-size="20">With a great user experience</text>
     <text x="592" y="131" fill="#b8b1c9" stroke="none" font-size="20">Enterprise governance &amp; controls</text>
     <path d="M344 244 h24 L402 198 H580" />
     <circle cx="344" cy="244" r="3" fill="#b19be9" stroke="none" />
     <text x="592" y="207" fill="#f0ebff" stroke="none" font-size="26" font-weight="600" letter-spacing="-.4">Your agents</text>
-    <text x="592" y="236" fill="#b8b1c9" stroke="none" font-size="20">Built-in Bots in OpenBot, or</text>
+    <text x="592" y="236" fill="#b8b1c9" stroke="none" font-size="20">Built-in Bots in XiongBao Work, or</text>
     <text x="592" y="263" fill="#b8b1c9" stroke="none" font-size="20">any agent execution platform</text>
     <text x="592" y="290" fill="#b8b1c9" stroke="none" font-size="20">connected through AG-UI.</text>
     <path d="M432 301 h112 L578 357 H580" />

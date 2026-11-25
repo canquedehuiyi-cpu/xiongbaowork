@@ -32,12 +32,12 @@ to the deployment's HTTPS API origin and run only `bun scripts/setup-learning.ts
 Chrome or Edge first: the helper opens an isolated browser window for the deployment's usual
 sign-in, lets you choose an accessible project, and creates or reuses `openbot` before minting
 its runtime key. Local development may use a loopback HTTP origin. Existing key-only setups
-use authenticated Intelligence administration to create a container and assign it in OpenBot Admin.
+use authenticated Intelligence administration to create a container and assign it in XiongBao Work Admin.
 There is no managed licence step.
 
 The same CLI sign-in also prepares Composio on the first `bash scripts/start.sh`;
 `bun run setup:composio` runs that step alone, independently of Learning. A failure
-does not stop the start: OpenBot runs with apps unavailable until a retry succeeds. A supplied
+does not stop the start: XiongBao Work runs with apps unavailable until a retry succeeds. A supplied
 `COMPOSIO_API_KEY` is preserved.
 The helper saves a stable installation UUID privately before any provisioning request,
 then the CLI saves this installation's Composio project key in `.env`. Keep
@@ -77,10 +77,10 @@ Ubuntu 26.04.
    sudo usermod -aG docker $USER
    ```
 
-4. Clone into your Ubuntu home directory, for example `~/OpenBot`, and follow [Setup](#setup) from
+4. Clone into your Ubuntu home directory, for example `~/xiongbaowork`, and follow [Setup](#setup) from
    there. `npx --yes copilotkit@latest login` opens the sign-in page in your Windows browser.
 
-5. Keep an Ubuntu terminal open while you use OpenBot. WSL stops Ubuntu shortly after its last
+5. Keep an Ubuntu terminal open while you use XiongBao Work. WSL stops Ubuntu shortly after its last
    terminal closes, and the app, the API server and Docker stop with it.
 
 6. Open the app from your Windows browser at <http://127.0.0.1:3010>. WSL forwards the port, and
@@ -104,7 +104,7 @@ Use `bun run dev` only when you want the app and API server without starting the
 | `supervisor`      | 4500 host / 4300 container |
 | PostgreSQL        | 5432                       |
 
-`start.sh` hands every selected Docker service to `docker compose up -d` on every run, so one whose configuration changed is recreated and an unchanged one is left as it is. It leaves an API server or app that already answers as OpenBot alone, restarts the API server when it refuses the worker's secret or has no routines route, and reports when a port is held by another process.
+`start.sh` hands every selected Docker service to `docker compose up -d` on every run, so one whose configuration changed is recreated and an unchanged one is left as it is. It leaves an API server or app that already answers as XiongBao Work alone, restarts the API server when it refuses the worker's secret or has no routines route, and reports when a port is held by another process.
 
 **Nothing here sweeps staged attachments.** A file dropped into the composer is stored before the
 message is sent, and the only thing that reclaims the ones never sent is
@@ -180,9 +180,9 @@ bun run test
 bun run build
 ```
 
-Integration tests expect a PostgreSQL database with pgvector. Point `TEST_DATABASE_URL` at a dedicated database such as `postgres://openbot:openbot@localhost:5432/openbot_test` before running them.
+Integration tests expect a PostgreSQL database with pgvector. Point `TEST_DATABASE_URL` at a dedicated database such as `postgres://openbot:openbot@localhost:5432/xiongbao_test` before running them.
 
-They refuse to use the application `openbot` database. `DATABASE_URL` is still the application setting, and the database client removes it from the process environment after opening a connection to preserve the Windows Bun connection fix, so tests use `TEST_DATABASE_URL` as their immutable fixture address. Running them against a deployment you are using puts test Bots in its audit trail and its activity reports, so create a separate database and migrate that before running the integration suite.
+They refuse to use the application `xiongbao` database. `DATABASE_URL` is still the application setting, and the database client removes it from the process environment after opening a connection to preserve the Windows Bun connection fix, so tests use `TEST_DATABASE_URL` as their immutable fixture address. Running them against a deployment you are using puts test Bots in its audit trail and its activity reports, so create a separate database and migrate that before running the integration suite.
 
 CI uses `bun run test:ci` to verify the expected test count in addition to normal tests. It runs the suite in shards, one runner each, and the `tests` check passes only when every shard passed and their counts add up to the floor in `scripts/test-floor.ts`. To run one shard the way CI does, pass it to the same script: `bun run test:ci --shard=2/4`.
 

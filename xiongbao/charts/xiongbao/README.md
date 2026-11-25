@@ -1,21 +1,21 @@
-# XiongBao on Kubernetes
+# XiongBao Work on Kubernetes
 
-Runs XiongBao on any Kubernetes cluster: EKS, GKE, AKS, or your own. One chart, five targets, and the
+Runs XiongBao Work on any Kubernetes cluster: EKS, GKE, AKS, or your own. One chart, five targets, and the
 only difference between them is values.
 
-**CopilotKit Intelligence is optional in this fork (熊宝).** Conversations, memory and history stay in
+**CopilotKit Intelligence is optional.** Conversations, memory and history stay in
 the PostgreSQL this chart brings up (or the one you point `database` at), and the server runs without
-Intelligence. Intelligence only adds Admin → 自动学习's published skills. You can point XiongBao at
+Intelligence. Intelligence only adds Admin → 自动学习's published skills. You can point XiongBao Work at
 managed Intelligence or one you already run ([the alternative](#with-managed-intelligence-or-one-you-already-run)),
 or have this chart install one beside it, self-hosted, on its own bundled PostgreSQL and Redis
 ([the bundled Intelligence](#with-the-bundled-intelligence)). The bundled one is OFF by default
 (`intelligence.enabled: false`) because a self-hosted Intelligence needs a CopilotKit licence.
-[The vanilla install](#vanilla-install) below is XiongBao alone in three steps.
+[The vanilla install](#vanilla-install) below is XiongBao Work alone in three steps.
 
 ## Vanilla install
 
 One person, from their own computer, on any cluster with a default StorageClass and amd64 nodes (the
-XiongBao image is amd64 only). From a checkout of this repository:
+XiongBao Work image is amd64 only). From a checkout of this repository:
 
 **1. Write your model key into a file you keep and never commit.**
 
@@ -73,10 +73,10 @@ Then open <http://127.0.0.1:3001>. You are its one administrator: `config.single
 reaches the server with no sign-in, which is why it is only ever reached through a port-forward on
 your own computer, and why the chart refuses it with a public URL or an open LoadBalancer.
 
-`ci/vanilla-values.yaml` is single-user mode, XiongBao's bundled database, and a placeholder for the
+`ci/vanilla-values.yaml` is single-user mode, XiongBao Work's bundled database, and a placeholder for the
 model key your file replaces. CI renders this install on every change.
 
-**What happens, so a first install that takes a few minutes is not a surprise.** XiongBao's own
+**What happens, so a first install that takes a few minutes is not a surprise.** XiongBao Work's own
 database comes up first. The `xiongbao-migrations-1` Job waits for the bundled PostgreSQL and migrates
 it, and the server and the scheduled Jobs wait in their `wait-for-database` init container until that
 database accepts their connection and holds every migration their image carries, so the server's
@@ -116,17 +116,17 @@ helm upgrade --install xiongbao charts/xiongbao \
 ```
 
 The chart then installs Intelligence (whose embeddings image is amd64 only too), generates every
-credential it needs as Secrets that are kept across upgrades and uninstalls, including XiongBao's
-runtime key in `openbot-intel-api-key`, and gives it the licence (XiongBao gets the same one).
-Intelligence's bootstrap Job then creates XiongBao's organization and project, stores that key for it,
+credential it needs as Secrets that are kept across upgrades and uninstalls, including XiongBao Work's
+runtime key in `openbot-intel-api-key`, and gives it the licence (XiongBao Work gets the same one).
+Intelligence's bootstrap Job then creates XiongBao Work's organization and project, stores that key for it,
 and creates the `openbot` Learning container. Nobody signs in to anything. The log of the
 `xiongbao-intelligence-bootstrap` Job says what Intelligence set up. The browser reaches
-Intelligence's gateway through XiongBao's own address, so the one port-forward is all it needs. Leave
+Intelligence's gateway through XiongBao Work's own address, so the one port-forward is all it needs. Leave
 `config.intelligence` and `secrets.intelligenceApiKey` empty: the chart wires the bundled one itself
 and refuses an address of your own beside it.
 
-In this fork Intelligence does not receive conversations (they stay in XiongBao's PostgreSQL), so its
-Learning agent has none of XiongBao's conversations to learn from; what reaches the Bots is the skills
+Intelligence does not receive conversations (they stay in XiongBao Work's PostgreSQL), so its
+Learning agent has none of XiongBao Work's conversations to learn from; what reaches the Bots is the skills
 published in it. See [Automatic Learning](#automatic-learning-optional).
 
 **Automatic Learning spends your model key.** Learning is on in the bundled Intelligence, whose
@@ -160,7 +160,7 @@ docker manifest inspect ghcr.io/copilotkit/openbot:v0.0.9 | grep architecture
 skills live in the PostgreSQL this chart brings up, or in the managed database you point `database`
 at, so there is no platform project to create and no runtime key to mint.
 
-**On kind, on an Apple Silicon Mac**, the node is arm64 and XiongBao's image is amd64 only, as is
+**On kind, on an Apple Silicon Mac**, the node is arm64 and XiongBao Work's image is amd64 only, as is
 `ghcr.io/huggingface/text-embeddings-inference:cpu-*` when the chart installs Intelligence; everything
 else it renders is multi-arch. `kind load docker-image` prints `loading...` for them and the node then
 silently drops the amd64 image, so the pod still cannot pull it. Import each one into the node's
@@ -254,11 +254,11 @@ managedNodeGroups:
 ```
 
 **Why three nodes.** The scheduler places a pod by what it requests, not by what it uses, and the
-vanilla install with the bundled Intelligence requests about 3.25 vCPU for as long as it runs (XiongBao
+vanilla install with the bundled Intelligence requests about 3.25 vCPU for as long as it runs (XiongBao Work
 alone, the default here, asks for less): summing `resources.requests.cpu` over the
 Deployments and StatefulSets in
 `helm template xiongbao charts/xiongbao -f charts/xiongbao/ci/vanilla-values.yaml --set intelligence.enabled=true`,
-times their replicas, gives 2200m for the Deployments (XiongBao's two servers and Intelligence's API, gateway,
+times their replicas, gives 2200m for the Deployments (XiongBao Work's two servers and Intelligence's API, gateway,
 embeddings and Learning) and 1050m for the StatefulSets (both databases, Redis, object storage and
 the shared computer, which alone asks for 500m). The install Jobs add about 400m while they run. A
 t3.large leaves about 1.93 vCPU allocatable, and EKS's own pods (the VPC CNI, kube-proxy, CoreDNS,
@@ -273,7 +273,7 @@ adds the third node by itself. A smaller cluster that shows that event needs ano
 **Why the two IMDS lines.** A node's instance metadata service, at 169.254.169.254, hands out that
 node's IAM role to anything that asks from the node. A Bot's computer is a pod on that node running
 commands a model chose, so `curl` against that address is one `run_command` away, and no rule in
-XiongBao's own policy engine is consulted: the engine decides browser navigation and tool calls, and
+XiongBao Work's own policy engine is consulted: the engine decides browser navigation and tool calls, and
 the shell reaches the network directly.
 
 `disablePodIMDS` sets the hop limit to 1, so a packet from a pod, which has one more hop to make
@@ -298,7 +298,7 @@ and neither field may be set on a node group that supplies its own `launchTempla
 
 The NetworkPolicy below also excepts `169.254.0.0/16`, and is the better control where it is
 enforced. It is off by default and does nothing on EKS until the VPC CNI is told to enforce it, so
-these two lines are what holds in the configuration a cluster actually starts in. Nothing in XiongBao
+these two lines are what holds in the configuration a cluster actually starts in. Nothing in XiongBao Work
 wants pod-level IMDS either way: the chart reaches AWS through IRSA, which is a ServiceAccount
 annotation and a projected token rather than the node's role.
 
@@ -329,7 +329,7 @@ to it: sign-in for a team, your own database, a cloud's features.
 
 ### With managed Intelligence, or one you already run
 
-`intelligence.enabled: false` installs XiongBao alone and points it at an Intelligence that already
+`intelligence.enabled: false` installs XiongBao Work alone and points it at an Intelligence that already
 runs: managed Intelligence, or a self-hosted one installed from its own chart. Name it in
 `config.intelligence` and give its key as `secrets.intelligenceApiKey` (see
 [What a cluster needs first](#what-a-cluster-needs-first)):
@@ -448,7 +448,7 @@ and asking for it with more than one replica is refused at install time.
 `postgresql.enabled` is **off by default and not production-grade**. A database on a pod goes away
 when the pod does: a rollout, a node drain or an eviction is a restart, and while the volume survives,
 nothing about that shape gives you backups, failover or point-in-time recovery. It is there so
-somebody can try XiongBao in one command.
+somebody can try XiongBao Work in one command.
 
 Point it at RDS, Cloud SQL, Azure Database or your own server, and keep the URL in a Secret rather
 than in a values file. Setting both a bundled database and a URL is refused, rather than one of them
@@ -602,7 +602,7 @@ nobody could sign in or nobody would be an administrator; an identity provider i
 `secrets.betterAuthSecret` or `config.publicUrl`; `singleUser` is combined with a public URL or a
 public LoadBalancer; with the bundled Intelligence (`intelligence.enabled: true`), an Intelligence
 address or key of your own is named beside it, the licence is missing, or it has no project key for
-XiongBao; the release predates the bundle (no `intelligence.enabled` at all);
+XiongBao Work; the release predates the bundle (no `intelligence.enabled` at all);
 `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; with a
 database of your own, there is no `secrets.keyEncryptionKey` or no `secrets.computerToken`;
 `computers.mode` is `external` with no `computers.url`, or `sandbox` on a cluster with no Sandbox
@@ -625,7 +625,7 @@ the computer token and the database password.
 
 ## Your own Bot
 
-XiongBao is a shell for somebody else's agent, and `config.managedAgent.url` is where that agent goes:
+XiongBao Work is a shell for somebody else's agent, and `config.managedAgent.url` is where that agent goes:
 an AG-UI endpoint the server pod can reach, so a Service in this cluster rather than localhost.
 
 ```yaml
@@ -647,7 +647,7 @@ nobody can talk to.
 ## Automatic Learning (optional)
 
 Only with a connected CopilotKit Intelligence (`secrets.intelligenceApiKey`, or the bundled one);
-without one, Admin → 自动学习 says so and nothing below applies. This fork keeps conversations in its
+without one, Admin → 自动学习 says so and nothing below applies. XiongBao Work keeps conversations in its
 own PostgreSQL, so they are not sent to Intelligence as learning evidence: the skills it delivers are
 the ones produced and published in Intelligence itself.
 
@@ -678,12 +678,11 @@ adding or removing a key (which can change the model), restart it once `helm upg
 kubectl -n xiongbao rollout restart deployment/xiongbao-intelligence-learning-agent
 ```
 
-Upstream's Learning runs by itself after 15 finished conversations and after every 15 more; in this
-fork Intelligence receives no conversations of XiongBao's, so it learns only from what reaches it
+Intelligence receives no conversations of XiongBao Work's, so it learns only from what reaches it
 otherwise. What it learns is kept in an object store the release runs
 (`intelligence.localObjectStorage`). Admin → 自动学习 chooses the default container and which Bots
-receive its published skills; upstream's review screen (proposed skills, Approve, Reject, Learn now)
-is not in this fork's web app yet. Intelligence's own dashboard is not installed by default
+receive its published skills; a review screen (proposed skills, Approve, Reject, Learn now)
+is not in the web app yet. Intelligence's own dashboard is not installed by default
 (`intelligence.appFrontend`); turn it on, with `intelligence.auth.issuer` and an Ingress, to review
 skills in Intelligence itself.
 
@@ -721,7 +720,7 @@ Automatic Learning take precedence, including switching it off. See
 ## Memory and background research
 
 Both are on by default: when a person talks to one of their Bots in a conversation with that Bot
-alone, XiongBao switches on read-only background research by that Bot, and from any turn by a Bot it
+alone, XiongBao Work switches on read-only background research by that Bot, and from any turn by a Bot it
 makes each app the person connected in their own account a memory source for it (not on a Team Bot
 somebody else published, where their accounts need consent). A person who turns either off, or
 removes it, keeps it that way, through a Bot reset too.
@@ -972,7 +971,7 @@ policy still decides what a Bot may reach. Turning it on with `networkPolicy.ena
 ## AWS usage attribution
 
 The load balancers this chart has AWS create carry a tag that credits CopilotKit, through AWS Partner
-Revenue Measurement, for the AWS usage XiongBao drives. It is on for every install and has no
+Revenue Measurement, for the AWS usage XiongBao Work drives. It is on for every install and has no
 setting. It is the same tag the bundled Intelligence puts on its own Ingress:
 
 ```text

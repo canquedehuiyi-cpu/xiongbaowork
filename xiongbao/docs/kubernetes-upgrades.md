@@ -1,6 +1,6 @@
 # Kubernetes release promotion
 
-`bun scripts/update.ts kubernetes plan|apply|gitops` is operator tooling around the existing Helm chart. The running application receives no cluster deployment permission. Promotion uses the manifest's exact monolithic `openbot` image digest, chart archive checksum, independent distribution policy and explicit customer values files.
+`bun scripts/update.ts kubernetes plan|apply|gitops` is operator tooling around the existing Helm chart. The running application receives no cluster deployment permission. Promotion uses the manifest's exact monolithic image digest (`images.openbot`), chart archive checksum, independent distribution policy and explicit customer values files.
 
 The release pipeline packages the existing chart and records its version, release-asset URL and SHA-256 in `release-manifest.json`. Download the approved package; this command checks its checksum before invoking Helm. The separate desktop `server` image cannot substitute for the monolithic image used by chart server/computer workloads.
 
@@ -10,10 +10,10 @@ bun scripts/update.ts kubernetes plan \
   --candidate /srv/approved/release-manifest.json \
   --candidate-sha256 "$APPROVED_MANIFEST_SHA256" \
   --policy /srv/customer-update-policy.json \
-  --chart /srv/approved/openbot-0.1.4.tgz \
-  --namespace customer --release openbot \
+  --chart /srv/approved/xiongbao-0.1.4.tgz \
+  --namespace customer --release xiongbao \
   --values /srv/customer-values.yaml \
-  --output /srv/promotions/openbot \
+  --output /srv/promotions/xiongbao \
   --backup-reference /srv/backups/this-promotion \
   --backup-command-json '["/usr/local/bin/customer-database-backup","--verify"]'
 ```
