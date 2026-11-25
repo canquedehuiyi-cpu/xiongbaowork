@@ -58,7 +58,7 @@ function withoutPolicyVersion(text: string): string {
 export const VERSION_ONLY_RULES: Record<string, (text: string) => string> = {
   "package.json": withoutPackageVersion,
   "release-policy.json": withoutPolicyVersion,
-  "charts/openbot/Chart.yaml": withoutAppVersion,
+  "charts/xiongbao/Chart.yaml": withoutAppVersion,
   "desktop/src-tauri/Cargo.toml": withoutDesktopVersion,
   "desktop/src-tauri/Cargo.lock": withoutDesktopVersion,
 };

@@ -38,7 +38,7 @@ setDefaultTimeout(120_000);
 const helm = Bun.which("helm") !== null;
 const digest = `sha256:${"b".repeat(64)}`;
 const mirror = "registry.internal/mirror/openbot";
-const chartSource = join(import.meta.dir, "../charts/openbot");
+const chartSource = join(import.meta.dir, "../charts/xiongbao");
 
 type Values = Record<string, unknown>;
 function merge(base: Values, overlay: Values): Values {

@@ -23,7 +23,7 @@ import { join } from "node:path";
 import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 
 type EnvVar = {
   name: string;

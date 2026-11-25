@@ -360,11 +360,11 @@ function keyOfSandbox(sandbox: Sandbox): ComputerKey {
   const annotations =
     (sandbox.metadata as { annotations?: Record<string, string> })
       ?.annotations ?? {};
-  const person = annotations["openbot.dev/person-id"];
+  const person = annotations["xiongbao.dev/person-id"];
   if (person) return { kind: "person", personId: person };
   return {
     kind: "bot",
-    botId: annotations["openbot.dev/bot-id"] ?? sandbox.metadata?.name ?? "",
+    botId: annotations["xiongbao.dev/bot-id"] ?? sandbox.metadata?.name ?? "",
   };
 }
 
@@ -466,20 +466,20 @@ export function createSandboxComputerProvider(
         name: sandboxNameFor(key),
         namespace: options.namespace,
         labels: {
-          "app.kubernetes.io/managed-by": "openbot",
-          "openbot.dev/component": "computer",
+          "app.kubernetes.io/managed-by": "xiongbao",
+          "xiongbao.dev/component": "computer",
         },
         // Whose computer, as written, which the name above cannot always carry. The listing and the
         // culler read this rather than trying to reverse the slug.
         annotations:
           key.kind === "person"
             ? {
-                "openbot.dev/person-id": key.personId,
-                "openbot.dev/computer": computerKeyText(key),
+                "xiongbao.dev/person-id": key.personId,
+                "xiongbao.dev/computer": computerKeyText(key),
               }
             : {
-                "openbot.dev/bot-id": key.botId,
-                "openbot.dev/computer": computerKeyText(key),
+                "xiongbao.dev/bot-id": key.botId,
+                "xiongbao.dev/computer": computerKeyText(key),
               },
       },
       spec: {

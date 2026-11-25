@@ -29,7 +29,7 @@ import { SQL } from "bun";
 import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 const serverDirectory = join(import.meta.dir, "../server");
 const script = readFileSync(join(chart, "files/wait-for-database.mjs"), "utf8");
 const SANDBOX_API = [

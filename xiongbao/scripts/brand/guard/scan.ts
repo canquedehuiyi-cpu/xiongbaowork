@@ -255,10 +255,6 @@ export const EXEMPT_PATHS: {
     reason: "tests and their fixtures",
   },
   { test: (p) => p === "server/src/brand.ts", reason: "the brand exit itself" },
-  {
-    test: (p) => p.startsWith("charts/"),
-    reason: "Helm chart is not delivered",
-  },
 ];
 
 // Every path this module reports is also a key somewhere else: the allowlist's `file`, EXEMPT_PATHS'

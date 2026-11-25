@@ -102,7 +102,7 @@ OpenBot enforces sign-in, tool permissions, action policies, and audit at its AP
 
 Computer execution is pluggable: use the default Kubernetes setup or connect a compatible external computer provider.
 
-[Architecture details](docs/architecture.md) · [Services and ports](#services-and-ports) · [Kubernetes deployment](charts/openbot/README.md)
+[Architecture details](docs/architecture.md) · [Services and ports](#services-and-ports) · [Kubernetes deployment](charts/xiongbao/README.md)
 
 ## Open source, local operation, and licensing
 
@@ -122,9 +122,9 @@ Computer execution is pluggable: use the default Kubernetes setup or connect a c
 
 Deploy OpenBot on **AWS EKS, Azure AKS, Google GKE, or your own Kubernetes cluster**. The chart can install CopilotKit Intelligence beside it (`intelligence.enabled=true` with a licence); in this fork that is off by default and nothing else needs it.
 
-For a first evaluation, you need a cluster with **amd64 nodes**, a **default StorageClass**, `kubectl`, Helm, and a model key. The commands below use an OpenAI key. For Anthropic, a model router, cluster sizing, or an existing Intelligence deployment, use the [full Helm guide](charts/openbot/README.md).
+For a first evaluation, you need a cluster with **amd64 nodes**, a **default StorageClass**, `kubectl`, Helm, and a model key. The commands below use an OpenAI key. For Anthropic, a model router, cluster sizing, or an existing Intelligence deployment, use the [full Helm guide](charts/xiongbao/README.md).
 
-> **Setting up with an AI assistant?** Give it this README and [the Helm guide](charts/openbot/README.md). The guide covers cloud-specific values, storage, secrets, sign-in, networking, upgrades, and troubleshooting. Use the evaluation below only through a local port-forward; configure sign-in and TLS before sharing a deployment.
+> **Setting up with an AI assistant?** Give it this README and [the Helm guide](charts/xiongbao/README.md). The guide covers cloud-specific values, storage, secrets, sign-in, networking, upgrades, and troubleshooting. Use the evaluation below only through a local port-forward; configure sign-in and TLS before sharing a deployment.
 
 1. **Get the source.** Skip this if you already have a checkout.
 
@@ -143,17 +143,17 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
 3. **Install.**
 
    ```sh
-   helm dependency build charts/openbot
-   helm install openbot charts/openbot \
+   helm dependency build charts/xiongbao
+   helm install openbot charts/xiongbao \
      --namespace openbot --create-namespace \
-     --values charts/openbot/ci/vanilla-values.yaml \
+     --values charts/xiongbao/ci/vanilla-values.yaml \
      --values openbot-secrets.yaml \
      --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
      --set config.extraEnv[0].value=warn \
      --timeout 15m
    ```
 
-   The two `extraEnv` lines acknowledge that the bundled database connects as its superuser, which row-level security does not bind; the chart refuses to render without them. Use your own database with the `openbot_app` role for real tenant isolation ([Helm guide](charts/openbot/README.md)).
+   The two `extraEnv` lines acknowledge that the bundled database connects as its superuser, which row-level security does not bind; the chart refuses to render without them. Use your own database with the `openbot_app` role for real tenant isolation ([Helm guide](charts/xiongbao/README.md)).
 
 4. **Open your evaluation.**
 
@@ -166,7 +166,7 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
 
 The chart creates the runtime credentials, installs the database, and sets up the scheduled jobs. With the bundled Intelligence switched on it also bootstraps Intelligence and its Learning container, whose Learning agent uses your model key too.
 
-For a team deployment, follow the [Helm guide](charts/openbot/README.md) to configure authentication, TLS, your database, secrets, persistent storage, and network policies. For a single-container alternative, see [Deploy it](#deploy-it).
+For a team deployment, follow the [Helm guide](charts/xiongbao/README.md) to configure authentication, TLS, your database, secrets, persistent storage, and network policies. For a single-container alternative, see [Deploy it](#deploy-it).
 
 ## Run from source
 
@@ -613,7 +613,7 @@ Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to ta
 - [docs/coworkers.md](docs/coworkers.md)
 - [docs/routines.md](docs/routines.md)
 - [docs/deployment.md](docs/deployment.md)
-- [charts/openbot/README.md](charts/openbot/README.md): the Helm chart
+- [charts/xiongbao/README.md](charts/xiongbao/README.md): the Helm chart
 - [docs/releasing.md](docs/releasing.md)
 - [docs/web-research.md](docs/web-research.md): public-web search and extraction through Parallel, Exa or Firecrawl
 

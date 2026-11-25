@@ -28,7 +28,7 @@ import {
 } from "../scripts/chart-reuse-values";
 
 const helm = Bun.which("helm") !== null;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 const LICENCE = "licence-given-once";
 
 type Doc = {

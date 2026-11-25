@@ -7,6 +7,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { allowedDiff, changedFiles } from "./release-candidate-check";
 import {
   CI_WORKFLOW,
   type CiRun,
@@ -15,7 +16,6 @@ import {
   type GateDeps,
   releaseFileViolations,
 } from "./release-ci-gate";
-import { allowedDiff, changedFiles } from "./release-candidate-check";
 
 const REPOSITORY = "CopilotKit/OpenBot";
 const repos: string[] = [];
@@ -75,7 +75,7 @@ function mainAt(): { repo: string; parent: string } {
     "package.json": pkg("0.3.1"),
     "desktop/src-tauri/Cargo.toml": cargo("0.3.1"),
     "desktop/src-tauri/Cargo.lock": lock("0.3.1"),
-    "charts/openbot/Chart.yaml": chart("0.3.1"),
+    "charts/xiongbao/Chart.yaml": chart("0.3.1"),
     "CHANGELOG.md": "# Changelog\n\n## Unreleased\n\n- A fix.\n\n## 0.3.1\n",
     "release-policy.json": policy("v0.3.1", ["v0.3.0"]),
     "server/src/index.ts": "export const answer = 42;\n",
@@ -89,7 +89,7 @@ function release(repo: string, extra: Record<string, string> = {}): string {
     "package.json": pkg("0.3.2"),
     "desktop/src-tauri/Cargo.toml": cargo("0.3.2"),
     "desktop/src-tauri/Cargo.lock": lock("0.3.2"),
-    "charts/openbot/Chart.yaml": chart("0.3.2"),
+    "charts/xiongbao/Chart.yaml": chart("0.3.2"),
     "CHANGELOG.md":
       "# Changelog\n\n## Unreleased\n\n## 0.3.2\n\n- A fix.\n\n## 0.3.1\n",
     "release-policy.json": policy("v0.3.2", ["v0.3.1", "v0.3.0"]),
@@ -205,7 +205,7 @@ test("a source file renamed onto a release file's name runs the full checks", ()
     "package.json": pkg("0.3.2"),
     "desktop/src-tauri/Cargo.toml": cargo("0.3.2"),
     "desktop/src-tauri/Cargo.lock": lock("0.3.2"),
-    "charts/openbot/Chart.yaml": chart("0.3.2"),
+    "charts/xiongbao/Chart.yaml": chart("0.3.2"),
   });
   commit(repo, "Release v0.3.2");
   const { decision } = gate(repo, [[ciRun({ head_sha: parent })]]);
@@ -230,7 +230,7 @@ test("a version file that changes more than its version runs the full checks", (
   for (const [path, text] of [
     ["package.json", pkg("0.3.2", { dependencies: { left: "1.0.0" } })],
     ["desktop/src-tauri/Cargo.lock", lock("0.3.2", "1.0.1")],
-    ["charts/openbot/Chart.yaml", chart("0.3.2", "0.2.0")],
+    ["charts/xiongbao/Chart.yaml", chart("0.3.2", "0.2.0")],
     ["desktop/src-tauri/Cargo.toml", `${cargo("0.3.2")}[features]\nx = []\n`],
     ["package.json", "{ not json"],
   ] as const) {
@@ -259,9 +259,9 @@ test("the changelog and the release policy may change freely", () => {
 test("a version file added or removed is not a version change", () => {
   expect(
     releaseFileViolations(
-      new Map([["charts/openbot/Chart.yaml", { before: "", after: "x" }]]),
+      new Map([["charts/xiongbao/Chart.yaml", { before: "", after: "x" }]]),
     ),
-  ).toEqual(["charts/openbot/Chart.yaml was added"]);
+  ).toEqual(["charts/xiongbao/Chart.yaml was added"]);
 });
 
 test("without a passing run of main's CI on the parent, the full checks run", () => {

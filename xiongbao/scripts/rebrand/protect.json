@@ -998,18 +998,6 @@
     "reason": "断言继续拦截上游名：模型可见文字里既不许出现旧名也不许出现新名"
   },
   {
-    "file": "xiongbao/server/src/computer/sandbox.ts",
-    "pattern": "openbot\\.dev/|\\\"app\\.kubernetes\\.io/managed-by\\\": \\\"openbot\\\"",
-    "until": "R2",
-    "reason": "Task 11：电脑 pod 的 K8s 标签/注解，与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/computer-sandbox.test.ts",
-    "pattern": "openbot\\.dev/|\\\"app\\.kubernetes\\.io/managed-by\\\": \\\"openbot\\\"",
-    "until": "R2",
-    "reason": "Task 11：电脑 pod 的 K8s 标签/注解，与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
     "file": "xiongbao/server/scripts/reset-test-database.ts",
     "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
     "until": "R2",
@@ -1385,30 +1373,6 @@
     "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
     "until": "R3",
     "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
-  },
-  {
-    "file": "xiongbao/server/src/browser/egress.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/src/channels/attachments.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/attachment-routes.test.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/handoff-caps-defaults.test.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
   },
   {
     "file": "xiongbao/server/tests/learning-personal-skills.test.ts",

@@ -62,7 +62,7 @@ export function prepareRelease(root: string, bump: Bump, kind: Kind): Prepared {
   // The chart's default image tag is its appVersion, so a release that moves package.json
   // without moving this leaves a default `helm install` pulling the previous image, or an
   // image tag that was never pushed. Move them together, every time.
-  const chartPath = join(root, "charts/openbot/Chart.yaml");
+  const chartPath = join(root, "charts/xiongbao/Chart.yaml");
   writeFileSync(
     chartPath,
     readFileSync(chartPath, "utf8").replace(

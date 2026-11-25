@@ -1,0 +1,53 @@
+# GKE. Cloud SQL, Workload Identity, Secret Manager through external-secrets, Gateway API.
+config:
+  initialAdminEmails: admin@example.com
+  auth:
+    google:
+      clientId: example.apps.googleusercontent.com
+  publicUrl: https://xiongbao.example.com
+postgresql:
+  enabled: false
+database:
+  existingSecret: xiongbao-database
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: xiongbao@example-project.iam.gserviceaccount.com
+externalSecrets:
+  enabled: true
+  secretStoreRef:
+    name: gcp-secret-manager
+  data:
+    - secretKey: key-encryption-key
+      remoteRef:
+        key: xiongbao-key-encryption-key
+    # Sessions are signed with this. The server refuses to start when sign-in is configured and it
+    # is missing, so every provider store has to carry it.
+    - secretKey: better-auth-secret
+      remoteRef:
+        key: xiongbao-better-auth-secret
+    - secretKey: google-client-secret
+      remoteRef:
+        key: xiongbao/google-client-secret
+    - secretKey: computer-token
+      remoteRef:
+        key: xiongbao/computer-token
+    - secretKey: license-token
+      remoteRef:
+        key: xiongbao-license-token
+# Gateway API rather than an Ingress, which the same chart supports without a second code path.
+ingress:
+  enabled: false
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: xiongbao-gateway
+      namespace: gateway-system
+  hostnames:
+    - xiongbao.example.com
+
+computers:
+  mode: shared
+
+# Managed Intelligence, named in config.intelligence above, rather than the one the chart installs.
+intelligence:
+  enabled: false

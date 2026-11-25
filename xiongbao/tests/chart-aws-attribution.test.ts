@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 
 const ourKey = "aws-apn-id-058264219587";
 const ourValue = "pc:avjdxr516uh0mgsqob730tzgy";

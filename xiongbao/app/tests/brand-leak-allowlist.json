@@ -336,20 +336,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/computer/sandbox.ts",
-    "text": "openbot.dev/",
-    "reason": "persisted-identifier: Kubernetes labels/annotations on live sandboxes",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/computer/sandbox.ts",
-    "text": "\"app.kubernetes.io/managed-by\": \"openbot\"",
-    "reason": "persisted-identifier: Kubernetes label on live sandboxes",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/copilot.ts",
     "text": "\"OpenBot standing role\"",
     "reason": "parsed-exact-text: context heading the agents parse verbatim",

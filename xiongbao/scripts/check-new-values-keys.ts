@@ -50,7 +50,7 @@ async function lastReleaseTag(): Promise<string> {
     .map((line) => line.trim())
     .filter(Boolean)) {
     const has = Bun.spawnSync(
-      ["git", "cat-file", "-e", `${tag}:charts/openbot/values.yaml`],
+      ["git", "cat-file", "-e", `${tag}:charts/xiongbao/values.yaml`],
       { stdout: "pipe", stderr: "pipe" },
     );
     if (has.exitCode === 0) return tag;
@@ -83,10 +83,10 @@ function paths(value: unknown, prefix = ""): string[] {
 
 const before = new Set(
   paths(
-    parse(await run(["git", "show", `${since}:charts/openbot/values.yaml`])),
+    parse(await run(["git", "show", `${since}:charts/xiongbao/values.yaml`])),
   ),
 );
-const now = paths(parse(await Bun.file("charts/openbot/values.yaml").text()));
+const now = paths(parse(await Bun.file("charts/xiongbao/values.yaml").text()));
 /*
  * A key whose parent is also new is covered by nulling the parent, and nulling both is the same
  * test twice. The parent is the harsher of the two, because that is what --reuse-values actually
@@ -122,7 +122,7 @@ if (added.length === 0) {
 /** Render, and say what came out. */
 function render(
   extra: string[],
-  chart = "charts/openbot",
+  chart = "charts/xiongbao",
 ): { ok: boolean; out: string; err: string } {
   const result = Bun.spawnSync(
     [
@@ -215,13 +215,13 @@ const refusedWhenAbsent: Record<string, string> = {
  * dependency's own default stays beneath it, as it does on an upgrade (chart-reuse-values.ts).
  */
 const dependencies = dependencyKeys(
-  await Bun.file("charts/openbot/Chart.yaml").text(),
+  await Bun.file("charts/xiongbao/Chart.yaml").text(),
 );
 
 let bad = 0;
 for (const path of added) {
   const attempt = underDependency(path, dependencies)
-    ? await withoutChartDefault("charts/openbot", path, (copy) =>
+    ? await withoutChartDefault("charts/xiongbao", path, (copy) =>
         render([], copy),
       )
     : render(["--set", `${path}=null`]);
@@ -294,7 +294,7 @@ function renderedValue(out: string, variable: string): string | undefined {
  * runs in a job with no Helm — and a test that shells out to a binary which is not there returns
  * undefined rather than failing.
  */
-const rawChartValues = await Bun.file("charts/openbot/values.yaml").text();
+const rawChartValues = await Bun.file("charts/xiongbao/values.yaml").text();
 const chartValues = parse(rawChartValues) as {
   config?: { handoff?: Record<string, number> };
 };
