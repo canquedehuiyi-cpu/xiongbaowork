@@ -18,8 +18,6 @@ const ROOTS = [
   "agent-computer/src",
   "agent-computer/tests",
   "desktop-device/src-tauri/src",
-  "extension/src",
-  "extension/tests",
   "server/src",
   "server/tests",
   "shared",
