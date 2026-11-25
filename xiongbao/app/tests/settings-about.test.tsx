@@ -9,7 +9,7 @@ import {
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { SETTINGS_SIDEBAR_ITEMS } from "@/components/settings/settings-sidebar";
 import { appConfig } from "@/lib/generated/application-config";
-import { AboutPage } from "@/routes/_authed/settings/about";
+import { AboutPage, ThirdPartyNotices } from "@/routes/_authed/settings/about";
 import { settleReactWork } from "./settle-react-work";
 
 /*
@@ -92,6 +92,16 @@ test("第三方依赖列出名称、版本、许可类型，点开才看到全�
   });
   expect(view.queryByText("left-pad")).toBeNull();
   expect(view.getByText("no-text-pkg")).not.toBeNull();
+});
+
+test("依赖清单加载失败时，随仓库附带的许可行仍可展开，版权行与 MIT 原文都在", async () => {
+  const view = render(
+    <ThirdPartyNotices load={() => Promise.reject(new Error("清单缺失"))} />,
+  );
+  expect(await view.findByText("第三方依赖清单加载失败。")).not.toBeNull();
+  fireEvent.click(view.getByRole("button", { name: /CopilotKit/ }));
+  expect(view.container.textContent).toContain("Copyright (c) 2026 CopilotKit");
+  expect(view.container.textContent).toContain("Permission is hereby granted");
 });
 
 test("设置侧栏有指向关于页的入口", () => {

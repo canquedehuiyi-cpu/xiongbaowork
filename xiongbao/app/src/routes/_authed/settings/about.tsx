@@ -19,7 +19,8 @@ type Notice = {
 
 /* 随仓库附带的 MIT 许可作为清单里的一行，名称取自版权行的权利人；没有版本号，版本列写「—」。 */
 const BUNDLED_NOTICE: Notice = {
-  name: license.match(/^Copyright \(c\) \d{4} (.+)$/m)?.[1] ?? "LICENSE",
+  name:
+    license.match(/^Copyright \(c\) \d{4} (.+)$/m)?.[1]?.trim() || "LICENSE",
   version: "—",
   license: "MIT",
   licenseText: license,
@@ -52,9 +53,19 @@ export function AboutPage() {
   );
 }
 
-function ThirdPartyNotices() {
+const loadGenerated = async () =>
+  (await import("@/lib/generated/third-party-notices.json"))
+    .default as Notice[];
+
+/** `load` 可替换，只为让测试模拟清单加载失败。 */
+export function ThirdPartyNotices({
+  load = loadGenerated,
+}: {
+  load?: () => Promise<Notice[]>;
+}) {
   // 1.8 MB 的许可全文只在打开本页时才取，不进主包。
-  const [notices, setNotices] = useState<Notice[] | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([BUNDLED_NOTICE]);
+  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
@@ -62,32 +73,34 @@ function ThirdPartyNotices() {
 
   useEffect(() => {
     let live = true;
-    import("@/lib/generated/third-party-notices.json").then(
-      (module) =>
-        live &&
-        setNotices(
-          [...(module.default as Notice[]), BUNDLED_NOTICE].sort(byName),
-        ),
+    load().then(
+      (list) => {
+        if (!live) return;
+        setNotices([...list, BUNDLED_NOTICE].sort(byName));
+        setLoaded(true);
+      },
       () => live && setFailed(true),
     );
     return () => {
       live = false;
     };
-  }, []);
+  }, [load]);
 
   const needle = deferred.trim().toLowerCase();
-  const shown = (notices ?? []).filter((notice) =>
+  const shown = notices.filter((notice) =>
     notice.name.toLowerCase().includes(needle),
   );
 
   return (
     <section className="flex flex-col gap-3">
       <h3 className="font-medium text-[13px]">第三方依赖</h3>
+      {/* 随仓库附带的许可行不依赖生成清单，加载中或失败时也要能看到。 */}
       {failed ? (
         <p className="text-destructive text-sm">第三方依赖清单加载失败。</p>
-      ) : notices === null ? (
+      ) : loaded ? null : (
         <p className="text-muted-foreground text-sm">正在加载…</p>
-      ) : (
+      )}
+      {
         <>
           <Input
             aria-label="按名称搜索"
@@ -128,7 +141,7 @@ function ThirdPartyNotices() {
             })}
           </ul>
         </>
-      )}
+      }
     </section>
   );
 }
