@@ -60,7 +60,7 @@ DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你
 2026-10-09 用户授权后手工跑过一遍（命令与 SSE 事件计数在
 `.scratch/qoderwake-replica/acceptance-v0.1/wp13-smoke-2026-10-09.md`）：真实 DeepSeek 回了一句话、
 看板恰好一张卡、卡的 `open` 落进那段对话。**没跑成自动化的是因为它不在 A 线路径里**——
-现有 `bun run test:smoke` 跑的是 `xiongbao/tests/smoke`（上游 `journey.test.ts` 在那儿，默认员工是 fintech 的
+现有 `bun run test:smoke` 跑的是 `xiongbao/tests/smoke`（原有的 `journey.test.ts` 在那儿，默认员工是 fintech 的
 `risk-analyst`，不动它），而 A 线只有 `xiongbao/server/**` 与 `xiongbao/server/docs/contracts`。
 
 要谁认领都行，形状就是上面那三条断言：

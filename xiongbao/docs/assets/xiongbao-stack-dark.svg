@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="88 -18 915 835" width="1098" height="1002" fill="none" role="img" aria-labelledby="stack-title stack-desc">
-  <title id="stack-title">OpenBot: your workspace, your stack</title>
-  <desc id="stack-desc">An exploded stack with an OpenBot workspace, built-in or AG-UI agents, your models, MCP tools, modular MCP and sandbox capabilities, and your infrastructure. Deploy on a laptop or Kubernetes with Helm. The workspace provides enterprise governance and controls.</desc>
-  <!-- Adapted from CopilotKit/openbot.co src/components/composable-stack.tsx. Self-contained SVG; no external assets or fonts. -->
+  <title id="stack-title">XiongBao Work: your workspace, your stack</title>
+  <desc id="stack-desc">An exploded stack with a XiongBao Work workspace, built-in or AG-UI agents, your models, MCP tools, modular MCP and sandbox capabilities, and your infrastructure. Deploy on a laptop or Kubernetes with Helm. The workspace provides enterprise governance and controls.</desc>
+  <!-- Self-contained SVG; no external assets or fonts. -->
   <rect x="88" y="-18" width="915" height="835" rx="12" fill="#17131f" />
   <defs>
     <radialGradient id="wash">
@@ -157,133 +157,15 @@
   <g stroke="#635584" stroke-width="1" font-family="Arial, Helvetica, sans-serif">
     <path d="M549 107 h12 L571 39 H580" />
     <circle cx="549" cy="107" r="3" fill="#b19be9" stroke="none" />
-    <svg viewBox="0 0 256 256" width="29" height="29" fill="none" x="592" y="25">
-      <title>OpenBot orb</title>
-      <defs>
-        <radialGradient id="g0" gradientUnits="userSpaceOnUse" cx="186.880" cy="128.000" r="89.600">
-          <stop offset="0" stop-color="#0ad7ed" stop-opacity="0.8500" />
-          <stop offset="1" stop-color="#0ad7ed" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g1" gradientUnits="userSpaceOnUse" cx="69.120" cy="245.760" r="230.400" gradientTransform="translate(69.120 245.760) rotate(0.000) scale(1 0.35714) translate(-69.120 -245.760)">
-          <stop offset="0" stop-color="#ff95d5" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#ff95d5" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g2" gradientUnits="userSpaceOnUse" cx="69.120" cy="98.560" r="166.400" gradientTransform="translate(69.120 98.560) rotate(135.000) scale(1 0.35714) translate(-69.120 -98.560)">
-          <stop offset="0" stop-color="#ebd7f9" stop-opacity="0.7000" />
-          <stop offset="1" stop-color="#ebd7f9" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g3" gradientUnits="userSpaceOnUse" cx="157.440" cy="128.000" r="89.600" gradientTransform="translate(157.440 128.000) rotate(135.000) scale(1 0.58824) translate(-157.440 -128.000)">
-          <stop offset="0" stop-color="#42e5f1" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#42e5f1" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g4" gradientUnits="userSpaceOnUse" cx="98.560" cy="186.880" r="64.000" gradientTransform="translate(98.560 186.880) rotate(45.000) scale(1 0.58824) translate(-98.560 -186.880)">
-          <stop offset="0" stop-color="#f9d4ff" stop-opacity="0.7000" />
-          <stop offset="1" stop-color="#f9d4ff" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g5" gradientUnits="userSpaceOnUse" cx="245.760" cy="-19.200" r="230.400" gradientTransform="translate(245.760 -19.200) rotate(90.000) scale(1 0.58824) translate(-245.760 19.200)">
-          <stop offset="0" stop-color="#8a3dd3" stop-opacity="0.3000" />
-          <stop offset="1" stop-color="#8a3dd3" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g6" gradientUnits="userSpaceOnUse" cx="39.680" cy="275.200" r="166.400" gradientTransform="translate(39.680 275.200) rotate(0.000) scale(1 0.35714) translate(-39.680 -275.200)">
-          <stop offset="0" stop-color="#8481a8" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#8481a8" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g7" gradientUnits="userSpaceOnUse" cx="98.560" cy="98.560" r="64.000" gradientTransform="translate(98.560 98.560) rotate(135.000) scale(1 0.58824) translate(-98.560 -98.560)">
-          <stop offset="0" stop-color="#ceffff" stop-opacity="0.5000" />
-          <stop offset="1" stop-color="#ceffff" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g8" gradientUnits="userSpaceOnUse" cx="39.680" cy="69.120" r="121.600" gradientTransform="translate(39.680 69.120) rotate(90.000) scale(1 0.35714) translate(-39.680 -69.120)">
-          <stop offset="0" stop-color="#b4c8ef" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#b4c8ef" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g9" gradientUnits="userSpaceOnUse" cx="69.120" cy="216.320" r="121.600" gradientTransform="translate(69.120 216.320) rotate(45.000) scale(1 0.35714) translate(-69.120 -216.320)">
-          <stop offset="0" stop-color="#e69cdc" stop-opacity="0.5000" />
-          <stop offset="1" stop-color="#e69cdc" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g10" gradientUnits="userSpaceOnUse" cx="128.000" cy="157.440" r="64.000" gradientTransform="translate(128.000 157.440) rotate(45.000) scale(1 0.58824) translate(-128.000 -157.440)">
-          <stop offset="0" stop-color="#4afffe" stop-opacity="0.3000" />
-          <stop offset="1" stop-color="#4afffe" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g11" gradientUnits="userSpaceOnUse" cx="157.440" cy="-19.200" r="121.600" gradientTransform="translate(157.440 -19.200) rotate(135.000) scale(1 0.58824) translate(-157.440 19.200)">
-          <stop offset="0" stop-color="#d59cef" stop-opacity="0.5000" />
-          <stop offset="1" stop-color="#d59cef" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g12" gradientUnits="userSpaceOnUse" cx="275.200" cy="275.200" r="166.400" gradientTransform="translate(275.200 275.200) rotate(90.000) scale(1 0.58824) translate(-275.200 -275.200)">
-          <stop offset="0" stop-color="#b6a3cc" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#b6a3cc" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g13" gradientUnits="userSpaceOnUse" cx="186.880" cy="69.120" r="64.000" gradientTransform="translate(186.880 69.120) rotate(45.000) scale(1 0.58824) translate(-186.880 -69.120)">
-          <stop offset="0" stop-color="#41a8e9" stop-opacity="0.3000" />
-          <stop offset="1" stop-color="#41a8e9" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g14" gradientUnits="userSpaceOnUse" cx="157.440" cy="216.320" r="44.800" gradientTransform="translate(157.440 216.320) rotate(0.000) scale(1 0.58824) translate(-157.440 -216.320)">
-          <stop offset="0" stop-color="#ffc8ff" stop-opacity="0.3000" />
-          <stop offset="1" stop-color="#ffc8ff" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g15" gradientUnits="userSpaceOnUse" cx="128.000" cy="98.560" r="64.000" gradientTransform="translate(128.000 98.560) rotate(135.000) scale(1 0.35714) translate(-128.000 -98.560)">
-          <stop offset="0" stop-color="#9dffff" stop-opacity="0.3000" />
-          <stop offset="1" stop-color="#9dffff" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g16" gradientUnits="userSpaceOnUse" cx="157.440" cy="128.000" r="44.800">
-          <stop offset="0" stop-color="#36e7ed" stop-opacity="0.7000" />
-          <stop offset="1" stop-color="#36e7ed" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g17" gradientUnits="userSpaceOnUse" cx="98.560" cy="157.440" r="44.800" gradientTransform="translate(98.560 157.440) rotate(90.000) scale(1 0.58824) translate(-98.560 -157.440)">
-          <stop offset="0" stop-color="#b2edf2" stop-opacity="0.5000" />
-          <stop offset="1" stop-color="#b2edf2" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g18" gradientUnits="userSpaceOnUse" cx="245.760" cy="39.680" r="121.600" gradientTransform="translate(245.760 39.680) rotate(45.000) scale(1 0.35714) translate(-245.760 -39.680)">
-          <stop offset="0" stop-color="#abf9f3" stop-opacity="0.7000" />
-          <stop offset="1" stop-color="#abf9f3" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g19" gradientUnits="userSpaceOnUse" cx="-19.200" cy="128.000" r="89.600" gradientTransform="translate(-19.200 128.000) rotate(0.000) scale(1 0.58824) translate(19.200 -128.000)">
-          <stop offset="0" stop-color="#97b7dd" stop-opacity="0.5000" />
-          <stop offset="1" stop-color="#97b7dd" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g20" gradientUnits="userSpaceOnUse" cx="69.120" cy="-19.200" r="166.400" gradientTransform="translate(69.120 -19.200) rotate(135.000) scale(1 0.35714) translate(-69.120 19.200)">
-          <stop offset="0" stop-color="#d0d7f4" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#d0d7f4" stop-opacity="0.0000" />
-        </radialGradient>
-        <radialGradient id="g21" gradientUnits="userSpaceOnUse" cx="128.000" cy="275.200" r="166.400" gradientTransform="translate(128.000 275.200) rotate(0.000) scale(1 0.35714) translate(-128.000 -275.200)">
-          <stop offset="0" stop-color="#cd92c6" stop-opacity="1.0000" />
-          <stop offset="1" stop-color="#cd92c6" stop-opacity="0.0000" />
-        </radialGradient>
-      </defs>
-      <g>
-        <circle cx="128.0" cy="128.0" r="128.0" fill="#9fc5eb" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g0)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g1)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g2)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g3)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g4)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g5)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g6)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g7)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g8)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g9)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g10)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g11)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g12)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g13)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g14)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g15)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g16)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g17)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g18)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g19)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g20)" />
-        <circle cx="128.0" cy="128.0" r="128.0" fill="url(#g21)" />
-        <circle cx="128.0" cy="128.0" r="127.500" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1" />
-      </g>
-    </svg>
-    <text x="630" y="48" fill="#f0ebff" stroke="none" font-size="26" font-weight="600" letter-spacing="-.4">OpenBot workspace</text>
+    <circle cx="606.5" cy="39.5" r="14.5" fill="#b19be9" stroke="none" />
+    <text x="630" y="48" fill="#f0ebff" stroke="none" font-size="26" font-weight="600" letter-spacing="-.4">XiongBao Work workspace</text>
     <text x="592" y="77" fill="#b8b1c9" stroke="none" font-size="20">Federates agents to your users</text>
     <text x="592" y="104" fill="#b8b1c9" stroke="none" font-size="20">With a great user experience</text>
     <text x="592" y="131" fill="#b8b1c9" stroke="none" font-size="20">Enterprise governance &amp; controls</text>
     <path d="M344 244 h24 L402 198 H580" />
     <circle cx="344" cy="244" r="3" fill="#b19be9" stroke="none" />
     <text x="592" y="207" fill="#f0ebff" stroke="none" font-size="26" font-weight="600" letter-spacing="-.4">Your agents</text>
-    <text x="592" y="236" fill="#b8b1c9" stroke="none" font-size="20">Built-in Bots in OpenBot, or</text>
+    <text x="592" y="236" fill="#b8b1c9" stroke="none" font-size="20">Built-in Bots in XiongBao Work, or</text>
     <text x="592" y="263" fill="#b8b1c9" stroke="none" font-size="20">any agent execution platform</text>
     <text x="592" y="290" fill="#b8b1c9" stroke="none" font-size="20">connected through AG-UI.</text>
     <path d="M432 301 h112 L578 357 H580" />

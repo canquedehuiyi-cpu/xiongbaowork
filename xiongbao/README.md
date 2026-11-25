@@ -1,104 +1,64 @@
-本 fork 的中文交付说明见 [仓库根 README](../README.md)。下方保留上游原文。
+熊宝的中文交付说明见 [仓库根 README](../README.md)。下文是英文的开发与部署参考。
 
 <div align="center">
 
-<img src="app/src/assets/openbot-logo.png" alt="" width="72">
+<img src="app/src/assets/brand/xiongbao-logo-256.png" alt="" width="72">
 
-# OpenBot
+# XiongBao Work
 
 ### AI coworkers. Ready for the enterprise.
 
 A modular, self-hostable workspace for AI coworkers.<br>
 Choose your models. Bring your agents. Own your infrastructure.
 
-[open.bot](https://open.bot) · [Docs](docs/README.md) · [Deploy on Kubernetes](#deploy-on-kubernetes) · [Run from source](#run-from-source)
-
-[![GitHub Trending: #3 Repository Of The Day](https://trendshift.io/api/badge/repositories/175080)](https://trendshift.io/repositories/175080)
-[![Trendshift: #3 Repository Of The Day](https://trendshift.io/api/badge/trendshift/repositories/175080/daily)](https://trendshift.io/repositories/175080)
-
-<br>
-
-[![Download for Mac (Apple silicon)](https://img.shields.io/github/v/release/CopilotKit/OpenBot?style=for-the-badge&labelColor=3A3466&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTExIDNoMnYxMC4ybDMuNi0zLjZMMTggMTFsLTYgNi02LTYgMS40LTEuNCAzLjYgMy42ek01IDE5aDE0djJINXoiLz48L3N2Zz4%3D&label=Download%20for%20Mac%20%28Apple%20silicon%29&color=6E6AE0)](https://downloads.copilotkit.ai/latest/OpenBot-mac-arm64.dmg)
-[![Download for Mac (Intel)](https://img.shields.io/github/v/release/CopilotKit/OpenBot?style=for-the-badge&labelColor=3A3466&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTExIDNoMnYxMC4ybDMuNi0zLjZMMTggMTFsLTYgNi02LTYgMS40LTEuNCAzLjYgMy42ek01IDE5aDE0djJINXoiLz48L3N2Zz4%3D&label=Download%20for%20Mac%20%28Intel%29&color=4A7CC8)](https://downloads.copilotkit.ai/latest/OpenBot-mac-x64.dmg)
-[![Download for Windows](https://img.shields.io/github/v/release/CopilotKit/OpenBot?style=for-the-badge&labelColor=3A3466&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTExIDNoMnYxMC4ybDMuNi0zLjZMMTggMTFsLTYgNi02LTYgMS40LTEuNCAzLjYgMy42ek01IDE5aDE0djJINXoiLz48L3N2Zz4%3D&label=Download%20for%20Windows&color=9A5CC6)](https://downloads.copilotkit.ai/latest/OpenBot-windows-x64-setup.exe)
-
-<sub>Notarized .dmg for Apple silicon and Intel Macs · signed installer for Windows x64 · no terminal or developer tools needed · [Release notes](https://github.com/CopilotKit/OpenBot/releases/latest)</sub>
-
-<br>
-
-[![OpenBot for Business: get early access](https://img.shields.io/badge/OpenBot_for_Business-Get_early_access_%E2%86%92-D14B9C?style=for-the-badge&labelColor=3A3466)](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=business&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access)
-
-<sub>From [CopilotKit](https://www.copilotkit.ai), creators of [AG-UI](https://github.com/ag-ui-protocol/ag-ui).</sub>
+[Docs](docs/README.md) · [Deploy on Kubernetes](#deploy-on-kubernetes) · [Run from source](#run-from-source)
 
 </div>
 
-https://github.com/user-attachments/assets/c60f07da-8b6d-46eb-a573-17fc1e65a644
-
-<p align="center"><sub>Watch a Bot use its browser and tools, answer with interactive results, and wait for your approval before it sends. Take over when it needs you, and connect the agents you already run.</sub></p>
-
 ## Getting started
 
-### On your laptop
-
-The easiest way to get started is with the fully self-contained app that runs on your laptop, combining the OpenBot frontend and Docker-based backend in one application.
-
-[Mac / Apple silicon](https://downloads.copilotkit.ai/latest/OpenBot-mac-arm64.dmg) · [Mac / Intel](https://downloads.copilotkit.ai/latest/OpenBot-mac-x64.dmg) · [Windows](https://downloads.copilotkit.ai/latest/OpenBot-windows-x64-setup.exe)
-
-[Run from source](#run-from-source)
-
-### For your team
-
-**OpenBot for Business** brings your agents into one workspace with company sign-in, tool permissions, approvals, and audit. Deploy on your infrastructure or work with our engineers on hosting and customization.
-
-[**Get early access to OpenBot for Business →**](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=business&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access) · [**Talk to an engineer**](https://open.bot/business) · [**Kubernetes setup**](#deploy-on-kubernetes)
-
-<a id="early-access-platforms"></a>
-
-### Web, mobile, and chat
-
-[Web](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=web&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access) · [iOS](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=ios&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access) · [Android](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=android&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access) · [Slack](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=slack&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access) · [Teams](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=teams&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access)
+Run XiongBao Work [from source](#run-from-source) on your own machine, as [one container](#deploy-it),
+or [on Kubernetes](#deploy-on-kubernetes) for a team. Web, Slack and Teams connect people to the same
+workspace.
 
 ## Your workspace. Your stack.
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/openbot-stack-dark.svg">
-  <img src="docs/assets/openbot-stack-light.svg" alt="OpenBot's modular stack: an enterprise workspace over built-in or AG-UI agents, your models, MCP tools, configurable infrastructure, and deployment on your laptop or Kubernetes." width="90%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/xiongbao-stack-dark.svg">
+  <img src="docs/assets/xiongbao-stack-light.svg" alt="XiongBao Work's modular stack: an enterprise workspace over built-in or AG-UI agents, your models, MCP tools, configurable infrastructure, and deployment on your laptop or Kubernetes." width="90%">
 </picture>
 </div>
 
 - **Choose your models.** Use OpenAI, Claude, Gemini, or open models through an OpenAI-compatible endpoint, hosted by a provider or on your own infrastructure. Keep your provider relationships and change models as your needs change.
-- **Bring your agents.** Run built-in Bots in the OpenBot server, or connect your existing agents through AG-UI from any agent execution platform. Agents built with different stacks can work in the same workspace.
+- **Bring your agents.** Run built-in Bots in the XiongBao Work server, or connect your existing agents through AG-UI from any agent execution platform. Agents built with different stacks can work in the same workspace.
 - **Make it yours.** Use the MIT-licensed template as-is, white-label it, or customize it deeply. AG-UI connects agents, MCP connects tools, and the frontends and backend can evolve independently.
-- **Govern work across your team.** Company sign-in, roles, tool permissions, approvals, and audit apply across the workspace. Your agents use OpenBot's tools and computers under the same policies.
-- **Get help deploying it.** CopilotKit's engineers can work with your team to deploy OpenBot, connect your systems, and automate parts of specific jobs.
+- **Govern work across your team.** Company sign-in, roles, tool permissions, approvals, and audit apply across the workspace. Your agents use XiongBao Work's tools and computers under the same policies.
 
-[Connect your agent](#bring-your-own-agent) · [Configure models and tools](docs/configuration.md) · [Explore OpenBot for Business](https://open.bot/business)
+[Connect your agent](#bring-your-own-agent) · [Configure models and tools](docs/configuration.md)
 
-## Built on CopilotKit and AG-UI
-
-OpenBot is built on [CopilotKit](https://www.copilotkit.ai), which is [used in production by a majority of Fortune 500 companies](https://www.copilotkit.ai/blog/series-a).
+## Agent stacks and execution platforms
 
 **Your agent stack.** [AG-UI](https://docs.ag-ui.com/introduction#supported-integrations) has first-class integrations across the major agent frameworks and harnesses, including Anthropic's Claude Agent SDK, Microsoft Agent Framework and Agent Harness, Google ADK, AWS Strands, Oracle Agent Spec, LangChain, Mastra, Pydantic AI, Agno, and CrewAI. Many ship first-party support; [Amazon Bedrock AgentCore supports AG-UI directly](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-agui.html).
 
-**Your execution platform.** Keep your agents on Amazon Bedrock AgentCore, Claude Managed Agents, [Google's Agent Platform](https://docs.cloud.google.com/gemini-enterprise-agent-platform), LangChain's Managed Deep Agents, [Microsoft Foundry Agent Service](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents), or your own infrastructure. Connect them to OpenBot through an AG-UI endpoint, using an adapter where needed. Your choice of agent platform stays independent of your workspace.
+**Your execution platform.** Keep your agents on Amazon Bedrock AgentCore, Claude Managed Agents, [Google's Agent Platform](https://docs.cloud.google.com/gemini-enterprise-agent-platform), LangChain's Managed Deep Agents, [Microsoft Foundry Agent Service](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents), or your own infrastructure. Connect them to XiongBao Work through an AG-UI endpoint, using an adapter where needed. Your choice of agent platform stays independent of your workspace.
 
 ## Architecture
 
-OpenBot has three parts, and in this fork the third, CopilotKit Intelligence, is optional. On your laptop, setup runs the backend for you. For a team, the Helm chart deploys it on Kubernetes in your own infrastructure, with Intelligence beside it if you want one.
+XiongBao Work has three parts, and the third, CopilotKit Intelligence, is optional. On your laptop, setup runs the backend for you. For a team, the Helm chart deploys it on Kubernetes in your own infrastructure, with Intelligence beside it if you want one.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-overview-dark.svg">
-  <img src="docs/assets/architecture-overview-light.svg" alt="Mac, Windows, web, iOS, Android, Slack, and Teams connect to the OpenBot backend. Built-in Bots in the server and your agents on any execution platform share an AG-UI lane. Computer execution uses Kubernetes by default or a compatible sandbox provider; tools use MCP and adapters. CopilotKit Intelligence can run alongside OpenBot on your infrastructure; it is optional in this fork." width="100%">
+  <img src="docs/assets/architecture-overview-light.svg" alt="Mac, Windows, web, iOS, Android, Slack, and Teams connect to the XiongBao Work backend. Built-in Bots in the server and your agents on any execution platform share an AG-UI lane. Computer execution uses Kubernetes by default or a compatible sandbox provider; tools use MCP and adapters. CopilotKit Intelligence can run alongside XiongBao Work on your infrastructure; it is optional." width="100%">
 </picture>
 
 | Part | What it does |
 | --- | --- |
-| **OpenBot frontends** | Mac, Windows, web, iOS, Android, Slack, and Teams connect people to the same workspace. Conversations, interactive results, computer view, and approvals adapt to each surface. [Choose a frontend](#getting-started). |
-| **OpenBot backend** | Runs the workspace API and built-in Bots, connects external agents and tools, manages Bot computers, and enforces identity, permissions, action policies, and audit. Deploys on Kubernetes with PostgreSQL and persistent storage. |
-| **CopilotKit Intelligence** (optional) | Automatic Learning's published skills. In this fork durable conversations and memory stay in OpenBot's own PostgreSQL, so the workspace runs without it. Separately licensed when self-hosted; can run on Kubernetes alongside OpenBot. |
+| **XiongBao Work frontends** | Mac, Windows, web, iOS, Android, Slack, and Teams connect people to the same workspace. Conversations, interactive results, computer view, and approvals adapt to each surface. [Choose a frontend](#getting-started). |
+| **XiongBao Work backend** | Runs the workspace API and built-in Bots, connects external agents and tools, manages Bot computers, and enforces identity, permissions, action policies, and audit. Deploys on Kubernetes with PostgreSQL and persistent storage. |
+| **CopilotKit Intelligence** (optional) | Automatic Learning's published skills. Durable conversations and memory stay in XiongBao Work's own PostgreSQL, so the workspace runs without it. Separately licensed when self-hosted; can run on Kubernetes alongside XiongBao Work. |
 
-OpenBot enforces sign-in, tool permissions, action policies, and audit at its API. Built-in Bots run in the OpenBot server; your own agents can run alongside OpenBot or on any agent execution platform. Both use AG-UI and can share the same workspace.
+XiongBao Work enforces sign-in, tool permissions, action policies, and audit at its API. Built-in Bots run in the XiongBao Work server; your own agents can run alongside XiongBao Work or on any agent execution platform. Both use AG-UI and can share the same workspace.
 
 Computer execution is pluggable: use the default Kubernetes setup or connect a compatible external computer provider.
 
@@ -106,21 +66,21 @@ Computer execution is pluggable: use the default Kubernetes setup or connect a c
 
 ## Open source, local operation, and licensing
 
-**The OpenBot application template is open source under the [MIT license](LICENSE).** You can fork, modify, and white-label it. It can use **CopilotKit Intelligence**, which is separately licensed and can run entirely on your own machine or infrastructure. In this fork Intelligence is optional: without it, no Intelligence licence is needed, and the table below applies only when you connect one.
+**The XiongBao Work application template is open source under the [MIT license](LICENSE).** You can modify and white-label it. It can use **CopilotKit Intelligence**, which is separately licensed and can run entirely on your own machine or infrastructure. Intelligence is optional: without it, no Intelligence licence is needed, and the table below applies only when you connect one.
 
 | Where you run it | CopilotKit Intelligence license |
 | --- | --- |
-| **Your laptop, for personal use and experimentation** | Requires a free local Intelligence license. Desktop setup handles this for you. |
-| **Kubernetes evaluation** | Requires a free Intelligence trial license. [Request a trial](https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=business&ref=github&utm_source=github&utm_medium=readme&utm_campaign=openbot-early-access). |
-| **Kubernetes / production** | Requires a production Intelligence license beyond evaluation. OpenBot for Business includes Intelligence for use with OpenBot. [Plans and pricing](https://open.bot/pricing). |
+| **Your laptop, for personal use and experimentation** | Requires a free local Intelligence license. See [Intelligence on your own machine](#intelligence-on-your-own-machine). |
+| **Kubernetes evaluation** | Requires a free Intelligence trial license. |
+| **Kubernetes / production** | Requires a production Intelligence license beyond evaluation. |
 
-**Fully local is an option.** Run OpenBot (and, if you want it, Intelligence) and a compatible model locally. A cloud model or connected online app still sends requests to that service. Initial downloads, account sign-in, and local license renewal need internet access.
+**Fully local is an option.** Run XiongBao Work (and, if you want it, Intelligence) and a compatible model locally. A cloud model or connected online app still sends requests to that service. Initial downloads, account sign-in, and local license renewal need internet access.
 
 ---
 
 ## Deploy on Kubernetes
 
-Deploy OpenBot on **AWS EKS, Azure AKS, Google GKE, or your own Kubernetes cluster**. The chart can install CopilotKit Intelligence beside it (`intelligence.enabled=true` with a licence); in this fork that is off by default and nothing else needs it.
+Deploy XiongBao Work on **AWS EKS, Azure AKS, Google GKE, or your own Kubernetes cluster**. The chart can install CopilotKit Intelligence beside it (`intelligence.enabled=true` with a licence); that is off by default and nothing else needs it.
 
 For a first evaluation, you need a cluster with **amd64 nodes**, a **default StorageClass**, `kubectl`, Helm, and a model key. The commands below use an OpenAI key. For Anthropic, a model router, cluster sizing, or an existing Intelligence deployment, use the [full Helm guide](charts/xiongbao/README.md).
 
@@ -129,11 +89,11 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
 1. **Get the source.** Skip this if you already have a checkout.
 
    ```sh
-   git clone https://github.com/CopilotKit/OpenBot.git
-   cd OpenBot
+   git clone https://github.com/canquedehuiyi-cpu/xiongbaowork.git
+   cd xiongbaowork/xiongbao
    ```
 
-2. **Create `openbot-secrets.yaml` locally.** Replace the placeholder with your model key. Keep this file out of source control.
+2. **Create `xiongbao-secrets.yaml` locally.** Replace the placeholder with your model key. Keep this file out of source control.
 
    ```yaml
    secrets:
@@ -147,7 +107,7 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
    helm install xiongbao charts/xiongbao \
      --namespace xiongbao --create-namespace \
      --values charts/xiongbao/ci/vanilla-values.yaml \
-     --values openbot-secrets.yaml \
+     --values xiongbao-secrets.yaml \
      --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
      --set config.extraEnv[0].value=warn \
      --timeout 15m
@@ -173,8 +133,8 @@ For a team deployment, follow the [Helm guide](charts/xiongbao/README.md) to con
 Use the template to customize the workspace, branding, Bots, and skills. The source setup below runs without Intelligence; connecting managed or [local Intelligence](#intelligence-on-your-own-machine) is optional.
 
 ```sh
-git clone https://github.com/CopilotKit/OpenBot.git
-cd OpenBot
+git clone https://github.com/canquedehuiyi-cpu/xiongbaowork.git
+cd xiongbaowork/xiongbao
 ```
 
 ### Requirements
@@ -213,7 +173,7 @@ The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the ap
 
    The helper provisions the selected project's runtime key, creates or reuses its
    `openbot` Learning container, then writes both settings to `.env`. It preserves
-   custom container assignments and never replaces an existing OpenBot key; with one
+   custom container assignments and never replaces an existing XiongBao Work key; with one
    set, it only creates `openbot` in that key's project if it is missing.
    For fresh self-hosted setup, set `INTELLIGENCE_API_URL` to that deployment's
    HTTPS API origin (or `http://localhost` for a local one) and run the helper
@@ -231,7 +191,7 @@ The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the ap
    Managed Intelligence needs no separate licence token.
 
    The same CopilotKit CLI sign-in provisions Composio automatically when you run
-   `bash scripts/start.sh`. If that cannot complete, OpenBot still starts, with apps
+   `bash scripts/start.sh`. If that cannot complete, XiongBao Work still starts, with apps
    unavailable. You can run `bun run setup:composio` first to prepare it separately, or
    later to retry; it does not need a Learning container. The helper creates or reuses one
    isolated Composio project for this installation and saves its project key to `.env`.
@@ -269,21 +229,21 @@ The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the ap
 
 Run the clone inside WSL 2 with Ubuntu, and run every step above from an Ubuntu terminal.
 [Windows (WSL 2)](docs/development.md#windows-wsl-2) lists what to install in Ubuntu first. Keep an
-Ubuntu terminal open while you use OpenBot, and open the app from your Windows browser at
+Ubuntu terminal open while you use XiongBao Work, and open the app from your Windows browser at
 <http://127.0.0.1:3010>.
 
 ### Intelligence on your own machine
 
-Intelligence is optional in this fork. To try it on one Mac instead of the managed service, follow
+Intelligence is optional. To try it on one Mac instead of the managed service, follow
 [Evaluate Intelligence locally](https://docs.copilotkit.ai/intelligence/self-hosting-local). The free
 [Developer plan](https://www.copilotkit.ai/pricing) qualifies. The local licence lasts 30 days and
 `npx copilotkit@latest local renew` renews it as often as you need, while your account is in good
 standing. It is a preview for macOS with Docker Desktop,
 not a production installation. Run its
-`npx copilotkit@latest local connect` from the OpenBot root, where `.env` is.
+`npx copilotkit@latest local connect` from the `xiongbao/` directory, where `.env` is.
 
 That command writes `INTELLIGENCE_API_URL`, `INTELLIGENCE_GATEWAY_WS_URL` and
-`CPK_INTELLIGENCE_API_KEY` to `.env`. OpenBot reads those settings directly; no key
+`CPK_INTELLIGENCE_API_KEY` to `.env`. XiongBao Work reads those settings directly; no key
 copying or renaming is needed. `INTELLIGENCE_API_KEY` remains supported for older
 configurations. When both are set, the non-empty CLI key takes precedence so
 reconnecting uses the new project's key.
@@ -299,13 +259,13 @@ One image carries the app, the API, the browser the Bots drive, and optionally P
 ```sh
 # The published image. Nothing to clone and nothing to build.
 docker run -p 3001:3001 --env-file .env \
-  -e EMBEDDED_POSTGRES=on -v openbot-data:/var/lib/postgresql \
-  ghcr.io/copilotkit/openbot:latest
+  -e EMBEDDED_POSTGRES=on -v xiongbao-data:/var/lib/postgresql \
+  ghcr.io/canquedehuiyi-cpu/xiongbaowork:latest
 
 # Or the tree you have in front of you.
-docker build -t openbot .
+docker build -t xiongbao .
 docker run -p 3001:3001 --env-file .env \
-  -e EMBEDDED_POSTGRES=on -v openbot-data:/var/lib/postgresql openbot
+  -e EMBEDDED_POSTGRES=on -v xiongbao-data:/var/lib/postgresql xiongbao
 ```
 
 Everything is on 3001 here, the app included, rather than the 3010 the clone uses. `latest` is the
@@ -314,7 +274,7 @@ most recent release and a version tag such as `:v0.0.9` pins one.
 Leave `EMBEDDED_POSTGRES` off and set `DATABASE_URL` to point at a database you already run. Name a
 role that is not a superuser: row-level security does not bind a superuser or a `BYPASSRLS` role, so
 tenant isolation would fall back to the application alone — see `docs/deployment.md` and `0054_app_role.sql`.
-[docs/deployment.md](docs/deployment.md) has the minimum sizes, the platform notes, and how it behaves behind more than one replica. For this fork — the QoderWake rebuild, where every user is a tenant and the two database roles are not interchangeable — [`docs/deployment-xiongbao.md`](../docs/deployment-xiongbao.md) is the one to follow: it covers the owner-versus-app-role split and why running as the superuser leaves row-level security unenforced, the migration tail a generated file cannot write for a tenant child table, the runner pairing flow, and how to tell a regression from noise in a suite where one parameterized family's timeout count drifts.
+[docs/deployment.md](docs/deployment.md) has the minimum sizes, the platform notes, and how it behaves behind more than one replica. For the multi-tenant delivery, where every user is a tenant and the two database roles are not interchangeable, [`docs/deployment-xiongbao.md`](docs/deployment-xiongbao.md) is the one to follow: it covers the owner-versus-app-role split and why running as the superuser leaves row-level security unenforced, the migration tail a generated file cannot write for a tenant child table, the runner pairing flow, and how to tell a regression from noise in a suite where one parameterized family's timeout count drifts.
 
 ## Try it
 
@@ -327,17 +287,15 @@ Pick a task you know well enough to review. For example, ask a Bot to check a ho
 
 ## What it is
 
-In Personal Edition, you start with one assistant on your computer. With the source template, Docker Compose starts the supporting services, PostgreSQL stores the workspace configuration, and you choose the model. OpenBot encrypts stored model credentials and keeps them out of logs.
+In Personal Edition, you start with one assistant on your computer. With the source template, Docker Compose starts the supporting services, PostgreSQL stores the workspace configuration, and you choose the model. XiongBao Work encrypts stored model credentials and keeps them out of logs.
 
 The team template comes with two Bots. **General Assistant** helps with everyday work. **Knowledge** answers questions from the company documents you connect and cites its sources.
 
-To add a Bot, open `/bots` or start from one of the [YAML examples](examples/fintech/catalog/). For example, [Meeting Follow-ups](examples/fintech/catalog/meeting-follow-ups.yaml) reads meeting notes and lists who agreed to do what. Copy its file into `examples/fintech/agents/` and restart OpenBot to try it. You grant tool access separately, so you can let a Bot read a document without giving it permission to edit it.
-
-More at [open.bot](https://open.bot).
+To add a Bot, open `/bots` or start from one of the [YAML examples](examples/fintech/catalog/). For example, [Meeting Follow-ups](examples/fintech/catalog/meeting-follow-ups.yaml) reads meeting notes and lists who agreed to do what. Copy its file into `examples/fintech/agents/` and restart XiongBao Work to try it. You grant tool access separately, so you can let a Bot read a document without giving it permission to edit it.
 
 ## Built on AG-UI
 
-A Bot is any endpoint speaking [AG-UI](https://github.com/ag-ui-protocol/ag-ui), the open protocol for agent-to-user interaction, so OpenBot is not tied to a framework and neither are you. Agents built with LangGraph, Mastra, CrewAI, Pydantic AI, Google ADK or written by hand all arrive the same way, and the governance rides the protocol rather than the framework.
+A Bot is any endpoint speaking [AG-UI](https://github.com/ag-ui-protocol/ag-ui), the open protocol for agent-to-user interaction, so XiongBao Work is not tied to a framework and neither are you. Agents built with LangGraph, Mastra, CrewAI, Pydantic AI, Google ADK or written by hand all arrive the same way, and the governance rides the protocol rather than the framework.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
@@ -537,7 +495,7 @@ provider's discovery document listed in `TRUSTED_ORIGINS`, not only the issuer.
   deployment, sign up first and then run `bun scripts/grant-admin.ts <email>` in the server.
 - `MICROSOFT_OAUTH_TENANT_ID` defaults to `common`, which admits personal Microsoft accounts as well
   as work ones. On a multi-tenant app registration Entra may send no `email` claim at all, so
-  OpenBot falls back to `upn` and then `preferred_username`. If none of the three arrives the
+  XiongBao Work falls back to `upn` and then `preferred_username`. If none of the three arrives the
   sign-in is refused and the reason is logged: add `email` as an optional claim, or use your
   directory GUID here.
 - A half-configured provider is refused at start-up rather than at somebody's first attempt to sign
@@ -552,19 +510,19 @@ provider's discovery document listed in `TRUSTED_ORIGINS`, not only the issuer.
 
 ### Organization sign-in for desktop installations
 
-For an employee desktop, provision an OpenBot authority using the Google, Microsoft or Okta
-settings above (your Kubernetes OpenBot can serve this role). Set **Organization OpenBot URL**
-in the desktop connection screen, or `OPENBOT_ORGANIZATION_AUTH_URL=https://openbot.company.example`
+For an employee desktop, provision a XiongBao Work authority using the Google, Microsoft or Okta
+settings above (your Kubernetes XiongBao Work can serve this role). Set **Organization XiongBao Work URL**
+in the desktop connection screen, or `OPENBOT_ORGANIZATION_AUTH_URL=https://xiongbao.company.example`
 in its public configuration. Use an HTTPS origin; HTTP is accepted only on loopback for local tests.
 Provider client secrets stay on that authority. Template and white-label deployments can supply
 the same setting without changing their own model credentials.
 
 This optional URL is separate from whatever sign-in providers the authority itself uses, and the
 provider client secrets stay on that authority rather than on the desktop. A Google ID token is not
-an OpenBot credential. Leave the organization URL empty for a standalone desktop.
+a XiongBao Work credential. Leave the organization URL empty for a standalone desktop.
 
 Desktop sign-in uses the system browser and Better Auth's single-use PKCE exchange. The authority
-verifies the employee and current role; organization mode never substitutes `dev@openbot.local`.
+verifies the employee and current role; organization mode never substitutes `admin@xiongbao.local`.
 Employees do not need project-key administration privileges. Installation happens once: reopening
 or refreshing an expired organization or model connection preserves the installed
 runtime and data and opens the relevant connection screen.
@@ -595,20 +553,12 @@ bun run --filter server db:migrate
 
 Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to take it down. Use `bun run dev` only when you want the app and server without the Docker Bots and computers.
 
-## Project status
-
-[![CI](https://github.com/CopilotKit/openbot/actions/workflows/ci.yml/badge.svg)](https://github.com/CopilotKit/openbot/actions/workflows/ci.yml)
-[![security](https://github.com/CopilotKit/openbot/actions/workflows/security_zizmor.yml/badge.svg)](https://github.com/CopilotKit/openbot/actions/workflows/security_zizmor.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Latest OpenBot release](https://img.shields.io/github/v/release/CopilotKit/OpenBot?label=release&color=blue)](https://github.com/CopilotKit/OpenBot/releases/latest)
-
 ## Documentation
 
-- [open.bot](https://open.bot)
 - [docs/README.md](docs/README.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/configuration.md](docs/configuration.md)
-- [docs/personal-edition.md](docs/personal-edition.md): OpenBot for one person, with no sign-in and no Admin
+- [docs/personal-edition.md](docs/personal-edition.md): XiongBao Work for one person, with no sign-in and no Admin
 - [docs/development.md](docs/development.md)
 - [docs/coworkers.md](docs/coworkers.md)
 - [docs/routines.md](docs/routines.md)
@@ -626,4 +576,4 @@ Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to ta
 
 ## License
 
-The OpenBot application source is [MIT-licensed](./LICENSE) © CopilotKit. CopilotKit Intelligence is separately licensed. OpenBot for Business includes Intelligence for use with OpenBot. See [plans and pricing](https://open.bot/pricing).
+XiongBao Work includes open-source code released under the MIT license; its copyright notice and the full licence text are in [LICENSE](./LICENSE). CopilotKit Intelligence is separately licensed.

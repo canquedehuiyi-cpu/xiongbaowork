@@ -1,4 +1,4 @@
--- PostHog/HogQL examples for the thin OpenBot event producer; no database setup.
+-- PostHog/HogQL examples for the thin XiongBao Work event producer; no database setup.
 -- Replace the dates with verified rollout/reporting coverage before publishing.
 -- Deduplicate stable properties.event_id in PostHog. distinct_id is transport
 -- identity, not a person. Use known (deployment_id,user_id) scope for user metrics.

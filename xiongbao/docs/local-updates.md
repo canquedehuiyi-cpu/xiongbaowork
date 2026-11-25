@@ -9,7 +9,7 @@ The first supported layout is a clean Git checkout whose exact HEAD matches its 
 Keep the distribution policy separately from downloaded metadata, for example `customer-update-policy.json`:
 
 ```json
-{"distributionId":"acme.openbot","repository":"acme/openbot","channel":"stable"}
+{"distributionId":"acme.xiongbao","repository":"acme/xiongbao","channel":"stable"}
 ```
 
 Obtain the candidate `release-manifest.json` and its approved SHA-256 from your release approval process. Verify publisher provenance using the configured repository before trusting that checksum. A checksum downloaded with untrusted content does not authenticate its publisher. The command requires the expected metadata hash, checks distribution identity/compatibility, and uses the exact source commit already present in Git. It does not download arbitrary archive URLs.
@@ -18,11 +18,11 @@ For initial adoption, an operator must verify the accepted manifest against actu
 
 ```bash
 bun scripts/update.ts local plan \
-  --root /srv/openbot --topology image \
+  --root /srv/xiongbao --topology image \
   --policy /srv/customer-update-policy.json \
   --candidate /srv/approved/release-manifest.json \
   --candidate-sha256 "$APPROVED_MANIFEST_SHA256" \
-  --backup-dir /srv/openbot-backups
+  --backup-dir /srv/xiongbao-backups
 ```
 
 Use `apply` with the same arguments plus `--acknowledge-interruption` after accepting the plan. An incompatible plan exits with code 2; execution errors exit with code 1. `check` is an alias for the read-only plan. Extra customer directories can be declared with repeated `--customer-path` arguments. External Intelligence capabilities may be supplied using repeated `--intelligence-capability`; absent those arguments, the accepted manifest's previously required capabilities form the baseline.
@@ -45,7 +45,7 @@ The accepted source remains pinned in Git. `docker compose restart` retains exis
 
 ## Interrupted operations and recovery
 
-The updater takes `.openbot-update.lock`, writes `.openbot-update-journal.json` before lifecycle changes, and retains previous/candidate source archives, the prior manifest, customer-state archive, database dump and its checksum in an operation-specific backup directory. `local status --root /srv/openbot` reads the journal. The operation lock survives process interruption; inspect it before manually removing a stale lock.
+The updater takes `.openbot-update.lock`, writes `.openbot-update-journal.json` before lifecycle changes, and retains previous/candidate source archives, the prior manifest, customer-state archive, database dump and its checksum in an operation-specific backup directory. `local status --root /srv/xiongbao` reads the journal. The operation lock survives process interruption; inspect it before manually removing a stale lock.
 
 After migration begins, failure never automatically resets source or restores SQL. The accepted manifest remains unchanged, owned candidate services are stopped, and the journal records `recovery-required`. Normal `scripts/start.sh` is blocked by any unaccepted journal; only the matching active update operation may enter its startup phase. A kill/engine failure is retained in recovery diagnostics.
 

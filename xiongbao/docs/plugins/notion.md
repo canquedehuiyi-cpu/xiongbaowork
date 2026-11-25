@@ -18,7 +18,7 @@ There is deliberately no endpoint for an administrator to connect an account on 
 
 ## What an administrator does
 
-### 1. Enable the connector in OpenBot
+### 1. Enable the connector in XiongBao Work
 
 At `/admin/plugins/notion`, turn on **Enable for this deployment**. There is no client to register
 and no secret to paste: this deployment introduces itself to Notion on first connect, over RFC 7591
@@ -29,7 +29,7 @@ be registered at Notion ahead of time.
 ### 2. Connect your own account
 
 On the same page, use **Your account** to connect your own Notion account before doing anything
-else here. Unlike Google Drive's tool list, which is OpenBot's own code and needs no credential to
+else here. Unlike Google Drive's tool list, which is XiongBao Work's own code and needs no credential to
 read, this connector's tool list is an answer from Notion's hosted server: refreshing it takes a
 credential, and the refresh in the next step mints one from the connection belonging to whoever
 presses the button — not whichever account happens to be connected here. That is a personal grant
@@ -63,11 +63,11 @@ audit row.
 ## What each person does
 
 At `/connections`, Notion appears once an administrator has enabled it. Open it and
-press **Connect**. That leaves OpenBot for Notion's own consent screen — the arrow on the button says
+press **Connect**. That leaves XiongBao Work for Notion's own consent screen — the arrow on the button says
 so — where the pages and databases to share are chosen, and returns to the same page, which then
 reads **Connected**.
 
-Nothing is cached. OpenBot stores the refresh token and mints a short-lived access token for each
+Nothing is cached. XiongBao Work stores the refresh token and mints a short-lived access token for each
 call, so withdrawing access at Notion takes effect on the next call rather than whenever a cache
 expires.
 

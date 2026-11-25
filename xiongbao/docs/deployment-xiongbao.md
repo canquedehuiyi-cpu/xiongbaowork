@@ -59,7 +59,7 @@ docker compose --project-name xiongbao-local --env-file .env.delivery \
 PowerShell 可把命令写在一行，或用反引号续行。修改宿主端口时，
 在 `.env.delivery` 设 `OPENBOT_PORT=新端口` 并同步 `OPENBOT_PUBLIC_URL`。
 停服用同一 `--project-name` 的 `stop`；`down` 会删容器而保留卷，禁止在升级时加 `-v`。
-开发用 `xiongbao/docker-compose.yml` 不作为交付起法，它还包含上游开发服务和宿主进程假设。
+开发用 `xiongbao/docker-compose.yml` 不作为交付起法，它还包含开发用服务和宿主进程假设。
 
 ## 3. 对外部署与账号
 
@@ -197,8 +197,8 @@ server {
 
 ```dotenv
 EMBEDDED_POSTGRES=off
-DATABASE_URL=postgres://openbot_app:<URL编码口令>@db.example.com:5432/openbot_b?sslmode=require
-ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:<URL编码口令>@db.example.com:5432/openbot_b?sslmode=require
+DATABASE_URL=postgres://openbot_app:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
+ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
 ```
 
 **API 运行期必须是非超级用户、无 BYPASSRLS 的角色。owner 串只用于迁移。**
@@ -317,7 +317,7 @@ DEEPSEEK_THINKING=disabled
 | --- | --- | --- |
 | `full` | 完整可用 | 正文没有引用本环境不可执行的工具形态，声明即可用。 |
 | `degraded` | 部分可用 | 两种成因：正文引用了 file-tool 类工具，装载时已改写到 `computer_read_file` / `computer_write_file` 或插入环境事实段；或正文引用了没随包附上的附件（`references/` 里被拒的文件、`assets/`、`scripts/`）。功能主体可用，按正文走会撞到缺文件；缺什么记在 `_porting.reason_ref`。 |
-| `blocked` | 暂不可用 | 正文真的要跑本地命令 / 调脚本 / 引用平台私有身份。**这不是故障，也不需要运维动作**：openbot 员工没有本地 shell，系统不做 shim，只在正文保留调用证据并插入降级说明。有人问"这个技能为什么用不了"时，答案在这里。 |
+| `blocked` | 暂不可用 | 正文真的要跑本地命令 / 调脚本 / 引用平台私有身份。**这不是故障，也不需要运维动作**：熊宝员工没有本地 shell，系统不做 shim，只在正文保留调用证据并插入降级说明。有人问"这个技能为什么用不了"时，答案在这里。 |
 
 每条 blocked 的判定原因（原文 + 行号 + 规则）见品牌包随带的
 `docs/porting/tool-ref-audit.md`——那是对外解释"为什么 109 条里只有 64 条开箱即用"的唯一可信答案。

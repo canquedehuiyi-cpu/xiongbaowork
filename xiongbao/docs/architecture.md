@@ -1,6 +1,6 @@
 # Architecture
 
-OpenBot combines a React app, a Hono API server, PostgreSQL, AG-UI Bot endpoints, and governed browser computers.
+XiongBao Work combines a React app, a Hono API server, PostgreSQL, AG-UI Bot endpoints, and governed browser computers.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture-dark.svg">
@@ -66,7 +66,7 @@ Policy rules can inspect:
 Rules use CEL expressions plus case-insensitive `contains()` and `matches()`.
 Deny rules are evaluated before allow rules. The policy engine fails closed: a
 missing or empty policy permits nothing, a broken deny rule denies, and a broken
-allow rule does not permit. OpenBot's shipped startup default is explicit:
+allow rule does not permit. XiongBao Work's shipped startup default is explicit:
 `deny: []` and `allow: ["true"]`, unless `AGENT_COMPUTER_POLICY` or a saved
 administrator policy replaces it. A malformed configured policy stops server
 startup.
@@ -149,7 +149,7 @@ Handovers are audited as control events:
 
 While a person controls the browser, Bot actions are refused rather than queued. A run with no browser attached pauses instead, waiting on the handover.
 
-The handover is also the designed fallback for a bot check a Bot cannot pass (a "Verify you are human" page, a CAPTCHA). OpenBot reduces how often that happens (headed Chromium, optional Web Bot Auth signatures, an optional residential proxy; see [Getting past bot checks](configuration.md#getting-past-bot-checks)) and never solves one on anyone's behalf: the Bot asks, the person solves it in the live screen, and hands back. A help request records the page it was made on, so a computer that restarted in between reopens that page rather than handing over a blank browser.
+The handover is also the designed fallback for a bot check a Bot cannot pass (a "Verify you are human" page, a CAPTCHA). XiongBao Work reduces how often that happens (headed Chromium, optional Web Bot Auth signatures, an optional residential proxy; see [Getting past bot checks](configuration.md#getting-past-bot-checks)) and never solves one on anyone's behalf: the Bot asks, the person solves it in the live screen, and hands back. A help request records the page it was made on, so a computer that restarted in between reopens that page rather than handing over a blank browser.
 
 Secret entry is separate from chat content. The audit trail records that a secret was requested or supplied and the character count, not the secret value.
 
@@ -356,31 +356,31 @@ Before the model call, a run is counted (`toolNamesSent`, without what waits). A
 ## Personal memory
 
 A person's memory is kept in CopilotKit Intelligence when the deployment is entitled to Intelligence
-memory (`features.memory` in its runtime entitlement), and in OpenBot's own tables when it is not.
+memory (`features.memory` in its runtime entitlement), and in XiongBao Work's own tables when it is not.
 
 - **Intelligence holds the content and does the recall.** Every memory the person has accepted is
   mirrored there: one they wrote, a Bot-formed or imported one once they confirm it. Editing a memory
   supersedes its Intelligence copy; pausing or forgetting it retires it, because Intelligence has no
   field for "paused". Recall for a search is ranked by Intelligence.
-- **OpenBot keeps what Intelligence has no field for.** Intelligence stores only content, kind and
-  scope, so the OpenBot row stays the record of where a memory came from, its review state, which Bot
+- **XiongBao Work keeps what Intelligence has no field for.** Intelligence stores only content, kind and
+  scope, so the XiongBao Work row stays the record of where a memory came from, its review state, which Bot
   formed it and which source imported it. Those decide which Bot may see a memory, and they are applied
   to everything Intelligence returns before a Bot sees it: a Bot-formed memory still reaches only the
   Bot that formed it, while it holds the source app.
 - **Only the person's own memories.** Every call names the person and asks for `user` scope with no
   project access, and project-scoped results are dropped, so one person's Bot never sees another
   person's memory.
-- **Memories formed elsewhere.** A memory Intelligence holds for the person that no OpenBot row
+- **Memories formed elsewhere.** A memory Intelligence holds for the person that no XiongBao Work row
   describes (another app on the same project, or Intelligence itself) appears in their Memory page as
   "Kept in Intelligence" and is recalled as their own. It can be edited or forgotten there, not paused.
-- **Without Intelligence memory** (not entitled, a lapsed licence, an outage), OpenBot reads and writes
+- **Without Intelligence memory** (not entitled, a lapsed licence, an outage), XiongBao Work reads and writes
   its tables exactly as before and nothing fails. Writes made meanwhile are mirrored by the memory sweep
   once Intelligence memory is available again; the first passes after a deployment becomes entitled are
   the backfill of everything it already holds.
 
 ## Tenant package and knowledge
 
-`TENANT_PACKAGE_DIR` points at the tenant package. The default is `../examples/xiongbao`, the 熊宝数字员工 package; `examples/fintech` is the upstream example and is loaded only when named.
+`TENANT_PACKAGE_DIR` points at the tenant package. The default is `../examples/xiongbao`, the 熊宝数字员工 package; `examples/fintech` is a generic example and is loaded only when named.
 
 Required package files:
 
@@ -403,7 +403,7 @@ Connector credentials are stored through the credential vault and referenced by 
 - Sign-in is Google, Microsoft or Okta from the environment, plus SAML and OpenID Connect providers registered at runtime and routed by email domain. One resolver answers both questions a run asks about a person, whose threads these are and which Bots they may run, so the two can never disagree.
 - `INITIAL_ADMIN_EMAILS` is a floor: an address it names is made an administrator at every sign-in and cannot be demoted from the People screen. Everybody else's role is decided there, and every change writes an audit row.
 - Registering, changing or removing an identity provider is administrator-only. Better Auth's SSO plugin guards those routes with a session alone, which would let any signed-in person register a provider for a domain.
-- A registered identity provider belongs to the deployment, not to whoever registered it. Better Auth scopes its own listing and removal to the registering user and cascades the row from that user, so two administrators see two different deployments and deleting the one who set sign-in up deletes the company's sign-in. Reads and removals go through OpenBot's own administrator-only routes against the whole table.
+- A registered identity provider belongs to the deployment, not to whoever registered it. Better Auth scopes its own listing and removal to the registering user and cascades the row from that user, so two administrators see two different deployments and deleting the one who set sign-in up deletes the company's sign-in. Reads and removals go through XiongBao Work's own administrator-only routes against the whole table.
 - A provider's client secret and SAML signing material are encrypted at rest with `KEY_ENCRYPTION_KEY`, through a wrapper on the Better Auth storage adapter, since the plugin stores them as plaintext JSON. OAuth access and refresh tokens use Better Auth's own encryption, keyed on `BETTER_AUTH_SECRET`.
 - Signing in, being refused, and being granted the administrator role by configuration each write an audit row. They are the only record that somebody who can edit `INITIAL_ADMIN_EMAILS` promoted themselves, and the only evidence a revoked person was ever here, since revoking them deletes their sessions.
 - Removing somebody deletes their sessions and denies their address, because deleting the user row alone is not removal: the next sign-in through the provider recreates it.
