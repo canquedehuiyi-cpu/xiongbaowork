@@ -1,6 +1,5 @@
 import {
   type Icon,
-  IconChalkboardTeacher,
   IconLogout,
   IconSitemap,
   IconUsers,
@@ -12,9 +11,7 @@ import { useId } from "react";
 import { MORE_SIDEBAR_ONLY } from "@/components/app-sidebar/app-sidebar";
 import { isPendingSummon } from "@/components/app-sidebar/roster";
 import { EmployeeList } from "@/components/app-sidebar/sidebar-roster";
-import { TEACH_A_BOT } from "@/components/browser/browser-nav-item";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import { browserStateQueryOptions } from "@/lib/browser/queries";
 import {
   type NavigationItem,
   navigationOwns,
@@ -160,20 +157,13 @@ function ContactsList() {
   );
 }
 
-/** 只在服务端说能为这个人跑浏览器时才有「教员工做事」，和侧栏的同一个判断（工作台首页的格子也用它）。 */
-export function useBrowserAvailable(): boolean {
-  const state = useQuery(browserStateQueryOptions());
-  return Boolean(state.data?.available);
-}
-
 /**
- * 工作台：归「工作台」的导航项。常用（主导航）在前，更多（组团流程、教员工做事、团队 Bot、审批）在后，
+ * 工作台：归「工作台」的导航项。常用（主导航）在前，更多（组团流程、团队 Bot、审批）在后，
  * 管理区只给能打开它的人（`useNavigationItems` 已经按角色和版本筛过）。
  */
 function WorkList() {
   const pathname = usePathname();
   const work = useNavigationItems().filter((item) => item.rail === "work");
-  const browser = useBrowserAvailable();
   const primary = work.filter(
     (item) => item.section === "primary" && !item.adminOnly,
   );
@@ -216,14 +206,6 @@ function WorkList() {
           className="m-0 flex list-none flex-col p-0"
         >
           {more.map(navRow)}
-          {browser ? (
-            <LinkRow
-              current={under("/browser")}
-              icon={IconChalkboardTeacher}
-              label={TEACH_A_BOT}
-              to="/browser"
-            />
-          ) : null}
           {MORE_SIDEBAR_ONLY.map((item) => (
             <LinkRow
               current={under(item.to)}

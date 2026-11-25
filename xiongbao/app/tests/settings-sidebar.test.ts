@@ -6,17 +6,16 @@ import {
 
 /*
  * M5b：设置侧栏照上游 main 的分区，加上熊宝的「套餐与用量」「我的设备」。「已连接的账号」搬到了主导航的「连接」，
- * 所以原来「浏览器紧跟在已连接的账号后面」的断言改成按新分区的顺序校验。
+ * 所以原来「浏览器紧跟在已连接的账号后面」的断言改成按新分区的顺序校验。浏览器录制删除后，「浏览器」一项也随之去掉。
  */
 describe("settings sidebar", () => {
-  test("分区依次是 通用、通知、审批、套餐与用量、我的设备、浏览器、学习、部署设置、密码、组件展示、关于", () => {
+  test("分区依次是 通用、通知、审批、套餐与用量、我的设备、学习、部署设置、密码、组件展示、关于", () => {
     expect(SETTINGS_SIDEBAR_ITEMS.map((item) => item.title)).toEqual([
       "通用",
       "通知",
       "审批",
       "套餐与用量",
       "我的设备",
-      "浏览器",
       "学习",
       "部署设置",
       "密码",
@@ -43,20 +42,12 @@ describe("settings sidebar", () => {
     expect(at("我的设备")).toEqual({ to: "/settings/devices" });
   });
 
-  test("浏览器 links to /settings/browsers, right after 我的设备", () => {
-    const titles = SETTINGS_SIDEBAR_ITEMS.map((item) => item.title);
-    const browsers = SETTINGS_SIDEBAR_ITEMS[titles.indexOf("浏览器")];
-
-    expect(browsers?.linkOptions).toEqual({ to: "/settings/browsers" });
-    expect(titles.indexOf("浏览器")).toBe(titles.indexOf("我的设备") + 1);
-  });
-
-  test("学习 links to /settings/learning, right after 浏览器", () => {
+  test("学习 links to /settings/learning, right after 我的设备", () => {
     const titles = SETTINGS_SIDEBAR_ITEMS.map((item) => item.title);
     const learning = SETTINGS_SIDEBAR_ITEMS[titles.indexOf("学习")];
 
     expect(learning?.linkOptions).toEqual({ to: "/settings/learning" });
-    expect(titles.indexOf("学习")).toBe(titles.indexOf("浏览器") + 1);
+    expect(titles.indexOf("学习")).toBe(titles.indexOf("我的设备") + 1);
   });
 
   test("个人版多出密钥、技能、电脑、活动，密码叫已保存的登录；团队版没有这些", () => {

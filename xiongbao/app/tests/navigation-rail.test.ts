@@ -21,7 +21,6 @@ const CASES: [string, string][] = [
   ["/reachability", "work"],
   ["/capabilities/skills", "work"],
   ["/connections", "work"],
-  ["/browser", "work"],
   ["/pipelines", "work"],
   ["/team-bots", "work"],
   ["/approvals", "work"],

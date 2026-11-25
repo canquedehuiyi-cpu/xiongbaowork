@@ -53,7 +53,6 @@ export type EnterpriseSettings = {
   inactiveComputerDays: number;
   modelAllowlist: { enabled: boolean; models: string[] };
   mcpAllowlist: { enabled: boolean; servers: string[] };
-  /** People may open the Skills learned from their recordings to every Bot. Off by default. */
   /** How many check-ins each Bot may run for one person in a day. 24 by default. */
   proactiveDailyRuns: number;
   /** People may pick the model a built-in Bot answers on, per conversation. Off by default. */

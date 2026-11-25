@@ -227,7 +227,7 @@ function Sidebar({
           data-mobile="true"
           /*
            * The sheet covers the page a link in it opens, so following one closes it: a
-           * conversation, Bots, Connections, Teach a Bot. Clicks reach here from the menus the
+           * conversation, Bots, Connections. Clicks reach here from the menus the
            * sidebar opens too (the account menu), because React passes them up through a portal.
            */
           onClick={(event) => {

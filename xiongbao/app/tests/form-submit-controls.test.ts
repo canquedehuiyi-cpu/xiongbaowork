@@ -8,7 +8,7 @@ import ts from "typescript";
  * Base UI's `Button` renders `type="button"` unless told otherwise, so a `<Button>` that looks like
  * a form's submit does nothing when pressed, and the form's own tests still pass because they fire
  * `submit` on the form directly. That shipped four dead forms at once (Remember, Add and sync
- * source, Confirm phone, Turn on background research) and the recorder before them. A plain
+ * source, Confirm phone, Turn on background research), and one more before them. A plain
  * `<button>` defaults to submit, so it counts; a `<Button>` counts only with `type="submit"`.
  *
  * A submit control outside the form that names it with `form={…}` (a dialog's footer, so the
@@ -26,8 +26,6 @@ const SUBMITTED_ELSEWHERE = new Set([
   "src/components/onboarding/name-step.tsx",
   // An address bar: one field, submitted by Enter in it; the buttons beside it move back and forth.
   "src/components/browser/browser-bar.tsx",
-  // The new tab's one search field, submitted by Enter in it as a browser's start page is.
-  "src/components/browser/browser-screen.tsx",
 ]);
 
 function attribute(node: ts.JsxOpeningLikeElement, name: string) {

@@ -215,7 +215,6 @@ beforeEach(() => {
     ["GET /api/agents/autonomous/all", { autonomous: OVERVIEW }],
     ["GET /api/automations", { automations: AUTOMATIONS }],
     ["GET /api/capabilities", { localEvaluation: false, edition: "team" }],
-    ["GET /api/browser", { available: false }],
   ]);
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -459,19 +458,13 @@ describe("工作台首页", () => {
     expect(detail?.textContent).toBe("等你拍板");
   });
 
-  test("服务端说跑不了浏览器时没有「教员工做事」", async () => {
+  test("没有「教员工做事」，也不再读 /api/browser", async () => {
     const { view } = renderHome();
     await view.findByRole("region", { name: "应用" });
-    await waitFor(() => expect(requests).toContain("GET /api/browser"));
+    await waitFor(() => expect(requests).toContain("GET /api/capabilities"));
     await settleReactWork();
     expect(view.queryByRole("link", { name: "教员工做事" })).toBeNull();
-  });
-
-  test("能跑浏览器时有「教员工做事」", async () => {
-    answers.set("GET /api/browser", { available: true });
-    const { view } = renderHome();
-    const link = await view.findByRole("link", { name: "教员工做事" });
-    expect(link.getAttribute("href")).toBe("/browser");
+    expect(requests).not.toContain("GET /api/browser");
   });
 
   test("成员看不到「管理」区", async () => {

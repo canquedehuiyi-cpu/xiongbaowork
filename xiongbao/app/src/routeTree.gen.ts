@@ -20,7 +20,6 @@ import { Route as AuthedAppApprovalsRouteImport } from './routes/_authed/_app/ap
 import { Route as AuthedAppAutonomousRouteImport } from './routes/_authed/_app/autonomous'
 import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
 import { Route as AuthedAppBriefingRouteImport } from './routes/_authed/_app/briefing'
-import { Route as AuthedAppBrowserRouteImport } from './routes/_authed/_app/browser'
 import { Route as AuthedAppCapabilitiesRouteImport } from './routes/_authed/_app/capabilities'
 import { Route as AuthedAppContactsRouteImport } from './routes/_authed/_app/contacts'
 import { Route as AuthedAppKnowledgeRouteImport } from './routes/_authed/_app/knowledge'
@@ -59,7 +58,6 @@ import { Route as AuthedSettingsIndexRouteImport } from './routes/_authed/settin
 import { Route as AuthedSettingsPersonalRouteImport } from './routes/_authed/settings/_personal'
 import { Route as AuthedSettingsAboutRouteImport } from './routes/_authed/settings/about'
 import { Route as AuthedSettingsApprovalsRouteImport } from './routes/_authed/settings/approvals'
-import { Route as AuthedSettingsBrowsersRouteImport } from './routes/_authed/settings/browsers'
 import { Route as AuthedSettingsDevicesRouteImport } from './routes/_authed/settings/devices'
 import { Route as AuthedSettingsLearningRouteImport } from './routes/_authed/settings/learning'
 import { Route as AuthedSettingsMemoryRouteImport } from './routes/_authed/settings/memory'
@@ -191,11 +189,6 @@ const AuthedAppBotRoute = AuthedAppBotRouteImport.update({
 const AuthedAppBriefingRoute = AuthedAppBriefingRouteImport.update({
   id: '/briefing',
   path: '/briefing',
-  getParentRoute: () => AuthedAppRoute,
-} as any)
-const AuthedAppBrowserRoute = AuthedAppBrowserRouteImport.update({
-  id: '/browser',
-  path: '/browser',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppCapabilitiesRoute = AuthedAppCapabilitiesRouteImport.update({
@@ -387,11 +380,6 @@ const AuthedSettingsAboutRoute = AuthedSettingsAboutRouteImport.update({
 const AuthedSettingsApprovalsRoute = AuthedSettingsApprovalsRouteImport.update({
   id: '/approvals',
   path: '/approvals',
-  getParentRoute: () => AuthedSettingsRouteRoute,
-} as any)
-const AuthedSettingsBrowsersRoute = AuthedSettingsBrowsersRouteImport.update({
-  id: '/browsers',
-  path: '/browsers',
   getParentRoute: () => AuthedSettingsRouteRoute,
 } as any)
 const AuthedSettingsDevicesRoute = AuthedSettingsDevicesRouteImport.update({
@@ -856,7 +844,6 @@ export interface FileRoutesByFullPath {
   '/autonomous': typeof AuthedAppAutonomousRoute
   '/bot': typeof AuthedAppBotRoute
   '/briefing': typeof AuthedAppBriefingRoute
-  '/browser': typeof AuthedAppBrowserRoute
   '/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/contacts': typeof AuthedAppContactsRoute
   '/knowledge': typeof AuthedAppKnowledgeRoute
@@ -892,7 +879,6 @@ export interface FileRoutesByFullPath {
   '/admin/what-if': typeof AuthedAdminWhatIfRoute
   '/settings/about': typeof AuthedSettingsAboutRoute
   '/settings/approvals': typeof AuthedSettingsApprovalsRoute
-  '/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/settings/devices': typeof AuthedSettingsDevicesRoute
   '/settings/learning': typeof AuthedSettingsLearningRoute
   '/settings/memory': typeof AuthedSettingsMemoryRoute
@@ -983,7 +969,6 @@ export interface FileRoutesByTo {
   '/autonomous': typeof AuthedAppAutonomousRoute
   '/bot': typeof AuthedAppBotRoute
   '/briefing': typeof AuthedAppBriefingRoute
-  '/browser': typeof AuthedAppBrowserRoute
   '/contacts': typeof AuthedAppContactsRoute
   '/knowledge': typeof AuthedAppKnowledgeRoute
   '/me': typeof AuthedAppMeRoute
@@ -1019,7 +1004,6 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthedSettingsIndexRoute
   '/settings/about': typeof AuthedSettingsAboutRoute
   '/settings/approvals': typeof AuthedSettingsApprovalsRoute
-  '/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/settings/devices': typeof AuthedSettingsDevicesRoute
   '/settings/learning': typeof AuthedSettingsLearningRoute
   '/settings/memory': typeof AuthedSettingsMemoryRoute
@@ -1113,7 +1097,6 @@ export interface FileRoutesById {
   '/_authed/_app/autonomous': typeof AuthedAppAutonomousRoute
   '/_authed/_app/bot': typeof AuthedAppBotRoute
   '/_authed/_app/briefing': typeof AuthedAppBriefingRoute
-  '/_authed/_app/browser': typeof AuthedAppBrowserRoute
   '/_authed/_app/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/_authed/_app/contacts': typeof AuthedAppContactsRoute
   '/_authed/_app/knowledge': typeof AuthedAppKnowledgeRoute
@@ -1150,7 +1133,6 @@ export interface FileRoutesById {
   '/_authed/settings/_personal': typeof AuthedSettingsPersonalRouteWithChildren
   '/_authed/settings/about': typeof AuthedSettingsAboutRoute
   '/_authed/settings/approvals': typeof AuthedSettingsApprovalsRoute
-  '/_authed/settings/browsers': typeof AuthedSettingsBrowsersRoute
   '/_authed/settings/devices': typeof AuthedSettingsDevicesRoute
   '/_authed/settings/learning': typeof AuthedSettingsLearningRoute
   '/_authed/settings/memory': typeof AuthedSettingsMemoryRoute
@@ -1246,7 +1228,6 @@ export interface FileRouteTypes {
     | '/autonomous'
     | '/bot'
     | '/briefing'
-    | '/browser'
     | '/capabilities'
     | '/contacts'
     | '/knowledge'
@@ -1282,7 +1263,6 @@ export interface FileRouteTypes {
     | '/admin/what-if'
     | '/settings/about'
     | '/settings/approvals'
-    | '/settings/browsers'
     | '/settings/devices'
     | '/settings/learning'
     | '/settings/memory'
@@ -1373,7 +1353,6 @@ export interface FileRouteTypes {
     | '/autonomous'
     | '/bot'
     | '/briefing'
-    | '/browser'
     | '/contacts'
     | '/knowledge'
     | '/me'
@@ -1409,7 +1388,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/settings/about'
     | '/settings/approvals'
-    | '/settings/browsers'
     | '/settings/devices'
     | '/settings/learning'
     | '/settings/memory'
@@ -1502,7 +1480,6 @@ export interface FileRouteTypes {
     | '/_authed/_app/autonomous'
     | '/_authed/_app/bot'
     | '/_authed/_app/briefing'
-    | '/_authed/_app/browser'
     | '/_authed/_app/capabilities'
     | '/_authed/_app/contacts'
     | '/_authed/_app/knowledge'
@@ -1539,7 +1516,6 @@ export interface FileRouteTypes {
     | '/_authed/settings/_personal'
     | '/_authed/settings/about'
     | '/_authed/settings/approvals'
-    | '/_authed/settings/browsers'
     | '/_authed/settings/devices'
     | '/_authed/settings/learning'
     | '/_authed/settings/memory'
@@ -1706,13 +1682,6 @@ declare module '@tanstack/react-router' {
       path: '/briefing'
       fullPath: '/briefing'
       preLoaderRoute: typeof AuthedAppBriefingRouteImport
-      parentRoute: typeof AuthedAppRoute
-    }
-    '/_authed/_app/browser': {
-      id: '/_authed/_app/browser'
-      path: '/browser'
-      fullPath: '/browser'
-      preLoaderRoute: typeof AuthedAppBrowserRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/capabilities': {
@@ -1979,13 +1948,6 @@ declare module '@tanstack/react-router' {
       path: '/approvals'
       fullPath: '/settings/approvals'
       preLoaderRoute: typeof AuthedSettingsApprovalsRouteImport
-      parentRoute: typeof AuthedSettingsRouteRoute
-    }
-    '/_authed/settings/browsers': {
-      id: '/_authed/settings/browsers'
-      path: '/browsers'
-      fullPath: '/settings/browsers'
-      preLoaderRoute: typeof AuthedSettingsBrowsersRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
     '/_authed/settings/devices': {
@@ -2653,7 +2615,6 @@ interface AuthedSettingsRouteRouteChildren {
   AuthedSettingsPersonalRoute: typeof AuthedSettingsPersonalRouteWithChildren
   AuthedSettingsAboutRoute: typeof AuthedSettingsAboutRoute
   AuthedSettingsApprovalsRoute: typeof AuthedSettingsApprovalsRoute
-  AuthedSettingsBrowsersRoute: typeof AuthedSettingsBrowsersRoute
   AuthedSettingsDevicesRoute: typeof AuthedSettingsDevicesRoute
   AuthedSettingsLearningRoute: typeof AuthedSettingsLearningRoute
   AuthedSettingsMemoryRoute: typeof AuthedSettingsMemoryRoute
@@ -2672,7 +2633,6 @@ const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
   AuthedSettingsPersonalRoute: AuthedSettingsPersonalRouteWithChildren,
   AuthedSettingsAboutRoute: AuthedSettingsAboutRoute,
   AuthedSettingsApprovalsRoute: AuthedSettingsApprovalsRoute,
-  AuthedSettingsBrowsersRoute: AuthedSettingsBrowsersRoute,
   AuthedSettingsDevicesRoute: AuthedSettingsDevicesRoute,
   AuthedSettingsLearningRoute: AuthedSettingsLearningRoute,
   AuthedSettingsMemoryRoute: AuthedSettingsMemoryRoute,
@@ -2744,7 +2704,6 @@ interface AuthedAppRouteChildren {
   AuthedAppAutonomousRoute: typeof AuthedAppAutonomousRoute
   AuthedAppBotRoute: typeof AuthedAppBotRoute
   AuthedAppBriefingRoute: typeof AuthedAppBriefingRoute
-  AuthedAppBrowserRoute: typeof AuthedAppBrowserRoute
   AuthedAppCapabilitiesRoute: typeof AuthedAppCapabilitiesRouteWithChildren
   AuthedAppContactsRoute: typeof AuthedAppContactsRoute
   AuthedAppKnowledgeRoute: typeof AuthedAppKnowledgeRoute
@@ -2802,7 +2761,6 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppAutonomousRoute: AuthedAppAutonomousRoute,
   AuthedAppBotRoute: AuthedAppBotRoute,
   AuthedAppBriefingRoute: AuthedAppBriefingRoute,
-  AuthedAppBrowserRoute: AuthedAppBrowserRoute,
   AuthedAppCapabilitiesRoute: AuthedAppCapabilitiesRouteWithChildren,
   AuthedAppContactsRoute: AuthedAppContactsRoute,
   AuthedAppKnowledgeRoute: AuthedAppKnowledgeRoute,

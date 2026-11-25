@@ -24,10 +24,7 @@ test("the generated-interface prompt names this delivery's product, not the upst
   expect(GENERATIVE_UI_DESIGN_SKILL).not.toContain("OpenBot");
 });
 
-test("the browser page draws the product logo and the old orb is gone", () => {
-  const browser = read("components/browser/browser-screen.tsx");
-  expect(browser).toContain('from "@/components/layout/brand-logo"');
-  expect(browser).not.toContain("OpenBotLogo");
+test("the old orb logo is gone", () => {
   expect(existsSync(join(appSource, "assets/openbot-logo.png"))).toBe(false);
   expect(
     existsSync(join(appSource, "components/edition/openbot-logo.tsx")),

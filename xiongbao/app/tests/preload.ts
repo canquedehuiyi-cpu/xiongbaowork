@@ -65,7 +65,7 @@ const PRINTED_NODE_CHARS = 300;
  * reach: its window and document, and the `__reactFiber$` and `__reactProps$` that React keeps on each element it
  * renders, which lead on to every component, query and client in the tree. The walk is synchronous, so a `waitFor`
  * whose check failed while it waited held the whole event loop until the walk was done. One failed
- * `expect(dialog).toBeNull()` in recorder-browsers.test.tsx took 3.3 s here and 8.8 s on GitHub's runner, where its test
+ * `expect(dialog).toBeNull()` in a dialog test (since deleted) took 3.3 s here and 8.8 s on GitHub's runner, where its test
  * timed out: the fake DELETE the test had just let go could not answer until the print was over. And what it printed
  * was the window's globals rather than the element.
  *

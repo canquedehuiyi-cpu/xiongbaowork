@@ -88,7 +88,7 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   /*
-   * 首页带着要填进输入框的话（`?ask=`，教员工做事的「试一试」交过来的）时，手机上也得是首页那个输入框，
+   * 首页带着要填进输入框的话（`?ask=`）时，手机上也得是首页那个输入框，
    * 不能换成会话列表。
    */
   const asking = useRouterState({

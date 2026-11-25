@@ -22,7 +22,6 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
-import { browserKeys } from "@/lib/browser/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
@@ -150,14 +149,6 @@ function renderNarrowApp(start = "/channel/models") {
     bots: [],
     lastPingId: null,
   });
-  // XiongBao can run a browser here, so 教员工做事 is in the sidebar, after the main destinations.
-  queryClient.setQueryDefaults(browserKeys.state, { refetchInterval: false });
-  queryClient.setQueryData(browserKeys.state, {
-    available: true,
-    computerId: "",
-    open: false,
-    tabs: [],
-  });
   queryClient.setQueryData(channelKeys.list(), {
     pages: [
       {
@@ -220,7 +211,6 @@ test.each([
   ["人才市场", "link", /^人才市场/, "/bots"],
   ["任务看板", "link", /^任务看板/, "/tasks"],
   ["连接", "link", /^连接/, "/connections"],
-  ["教员工做事", "link", /^教员工做事/, "/browser"],
   // A link drawn as a button: it still goes somewhere.
   ["新对话", "button", /^新对话$/, "/channel/new"],
 ] as const)(

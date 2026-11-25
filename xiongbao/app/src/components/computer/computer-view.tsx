@@ -28,7 +28,7 @@ import {
 import { useComputerControl } from "@/lib/computers/use-control";
 import { queryClient } from "@/query-client";
 import { ChannelAvatar } from "../channels/avatar";
-import { BotBrowserBar, BotRecordPanel } from "./bot-browser";
+import { BotBrowserBar } from "./bot-browser";
 import { ComputerControlButton } from "./computer-controls";
 import { LiveScreen, type LiveScreenHandle } from "./live-screen";
 import { useElementVisible, usePageVisible } from "./preview-visibility";
@@ -231,9 +231,8 @@ function NothingToSee({
 
 /**
  * The Bot's browser as a window, in the live full-size view: its bar (tabs, the address, back, forward and reload) over
- * its page, framed as one, the page as large as the space left allows at the browser's own shape. The Browser page
- * draws the person's own browser the same way (`components/browser/browser-screen.tsx`), the page inside the tabs'
- * panel with the address. The window is sized to its page (`useFittedWidth`), centred in the space, so the page fills
+ * its page, framed as one, the page as large as the space left allows at the browser's own shape, the page inside the
+ * tabs' panel with the address. The window is sized to its page (`useFittedWidth`), centred in the space, so the page fills
  * the window with no blank band under or beside it whatever the window's shape. A turn that is over is a picture rather
  * than a browser, and is drawn as it always was.
  */
@@ -282,7 +281,7 @@ function BrowserWindow({
 }
 
 /**
- * Who has the wheel and Record, in a live full-size view: a column beside the Bot's browser in a wide window, so the
+ * Who has the wheel, in a live full-size view: a column beside the Bot's browser in a wide window, so the
  * page takes the window's height, and under it in a narrow one. A turn that is over keeps them where they always were.
  */
 function WheelColumn({
@@ -605,17 +604,17 @@ export function ComputerView({
   }, [expanded]);
 
   /*
-   * The Bot's browser as the person working in it sees it: the bar above the screen and Record under it. Read only
-   * while the screen is open full size and live, every second, as the screen itself is watched; a finished turn is a
-   * record and has neither.
+   * The Bot's browser as the person working in it sees it: the bar above the screen. Read only while the screen is
+   * open full size and live, every second, as the screen itself is watched; a finished turn is a record and has no
+   * bar.
    */
   const botBrowser = useQuery({
     ...botBrowserStateQueryOptions(computerId),
     enabled: expanded && !settled,
   });
   /*
-   * Read again the moment the wheel changes hands, rather than up to a second later: the bar and Record go live, or
-   * still, with the button the person just pressed.
+   * Read again the moment the wheel changes hands, rather than up to a second later: the bar goes live, or still,
+   * with the button the person just pressed.
    */
   const holder = control ? `${control.holder}:${control.heldBy ?? ""}` : null;
   useEffect(() => {
@@ -987,7 +986,7 @@ export function ComputerView({
       {expanded && typeof document !== "undefined"
         ? createPortal(
             /*
-             * Scrolls when the card is taller than the window (a narrow window, with Record under the screen), and the
+             * Scrolls when the card is taller than the window (a narrow window, with the wheel under the screen), and the
              * card's auto margins centre it when it is not. Centring with justify-content instead put the card's top out
              * of reach above the window. A live view keeps only a thin margin: the window is for the Bot's browser.
              */
@@ -1015,10 +1014,10 @@ export function ComputerView({
                 only a picture, sized to its width as it always was.
 
                 A live view fills the window, because the Bot's browser is what it is for: the bar and
-                the page take everything but a column beside them for the wheel and Record (under them
-                in a narrow window), and the page is as large as that space allows at its own shape.
+                the page take everything but a column beside them for the wheel (under them in a
+                narrow window), and the page is as large as that space allows at its own shape.
                 Never less than a screen a person can work in: in a short, narrow window the card grows
-                past it and the view scrolls, so Record is always reachable.
+                past it and the view scrolls, so the wheel is always reachable.
               */}
               <div
                 className={`relative m-auto flex w-full min-w-0 shrink-0 flex-col rounded-2xl bg-background shadow-2xl ring-1 ring-black/5 dark:ring-white/10 ${settled ? "max-w-[70vw] p-4" : "min-h-[calc(100svh-1rem)] gap-4 p-3 sm:min-h-[calc(100svh-2rem)] lg:h-[calc(100svh-2rem)] lg:flex-row"}`}
@@ -1200,15 +1199,10 @@ export function ComputerView({
                     </div>
                   )}
                   {/*
-                  Record, under the wheel, because it is only for the person holding it. Branched on
-                  the data first, so a read that fails after one has answered keeps what it showed.
+                  Branched on the data first, so a read that fails after one has answered keeps the
+                  bar it showed.
                 */}
-                  {settled ? null : botBrowser.data ? (
-                    <BotRecordPanel
-                      botId={computerId}
-                      state={botBrowser.data}
-                    />
-                  ) : botBrowser.error ? (
+                  {settled || botBrowser.data ? null : botBrowser.error ? (
                     <p className="text-destructive text-sm" role="alert">
                       员工的浏览器没能加载。关掉后重新打开试试。
                     </p>

@@ -61,8 +61,7 @@ function rowId(computer: ComputerProfile): string {
 }
 
 /**
- * A person's own XiongBao browser, the one Teach a Bot records in. It is listed beside the Bots' browsers, under an id
- * that is no Bot's, so it read "A Bot no longer here" until it was named for what it is.
+ * A person's own XiongBao browser. It is listed beside the Bots' browsers, under an id that is no Bot's, so it read "A Bot no longer here" until it was named for what it is.
  */
 function isOwnBrowser(computer: ComputerProfile): boolean {
   return computer.botId !== undefined && isPersonBrowserId(computer.botId);
@@ -91,8 +90,8 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
   const queryClient = useQueryClient();
   const nameFor = useBotNames();
   /*
-   * The person's own XiongBao browser is cleared the way Teach a Bot clears it: a recording in it ends first, and its
-   * Recorder connection ends with the profile. A Bot's Reset does neither.
+   * The person's own XiongBao browser is cleared through its own route (`/api/browser/clear`), which wipes its profile
+   * and opens it again if it was open.
    */
   const clearOwnBrowser = useMutation(clearBrowserMutationOptions(queryClient));
   const clearing = useClearBrowserData(clearOwnBrowser);
@@ -173,7 +172,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
 
   /** What a row carries, said once before its state. */
   const scopeOf = (computer: ComputerProfile): string => {
-    if (isOwnBrowser(computer)) return "这个人自己教员工做事时用的浏览器";
+    if (isOwnBrowser(computer)) return "这个人自己的浏览器";
     if (computer.kind === "person") {
       return computer.botId
         ? "这个人为这位员工保留的浏览器资料和文件夹"
@@ -191,11 +190,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
       : "没有浏览器在运行";
     if (!isOwnBrowser(computer))
       return computer.running ? since : `${since}。员工下次需要时会启动。`;
-    // In the team edition the row already says it is that person's browser for Teach a Bot.
-    if (!personal) return since;
-    return computer.running
-      ? `${since}。你用「教员工做事」录制时就在这里录。`
-      : `${since}。你用「教员工做事」录制时它会打开。`;
+    return since;
   };
 
   return (

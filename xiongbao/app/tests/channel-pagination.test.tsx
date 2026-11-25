@@ -32,7 +32,6 @@ import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { avatarSourceKeys } from "@/lib/avatar/sources";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
-import { browserKeys } from "@/lib/browser/queries";
 import { type ChannelSummary, channelKeys } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { quotaKeys } from "@/lib/quota/queries";
@@ -214,13 +213,6 @@ function renderSidebar() {
     agentId: "avatar-user",
     configuredAt: null,
     sources: [],
-  });
-  // The Browser button reads whether there is a browser once; answered here so only channel requests are counted.
-  queryClient.setQueryData(browserKeys.state, {
-    available: false,
-    computerId: "",
-    open: false,
-    tabs: [],
   });
   queryClient.setQueryData(channelKeys.list(), {
     pages: [
