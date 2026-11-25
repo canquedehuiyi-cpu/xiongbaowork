@@ -543,7 +543,6 @@ describe("what the 分身 is told", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
         // M3: upstream's recordToolLimitRefusal, holdsTools, pickedModel, botNames and
         // resolveAgentModel now come before the sources loader.
         undefined,

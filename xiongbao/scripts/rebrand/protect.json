@@ -1851,5 +1851,11 @@
     "pattern": "openbot",
     "until": "R4",
     "reason": "历史取证记录（当时的检出路径、冻结叶与基线原文），保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/server/src/db/schema/threads.ts",
+    "text": "instead of against CopilotKit Intelligence.",
+    "until": "R4",
+    "reason": "recovery-flow-customization-turns 测试钉死了这个文件的字节数与 sha256（基线 9eb7436d8 原样），R1 不能改它的注释；R4 基线化时随钉死值一起改"
   }
 ]

@@ -230,21 +230,18 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // and the GitHub callback's "is this person still active" reads the deployment's people table.
   // M3: upstream's wiring adds "who is this" reads, each commented where it is made: the session,
   // roles and Entra token of a request not yet framed, a Bot's isolation switch and owner for its
-  // computer seat, people's names and their XiongBao browsers for the admin computer list, Learning's
-  // open sources, withheld skills and people, every live Recorder connection, the boot-time model
-  // check; and the background translator of `text_translations` (no tenant column).
+  // computer seat, people's names and their XiongBao browsers for the admin computer list, every live
+  // Recorder connection, the boot-time model check; and the background translator of
+  // `text_translations` (no tenant column). Task 14 removed seven with Automatic Learning: the three
+  // auto-assign rounds, the Learning space's name lookup, and Learning's open sources, withheld
+  // skills and people.
   // The three `runAsTenant("platform")` are that translator and, from main, the boot refresh of
   // XiongBao's own apps' saved tools (`refreshOwnListings`) and the broker relist rounds
   // (`relistOutdatedBrokeredApps`), described above.
-  // M5: the nineteenth `asPlatform` is `adminRead`, the reads behind upstream's admin drafting
+  // M5: one `asPlatform` is `adminRead`, the reads behind upstream's admin drafting
   // routes (audit questions, what-if, grant decisions), taken only while the capability is held.
-  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 19 },
-  // M3: an administrator's review of everybody's skill-sharing requests, behind the admin gate.
-  "src/learning/routes.ts": { "asPlatform(": 2 },
+  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 12 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
-  // Whose memories are out of step with Intelligence (upstream #773); each person's are then
-  // mirrored in their own frame.
-  "src/memory/store.ts": { 'runAsTenant("platform"': 1 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
   // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;
   // each run found is then settled in the tenant on its own row.
