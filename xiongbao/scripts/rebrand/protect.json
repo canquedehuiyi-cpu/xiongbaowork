@@ -1849,12 +1849,6 @@
     "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
   },
   {
-    "file": "xiongbao/app/src/lib/recorder/mutations.ts",
-    "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
-    "until": "R2",
-    "reason": "Task 9：网页与录制扩展之间的消息类型/拒绝原因码（扩展 messages.ts 的 openbot.ping、openbot.connect 与 connect 失败原因 openbot-unreachable），两侧在 Task 9 同一 PR 改名，届时删除本条目"
-  },
-  {
     "file": "xiongbao/app/tests/recorder-bridge.test.ts",
     "pattern": "openbot\\.(?:ping|connect)\\b|openbot-unreachable",
     "until": "R2",

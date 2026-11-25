@@ -13,7 +13,7 @@ import { AboutPage } from "@/routes/_authed/settings/about";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * 关于页：产品名、版本、公司名，基础代码的 MIT 声明，以及第三方依赖清单。真实清单有 1.8 MB，
+ * 关于页：产品名、版本、公司名，以及第三方依赖清单（清单里有一行随仓库附带的 MIT 许可）。真实清单有 1.8 MB，
  * 这里换成小夹具，既快也不依赖生成步骤的输出。
  */
 mock.module("@/lib/generated/third-party-notices.json", () => ({
@@ -43,16 +43,35 @@ function open() {
   return render(<RouterProvider router={router as never} />);
 }
 
-test("关于页写明公司名、基础代码的版权行和 MIT 全文，且不带上游仓库链接", async () => {
+test("关于页写明公司名，不带上游仓库链接，也没有单独的基础代码标题", async () => {
   const view = open();
-  expect(await view.findByText("基础代码（MIT）")).not.toBeNull();
-  expect(await view.findByText("Copyright (c) 2026 CopilotKit")).not.toBeNull();
-  expect(view.container.textContent).toContain("Permission is hereby granted");
+  await view.findByText("left-pad");
   expect(view.container.textContent).toContain(
     `© 2026 ${appConfig.brand.companyName}`,
   );
   expect(view.container.textContent).toContain(appConfig.brand.productName);
+  expect(view.container.textContent).not.toContain("基础代码");
   expect(view.container.innerHTML).not.toContain("github.com/CopilotKit");
+});
+
+test("依赖清单里有 CopilotKit 一行（版本写「—」、许可 MIT），搜索 copilot 能找到，展开后是版权行与 MIT 全文", async () => {
+  const view = open();
+  const row = await view.findByRole("button", { name: /CopilotKit/ });
+  expect(row.textContent).toContain("—");
+  expect(row.textContent).toContain("MIT");
+  expect(view.container.textContent).not.toContain(
+    "Permission is hereby granted",
+  );
+
+  fireEvent.change(view.getByRole("searchbox"), {
+    target: { value: "copilot" },
+  });
+  expect(view.queryByText("left-pad")).toBeNull();
+
+  fireEvent.click(view.getByRole("button", { name: /CopilotKit/ }));
+  expect(view.container.textContent).toContain("Copyright (c) 2026 CopilotKit");
+  expect(view.container.textContent).toContain("Permission is hereby granted");
+  expect(view.container.textContent).toContain("THE SOFTWARE IS PROVIDED");
 });
 
 test("第三方依赖列出名称、版本、许可类型，点开才看到全文，搜索按名称过滤", async () => {

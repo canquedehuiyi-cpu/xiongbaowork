@@ -17,14 +17,25 @@ type Notice = {
   licenseText?: string;
 };
 
+/* 随仓库附带的 MIT 许可作为清单里的一行，名称取自版权行的权利人；没有版本号，版本列写「—」。 */
+const BUNDLED_NOTICE: Notice = {
+  name: license.match(/^Copyright \(c\) \d{4} (.+)$/m)?.[1] ?? "LICENSE",
+  version: "—",
+  license: "MIT",
+  licenseText: license,
+};
+
+/* 与生成清单同一排序规则（按名称的码元顺序），这一行才能落在固定位置。 */
+function byName(a: Notice, b: Notice) {
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+}
+
 /* 版本号取仓库根 package.json：应用本身没有单独的版本来源，发版时改的就是这一处。 */
 const APP_VERSION = version;
 
-/** 产品名、版本、基础代码的 MIT 声明，和第三方依赖清单。 */
+/** 产品名、版本，和第三方依赖清单（含随仓库附带的 MIT 许可）。 */
 export function AboutPage() {
   const { productName, companyName } = appConfig.brand;
-  const copyright =
-    license.split("\n").find((line) => line.startsWith("Copyright")) ?? "";
   return (
     <PageShell
       title="关于"
@@ -35,11 +46,6 @@ export function AboutPage() {
         <p className="text-muted-foreground text-sm">
           本产品使用了以下开源软件。
         </p>
-        <h3 className="font-medium text-[13px]">基础代码（MIT）</h3>
-        <p className="text-[13px]">{copyright}</p>
-        <pre className="whitespace-pre-wrap rounded-[9px] border border-border bg-card p-3 text-[12px] text-muted-foreground">
-          {license}
-        </pre>
       </section>
       <ThirdPartyNotices />
     </PageShell>
@@ -57,7 +63,11 @@ function ThirdPartyNotices() {
   useEffect(() => {
     let live = true;
     import("@/lib/generated/third-party-notices.json").then(
-      (module) => live && setNotices(module.default as Notice[]),
+      (module) =>
+        live &&
+        setNotices(
+          [...(module.default as Notice[]), BUNDLED_NOTICE].sort(byName),
+        ),
       () => live && setFailed(true),
     );
     return () => {
