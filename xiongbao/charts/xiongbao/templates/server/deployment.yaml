@@ -178,7 +178,7 @@ spec:
             {{- if $sandbox }}
             {{- /* The shape of a Bot's computer, as a file rather than as a permission to read one. */}}
             - name: sandbox-template
-              mountPath: /etc/xiongbao
+              mountPath: /etc/xiongbao-sandbox
               readOnly: true
             {{- end }}
             {{- with (include "xiongbao.extraVolumeMounts" . | trim) }}

@@ -95,7 +95,7 @@ spec:
               {{- /* The same shape of computer the server uses, so the two cannot disagree. */}}
               volumeMounts:
                 - name: sandbox-template
-                  mountPath: /etc/xiongbao
+                  mountPath: /etc/xiongbao-sandbox
                   readOnly: true
                 {{- with (include "xiongbao.extraVolumeMounts" . | trim) }}
                 {{- . | nindent 16 }}

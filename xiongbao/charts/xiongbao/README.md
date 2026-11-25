@@ -117,7 +117,7 @@ helm upgrade --install xiongbao charts/xiongbao \
 
 The chart then installs Intelligence (whose embeddings image is amd64 only too), generates every
 credential it needs as Secrets that are kept across upgrades and uninstalls, including XiongBao's
-runtime key in `xiongbao-intel-api-key`, and gives it the licence (XiongBao gets the same one).
+runtime key in `openbot-intel-api-key`, and gives it the licence (XiongBao gets the same one).
 Intelligence's bootstrap Job then creates XiongBao's organization and project, stores that key for it,
 and creates the `xiongbao` Learning container. Nobody signs in to anything. The log of the
 `xiongbao-intelligence-bootstrap` Job says what Intelligence set up. The browser reaches
@@ -663,7 +663,7 @@ Learning agent spends the same key your Bots do, on a model that follows the key
 | both | `openai/gpt-5.5` | the OpenAI key |
 
 `config.learning.model` names another, as `provider/model` (`anthropic/claude-opus-4-8`, say). The
-chart writes the model and each key, under its own name, into `xiongbao-intel-learning`, and the agent
+chart writes the model and each key, under its own name, into `openbot-intel-learning`, and the agent
 reads them from there as `LEARNING_AGENT_MODEL`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
 (`intelligence.learning.agent`), so the Anthropic key never reaches it under the OpenAI name. Leave
 `intelligence.learning.agent.model` empty: it would set the model a second time, and the chart refuses
@@ -1033,7 +1033,7 @@ either and tenant isolation would rest on the application alone.
   nor `BYPASSRLS`.
 
 `config.extraEnv` renders after the chart's own variables, so it is the value the pods get. See
-[configuration](../../docs/configuration.md#the-database-role-and-xiongbao_rls_enforce).
+[configuration](../../docs/configuration.md#the-database-role-and-openbot_rls_enforce).
 
 ### Coming from a release before 0.0.14: a computer now runs as uid 1001
 

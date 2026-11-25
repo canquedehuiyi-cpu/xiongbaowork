@@ -42,10 +42,10 @@ function render(...args: string[]): Doc[] {
     [
       "helm",
       "template",
-      "openbot",
+      "xiongbao",
       chart,
       "--namespace",
-      "openbot",
+      "xiongbao",
       "--values",
       join(chart, "ci/vanilla-values.yaml"),
       ...args,
@@ -70,8 +70,8 @@ function refusal(...args: string[]): string {
 }
 
 /** This chart's own resources, not the bundled Intelligence's. */
-const openbot = (doc: Doc) =>
-  doc.metadata.labels?.["app.kubernetes.io/name"] === "openbot";
+const xiongbao = (doc: Doc) =>
+  doc.metadata.labels?.["app.kubernetes.io/name"] === "xiongbao";
 
 /** A load balancer this chart has a controller create, and where its tags go. */
 type Surface = {
@@ -97,7 +97,7 @@ const surfaces: Surface[] = [
       "--set-string",
       "ingress.className=alb",
     ],
-    find: (docs) => docs.find((d) => d.kind === "Ingress" && openbot(d)),
+    find: (docs) => docs.find((d) => d.kind === "Ingress" && xiongbao(d)),
   },
   {
     name: "the server's LoadBalancer Service",
@@ -116,7 +116,7 @@ const surfaces: Surface[] = [
       docs.find(
         (d) =>
           d.kind === "Service" &&
-          openbot(d) &&
+          xiongbao(d) &&
           d.metadata.labels?.["app.kubernetes.io/component"] === "server",
       ),
   },
@@ -220,7 +220,7 @@ describe.skipIf(!helm)("AWS usage attribution", () => {
         "ingress.enabled=true",
         "--set-string",
         `ingress.className=${className}`,
-      ).find((d) => d.kind === "Ingress" && openbot(d));
+      ).find((d) => d.kind === "Ingress" && xiongbao(d));
       expect(
         ingress?.metadata.annotations?.["alb.ingress.kubernetes.io/tags"],
       ).toBe(ourTag);
@@ -232,7 +232,7 @@ describe.skipIf(!helm)("AWS usage attribution", () => {
       ...(surfaces[0] as Surface).on,
       "--set-json",
       'ingress.annotations={"alb.ingress.kubernetes.io/group.name":"shared"}',
-    ).find((d) => d.kind === "Ingress" && openbot(d));
+    ).find((d) => d.kind === "Ingress" && xiongbao(d));
     expect(
       ingress?.metadata.annotations?.["alb.ingress.kubernetes.io/group.name"],
     ).toBe("shared");

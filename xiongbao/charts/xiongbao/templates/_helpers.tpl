@@ -653,7 +653,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 - name: COMPUTER_SANDBOX_IDLE_AFTER
   value: {{ .Values.computers.sandbox.idleAfter | quote }}
 - name: COMPUTER_SANDBOX_TEMPLATE_FILE
-  value: /etc/xiongbao/sandbox-template.json
+  value: /etc/xiongbao-sandbox/sandbox-template.json
 {{- end }}
 {{- /*
   How far one Bot may hand work to another.

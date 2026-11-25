@@ -8,7 +8,7 @@ set -euo pipefail
 
 chart=charts/xiongbao
 key="$(openssl rand -base64 32)"
-external="$chart/ci/eks-values.yaml"     # postgresql off, database.existingSecret: openbot-database
+external="$chart/ci/eks-values.yaml"     # postgresql off, database.existingSecret: xiongbao-database
 bundled="$chart/ci/self-hosted-values.yaml" # postgresql on
 
 render() {

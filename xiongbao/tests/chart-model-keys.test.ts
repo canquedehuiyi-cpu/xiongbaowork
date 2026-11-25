@@ -49,10 +49,10 @@ function render(...args: string[]): Doc[] {
     [
       "helm",
       "template",
-      "openbot",
+      "xiongbao",
       chart,
       "--namespace",
-      "openbot",
+      "xiongbao",
       "--values",
       join(chart, "ci/vanilla-values.yaml"),
       ...args,
@@ -128,12 +128,12 @@ describe.skipIf(!helm)("an Anthropic key", () => {
       `secrets.anthropicApiKey=${ANTHROPIC_KEY}`,
     );
     expect(
-      secret(docs, "openbot-secrets")?.stringData?.["anthropic-api-key"],
+      secret(docs, "xiongbao-secrets")?.stringData?.["anthropic-api-key"],
     ).toBe(ANTHROPIC_KEY);
     expect(
       variable(docs, "ANTHROPIC_API_KEY")?.valueFrom?.secretKeyRef,
     ).toEqual({
-      name: "openbot-secrets",
+      name: "xiongbao-secrets",
       key: "anthropic-api-key",
       optional: true,
     });
@@ -146,7 +146,7 @@ describe.skipIf(!helm)("an Anthropic key", () => {
       "--set-string",
       `secrets.anthropicApiKey=${ANTHROPIC_KEY}`,
     );
-    const written = secret(docs, "openbot-secrets")?.stringData ?? {};
+    const written = secret(docs, "xiongbao-secrets")?.stringData ?? {};
     expect(written["model-api-key"]).toBe(OPENAI_KEY);
     expect(written["anthropic-api-key"]).toBe(ANTHROPIC_KEY);
     expect(variable(docs, "OPENAI_API_KEY")?.valueFrom?.secretKeyRef?.key).toBe(
@@ -168,18 +168,18 @@ describe.skipIf(!helm)("an Anthropic key", () => {
       key: "anthropic-api-key",
       optional: true,
     });
-    expect(secret(docs, "openbot-secrets")).toBeUndefined();
+    expect(secret(docs, "xiongbao-secrets")).toBeUndefined();
   });
 });
 
 describe.skipIf(!helm)("an install on OpenAI alone", () => {
   test("writes no Anthropic key and names no provider or endpoint", () => {
     const docs = render("--set-string", `secrets.modelApiKey=${OPENAI_KEY}`);
-    const written = secret(docs, "openbot-secrets")?.stringData ?? {};
+    const written = secret(docs, "xiongbao-secrets")?.stringData ?? {};
     expect(written["model-api-key"]).toBe(OPENAI_KEY);
     expect(written).not.toHaveProperty("anthropic-api-key");
     expect(variable(docs, "OPENAI_API_KEY")?.valueFrom?.secretKeyRef).toEqual({
-      name: "openbot-secrets",
+      name: "xiongbao-secrets",
       key: "model-api-key",
       optional: true,
     });

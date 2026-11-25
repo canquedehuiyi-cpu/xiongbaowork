@@ -144,8 +144,8 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
 
    ```sh
    helm dependency build charts/xiongbao
-   helm install openbot charts/xiongbao \
-     --namespace openbot --create-namespace \
+   helm install xiongbao charts/xiongbao \
+     --namespace xiongbao --create-namespace \
      --values charts/xiongbao/ci/vanilla-values.yaml \
      --values openbot-secrets.yaml \
      --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
@@ -158,8 +158,8 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
 4. **Open your evaluation.**
 
    ```sh
-   kubectl -n openbot get pods,jobs
-   kubectl -n openbot port-forward svc/openbot-server 3001:3001
+   kubectl -n xiongbao get pods,jobs
+   kubectl -n xiongbao port-forward svc/xiongbao-server 3001:3001
    ```
 
    Open <http://127.0.0.1:3001>. This configuration is single-user: anyone who can reach it is an administrator. Keep the port-forward local.
