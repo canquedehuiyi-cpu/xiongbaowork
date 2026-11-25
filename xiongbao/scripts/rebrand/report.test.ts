@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { findLeftovers } from "./report";
+import { copilotkitImportedNames, findLeftovers, isExcluded } from "./report";
 
 const script = join(import.meta.dir, "report.ts");
 
@@ -135,6 +135,143 @@ describe("findLeftovers", () => {
     );
     const found = findLeftovers(["xiongbao/app/src/c.ts"], "R1", root);
     expect(found.map((hit) => hit.line)).toEqual([5, 6]);
+  });
+
+  test("从 @copilotkit/* 导入的名字在同文件里放行（含多行导入、as 别名、type、再导出），没导入的名字不放行", () => {
+    put(
+      "xiongbao/app/src/imports.tsx",
+      [
+        "import {",
+        "  CopilotKitProvider,",
+        "  useCopilotKit as useRuntime,",
+        "  type CopilotKitProviderProps,",
+        '} from "@copilotkit/react-core/v2";',
+        'import type { CopilotKitIntelligence } from "@copilotkit/runtime/v2";',
+        "const p: CopilotKitProviderProps = {};",
+        'type T = CopilotKitIntelligence["getThread"];',
+        "<CopilotKitProvider />;",
+        "useCopilotKit();",
+        "const x: CopilotKitCore = y;",
+      ].join("\n"),
+    );
+    const found = findLeftovers(["xiongbao/app/src/imports.tsx"], "R1", root);
+    // useCopilotKit 写在导入语句里（as 之前的原名），同样放行；CopilotKitCore 没有导入，不放行。
+    expect(found.map((hit) => [hit.line, hit.word])).toEqual([
+      [11, "CopilotKit"],
+    ]);
+  });
+
+  test("导入名放行只认导入语句：别的模块导入的 CopilotKit 名字与非源码文件不放行", () => {
+    put(
+      "xiongbao/app/src/other.ts",
+      ['import { CopilotKitThing } from "./local";', "CopilotKitThing();"].join(
+        "\n",
+      ),
+    );
+    put(
+      "xiongbao/docs/x.md",
+      [
+        'import { CopilotKitProvider } from "@copilotkit/react-core";',
+        "CopilotKitProvider",
+      ].join("\n"),
+    );
+    expect(
+      findLeftovers(["xiongbao/app/src/other.ts"], "R1", root).map(
+        (hit) => hit.line,
+      ),
+    ).toEqual([1, 2]);
+    expect(
+      findLeftovers(["xiongbao/docs/x.md"], "R1", root).map((hit) => hit.line),
+    ).toEqual([1, 2]);
+  });
+
+  test("copilotkitImportedNames 收默认导入、命名空间与花括号里的名字，不收别的模块", () => {
+    const names = copilotkitImportedNames(
+      [
+        'import Kit, { a as CopilotKitA } from "@copilotkit/x";',
+        'import * as CopilotKitNs from "@copilotkit/y";',
+        'export { CopilotKitRe } from "@copilotkit/z";',
+        'import { CopilotKitLocal } from "./local";',
+      ].join("\n"),
+    );
+    expect([...names].sort()).toEqual(
+      ["CopilotKitA", "CopilotKitNs", "CopilotKitRe", "Kit", "a"].sort(),
+    );
+  });
+
+  test("依赖的线上名逐个放行，名单外的带 copilotkit 的名字与公司名不放行", () => {
+    put(
+      "xiongbao/server/src/wire.ts",
+      [
+        "const v = { __copilotkit_interrupt_value__: 1 };",
+        'const t = "copilotkitSuggest";',
+        'const c = "[&_.copilotKitInput]:border";',
+        "const w = { __copilotkit_other__: 1 };",
+        'const s = "CopilotKit Intelligence";',
+      ].join("\n"),
+    );
+    put("xiongbao/app/src/s.css", ".copilotKitInput { color: red; }\n");
+    expect(
+      findLeftovers(["xiongbao/server/src/wire.ts"], "R1", root).map(
+        (hit) => hit.line,
+      ),
+    ).toEqual([4, 5]);
+    expect(findLeftovers(["xiongbao/app/src/s.css"], "R1", root)).toEqual([]);
+  });
+
+  test("依赖对象的成员名 copilotkit 只在属性访问、解构与对象键处放行，句子里不放行", () => {
+    put(
+      "xiongbao/app/src/member.ts",
+      [
+        "const { copilotkit } = hook();",
+        "copilotkit.runAgent();",
+        "props.copilotkit.ui;",
+        "const { copilotkit: _ns, ...rest } = props;",
+        "const next = { ...rest, copilotkit };",
+        'const label = "copilotkit is the runtime";',
+      ].join("\n"),
+    );
+    expect(
+      findLeftovers(["xiongbao/app/src/member.ts"], "R1", root).map(
+        (hit) => hit.line,
+      ),
+    ).toEqual([2, 6]);
+  });
+
+  test("注释里的 @copilotkit/<包> 包名放行；字符串里的包名与注释里的公司名不放行", () => {
+    put(
+      "xiongbao/server/src/comment.ts",
+      [
+        "// 见 `@copilotkit/runtime` 1.85.0 的 dist/agent/index.mjs",
+        " * 依赖 @copilotkit/shared/telemetry 读这个变量",
+        'const name = "@copilotkit/runtime"; // 运行时 @copilotkit/runtime',
+        "// CopilotKit 的云服务",
+        'const url = "https://x.example/@copilotkit/a";',
+      ].join("\n"),
+    );
+    put(
+      "xiongbao/docs/dep.md",
+      "用 `@copilotkit/react-core` 画聊天；CopilotKit 公司\n",
+    );
+    put(
+      "xiongbao/docker/x.yml",
+      '# @copilotkit/runtime 读它\nk: "@copilotkit/runtime"\n',
+    );
+    expect(
+      findLeftovers(["xiongbao/server/src/comment.ts"], "R1", root).map(
+        (hit) => hit.line,
+      ),
+    ).toEqual([3, 4, 5]);
+    expect(
+      findLeftovers(["xiongbao/docs/dep.md"], "R1", root).map(
+        (hit) => hit.word,
+      ),
+    ).toEqual(["CopilotKit"]);
+    expect(
+      findLeftovers(["xiongbao/docker/x.yml"], "R1", root).map(
+        (hit) => hit.line,
+      ),
+    ).toEqual([2]);
   });
 
   test("package.json 只放行依赖与 overrides 的键，脚本里的 copilotkit 不放行", () => {
@@ -312,6 +449,50 @@ describe("report.ts 命令行", () => {
     ]);
     expect(result.code).toBe(2);
     expect(result.err).toContain("xiongbao/no-such-dir");
+  });
+
+  test("--exclude 去掉文件与目录下的命中，--scope 可跟多个路径", () => {
+    put("xiongbao/keep/k.ts", "// copilotkit\n");
+    put("xiongbao/drop/d.ts", "// copilotkit\n");
+    put("xiongbao/drop.md", "copilotkit\n");
+    put(".github/w.yml", "# ok\n");
+    gitAdd();
+    const base = ["--phase", "R1", "--families", "copilotkit"];
+    expect(
+      run([
+        ...base,
+        "--scope",
+        "xiongbao/keep",
+        "xiongbao/drop",
+        "--exclude",
+        "xiongbao/keep/k.ts",
+        "xiongbao/drop/",
+        "--fail-on-unprotected",
+      ]).code,
+    ).toBe(0);
+    const failing = run([
+      ...base,
+      "--scope",
+      "xiongbao/keep",
+      ".github",
+      "--exclude",
+      "xiongbao/drop",
+      "--fail-on-unprotected",
+    ]);
+    expect(failing.code).toBe(1);
+    expect(failing.err).toContain("xiongbao/keep/k.ts:1");
+  });
+
+  test("isExcluded 按路径段匹配，前缀相同的兄弟目录不算", () => {
+    expect(isExcluded("xiongbao/drop/a.ts", ["xiongbao/drop"])).toBe(true);
+    expect(isExcluded("xiongbao/drop.md", ["xiongbao/drop"])).toBe(false);
+    expect(isExcluded("xiongbao/dropped/a.ts", ["xiongbao/drop/"])).toBe(false);
+    expect(isExcluded("xiongbao/NOTICE", ["xiongbao/NOTICE"])).toBe(true);
+  });
+
+  test("--exclude 后没有路径退出 2", () => {
+    gitAdd();
+    expect(run(["--phase", "R1", "--exclude"]).code).toBe(2);
   });
 
   test("不认识的族名退出 2", () => {
