@@ -48,7 +48,7 @@ bun build scripts/ci/windows-runner-probe.ts --compile --target=bun-windows-x64-
 
 `windows-final-linux.log`：shell 29 pass / 0 fail，90 断言。
 `windows-final-device.log`：通道、设备安全和离线队列 17 pass / 0 fail，92 断言。
-测试使用自己创建的普通应用角色与一次性库 xiongbao_windows_final，不读取真实账户或模型 key。
+测试使用自己创建的普通应用角色与一次性库 openbot_windows_final，不读取真实账户或模型 key。
 
 固定 SHA 全量、正式镜像及独立 Windows CLI 扩展验收另行记录。
 本脚本验证直接执行器与协议 dispatcher；不把它写成完整真实服务器配对验收。

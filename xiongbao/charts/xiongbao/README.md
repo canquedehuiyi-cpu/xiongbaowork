@@ -119,7 +119,7 @@ The chart then installs Intelligence (whose embeddings image is amd64 only too),
 credential it needs as Secrets that are kept across upgrades and uninstalls, including XiongBao's
 runtime key in `openbot-intel-api-key`, and gives it the licence (XiongBao gets the same one).
 Intelligence's bootstrap Job then creates XiongBao's organization and project, stores that key for it,
-and creates the `xiongbao` Learning container. Nobody signs in to anything. The log of the
+and creates the `openbot` Learning container. Nobody signs in to anything. The log of the
 `xiongbao-intelligence-bootstrap` Job says what Intelligence set up. The browser reaches
 Intelligence's gateway through XiongBao's own address, so the one port-forward is all it needs. Leave
 `config.intelligence` and `secrets.intelligenceApiKey` empty: the chart wires the bundled one itself
@@ -653,7 +653,7 @@ the ones produced and published in Intelligence itself.
 
 **With the bundled Intelligence** (`intelligence.enabled: true`, off by default) there is nothing to
 set up. Learning is on in Intelligence too (`intelligence.learning`), Intelligence creates the
-project's `xiongbao` container at install, and the server assigns it as the default. Intelligence's
+project's `openbot` container at install, and the server assigns it as the default. Intelligence's
 Learning agent spends the same key your Bots do, on a model that follows the keys you give:
 
 | Keys | Learning's model | Key it spends |
@@ -689,7 +689,7 @@ skills in Intelligence itself.
 
 **With an Intelligence of your own** (`intelligence.enabled: false`), Learning needs a container in its
 project before it delivers anything. With nothing saved in Admin and no
-`config.learning.containerId`, the server assigns the project's `xiongbao` container as the default by
+`config.learning.containerId`, the server assigns the project's `openbot` container as the default by
 itself once it exists. A current Intelligence lets the runtime key create it, and the server does. On
 one that does not, give the chart a credential that can and a setup Job creates it on install and
 every upgrade:
