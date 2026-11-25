@@ -3,7 +3,7 @@
  * tables served is gone, and the tables stay until a later phase drops them; nothing here reads or writes them now.
  */
 
-/** How a browser was connected: `web`, `desktop`, XiongBao's own browser (`openbot-browser`, as stored), or a Bot's
+/** How a browser was connected: `web`, `desktop`, XiongBao's own browser (the third value, as stored), or a Bot's
  * browser for one recording (`bot-browser`). */
 export type RecorderConnectVia =
   | "web"

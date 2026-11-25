@@ -39,8 +39,7 @@ import { cn } from "@/lib/utils";
 
 /*
  * THE BAR ABOVE A BROWSER SHOWN IN THE PAGE: its tabs, then back, forward, reload, Clear browser data and the address.
- * One component for both browsers a person works in through XiongBao, their own (the Browser page, hosted) and a Bot's
- * (the Bot's screen), so the two never drift into two different browsers.
+ * Shown above a Bot's browser, on the Bot's screen.
  */
 
 /**

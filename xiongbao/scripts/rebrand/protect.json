@@ -10,16 +10,6 @@
     "reason": "环境变量名与错误码（任务 15 处理）"
   },
   {
-    "text": "openbot-recorder",
-    "until": "R2",
-    "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
-  },
-  {
-    "text": "OpenBotUrl",
-    "until": "R2",
-    "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
-  },
-  {
     "pattern": "\\bopenbotUrl\\b",
     "until": "R2",
     "reason": "打开浏览器请求体 connection.openbotUrl 与录制扩展状态 LauncherState.openbotUrl：服务器与电脑端（旧版可能仍在跑）之间传输的字段名（设备端/服务器线上名，任务 16 处理）"
@@ -58,11 +48,6 @@
     "text": "x-openbot-person-id",
     "until": "R2",
     "reason": "电脑端请求头：人员 id（设备端/服务器线上名，任务 16 处理）"
-  },
-  {
-    "text": "x-openbot-recorder-bot",
-    "until": "R2",
-    "reason": "录制扩展到服务器的 Bot 头（设备端/服务器线上名，任务 16 处理）"
   },
   {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
@@ -119,58 +104,10 @@
     "reason": "品牌白名单：xiongbao/shared/staffing-proposal.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"data-copilotkit-ignore\"",
-    "file": "xiongbao/extension/src/content/notice.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/content/notice.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"data-copilotkit-ignore\"",
-    "file": "xiongbao/extension/src/content/indicator.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/content/indicator.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-browser\"",
-    "file": "xiongbao/app/src/components/settings/browsers/connected-browsers.tsx",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/components/settings/browsers/connected-browsers.tsx 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-browser\"",
-    "file": "xiongbao/server/src/browser/routes.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/browser/routes.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "\"openbot-browser\"",
     "file": "xiongbao/shared/recorder-api.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/shared/recorder-api.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-browser\"",
-    "file": "xiongbao/extension/src/background/setup.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/background/setup.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-browser\"",
-    "file": "xiongbao/extension/src/background/launcher.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/background/launcher.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-browser\"",
-    "file": "xiongbao/extension/src/background/connection.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/background/connection.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-browser\":",
-    "file": "xiongbao/extension/src/pages/options/options.tsx",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/pages/options/options.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-component-\"",
@@ -305,12 +242,6 @@
     "reason": "品牌白名单：xiongbao/server/src/agents/harness-model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "[data-copilotkit-action]",
-    "file": "xiongbao/extension/src/content/targeting.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/extension/src/content/targeting.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "/openbot/deliver",
     "until": "R3",
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
@@ -361,12 +292,6 @@
     "reason": "品牌白名单：xiongbao/shared/openbot-actor.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
-    "file": "xiongbao/shared/learning.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/learning.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "by.startsWith(\"openbot:\")",
     "file": "xiongbao/server/src/plugins/store.ts",
     "until": "R3",
@@ -395,12 +320,6 @@
     "file": "xiongbao/supervisor/src/names.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "eq(recorderConnections.via, \"openbot-browser\")",
-    "file": "xiongbao/server/src/index.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "granted_by 以 openbot: 开头",
@@ -569,12 +488,6 @@
     "text": "openbot-deployment:",
     "until": "R3",
     "reason": "Composio/Arcade 共享账号身份前缀：第三方已登记"
-  },
-  {
-    "text": "openbot-egress-credentials.invalid",
-    "file": "xiongbao/agent-computer/src/egress.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/agent-computer/src/egress.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "openbot:agent-run",
@@ -1040,12 +953,6 @@
     "reason": "测试引用 auth 已保护的桌面端 OAuth client id"
   },
   {
-    "file": "xiongbao/server/tests/browser-routes.integration.test.ts",
-    "pattern": "\\\"openbot-browser\\\"",
-    "until": "R3",
-    "reason": "测试引用已保护的录制连接 via 值（recorder_connections.via 落库）"
-  },
-  {
     "file": "xiongbao/server/tests/brand-third-party.test.ts",
     "pattern": "\\((?:OpenBot)\\)",
     "until": "R3",
@@ -1109,12 +1016,6 @@
     "pattern": "\\\"openbot:test\\\"",
     "until": "R3",
     "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
-  },
-  {
-    "file": "xiongbao/server/tests/learning-personal-space.test.ts",
-    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
-    "until": "R3",
-    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
   },
   {
     "file": "xiongbao/server/tests/tenant-package-brand-fields.test.ts",
@@ -1249,12 +1150,6 @@
     "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
   },
   {
-    "file": "xiongbao/app/tests/recorder-browsers.test.tsx",
-    "text": "\"openbot-browser\"",
-    "until": "R3",
-    "reason": "测试与 connected-browsers.tsx 已保护的连接来源 via \"openbot-browser\"（服务器存量连接记录的值）同值"
-  },
-  {
     "file": "xiongbao/app/tests/a2ui.test.tsx",
     "text": "\"openbot/ui@1\"",
     "until": "R3",
@@ -1313,36 +1208,6 @@
     "text": "framework: \"OpenBot\"",
     "until": "R3",
     "reason": "服务器给内置员工的框架名 OpenBot（shared/harnesses.ts 已保护的 OPENBOT_HARNESS_NAME，bot-profile/setup.tsx 按它显示「<品牌>内置」），测试夹具与之同值"
-  },
-  {
-    "text": "Could not connect to OpenBot's back end",
-    "file": "xiongbao/extension/src/offscreen/grant.ts",
-    "until": "R4",
-    "reason": "Intelligence 网关在 CONNECTION_FAILED 时回的原文（服务器 trajectory-connect.ts 原样转发 TrajectoryConnectionError 的 message），扩展 grant.ts 按子串匹配决定重试；对端不归本仓库，改字面量会失配"
-  },
-  {
-    "text": "Could not connect to OpenBot's back end",
-    "file": "xiongbao/extension/tests/grant.test.ts",
-    "until": "R4",
-    "reason": "Intelligence 网关在 CONNECTION_FAILED 时回的原文（服务器 trajectory-connect.ts 原样转发 TrajectoryConnectionError 的 message），扩展 grant.ts 按子串匹配决定重试；对端不归本仓库，改字面量会失配"
-  },
-  {
-    "text": "Could not connect to OpenBot's back end",
-    "file": "xiongbao/extension/tests/streamer.test.ts",
-    "until": "R4",
-    "reason": "Intelligence 网关在 CONNECTION_FAILED 时回的原文（服务器 trajectory-connect.ts 原样转发 TrajectoryConnectionError 的 message），扩展 grant.ts 按子串匹配决定重试；对端不归本仓库，改字面量会失配"
-  },
-  {
-    "file": "xiongbao/extension/tests/launcher.test.ts",
-    "text": "\"openbot-browser\"",
-    "until": "R3",
-    "reason": "测试与 launcher.ts 已保护的连接来源 via \"openbot-browser\"（扩展 chrome.storage.local 的 connection.via 与服务器 recorder_connections.via 存量值）同值"
-  },
-  {
-    "file": "xiongbao/extension/tests/recorder-marks-compat.test.ts",
-    "pattern": "openbot\\.recorder\\.(?:configure|stop)\\b|openbot\\.recorder\"",
-    "until": "R2",
-    "reason": "旧版录制扩展注入页面主世界的 Symbol.for 名（页面里旧版 page-network 留下的钩子），测试证明新版回退只调 xb.recorder.* 而不碰旧名；与同文件已保护的旧 DOM 标记 openbot-recorder-* 一起归任务 17 处理"
   },
   {
     "file": "xiongbao/agent-computer/tests/session-cookies-rename.test.ts",
@@ -1788,12 +1653,6 @@
   },
   {
     "file": "xiongbao/docs/configuration.md",
-    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
-    "until": "R3",
-    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），文档写的是实际路径；改名需带迁移"
-  },
-  {
-    "file": "xiongbao/docs/personal-edition.md",
     "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
     "until": "R3",
     "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），文档写的是实际路径；改名需带迁移"
