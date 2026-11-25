@@ -9,20 +9,20 @@ import {
 } from "../src/loopback-relay";
 
 /**
- * A Recorder in the computer's container is handed OpenBot at `http://127.0.0.1:<port>` and a local Intelligence gateway
+ * A Recorder in the computer's container is handed XiongBao at `http://127.0.0.1:<port>` and a local Intelligence gateway
  * at `ws://localhost:<port>`: the person's own laptop's addresses, which inside the container are the container. Before
- * `COMPUTER_LOOPBACK_RELAYS`, nothing answered there, so Record in a browser on OpenBot Desktop's computer connected and
+ * `COMPUTER_LOOPBACK_RELAYS`, nothing answered there, so Record in a browser on XiongBao Desktop's computer connected and
  * then reached nothing. These run the real relay and the real computer process over real sockets.
  */
 
-/** Stands in for OpenBot (another container) or the gateway (the host): it answers HTTP and echoes a WebSocket. */
+/** Stands in for XiongBao (another container) or the gateway (the host): it answers HTTP and echoes a WebSocket. */
 function target() {
   return Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     fetch(request, server) {
       if (server.upgrade(request)) return undefined;
-      return new Response(`openbot ${new URL(request.url).pathname}`);
+      return new Response(`xiongbao ${new URL(request.url).pathname}`);
     },
     websocket: {
       message(socket, message) {
@@ -64,14 +64,14 @@ describe("which ports a setting relays", () => {
 
 describe("a relay", () => {
   test("carries HTTP and a WebSocket from this machine's loopback to the target", async () => {
-    const openbot = target();
+    const xiongbao = target();
     const port = await reservePort();
     const relays = await startLoopbackRelays([
-      { port, host: "127.0.0.1", targetPort: Number(openbot.port) },
+      { port, host: "127.0.0.1", targetPort: Number(xiongbao.port) },
     ]);
     try {
       const answer = await fetch(`http://127.0.0.1:${port}/api/recorder/info`);
-      expect(await answer.text()).toBe("openbot /api/recorder/info");
+      expect(await answer.text()).toBe("xiongbao /api/recorder/info");
       const socket = new WebSocket(`ws://127.0.0.1:${port}/socket`);
       const echoed = new Promise<string>((resolve, reject) => {
         socket.onmessage = (event) => resolve(String(event.data));
@@ -85,7 +85,7 @@ describe("a relay", () => {
       socket.close();
     } finally {
       await relays.close();
-      openbot.stop(true);
+      xiongbao.stop(true);
     }
   });
 
@@ -116,7 +116,7 @@ describe("the computer started with COMPUTER_LOOPBACK_RELAYS", () => {
   });
 
   async function computer(relays: string) {
-    root ||= await mkdtemp(join(tmpdir(), "openbot-loopback-relay-"));
+    root ||= await mkdtemp(join(tmpdir(), "xiongbao-loopback-relay-"));
     const port = await reservePort();
     const child = Bun.spawn([process.execPath, "src/index.ts"], {
       cwd: join(import.meta.dir, ".."),
@@ -139,11 +139,11 @@ describe("the computer started with COMPUTER_LOOPBACK_RELAYS", () => {
   }
 
   test("relays from the moment it answers", async () => {
-    const openbot = target();
+    const xiongbao = target();
     const relayed = await reservePort();
     try {
       const { child, base } = await computer(
-        `${relayed}=127.0.0.1:${openbot.port}`,
+        `${relayed}=127.0.0.1:${xiongbao.port}`,
       );
       const deadline = Date.now() + 15_000;
       while (
@@ -159,9 +159,9 @@ describe("the computer started with COMPUTER_LOOPBACK_RELAYS", () => {
       }
       expect(
         await (await fetch(`http://127.0.0.1:${relayed}/capture`)).text(),
-      ).toBe("openbot /capture");
+      ).toBe("xiongbao /capture");
     } finally {
-      openbot.stop(true);
+      xiongbao.stop(true);
     }
   }, 30_000);
 

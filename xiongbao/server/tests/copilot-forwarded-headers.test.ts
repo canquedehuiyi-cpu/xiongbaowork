@@ -290,7 +290,7 @@ test("a suggestion sends a harness its own key and none of the request's headers
     );
     harness.headers = {
       ...harness.headers,
-      "x-openbot-agent-token": "deployment-token",
+      "x-xiongbao-agent-token": "deployment-token",
     };
     const runtime = mount([
       harness,

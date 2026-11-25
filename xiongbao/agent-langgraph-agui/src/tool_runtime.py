@@ -1,7 +1,7 @@
 """The current run's tools, with the same ownership contract as agent-langgraph.
 
 Computer/UI tools finish the run for the surface to execute and resume. Only tools
-marked by OpenBot's server execute here, through its signed callback. The request
+marked by XiongBao's server execute here, through its signed callback. The request
 context is deliberately outside graph state: assertions must never enter a
 checkpoint, model message, or AG-UI state snapshot.
 """
@@ -37,7 +37,7 @@ class RunTools:
     deployment: frozenset[str] = frozenset()
     assertion: str = field(default="", repr=False)
     connection: dict = field(default_factory=dict, compare=False, repr=False)
-    # The model and reasoning effort the server chose for this run (`openbotModel`); empty when it
+    # The model and reasoning effort the server chose for this run (`xiongbaoModel`); empty when it
     # chose none, and the deployment's own configuration applies.
     model: str = ""
     effort: str = ""
@@ -50,22 +50,22 @@ RUN_EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "m
 # graph state, a checkpoint or a snapshot.
 OPENBOT_PROPS = {
     "openbotRun",
-    "openbotDeploymentTools",
-    "openbotModel",
+    "xiongbaoDeploymentTools",
+    "xiongbaoModel",
     "openbot_run",
-    "openbot_deployment_tools",
-    "openbot_model",
+    "xiongbao_deployment_tools",
+    "xiongbao_model",
 }
 
 
 def run_model(props) -> tuple[str, str]:
     """The `(model, effort)` the server chose for this run, or empty strings.
 
-    The server sends `openbotModel: {"model": ..., "reasoningEffort": ...}` and strips any a
+    The server sends `xiongbaoModel: {"model": ..., "reasoningEffort": ...}` and strips any a
     browser supplied, so it is the deployment's decision. A value of another shape is ignored, as
     is an effort outside the server's spelling: no effort means the model's own default.
     """
-    choice = props.get("openbotModel")
+    choice = props.get("xiongbaoModel")
     if not isinstance(choice, dict):
         return "", ""
     model = choice.get("model")
@@ -151,7 +151,7 @@ def provider_name() -> str:
     if host == "generativelanguage.googleapis.com":
         return "Google"
     if "/api/model-provider/" in base:
-        # OpenBot's own sign-in proxy, which serves Google or xAI: the model says which.
+        # XiongBao's own sign-in proxy, which serves Google or xAI: the model says which.
         model = (os.environ.get("BOT_MODEL") or "").strip().lower()
         if model.startswith("grok"):
             return "xAI"
@@ -236,7 +236,7 @@ def provider_message(error: BaseException) -> str:
 # What a person reads when a run fails for a reason that is not the provider's.
 RUN_FAILED = "The Bot stopped before it finished answering. Try again."
 
-_current: ContextVar[RunTools | None] = ContextVar("openbot_run_tools", default=None)
+_current: ContextVar[RunTools | None] = ContextVar("xiongbao_run_tools", default=None)
 
 
 def current_tools() -> RunTools:
@@ -250,7 +250,7 @@ class UnofferedToolError(ValueError):
 class ToolAwareAgent(WholeThreadAgent):
     async def run(self, input: RunAgentInput):
         props = input.forwarded_props if isinstance(input.forwarded_props, dict) else {}
-        names = props.get("openbotDeploymentTools", [])
+        names = props.get("xiongbaoDeploymentTools", [])
         assertion = props.get("openbotRun", "")
         model, effort = run_model(props)
         context = RunTools(
@@ -453,7 +453,7 @@ async def _call_tool(call, context):
             async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
                 response = await client.post(
                     url,
-                    headers={"x-openbot-agent-token": token},
+                    headers={"x-xiongbao-agent-token": token},
                     json={
                         "name": call["name"],
                         "args": call["args"],

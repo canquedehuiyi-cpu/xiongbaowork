@@ -46,7 +46,7 @@ export const HOST_SPECIFIC_SKILLS: readonly {
   {
     slug: "workbuddy-market-export",
     reasonRef:
-      '正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接口、workbuddy_marketplace_* 工具、市场目录结构。openbot 没有这三个市场、没有这些接口与工具，每一步都落空。 ← "workbuddy_marketplace_skill"; "把 WorkBuddy 市场里的专家/技能/插件全下载下来"',
+      '正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接口、workbuddy_marketplace_* 工具、市场目录结构。本产品没有这三个市场、没有这些接口与工具，每一步都落空。 ← "workbuddy_marketplace_skill"; "把 WorkBuddy 市场里的专家/技能/插件全下载下来"',
   },
 ];
 

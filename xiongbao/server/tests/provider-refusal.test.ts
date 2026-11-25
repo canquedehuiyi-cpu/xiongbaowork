@@ -498,7 +498,7 @@ function harnessRefusedWith(
   });
   if (bot?.type !== "remote_ag_ui") throw new Error("the Bot did not parse");
   // The deployment's token, as `runtime-agents.ts` gives every endpoint this deployment runs.
-  bot.headers = { "x-openbot-agent-token": "managed-agent-token" };
+  bot.headers = { "x-xiongbao-agent-token": "managed-agent-token" };
   return runError(bot, {
     provider: vendor,
     defaultModel: vendor === "openai" ? "gpt-5.5" : "claude-sonnet-5-5",

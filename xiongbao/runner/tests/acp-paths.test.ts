@@ -9,7 +9,7 @@ import { classifyPath, permissionFacts } from "../src/acp/paths";
  * symlinks are resolved, and reported upward without any absolute path.
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-acp-paths-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-acp-paths-"));
 const work = join(scratch, "work");
 const elsewhere = join(scratch, "elsewhere");
 mkdirSync(join(work, "src"), { recursive: true });

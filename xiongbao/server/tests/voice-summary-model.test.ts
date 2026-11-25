@@ -127,7 +127,7 @@ test.each(["claude", "chatgpt"] as const)(
         expect(new URL(request.url).pathname).toBe(
           provider === "claude" ? "/model" : "/",
         );
-        expect(request.headers.get("x-openbot-agent-token")).toBe(
+        expect(request.headers.get("x-xiongbao-agent-token")).toBe(
           "owned-harness-token",
         );
         expect(request.headers.get("authorization")).toBeNull();
@@ -180,7 +180,7 @@ test.each(["claude", "chatgpt"] as const)(
       expect(requests[0]?.threadId).not.toBe(requests[1]?.threadId);
       for (const request of requests) {
         expect(request.tools).toEqual([]);
-        expect(request.forwardedProps.openbotModelOnly).toBe(true);
+        expect(request.forwardedProps.xiongbaoModelOnly).toBe(true);
         expect(JSON.stringify(request.context)).toContain("untrusted");
         expect(JSON.stringify(request.messages)).toContain("Plan the launch.");
         expect(JSON.stringify(request)).not.toContain("synthetic-plan-token");

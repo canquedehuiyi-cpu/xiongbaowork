@@ -38,7 +38,7 @@ def _model_id() -> str:
 
 app = FastAPI()
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 @app.middleware("http")
@@ -62,7 +62,7 @@ async def health():
 add_strands_fastapi_endpoint(
     app,
     StrandsAgent(
-        name="openbot",
+        name="xiongbao",
         agent=Agent(model=LiteLLMModel(model_id=_model_id())),
         hooks=[RunSystemPrompt()],
     ),

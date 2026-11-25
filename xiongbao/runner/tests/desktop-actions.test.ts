@@ -428,7 +428,7 @@ describe("desktop actions", () => {
       const tail = [
         "At C:\\Users\\zhangsan\\AppData\\Local\\Temp\\helper 1.ps1:3 char:1",
         "Add-Type : cannot open \\\\server\\share\\x.cs",
-        "see /home/zhangsan/.cache/openbot/helper.cs and /tmp/x.log",
+        "see /home/zhangsan/.cache/xiongbao/helper.cs and /tmp/x.log",
         "C:\\Users\\张三\\桌面\\a.txt ZhangSan",
       ].join("\n");
       const actions = throwingActions(

@@ -3,12 +3,12 @@
  *
  * A Bot on its own framework picks its own model, so the composer's picker is only offered where a
  * run's model is this deployment's to decide: a built-in Bot, and the harness picked in setup when it
- * is one of XiongBao's own images that reads `forwardedProps.openbotModel` (the LangGraph harness,
+ * is one of XiongBao's own images that reads `forwardedProps.xiongbaoModel` (the LangGraph harness,
  * which also serves the ChatGPT plan, and the Claude Agent SDK harness, which serves the Claude plan).
  * A harness somebody brought themselves is theirs, and is never told what to run on.
  */
 
-/** XiongBao's own harness images that read `forwardedProps.openbotModel`, by name or digest. */
+/** XiongBao's own harness images that read `forwardedProps.xiongbaoModel`, by name or digest. */
 const TAKES_MODEL =
   /(?:^|\/)(?:openbot-)?agent-(?:langgraph-agui|claude-sdk)(?::|@|$)/;
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # The root helper, tested as root inside the delivery image (it creates users, so nowhere else):
 #
-#   docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
+#   docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" xiongbao:trackb /t/xb-bot.test.sh
 #
 # Any failed assertion exits 1.
 set -u

@@ -18,7 +18,7 @@ import {
 } from "../src/index";
 
 const SERVER = ["--server", "https://bot.example.com"];
-const root = mkdtempSync(join(tmpdir(), "openbot-runner-data-dir-"));
+const root = mkdtempSync(join(tmpdir(), "xiongbao-runner-data-dir-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 function parsed(argv: string[], env: Record<string, string> = {}): Options {

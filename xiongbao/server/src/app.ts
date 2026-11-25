@@ -2584,7 +2584,7 @@ export function createApp(
       } | null;
 
       const verdict = await authoriseAgentCall({
-        presented: context.req.header("x-openbot-agent-token") ?? "",
+        presented: context.req.header("x-xiongbao-agent-token") ?? "",
         run: body?.run,
         encryptionKey: config.keyEncryptionKey,
         legacyToken,

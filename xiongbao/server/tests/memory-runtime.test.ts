@@ -100,6 +100,18 @@ test("disabled or deleted memory removes stale replayed context", async () => {
   expect(next?.messages).toHaveLength(1);
   expect(next?.context).toHaveLength(0);
 });
+test("a continuation replaying its memory entry still carries one memory", async () => {
+  // An approval's continuation snapshot keeps the context the run was sent and replays it as-is.
+  const request = input();
+  request.context.push({
+    description: "OpenBot personal memory",
+    value: "stale fact",
+  });
+  const next = await run(async () => "fresh fact", request);
+  expect(next?.context).toEqual([
+    { description: "OpenBot personal memory", value: "fresh fact" },
+  ]);
+});
 test("personal memory retains Automatic Learning catalog and tool authority", async () => {
   const request = input();
   request.messages.unshift({

@@ -38,7 +38,7 @@ import { createRootRegistry, PROJECTS_DIR } from "../src/roots";
  * checked to be exactly that.
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "openbot-project-roots-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-project-roots-"));
 let made = 0;
 
 /** Run the test's own `git` (fixture setup only), failing loudly. */

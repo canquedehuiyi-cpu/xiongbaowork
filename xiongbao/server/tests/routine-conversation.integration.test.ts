@@ -468,7 +468,7 @@ describe("a routine asked for by a Bot running its own loop", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-openbot-agent-token": "deployment-wide-agent-token",
+          "x-xiongbao-agent-token": "deployment-wide-agent-token",
         },
         body: JSON.stringify({
           name: "mcp__routines__create_routine",

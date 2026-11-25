@@ -32,7 +32,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk._internal.sdk_mcp_bridge import SdkMcpBridge
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 
 SEARCH = "search_tools"
 FOUND = "mcp__routines__create_routine"
@@ -91,7 +91,7 @@ def step(run, tools, search_result=None):
                 for name in tools
             ],
             "context": [],
-            "forwardedProps": {"openbotModelOnly": True},
+            "forwardedProps": {"xiongbaoModelOnly": True},
         }
     )
 
@@ -239,7 +239,7 @@ def called(seen):
 
 def test_the_step_after_a_search_holds_and_calls_the_found_tool(sdk):
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="model", model_only=True)
+        adapter = XiongBaoClaudeAgentAdapter(name="model", model_only=True)
         try:
             first = await events(adapter, step("run-1", [SEARCH]))
             assert called(first) == [SEARCH]
@@ -273,7 +273,7 @@ def test_the_step_after_a_search_holds_and_calls_the_found_tool(sdk):
 
 def test_a_step_sent_the_same_tools_resumes_its_query(sdk):
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="model", model_only=True)
+        adapter = XiongBaoClaudeAgentAdapter(name="model", model_only=True)
         try:
             first = await events(adapter, step("run-1", [SEARCH, FOUND]))
             search_id = next(

@@ -627,16 +627,16 @@ describe("a remote Bot", () => {
     expect(String(holdings?.content ?? "")).toContain("slack");
     // Narrowed away, so the Bot must not be told it holds it.
     expect(String(holdings?.content ?? "")).not.toContain("drive: tool_0");
-    expect(run?.forwardedProps?.openbotBotId).toBe("risk");
+    expect(run?.forwardedProps?.xiongbaoBotId).toBe("risk");
     expect(run?.forwardedProps?.openbotRun).toBe("signed-assertion");
     // The narrowed set is what the Bot is offered. Governed vendor tools run through the AG-UI tool
     // lifecycle here (approvals see the provider's call), so none is on the callback-only list.
     expect(run?.tools).toContain("mcp__slack__tool_0");
     expect(run?.tools).not.toContain("mcp__drive__tool_0");
-    expect(run?.forwardedProps?.openbotDeploymentTools).not.toContain(
+    expect(run?.forwardedProps?.xiongbaoDeploymentTools).not.toContain(
       "mcp__slack__tool_0",
     );
-    expect(run?.forwardedProps?.openbotDeploymentTools).not.toContain(
+    expect(run?.forwardedProps?.xiongbaoDeploymentTools).not.toContain(
       "mcp__drive__tool_0",
     );
   });
@@ -812,10 +812,10 @@ describe("a remote Mastra Bot", () => {
       expect(run?.tools?.map((tool) => tool.name)).not.toContain(
         "mcp__drive__tool_0",
       );
-      expect(run?.forwardedProps?.openbotBotId).toBe("risk-mastra");
+      expect(run?.forwardedProps?.xiongbaoBotId).toBe("risk-mastra");
       expect(run?.forwardedProps?.openbotRun).toBe("signed-assertion");
       // Executed through the AG-UI tool lifecycle, not the callback, so not on the callback list.
-      expect(run?.forwardedProps?.openbotDeploymentTools).not.toContain(
+      expect(run?.forwardedProps?.xiongbaoDeploymentTools).not.toContain(
         "mcp__slack__tool_0",
       );
       expect(sentToMastra).toHaveLength(1);
@@ -892,9 +892,9 @@ describe("a remote Mastra Bot", () => {
       );
       expect(holdings).toBeUndefined();
       expect(run?.tools?.map((tool) => tool.name)).toEqual([]);
-      expect(run?.forwardedProps?.openbotBotId).toBe("risk-mastra");
+      expect(run?.forwardedProps?.xiongbaoBotId).toBe("risk-mastra");
       expect(run?.forwardedProps?.openbotRun).toBeUndefined();
-      expect(run?.forwardedProps?.openbotDeploymentTools).toEqual([]);
+      expect(run?.forwardedProps?.xiongbaoDeploymentTools).toEqual([]);
       expect(sentToMastra).toHaveLength(1);
       body = sentToMastra[0];
       expect(body?.messages?.map((message) => message.role)).toEqual(["user"]);

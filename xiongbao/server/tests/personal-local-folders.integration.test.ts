@@ -222,7 +222,7 @@ describe("the personal edition with XiongBao Desktop", () => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-openbot-agent-token": "legacy-agent-tool-token",
+        "x-xiongbao-agent-token": "legacy-agent-tool-token",
       },
       body: JSON.stringify({
         name: "host_read_file",

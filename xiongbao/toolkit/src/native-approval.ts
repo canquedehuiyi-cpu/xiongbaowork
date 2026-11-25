@@ -53,7 +53,7 @@ export type NativeRunScope = {
   run?: NativeRun;
   /**
    * Every async context the run started in, re-entered with it (`AsyncLocalStorage.snapshot()`).
-   * The same stream that loses the run loses the host's own context too: OpenBot's tenant frame
+   * The same stream that loses the run loses the host's own context too: XiongBao's tenant frame
    * (server/src/tenant/context.ts) was gone by the time a tool ran, and every call was refused with
    * "no tenant frame". Carried the same way as the run, for the same reason.
    */

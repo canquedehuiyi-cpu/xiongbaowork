@@ -19,13 +19,13 @@ import { TURN_LIMITS } from "./limits";
  * What a person reads when a Bot's stream ends with neither an answer nor an error.
  *
  * It used to read "Remote agent ended without a terminal event.", in red under the message: seen on
- * OpenBot Desktop when the LangGraph harness died on a provider's refusal it did not catch. The
+ * XiongBao Desktop when the LangGraph harness died on a provider's refusal it did not catch. The
  * harness now ends every run with an error of its own, so this is for a Bot that still does not.
  */
 export const RUN_ENDED_EARLY =
   "The Bot stopped before it finished answering. Try again.";
 
-/** Client tools supplied by OpenBot when the caller has no browser. */
+/** Client tools supplied by XiongBao when the caller has no browser. */
 export type HeadlessTool = {
   definition: Tool;
   /**

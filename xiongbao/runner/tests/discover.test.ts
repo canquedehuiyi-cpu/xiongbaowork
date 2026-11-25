@@ -34,7 +34,7 @@ import type { UninstallEntry } from "../src/discover-installed";
  * (files, registry, PATH, clock) is injected; nothing that identifies how to start an app leaves.
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-discover-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-discover-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 let made = 0;
 

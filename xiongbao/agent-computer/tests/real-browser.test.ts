@@ -197,7 +197,7 @@ describe("what the person's browser is started with", () => {
 });
 
 describe("finding the person's own browsers", () => {
-  test("where the OpenBot browser finds them, in its order, on each OS", async () => {
+  test("where the XiongBao browser finds them, in its order, on each OS", async () => {
     const at = (files: string[]) => async (path: string) =>
       files.includes(path);
     expect(
@@ -449,7 +449,7 @@ describe("bringing the person's browser forward, and opening the store page in i
         args: [
           "-c",
           LINUX_HANDOFF,
-          "openbot-real-browser",
+          "xiongbao-real-browser",
           launcher,
           EDGE_PAGE,
         ],
@@ -457,7 +457,7 @@ describe("bringing the person's browser forward, and opening the store page in i
       },
       {
         file: "/bin/sh",
-        args: ["-c", LINUX_HANDOFF, "openbot-real-browser", chromeLauncher],
+        args: ["-c", LINUX_HANDOFF, "xiongbao-real-browser", chromeLauncher],
         env: shown,
       },
     ]);
@@ -476,7 +476,7 @@ describe("bringing the person's browser forward, and opening the store page in i
     expect(ran).toEqual([
       {
         file: "/bin/sh",
-        args: ["-c", LINUX_HANDOFF, "openbot-real-browser", nixChrome],
+        args: ["-c", LINUX_HANDOFF, "xiongbao-real-browser", nixChrome],
         env: { PATH: "/run/current-system/sw/bin", DISPLAY: ":0" },
       },
     ]);
@@ -609,7 +609,7 @@ describe("what the routes refuse", () => {
       ],
       [
         realBrowserComputerPaths.store,
-        { browser: "chrome", url: `${CHROME_PAGE}?ref=openbot` },
+        { browser: "chrome", url: `${CHROME_PAGE}?ref=xiongbao` },
         400,
       ],
       [
@@ -706,13 +706,13 @@ describe("the commands, run for real", () => {
       }),
     ).toEqual({ code: 3, stdout: "out one\n", stderr: "err\n" });
     await expect(
-      runCommand({ file: "/nonexistent/openbot-browser", args: [] }),
+      runCommand({ file: "/nonexistent/xiongbao-browser", args: [] }),
     ).rejects.toThrow();
   });
 
   test("Linux's hand-off returns at once and leaves what it started nobody's child but the system's", async () => {
     if (process.platform === "win32") return;
-    const dir = await mkdtemp(join(tmpdir(), "openbot-real-browser-"));
+    const dir = await mkdtemp(join(tmpdir(), "xiongbao-real-browser-"));
     scratch.push(dir);
     const said = join(dir, "said");
     // Stands in for the browser: it outlives the shell that started it, and says who its parent is
@@ -726,7 +726,13 @@ describe("the commands, run for real", () => {
     const started = Date.now();
     const result = await runCommand({
       file: "/bin/sh",
-      args: ["-c", LINUX_HANDOFF, "openbot-real-browser", browser, CHROME_PAGE],
+      args: [
+        "-c",
+        LINUX_HANDOFF,
+        "xiongbao-real-browser",
+        browser,
+        CHROME_PAGE,
+      ],
     });
     expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
     expect(Date.now() - started).toBeLessThan(900);
@@ -815,9 +821,9 @@ let managed: Computer;
 
 beforeAll(async () => {
   if (!canRunLocal) return;
-  root = await mkdtemp(join(tmpdir(), "openbot-real-browser-computer-"));
+  root = await mkdtemp(join(tmpdir(), "xiongbao-real-browser-computer-"));
   [local, managed] = await Promise.all([
-    // OpenBot Desktop's: people's browsers and no Bot.
+    // XiongBao Desktop's: people's browsers and no Bot.
     startComputer("local", {
       COMPUTER_BROWSER_BACKEND: "local-chrome",
       COMPUTER_BROWSER_MODE: "headed",

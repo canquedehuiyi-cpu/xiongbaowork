@@ -218,7 +218,7 @@ def plan(monkeypatch, tmp_path):
 def run_body(*, model=None, tools=(), content="Say hello."):
     props = {"openbotRun": "synthetic-run-assertion"}
     if model is not None:
-        props["openbotModel"] = model
+        props["xiongbaoModel"] = model
     return {
         "threadId": str(uuid4()),
         "runId": str(uuid4()),
@@ -241,7 +241,7 @@ async def run(body):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://harness"
     ) as client:
-        response = await client.post("/", json=body, headers={"x-openbot-agent-token": TOKEN})
+        response = await client.post("/", json=body, headers={"x-xiongbao-agent-token": TOKEN})
     assert response.status_code == 200
     return [
         json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
@@ -260,7 +260,7 @@ async def get(path, token=TOKEN):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://harness"
     ) as client:
-        headers = {"x-openbot-agent-token": token} if token else {}
+        headers = {"x-xiongbao-agent-token": token} if token else {}
         return await client.get(path, headers=headers)
 
 
@@ -311,7 +311,7 @@ async def test_the_servers_model_and_effort_reach_the_codex_backend(plan, choice
     body = plan.answers[0]["body"]
     assert body["model"] == "gpt-5.6-terra"
     assert body.get("reasoning") == reasoning
-    assert "openbotModel" not in json.dumps(events), "server props never reach the snapshot"
+    assert "xiongbaoModel" not in json.dumps(events), "server props never reach the snapshot"
 
 
 @pytest.mark.asyncio
@@ -356,7 +356,7 @@ async def test_a_plan_refusing_a_model_ends_the_run_with_its_reason_and_refreshe
     assert len(plan.listings) == 2
 
 
-# The Codex backend's refusal of a tool schema, as the harness log showed it on OpenBot Desktop:
+# The Codex backend's refusal of a tool schema, as the harness log showed it on XiongBao Desktop:
 # `openai.APIError: Invalid JSON schema: regex lookaround is not supported. Found at
 # $.properties.email_address.pattern.` raised from `bind_tools(model).ainvoke`. The message is the
 # backend's, verbatim. The envelope is the one shape that raises that class from a stream: the
@@ -430,7 +430,7 @@ async def test_a_run_that_fails_for_its_own_reason_still_ends_with_a_terminal_er
 
 @pytest.mark.asyncio
 async def test_models_answers_the_plans_listing_in_the_servers_shape(plan, monkeypatch):
-    monkeypatch.setenv("LANGCHAIN_CODEX_ORIGINATOR", "openbot-proof")
+    monkeypatch.setenv("LANGCHAIN_CODEX_ORIGINATOR", "xiongbao-proof")
 
     response = await get("/models")
 
@@ -466,7 +466,7 @@ async def test_models_answers_the_plans_listing_in_the_servers_shape(plan, monke
     # The same credentials the plan's answers carry (`_ChatOpenAICodex._build_headers`).
     assert request["headers"]["authorization"] == "Bearer synthetic-access"
     assert request["headers"]["chatgpt-account-id"] == "synthetic-account"
-    assert request["headers"]["originator"] == "openbot-proof"
+    assert request["headers"]["originator"] == "xiongbao-proof"
 
 
 @pytest.mark.asyncio

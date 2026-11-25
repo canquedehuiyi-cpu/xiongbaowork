@@ -44,7 +44,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import StreamEvent
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 
 ASKED = (
     "Call your tool named send_fax with number 555-0100 and text hello. Do not use any other "
@@ -264,7 +264,7 @@ def run(messages):
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="openbot")
+        adapter = XiongBaoClaudeAgentAdapter(name="xiongbao")
         try:
             async with asyncio.timeout(2):
                 return [event async for event in adapter.run(request)]

@@ -114,8 +114,8 @@ const connection = (): LauncherConnection => ({
 
 beforeAll(async () => {
   if (!asked) return;
-  root = await mkdtemp(join(tmpdir(), "openbot-person-computer-"));
-  // The OpenBot the fixture Recorder reports to, and a page whose title is what the person types.
+  root = await mkdtemp(join(tmpdir(), "xiongbao-person-computer-"));
+  // The XiongBao the fixture Recorder reports to, and a page whose title is what the person types.
   site = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -384,13 +384,13 @@ describe.skipIf(!asked)("a person's browser on the computer", () => {
 });
 
 /**
- * A computer whose image lacks Playwright's Chromium: the person's browser cannot start, which is OpenBot's setup and
+ * A computer whose image lacks Playwright's Chromium: the person's browser cannot start, which is XiongBao's setup and
  * nothing the person did or can do. Run 4 saw a launch failure reach the person as a 502 reading "The browser could
  * not be opened:" and Playwright's own text, its install box included. No browser starts, so this runs everywhere.
  */
 describe("a person's browser on a computer whose browser is not installed", () => {
   test("is a 503 the server turns into its sentence for the person, and Playwright's text stays in the computer's log", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "openbot-no-chromium-"));
+    const dir = await mkdtemp(join(tmpdir(), "xiongbao-no-chromium-"));
     const port = await reservePort();
     const base = `http://127.0.0.1:${port}`;
     const child = Bun.spawn([process.execPath, "src/index.ts"], {
@@ -481,7 +481,7 @@ describe("a person's browser on a computer whose browser is not installed", () =
  * Where a person's browser may run at all, as the running computer decides it from how it was started. A Bot on the
  * computer every Bot shares may run a shell as the same user the browser's profile belongs to, so a person's browser
  * runs only on a computer of its own: one started for it (`COMPUTER_BOT_ID`, as a supervisor or a Sandbox starts each),
- * or one started for people's browsers alone (`COMPUTER_PEOPLE_ONLY`, OpenBot Desktop's). Refused before anything is
+ * or one started for people's browsers alone (`COMPUTER_PEOPLE_ONLY`, XiongBao Desktop's). Refused before anything is
  * launched, so no browser starts and this runs everywhere.
  */
 describe("a person's browser on a computer that is not its own", () => {
@@ -489,7 +489,7 @@ describe("a person's browser on a computer that is not its own", () => {
   /** The computers this block starts, which it stops itself: the file's own teardown runs only with a browser. */
   let first = 0;
   beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), "openbot-person-placement-"));
+    dir = await mkdtemp(join(tmpdir(), "xiongbao-person-placement-"));
     root ||= dir;
     first = computers.length;
   });
@@ -576,7 +576,7 @@ describe("a person's browser on a computer that is not its own", () => {
     ).toBe(200);
   }, 30_000);
 
-  test("on OpenBot Desktop's computer, which runs people's browsers and no Bot, a Bot is refused", async () => {
+  test("on XiongBao Desktop's computer, which runs people's browsers and no Bot, a Bot is refused", async () => {
     const desktop = await startComputer("people-only", {
       OPENBOT_RECORDER_DIR: FIXTURE,
       COMPUTER_PEOPLE_ONLY: "on",

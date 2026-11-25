@@ -67,7 +67,7 @@ async function profilesFor(
   options: Parameters<typeof import("../src/profiles").createProfiles>[2],
 ) {
   const { createProfiles } = await import("../src/profiles");
-  const root = await mkdtemp(join(tmpdir(), `openbot-${name}-`));
+  const root = await mkdtemp(join(tmpdir(), `xiongbao-${name}-`));
   roots.push(root);
   const told: string[] = [];
   const profiles = createProfiles(

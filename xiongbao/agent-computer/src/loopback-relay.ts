@@ -4,13 +4,13 @@
  * WHY. The Recorder reaches XiongBao only at an https address or at a loopback one (`normaliseXiongBaoOrigin`), so on a
  * laptop it is handed `http://127.0.0.1:<port>`, the address the person's own window uses, and the Intelligence gateway
  * at `ws://localhost:<port>` where Intelligence runs on the laptop too. A browser in this container that is handed
- * those addresses reaches the container, where nothing answers: OpenBot is another container and Intelligence is on the
+ * those addresses reaches the container, where nothing answers: XiongBao is another container and Intelligence is on the
  * host. Record in any browser here (a person's own, or a Bot's) would connect and then send nothing anywhere.
  *
  * WHAT. `COMPUTER_LOOPBACK_RELAYS` names each such port and where this container reaches it, `<port>=<host>:<port>`,
- * comma-separated (OpenBot Desktop: its app's and server's ports to `server:3001`, a local gateway's to
+ * comma-separated (XiongBao Desktop: its app's and server's ports to `server:3001`, a local gateway's to
  * `host.docker.internal`). Each is listened on at this container's loopback alone and piped, byte for byte, to its
- * target. Unset, nothing listens: a deployment whose OpenBot has a public address needs none of this.
+ * target. Unset, nothing listens: a deployment whose XiongBao has a public address needs none of this.
  *
  * Every Bot here can reach the same targets by name already (the server is on the Compose network, and the host is
  * this person's own machine in the personal edition, the one place this is set), so a relay opens no new destination.

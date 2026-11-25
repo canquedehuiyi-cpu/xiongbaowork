@@ -1,7 +1,7 @@
 /*
- * The fixture Recorder's offscreen document: it asks OpenBot for a recording's capture pass, as the
+ * The fixture Recorder's offscreen document: it asks XiongBao for a recording's capture pass, as the
  * Recorder's own document does (`fetchGrant` in extension/src/offscreen/grant.ts), and answers the
- * worker with the status OpenBot's answer came back with, or null when nothing came back.
+ * worker with the status XiongBao's answer came back with, or null when nothing came back.
  */
 chrome.runtime.onMessage.addListener((message, _sender, reply) => {
   if (message?.type !== "pass") return false;

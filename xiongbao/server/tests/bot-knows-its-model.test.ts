@@ -240,7 +240,7 @@ describe("a Bot on XiongBao's own harness, on an API key", () => {
       );
       const starter = agents.find((agent) => agent.id === "personal-assistant");
       if (!starter) throw new Error("the personal package ships no starter");
-      expect(starter.title).toContain("Powered by OpenBot");
+      expect(starter.title).toContain("Powered by XiongBao Work");
       const registered = registeredAgentFromRow(starter);
       if (!registered) throw new Error("the starter does not register");
 
@@ -271,7 +271,7 @@ function planHarness() {
     hostname: "127.0.0.1",
     port: 0,
     fetch: async (request) => {
-      if (request.headers.get("x-openbot-agent-token") !== "managed-token")
+      if (request.headers.get("x-xiongbao-agent-token") !== "managed-token")
         return Response.json({ error: "unauthorised" }, { status: 401 });
       if (
         request.method === "GET" &&
@@ -419,7 +419,7 @@ describe("a Bot on a harness this deployment runs", () => {
               name: "Personal Assistant",
               type: "remote_ag_ui",
               endpoint,
-              headers: { "x-openbot-agent-token": "managed-token" },
+              headers: { "x-xiongbao-agent-token": "managed-token" },
               standingMessage: {
                 id: "standing-role:picked-harness",
                 role: "system",

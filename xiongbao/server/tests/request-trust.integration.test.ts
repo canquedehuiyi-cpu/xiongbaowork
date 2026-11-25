@@ -747,7 +747,7 @@ describe.skipIf(!lanIsPrivate)("another machine on the network", () => {
       headers: {
         host: `host.docker.internal:${local.port}`,
         "content-type": "application/json",
-        "x-openbot-agent-token": AGENT_TOOL_TOKEN,
+        "x-xiongbao-agent-token": AGENT_TOOL_TOKEN,
       },
       body: JSON.stringify({
         name: "mcp__linear__LINEAR_CREATE_ISSUE",

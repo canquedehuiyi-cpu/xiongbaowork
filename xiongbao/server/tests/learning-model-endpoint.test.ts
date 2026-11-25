@@ -61,11 +61,11 @@ function planHarness(steps: Record<string, unknown>[][]) {
         runId: string;
       };
       runs.push({
-        token: request.headers.get("x-openbot-agent-token"),
+        token: request.headers.get("x-xiongbao-agent-token"),
         path,
         body,
       });
-      if (request.headers.get("x-openbot-agent-token") !== DEPLOYMENT_TOKEN)
+      if (request.headers.get("x-xiongbao-agent-token") !== DEPLOYMENT_TOKEN)
         return new Response("refused", { status: 401 });
       const events = [
         { type: "RUN_STARTED", threadId: body.threadId, runId: body.runId },
@@ -211,7 +211,9 @@ for (const provider of ["chatgpt", "claude"] as const) {
     expect(step?.token).toBe(DEPLOYMENT_TOKEN);
     expect(step?.path).toBe(provider === "claude" ? "/model" : "/");
     expect(JSON.stringify(step)).not.toContain(LEARNING_SECRET);
-    expect(step?.body.forwardedProps).toMatchObject({ openbotModelOnly: true });
+    expect(step?.body.forwardedProps).toMatchObject({
+      xiongbaoModelOnly: true,
+    });
     expect(step?.body.tools.map((tool) => tool.name)).toEqual([
       "submit_learning_result",
     ]);

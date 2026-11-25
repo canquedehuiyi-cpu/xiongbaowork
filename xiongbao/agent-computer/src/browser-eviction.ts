@@ -28,10 +28,10 @@ export type Evictable = { usedAt: number };
 /**
  * Which browsers the idle sweep leaves alone and the cap closes last, from where people's browsers show here.
  *
- * A NATIVE WINDOW, AND ONLY A NATIVE WINDOW. A person browsing in a window on their own desktop (OpenBot Desktop) sends
+ * A NATIVE WINDOW, AND ONLY A NATIVE WINDOW. A person browsing in a window on their own desktop (XiongBao Desktop) sends
  * this process nothing, so nothing here can tell them from a person who walked away, and their browser always looks
  * like the one used longest ago: by use alone it would be closed out from under them. A cloud browser is different.
- * The person reaches it only through OpenBot's Browser page, which asks for its state every second and streams its
+ * The person reaches it only through XiongBao's Browser page, which asks for its state every second and streams its
  * screen, and every one of those touches it; once nobody is on that page it is a root, sandbox-less Chromium nobody
  * can see. So it closes when idle, by the Bots' own rule and timeout, and is ranked by use alongside theirs rather
  * than ahead of them. Closing it loses nothing but the open tabs: its profile is on disk and the next open starts

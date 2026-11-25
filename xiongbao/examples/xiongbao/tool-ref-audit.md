@@ -16,24 +16,24 @@ audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6
 | amap-guide | full | — | — | 无命中 |
 | assign-work | full | — | — | 无命中 |
 | awesome-design-md | degraded | — | missing-asset-references:"文件 references/voltagent.md 未入包，正文引用 references/voltagent.md" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
-| baseline-regression-triage | blocked | — | shell-command-prose:"git log --oneline -8 # 找到任务起点"（共 11 处）; executable-scripts:"scripts/*`）。" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| baseline-regression-triage | blocked | — | shell-command-prose:"git log --oneline -8 # 找到任务起点"（共 11 处）; executable-scripts:"scripts/*`）。" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | bot-creator | blocked | `incidental` | unknown-mcp-server:"mcp__staffing__list_staff"（共 4 处） | 正文引用 mcp__<server>__<tool>，而该 server 不在 connectors.yaml 里。 |
 | canvasflow-ppt | degraded | — | missing-asset-references:"目录 assets 未入包，正文引用 assets/template.html" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
 | code | full | — | — | 无命中 |
-| code-error-fixer | blocked | — | shell-command-prose:"npx tsc --version"（共 5 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| code-error-fixer | blocked | — | shell-command-prose:"npx tsc --version"（共 5 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | code-review-and-quality | full | — | — | 无命中 |
 | competitor-research | full | — | — | 无命中 |
 | context7-docs | full | — | — | 无命中 |
 | contract-key-points | full | — | — | 无命中 |
-| cursor-memory-backup | blocked | — | shell-command-prose:"python scripts/cursor-memory-backup.py backup # 默认：D:\Curso…"（共 4 处）; executable-scripts:"scripts/cursor-memory-backup.py`，只用标准库（Python 3.8+）。" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| darwin-skill | blocked | — | shell-command-prose:"git revert HEAD（创建新commit回滚，不用reset --hard）"（共 6 处）; executable-scripts:"scripts/screenshot.mjs 截图（2x 高清，只截 .card 元素，自动 open 图片）："; references-without-assets:"references/scripts/assets引用正确、路径可达 /" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 正文引用 references/ 下的附件，而该技能没有随包附上 references/。 |
+| cursor-memory-backup | blocked | — | shell-command-prose:"python scripts/cursor-memory-backup.py backup # 默认：D:\Curso…"（共 4 处）; executable-scripts:"scripts/cursor-memory-backup.py`，只用标准库（Python 3.8+）。" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| darwin-skill | blocked | — | shell-command-prose:"git revert HEAD（创建新commit回滚，不用reset --hard）"（共 6 处）; executable-scripts:"scripts/screenshot.mjs 截图（2x 高清，只截 .card 元素，自动 open 图片）："; references-without-assets:"references/scripts/assets引用正确、路径可达 /" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 正文引用 references/ 下的附件，而该技能没有随包附上 references/。 |
 | data-analysis-report | full | — | — | 无命中 |
 | design-token-forensics | full | — | — | 无命中 |
-| dev-expert--indiv-weishui | blocked | `incidental` | executable-scripts:"scripts/init_deploy.py`（dry-run → `--apply`：写前 `.bak`、幂等合并、…" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| dev-expert--skillhub | blocked | `incidental` | executable-scripts:"scripts/init_deploy.py`（dry-run→`--apply`：写前 `.bak`、幂等合并、只追…" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| dev-expert--user-814dbe54 | blocked | `incidental` | executable-scripts:"scripts/init_deploy.py`（dry-run→`--apply`：写前 `.bak`、幂等合并、只追…" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| dev-expert-pro | blocked | — | shell-command-prose:"python3 "<本技能目录>/scripts/skill_lookup.py" @harmonyos"; executable-scripts:"scripts/project_probe.py) /" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| dev-god | blocked | — | shell-command-prose:"python3 <本技能目录>/scripts/project_probe.py <目标工程目录>"; executable-scripts:"scripts/project_probe.py)：" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| dev-expert--indiv-weishui | blocked | `incidental` | executable-scripts:"scripts/init_deploy.py`（dry-run → `--apply`：写前 `.bak`、幂等合并、…" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| dev-expert--skillhub | blocked | `incidental` | executable-scripts:"scripts/init_deploy.py`（dry-run→`--apply`：写前 `.bak`、幂等合并、只追…" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| dev-expert--user-814dbe54 | blocked | `incidental` | executable-scripts:"scripts/init_deploy.py`（dry-run→`--apply`：写前 `.bak`、幂等合并、只追…" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| dev-expert-pro | blocked | — | shell-command-prose:"python3 "<本技能目录>/scripts/skill_lookup.py" @harmonyos"; executable-scripts:"scripts/project_probe.py) /" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| dev-god | blocked | — | shell-command-prose:"python3 <本技能目录>/scripts/project_probe.py <目标工程目录>"; executable-scripts:"scripts/project_probe.py)：" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | dingtalk-assistant | full | — | — | 无命中 |
 | doc-coauthor | full | — | — | 无命中 |
 | doc-polish | full | — | — | 无命中 |
@@ -41,32 +41,32 @@ audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6
 | email-draft | full | — | — | 无命中 |
 | engineering-workflow | degraded | — | missing-asset-references:"目录 reference 未入包，正文引用 reference/api-and-interface-design.md…" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
 | feishu-assistant | full | — | — | 无命中 |
-| fore-vip-pc-clear | blocked | — | shell-command-prose:"python3 scripts/gen_clean_script.py --platform macos --titl…"; executable-scripts:"scripts/gen_clean_script.py`，把本次全部步骤生成为一键清理脚本放到**桌面**：" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| frontend-artifact-contract-drift-triage | blocked | — | shell-command-prose:"ssh -i key.pem ubuntu@host 'sudo env NODE_PATH=<release>/no…"（共 3 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| frontend-build-verification | blocked | — | shell-command-prose:"npx tsc --noEmit # 类型"（共 3 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| fore-vip-pc-clear | blocked | — | shell-command-prose:"python3 scripts/gen_clean_script.py --platform macos --titl…"; executable-scripts:"scripts/gen_clean_script.py`，把本次全部步骤生成为一键清理脚本放到**桌面**：" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| frontend-artifact-contract-drift-triage | blocked | — | shell-command-prose:"ssh -i key.pem ubuntu@host 'sudo env NODE_PATH=<release>/no…"（共 3 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| frontend-build-verification | blocked | — | shell-command-prose:"npx tsc --noEmit # 类型"（共 3 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | frontend-developer--brand-guidelines | full | — | — | 无命中 |
-| frontend-developer--browser-use | blocked | `incidental` | shell-tool-call:"Bash(browser-use:*)**: 使用 Bash(browser-use:*) 工具" | 正文调用 Bash/Shell/Terminal(...)；openbot 员工没有本地 shell。 |
-| frontend-developer--frontend-dev | blocked | `incidental` | executable-scripts:"scripts/ # Asset generation scripts" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| frontend-developer--fullstack-dev | blocked | — | shell-command-prose:"npx prisma migrate dev alembic revision --autogenerate migr…"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| frontend-developer--browser-use | blocked | `incidental` | shell-tool-call:"Bash(browser-use:*)**: 使用 Bash(browser-use:*) 工具" | 正文调用 Bash/Shell/Terminal(...)；员工没有本地 shell。 |
+| frontend-developer--frontend-dev | blocked | `incidental` | executable-scripts:"scripts/ # Asset generation scripts" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| frontend-developer--fullstack-dev | blocked | — | shell-command-prose:"npx prisma migrate dev alembic revision --autogenerate migr…"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | frontend-developer--github | full | — | — | 无命中 |
 | frontend-developer--impeccable | full | — | — | 无命中 |
-| fullstack-dev | blocked | — | shell-command-prose:"npx prisma migrate dev alembic revision --autogenerate migr…"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| fullstack-dev | blocked | — | shell-command-prose:"npx prisma migrate dev alembic revision --autogenerate migr…"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | github | full | — | — | 无命中 |
 | github-issue-pr | full | — | — | 无命中 |
-| graphify | blocked | — | shell-command-prose:"python run.py --selftest"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| graphify | blocked | — | shell-command-prose:"python run.py --selftest"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | grill-me | full | — | — | 无命中 |
 | gstack--design-html | degraded | — | missing-asset-references:"目录 vendor 未入包，正文引用 vendor/pretext.js" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
 | gstack--qa | degraded | — | missing-asset-references:"目录 templates 未入包，正文引用 templates/qa-report-template.md" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
 | gstack--review | degraded | — | missing-asset-references:"目录 specialists 未入包，正文引用 specialists/api-contract.md、special…" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
-| hash-bound-review-loop | blocked | `incidental` | shell-command-prose:"git --shortstat` 数字照抄，被审查判为 blocker。"（共 3 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| hostile-git-repo-recovery | blocked | — | shell-command-prose:"git init -q t && cd t && git commit -q --allow-empty -m x"（共 41 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| humanize-ppt-team--frontend-slides | blocked | — | shell-command-prose:"bash scripts/deploy.sh <path-to-presentation>"（共 4 处）; executable-scripts:"scripts/extract-pptx.py <input.pptx> <output_dir>` (install…" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| humanize-ppt-team--guizang-ppt-skill | blocked | `incidental` | shell-command-prose:"node --check`。" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| humanize-ppt-team--html-ppt | blocked | `incidental` | executable-scripts:"scripts/"; shell-command-prose:"sh templates/theme-showcase.html # one shot"（共 5 处） | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| humanize-ppt-team--humanize-ppt | blocked | — | executable-scripts:"scripts/humanize_ppt_v1.py \"; shell-command-prose:"python3 scripts/humanize_ppt_v1.py \" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| hash-bound-review-loop | blocked | `incidental` | shell-command-prose:"git --shortstat` 数字照抄，被审查判为 blocker。"（共 3 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| hostile-git-repo-recovery | blocked | — | shell-command-prose:"git init -q t && cd t && git commit -q --allow-empty -m x"（共 41 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| humanize-ppt-team--frontend-slides | blocked | — | shell-command-prose:"bash scripts/deploy.sh <path-to-presentation>"（共 4 处）; executable-scripts:"scripts/extract-pptx.py <input.pptx> <output_dir>` (install…" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| humanize-ppt-team--guizang-ppt-skill | blocked | `incidental` | shell-command-prose:"node --check`。" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| humanize-ppt-team--html-ppt | blocked | `incidental` | executable-scripts:"scripts/"; shell-command-prose:"sh templates/theme-showcase.html # one shot"（共 5 处） | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| humanize-ppt-team--humanize-ppt | blocked | — | executable-scripts:"scripts/humanize_ppt_v1.py \"; shell-command-prose:"python3 scripts/humanize_ppt_v1.py \" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | internal-comms-3p | full | — | — | 无命中 |
 | meeting-minutes | full | — | — | 无命中 |
-| mutation-driver-engineering | blocked | — | shell-command-prose:"python -c ""（共 3 处）; executable-scripts:"scripts/`）" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| mutation-driver-engineering | blocked | — | shell-command-prose:"python -c ""（共 3 处）; executable-scripts:"scripts/`）" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | pdf-extract-fill | full | — | — | 无命中 |
 | persona-code-architect-expert | full | — | — | 无命中 |
 | persona-engineering-workflow-coach | full | — | — | 无命中 |
@@ -90,8 +90,8 @@ audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6
 | persona-software-team-lead | full | — | — | 无命中 |
 | persona-video-motion-agent | full | — | — | 无命中 |
 | persona-xtgxiso-windows-pc-care | degraded | — | references-without-assets:"references/script-templates.md`，需要时再读取**，不要把模板常驻在每一次回答里。" | 正文引用 references/ 下的附件，而该技能没有随包附上 references/。 |
-| postgres-real-verification | blocked | — | shell-command-prose:"node node_modules/vitest/vitest.mjs run --no-file-paralleli…"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| ppt-craft-master | blocked | `incidental` | executable-scripts:"scripts/generate.js`。" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| postgres-real-verification | blocked | — | shell-command-prose:"node node_modules/vitest/vitest.mjs run --no-file-paralleli…"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| ppt-craft-master | blocked | `incidental` | executable-scripts:"scripts/generate.js`。" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | ppt-designer | full | — | — | 无命中 |
 | ppt-generator | degraded | — | missing-asset-references:"目录 assets 未入包，正文引用 assets/template.html" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
 | ppt-logic-organizer | full | — | — | 无命中 |
@@ -100,11 +100,11 @@ audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6
 | project-expert-orchestration | blocked | `incidental` | unknown-mcp-server:"mcp__wb-issues__automation_list_experts" | 正文引用 mcp__<server>__<tool>，而该 server 不在 connectors.yaml 里。 |
 | prompt-engineering-expert | full | — | — | 无命中 |
 | qqbrowser-skill | degraded | — | missing-asset-references:"文件 references/playbook.md 未入包，正文引用 references/playbook.md" | 正文引用的附件在包内不存在；按文件级账本判定，规则表的布尔 hasBundledReferences 看不见这一类。 |
-| remotion-video-toolkit | blocked | — | shell-command-prose:"npx remotion render src/index.ts MyComposition out/video.mp4" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
-| reverse-engineering-fusion | blocked | `incidental` | executable-scripts:"scripts/test-nes.ts` - 集成测试脚本" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| remotion-video-toolkit | blocked | — | shell-command-prose:"npx remotion render src/index.ts MyComposition out/video.mp4" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
+| reverse-engineering-fusion | blocked | `incidental` | executable-scripts:"scripts/test-nes.ts` - 集成测试脚本" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | review-diff | full | — | — | 无命中 |
 | run-on-my-machine | full | — | — | 无命中 |
-| senior-developer--frontend-dev | blocked | `incidental` | executable-scripts:"scripts/ # AI 资产生成脚本" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| senior-developer--frontend-dev | blocked | `incidental` | executable-scripts:"scripts/ # AI 资产生成脚本" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | senior-developer--fullstack-dev | full | — | — | 无命中 |
 | senior-developer--skillhub | full | — | — | 无命中 |
 | skill-creator | full | — | — | 无命中 |
@@ -113,13 +113,13 @@ audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6
 | superpowers | full | — | — | 无命中 |
 | token-efficient-dev | full | — | — | 无命中 |
 | translate-proofread | full | — | — | 无命中 |
-| video-content-forensics | blocked | `incidental` | shell-command-prose:"npm i playwright && npx playwright install chromium" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| video-content-forensics | blocked | `incidental` | shell-command-prose:"npm i playwright && npx playwright install chromium" | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | web-search-guide | full | — | — | 无命中 |
-| windows-pc-tuneup | blocked | `incidental` | executable-scripts:"scripts/check_bat.py`（静态检查）+ `scripts/test_bat_ps.py`（内嵌命令实…" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
-| wiring-and-coverage-audit | blocked | — | shell-command-prose:"npx tsc --noEmit --listFiles > /tmp/before.txt # 记录基线"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| windows-pc-tuneup | blocked | `incidental` | executable-scripts:"scripts/check_bat.py`（静态检查）+ `scripts/test_bat_ps.py`（内嵌命令实…" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
+| wiring-and-coverage-audit | blocked | — | shell-command-prose:"npx tsc --noEmit --listFiles > /tmp/before.txt # 记录基线"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | work-report | full | — | — | 无命中 |
 | workbuddy-market-export | blocked | — | host-specific-skill:"正文整篇只讲 WorkBuddy/CodeBuddy 三个市场（专家、技能、插件）怎么批量导出：官方市场的免鉴权整包接…" | 该能力只对 WorkBuddy 宿主成立，本部署里没有它依赖的市场与接口。 |
-| workbuddy-safe-delete-guard | blocked | — | shell-command-prose:"python - <<'EOF'"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 |
+| workbuddy-safe-delete-guard | blocked | — | shell-command-prose:"python - <<'EOF'"（共 2 处） | 正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。 |
 | xlsx-formulas | full | — | — | 无命中 |
 
 其中 15 条标 `incidental`：判定成立，但决定性命中落在“散文里夹带的命令”或“纯描述性提及”，删掉那句话判定就会翻。
@@ -135,7 +135,7 @@ audit_rules_sha256: 9cbb849349cc794713c7434e3e05d1d4a28b216aff22b39c431eb62219e6
 | code-reviewer | full | — | — | 无命中 |
 | engineering-workflow-coach | full | — | — | 无命中 |
 | frontend-developer | full | — | — | 无命中 |
-| frontend-slides-renderer | blocked | `incidental` | executable-scripts:"scripts/deploy.sh` 与 `scripts/export-pdf.sh` 的规则。" | 正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。 |
+| frontend-slides-renderer | blocked | `incidental` | executable-scripts:"scripts/deploy.sh` 与 `scripts/export-pdf.sh` 的规则。" | 正文引用 scripts/ 下的可执行文件；员工无脚本通道。 |
 | general-assistant | full | — | — | 无命中 |
 | gstack-designer | full | — | — | 无命中 |
 | gstack-investigator | full | — | — | 无命中 |

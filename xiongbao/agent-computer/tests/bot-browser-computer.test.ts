@@ -24,7 +24,7 @@ import {
 /**
  * A Bot's browser worked by a person, through the computer itself: the real process, its token, its dispatcher, its
  * control and the Bot's own routes, with bundled Chromium headless and the fixture Recorder (`fixtures/recorder`),
- * which reports every call it receives to the OpenBot it was connected to, so what these tests read about the
+ * which reports every call it receives to the XiongBao it was connected to, so what these tests read about the
  * Recorder is the Recorder's side of each call.
  *
  * What it pins: the Bot works as it did with the Recorder in its browser; the bar and Record refuse anyone without the
@@ -47,7 +47,7 @@ type FixtureCall = {
   sending?: boolean;
 };
 const calls: FixtureCall[] = [];
-/** How long the last of a stopped recording takes to reach Intelligence, as this OpenBot tells the fixture Recorder. */
+/** How long the last of a stopped recording takes to reach Intelligence, as this XiongBao tells the fixture Recorder. */
 let tailMs = 0;
 
 type Computer = { base: string; child: ReturnType<typeof Bun.spawn> };
@@ -174,8 +174,8 @@ const start = (by: string, title = "File an expense report", on?: Computer) =>
 
 beforeAll(async () => {
   if (!asked) return;
-  root = await mkdtemp(join(tmpdir(), "openbot-bot-browser-computer-"));
-  // The OpenBot the fixture Recorder reports to, and the pages the Bot and the person browse.
+  root = await mkdtemp(join(tmpdir(), "xiongbao-bot-browser-computer-"));
+  // The XiongBao the fixture Recorder reports to, and the pages the Bot and the person browse.
   site = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -1067,7 +1067,7 @@ function serverOn(on: Computer) {
     /** A POST to the server's route under `/api/computers`, as the app makes it. */
     async post(botId: string, path: string, body: unknown) {
       const response = await routes.request(
-        `http://openbot.test/${botId}${path}`,
+        `http://xiongbao.test/${botId}${path}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },

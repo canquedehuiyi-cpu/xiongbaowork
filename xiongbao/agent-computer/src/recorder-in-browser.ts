@@ -65,7 +65,7 @@ export function closeRecorderSetupPages(
  * from the first challenge Playwright answered: Chromium keeps a proxy's credentials for the whole
  * profile (`HttpAuthCache` never partitions proxy entries) and sends them up front from then on. A
  * computer that starts again opens the person's browser on the profile it had, where the Recorder
- * still holds its connection and asks OpenBot nothing, so the first request of that browser to go
+ * still holds its connection and asks XiongBao nothing, so the first request of that browser to go
  * through the filter was the capture pass Record asks for from the offscreen document: the 407 held
  * the recording, and every one made before a page had loaded was not saved.
  *
@@ -157,7 +157,7 @@ export async function fitWindowsToViewport(
  * same script again is, by the service worker rules, the registration already there; and the
  * browser's own update check never runs for an extension's worker. So a profile kept running the
  * Recorder it first cached, whatever had been built since: every Recorder fix was invisible in a
- * browser that had run an earlier one, and an update of OpenBot would never have updated it.
+ * browser that had run an earlier one, and an update of XiongBao would never have updated it.
  * Measured on Google Chrome 156 and Playwright's Chromium, for a changed script and for a changed
  * manifest version alike, which makes no difference. Loading the Recorder again while it is loaded
  * is an update, and an update unregisters the worker and registers the one on disk: measured the

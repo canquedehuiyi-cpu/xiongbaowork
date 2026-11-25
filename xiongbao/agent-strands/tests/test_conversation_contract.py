@@ -42,7 +42,7 @@ def _app(monkeypatch, environment, base):
 
 
 def _post(client, body):
-    response = client.post("/", json=body, headers={"x-openbot-agent-token": TOKEN})
+    response = client.post("/", json=body, headers={"x-xiongbao-agent-token": TOKEN})
     assert response.status_code == 200
     assert [e["type"] for e in run_events(response.text) if e["type"].startswith("RUN_")] == [
         "RUN_STARTED",

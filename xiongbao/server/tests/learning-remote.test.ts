@@ -27,7 +27,7 @@ const input: RunAgentInput = {
   tools: [],
   context: [],
   forwardedProps: {
-    openbotDeploymentTools: ["governed_action"],
+    xiongbaoDeploymentTools: ["governed_action"],
     openbotRun: "signed",
   },
 };
@@ -253,6 +253,25 @@ describe("remote Automatic Learning delivery", () => {
     );
     expect(remote.inputs).toEqual([]);
     expect(output.at(-1)?.type).toBe(EventType.RUN_ERROR);
+  });
+
+  test("a continuation replaying its catalog entry sends one catalog", async () => {
+    // An approval's continuation snapshot keeps the context the run was sent and replays it as-is.
+    const remote = new Remote(() => of(start, finish));
+    const replayed: RunAgentInput = {
+      ...input,
+      context: [
+        { description: "OpenBot learned skills", value: "catalog stale" },
+      ],
+    };
+    await events(
+      new RemoteLearnedSkillsMiddleware("bot", async () => snapshot()),
+      remote,
+      replayed,
+    );
+    expect(remote.inputs[0]?.context).toEqual([
+      { description: "OpenBot learned skills", value: "catalog revision-one" },
+    ]);
   });
 
   test("unconfigured delivery preserves the original run and never invents tools", async () => {

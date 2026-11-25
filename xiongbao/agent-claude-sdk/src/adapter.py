@@ -58,11 +58,11 @@ AG_UI_TOOL_PREFIX = "mcp__ag_ui__"
 # `puppeteer` server").
 AG_UI_TOOLS = f"{AG_UI_TOOL_PREFIX}*"
 
-# How large a result of one of OpenBot's tools Claude Code keeps in the conversation, in characters.
+# How large a result of one of XiongBao's tools Claude Code keeps in the conversation, in characters.
 #
 # Claude Code keeps a tool result over 50,000 characters out of the conversation: it saves it to a
 # file (`<config>/projects/<cwd>/<session>/tool-results/`) and shows the model a 2 KB preview and the
-# path. Every OpenBot tool reaches this harness as an MCP tool, so a page of email, an app's tool
+# path. Every XiongBao tool reaches this harness as an MCP tool, so a page of email, an app's tool
 # list or a file the Bot read from its computer (up to 64,000 bytes) crossed it, and the turn's
 # history then kept the preview in place of the result. Claude Code lets an MCP tool raise its own
 # threshold, to at most 500,000, with `anthropic/maxResultSizeChars` (`ToolAnnotations` in the SDK).
@@ -83,7 +83,7 @@ READ_TOOL_NOTE = (
 # What a person is told when Claude Code never started, in place of the process error.
 START_FAILED = (
     "This Bot couldn't start, so it didn't answer. Send your message again, and restart "
-    "OpenBot if it keeps happening."
+    "the app if it keeps happening."
 )
 
 
@@ -128,13 +128,13 @@ def not_started(error):
 def run_model(forwarded_props):
     """The `(model, effort)` the server chose for this run, or `None` when it chose none.
 
-    The server sends `openbotModel: {"model": ..., "reasoningEffort": ...}` on both of this
+    The server sends `xiongbaoModel: {"model": ..., "reasoningEffort": ...}` on both of this
     harness's paths and strips any a browser supplied, so it is the deployment's decision. A value
     of another shape is ignored. An effort the SDK does not take is not sent, and no effort means
     the model's own default.
     """
     props = forwarded_props if isinstance(forwarded_props, dict) else {}
-    choice = props.get("openbotModel")
+    choice = props.get("xiongbaoModel")
     if not isinstance(choice, dict):
         return None
     model = choice.get("model")
@@ -399,7 +399,7 @@ class _OneReply:
 
     @staticmethod
     def _stream(event):
-        return StreamEvent(uuid="openbot-unstreamed", session_id="", event=event)
+        return StreamEvent(uuid="xiongbao-unstreamed", session_id="", event=event)
 
 
 def _results_kept_inline(input_data):
@@ -459,7 +459,7 @@ async def own_tool_results_only(input_data, tool_use_id, context):
     """Let `Read` open a tool result Claude Code saved for this session, and nothing else.
 
     A full Bot is given no built-in tools (see `build_options`): its files and commands are on its
-    own computer, under OpenBot's policy. Claude Code saves a tool result larger than its threshold
+    own computer, under XiongBao's policy. Claude Code saves a tool result larger than its threshold
     to a file and tells the model to read it, and the model had nothing that could. `Read` is the
     tool Claude Code expects it to use, and this hook keeps it to this session's own saved results:
     any other path, in this container or anywhere else, is refused.
@@ -499,7 +499,7 @@ def _with_instructions(system_prompt, instructions):
     return f"{instructions}\n\n{system_prompt}" if system_prompt else instructions
 
 
-class OpenBotClaudeAgentAdapter(ClaudeAgentAdapter):
+class XiongBaoClaudeAgentAdapter(ClaudeAgentAdapter):
     def __init__(self, *args, model_only=False, **kwargs):
         super().__init__(*args, **kwargs)
         self._model_only = model_only
@@ -601,23 +601,23 @@ class OpenBotClaudeAgentAdapter(ClaudeAgentAdapter):
                     "hookSpecificOutput": {
                         "hookEventName": "PreToolUse",
                         "permissionDecision": "deny",
-                        "permissionDecisionReason": "Built-in Bots may only call tools supplied by the OpenBot server.",
+                        "permissionDecisionReason": "Built-in Bots may only call tools supplied by the XiongBao server.",
                     }
                 }
 
             options.hooks["PreToolUse"] = [HookMatcher(hooks=[only_offered])]
         else:
-            # A full Bot acts through what OpenBot grants it: its computer, its apps, web search,
+            # A full Bot acts through what XiongBao grants it: its computer, its apps, web search,
             # Routines and `run_subagent`, each under the deployment's policy and audit trail.
             # Claude Code's own versions (WebSearch, Bash, Read, CronCreate, Agent, RemoteTrigger
             # and the rest) run in this container instead, ungoverned and unapproved. Left in
             # view, Claude reached for its own WebSearch, was refused, and told the person to
-            # grant it. No built-ins, as on the model endpoint; OpenBot's tools still load.
+            # grant it. No built-ins, as on the model endpoint; XiongBao's tools still load.
             #
             # Except `Read`, held to the tool results Claude Code saves to a file for this session
             # (`own_tool_results_only`), which is the tool Claude Code tells the model to open one
             # with: a result over `INLINE_RESULT_CHARS`. With no `Read`, the Bot tried its
-            # computer's `Read file` on the path, which OpenBot refused for a path outside the Bot's
+            # computer's `Read file` on the path, which XiongBao refused for a path outside the Bot's
             # workspace, then `grep` on its computer, a different machine, and lost the result.
             options.tools = [READ_TOOL]
             # After the Bot's own instructions, which come first.
@@ -868,7 +868,7 @@ class OpenBotClaudeAgentAdapter(ClaudeAgentAdapter):
         async with lock:
             answer_only = (
                 self._model_only
-                and (input_data.forwarded_props or {}).get("openbotAnswerOnly") is True
+                and (input_data.forwarded_props or {}).get("xiongbaoAnswerOnly") is True
             )
             turn = self._turns.get(thread_id)
             if turn is not None and turn.task.done():
@@ -934,7 +934,7 @@ class OpenBotClaudeAgentAdapter(ClaudeAgentAdapter):
             else:
                 # A tool result whose query is no longer running is answered by a fresh query that
                 # replays the thread, the call and its result included, as a replaced model step is.
-                # A query is bounded (`run_replayed_query`), and the person deciding a step OpenBot
+                # A query is bounded (`run_replayed_query`), and the person deciding a step XiongBao
                 # asked them about routinely takes longer than that bound; a restart ends one too.
                 # Refused, the run ended with an error nobody was shown and the Bot never answered
                 # the person's decision.

@@ -19,7 +19,7 @@ type HarnessBody = {
   threadId: string;
   runId: string;
   messages: { content?: unknown }[];
-  forwardedProps: { openbotModelOnly?: boolean };
+  forwardedProps: { xiongbaoModelOnly?: boolean };
 };
 const requests: { path: string; body: HarnessBody }[] = [];
 /** When set, the harness holds the request open instead of answering: a plan that times out. */
@@ -121,7 +121,7 @@ test("Auto-review on a plan gives a real verdict, and lets through what it judge
   // Asked of the plan's model endpoint, as a model call.
   expect(requests).toHaveLength(1);
   expect(requests[0]?.path).toBe("/model");
-  expect(requests[0]?.body.forwardedProps.openbotModelOnly).toBe(true);
+  expect(requests[0]?.body.forwardedProps.xiongbaoModelOnly).toBe(true);
 });
 
 test("Auto-review on a plan still fails closed when the plan does not answer in time", async () => {

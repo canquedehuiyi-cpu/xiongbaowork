@@ -30,7 +30,7 @@ let mine: string;
 let theirs: string;
 
 beforeEach(async () => {
-  base = await mkdtemp(join(tmpdir(), "openbot-confined-"));
+  base = await mkdtemp(join(tmpdir(), "xiongbao-confined-"));
   mine = join(base, "bots", "aaaaaaaaaaaa");
   theirs = join(base, "bots", "bbbbbbbbbbbb");
   await mkdir(join(mine, "d"), { recursive: true });

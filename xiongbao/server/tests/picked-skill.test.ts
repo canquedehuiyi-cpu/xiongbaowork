@@ -71,7 +71,7 @@ const harnessBot: RegisteredAgent = {
   name: "Weekend Helper",
   type: "remote_ag_ui",
   endpoint: "http://agent-harness.test:4206",
-  headers: { "x-openbot-agent-token": "managed-token" },
+  headers: { "x-xiongbao-agent-token": "managed-token" },
   standingMessage: {
     id: "standing-role:picked-harness",
     role: "system",

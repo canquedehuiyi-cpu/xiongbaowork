@@ -180,7 +180,7 @@ async function callBack(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-openbot-agent-token": token,
+        "x-xiongbao-agent-token": token,
       },
       body: JSON.stringify({
         name: toolName,
@@ -474,7 +474,7 @@ describe("a `team` Bot's callback reaches the account its in-process turn would 
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-openbot-agent-token": token,
+          "x-xiongbao-agent-token": token,
         },
         body: JSON.stringify({
           name: `mcp__${server}__erase`,

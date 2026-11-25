@@ -61,7 +61,7 @@ const children: Bun.Subprocess[] = [];
 const sockets = new Set<ServerWebSocket<RunnerSocketData>>();
 
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), "openbot-runner-package-"));
+  root = mkdtempSync(join(tmpdir(), "xiongbao-runner-package-"));
   binary = join(root, "openbot-runner");
   const build = Bun.spawn(
     [

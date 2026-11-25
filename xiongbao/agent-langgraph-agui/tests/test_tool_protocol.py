@@ -67,11 +67,11 @@ def boundary(monkeypatch):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == "/api/agent-tools/call":
                 captured["callback"].append(
-                    {"body": body, "token": self.headers.get("x-openbot-agent-token")}
+                    {"body": body, "token": self.headers.get("x-xiongbao-agent-token")}
                 )
                 status = captured["callback_status"]
                 if authorize := captured.get("callback_authorize"):
-                    status = authorize(body, self.headers.get("x-openbot-agent-token"))
+                    status = authorize(body, self.headers.get("x-xiongbao-agent-token"))
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -228,7 +228,7 @@ def run_input(
         "context": [],
         "state": {},
         "forwardedProps": {
-            "openbotDeploymentTools": list(deployment),
+            "xiongbaoDeploymentTools": list(deployment),
             "openbotRun": assertion,
         },
     }
@@ -239,7 +239,7 @@ async def run_protocol(body, *, allow_error=False):
         transport=httpx.ASGITransport(app=main.app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/", json=body, headers={"x-openbot-agent-token": "synthetic-server-token"}
+            "/", json=body, headers={"x-xiongbao-agent-token": "synthetic-server-token"}
         )
     assert response.status_code == 200
     events = [
@@ -269,7 +269,7 @@ async def test_only_provider_auth_status_emits_model_refresh_code(
         assert "controlled provider refusal" in errors[-1]["message"]
 
 
-# OpenAI's answer to a run offered 202 tools, captured from its API on 2026-11-07. Seen on OpenBot
+# OpenAI's answer to a run offered 202 tools, captured from its API on 2026-11-07. Seen on XiongBao
 # Desktop as "Error code: 400 - Invalid 'tools': array too long. …" in red under the person's message.
 OPENAI_TOO_MANY_TOOLS = (
     400,

@@ -1395,7 +1395,7 @@ function normalizeConnector(
   }
   const connectorDropped: string[] = raw.attachedSkillPaths.map(
     (path) =>
-      `${path}（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）`,
+      `${path}（连接器自带的安装说明，本产品由 connectors.yaml 直接声明，不移植）`,
   );
   const connectorDir = raw.mcpJson.relativePath.replace(/\/mcp\.json$/, "");
   for (const path of raw.attachedSkillPaths) {
@@ -1411,7 +1411,7 @@ function normalizeConnector(
   // that the platform used to hold it has to be written down where a reviewer will see it.
   const marketAuthMode = raw.marketplace?.authMode;
   if (marketAuthMode !== undefined && openbotAuthFor(marketAuthMode) === null) {
-    const note = `WorkBuddy auth_mode=${marketAuthMode} 无 openbot 等价物（平台代持凭证），本包按 ${auth} 声明，凭证需自行提供`;
+    const note = `WorkBuddy auth_mode=${marketAuthMode} 本产品无等价物（平台代持凭证），本包按 ${auth} 声明，凭证需自行提供`;
     connectorDropped.push(note);
     dropped.push({
       kind: "connector",

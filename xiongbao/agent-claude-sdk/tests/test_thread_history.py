@@ -1,6 +1,6 @@
 """The conversation a Bot answers from is the one the server sends, on every run.
 
-OpenBot restores a thread from Intelligence and sends all of it in `input.messages`. Nothing may
+XiongBao restores a thread from Intelligence and sends all of it in `input.messages`. Nothing may
 depend on this process remembering an earlier run: a restart, or the upstream adapter dropping an
 idle worker after 30 minutes, would otherwise leave the Bot answering the newest message alone.
 
@@ -19,7 +19,7 @@ from ag_ui.core import RunAgentInput
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 from test_tool_continuation import started_with
 
 
@@ -100,7 +100,7 @@ def test_a_fresh_process_answers_from_the_whole_thread(sdk):
     """What a restart looks like from here: a new adapter, a thread with history in it."""
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             finished = await events(
                 adapter,
@@ -125,7 +125,7 @@ def test_the_standing_role_reaches_the_system_prompt(sdk):
     """The server sends a remote Bot its standing role as a system message, first, every run."""
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             await events(adapter, thread(("user", "Hello")))
             assert "STANDING_ROLE_MARKER" in sdk[-1].system_prompt
@@ -142,7 +142,7 @@ def test_each_run_replays_once_and_sees_the_current_grants(sdk):
     """A second run on a live process neither doubles the history nor keeps the old context."""
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             await events(adapter, thread(("user", "First question")))
             await events(
@@ -168,7 +168,7 @@ def test_each_run_replays_once_and_sees_the_current_grants(sdk):
 
 def test_state_still_reaches_the_bot(sdk):
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         request = thread(("user", "Hello")).model_copy(update={"state": {"step": 2}})
         try:
             finished = await events(adapter, request)
@@ -216,7 +216,7 @@ def test_only_the_servers_own_system_messages_reach_the_system_prompt(sdk):
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             built = str(adapter.build_options(request, "thread-a").system_prompt)
             assert "STANDING_ROLE_MARKER" in built
@@ -249,7 +249,7 @@ def test_a_thread_over_the_budget_replays_its_newest_messages(sdk):
     turns.append(("user", "LATEST_QUESTION"))
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             finished = await events(adapter, thread(*turns))
             assert finished[-1].type == "RUN_FINISHED"
@@ -294,7 +294,7 @@ def test_the_bound_never_separates_a_tool_call_from_its_result(sdk):
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             await events(adapter, request)
             prompt = sdk[-1].prompts[-1]
@@ -332,7 +332,7 @@ def test_the_bound_keeps_everything_from_the_latest_user_message_on(sdk):
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             await events(adapter, request)
             prompt = sdk[-1].prompts[-1]
@@ -388,7 +388,7 @@ def test_a_long_task_keeps_its_request_and_its_latest_results(sdk):
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             finished = await events(adapter, run_input(*messages))
             assert finished[-1].type == "RUN_FINISHED"

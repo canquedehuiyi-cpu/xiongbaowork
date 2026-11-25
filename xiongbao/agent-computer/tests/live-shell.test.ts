@@ -51,7 +51,7 @@ async function until(check: () => boolean, ms = 10_000) {
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "openbot-live-shell-"));
+  root = await mkdtemp(join(tmpdir(), "xiongbao-live-shell-"));
 });
 
 afterEach(async () => {

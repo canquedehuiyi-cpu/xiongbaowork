@@ -101,7 +101,7 @@ export const TOOL_NAME_MAP: readonly ToolMapping[] = [
     workbuddy: "Bash",
     openbot: null,
     equivalence: "none",
-    note: "openbot 员工没有本地 shell、Python 与 Node，不可等价。",
+    note: "员工没有本地 shell、Python 与 Node，不可等价。",
   },
   {
     workbuddy: "Task",
@@ -142,7 +142,10 @@ export function toolMapping(workbuddy: string): ToolMapping | undefined {
  * - `references-without-assets`: `references/…` mentions, judged against whether the skill actually
  *   carries the directory it points at.
  */
-export type AuditRuleKind = "pattern" | "mcp-server" | "references-without-assets";
+export type AuditRuleKind =
+  | "pattern"
+  | "mcp-server"
+  | "references-without-assets";
 
 /** One rule of the §5.3 table. */
 export interface AuditRule {
@@ -179,7 +182,9 @@ const SHELL_COMMAND_WORDS =
  * question the audit table's evidence column has to answer, and a word in the middle of a sentence cannot
  * answer it.
  */
-export const LEADING_COMMAND_PATTERN = new RegExp(`^[ \\t]*(?:\\$[ \\t]*)?\`?(?:${SHELL_COMMAND_WORDS})\\b`);
+export const LEADING_COMMAND_PATTERN = new RegExp(
+  `^[ \\t]*(?:\\$[ \\t]*)?\`?(?:${SHELL_COMMAND_WORDS})\\b`,
+);
 
 /**
  * The shell features that turn a command *mention* into a command *dependency*.
@@ -239,27 +244,29 @@ export const AUDIT_RULE_TABLE: readonly AuditRule[] = [
     level: "blocked",
     kind: "pattern",
     pattern: /\b(?:Bash|Shell|Terminal)\s*\(/,
-    reason: "正文调用 Bash/Shell/Terminal(...)；openbot 员工没有本地 shell。",
+    reason: "正文调用 Bash/Shell/Terminal(...)；员工没有本地 shell。",
   },
   {
     id: "shell-command-prose",
     level: "blocked",
     kind: "pattern",
     pattern: SHELL_COMMAND_PROSE,
-    reason: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。",
+    reason:
+      "正文给出可执行的 shell 命令（带实参/heredoc/管道）；员工没有本地运行时。",
   },
   {
     id: "executable-scripts",
     level: "blocked",
     kind: "pattern",
     pattern: /(?<![\w/.-])scripts\//,
-    reason: "正文引用 scripts/ 下的可执行文件；openbot 无脚本通道。",
+    reason: "正文引用 scripts/ 下的可执行文件；员工无脚本通道。",
   },
   {
     id: "unknown-mcp-server",
     level: "blocked",
     kind: "mcp-server",
-    reason: "正文引用 mcp__<server>__<tool>，而该 server 不在 connectors.yaml 里。",
+    reason:
+      "正文引用 mcp__<server>__<tool>，而该 server 不在 connectors.yaml 里。",
   },
   {
     id: "file-tool-call",
@@ -416,7 +423,9 @@ export const CONNECTOR_PRESETS: Readonly<Record<string, ConnectorPreset>> = {
  * `server-side` 12, `oneid-token` 1, `cli` 44, missing 1. Together with 15 stdio `command` connectors,
  * that is ~72 of 298 (24%) structurally unportable — the number L1 planning has to carry.
  */
-export const AUTH_MODE_MAP: Readonly<Record<string, "none" | "deployment-bearer" | "user-oauth" | null>> = {
+export const AUTH_MODE_MAP: Readonly<
+  Record<string, "none" | "deployment-bearer" | "user-oauth" | null>
+> = {
   none: "none",
   token: "deployment-bearer",
   oauth: "user-oauth",
@@ -426,7 +435,9 @@ export const AUTH_MODE_MAP: Readonly<Record<string, "none" | "deployment-bearer"
 };
 
 /** Map a WorkBuddy `auth_mode` onto an openbot carrier; `null` when there is no equivalent. */
-export function openbotAuthFor(authMode: string | undefined): "none" | "deployment-bearer" | "user-oauth" | null {
+export function openbotAuthFor(
+  authMode: string | undefined,
+): "none" | "deployment-bearer" | "user-oauth" | null {
   if (authMode === undefined) {
     return null;
   }
@@ -449,7 +460,11 @@ export function deriveCredentialEnv(connectorId: string): string {
  * employee cannot reach, and every `mcp__<id>__<tool>` reference in a skill body would point at
  * nothing. Restricting the set keeps the auditor honest.
  */
-export const CONNECTOR_ALLOWLIST: readonly string[] = ["github", "tapd", "tencent-docs"];
+export const CONNECTOR_ALLOWLIST: readonly string[] = [
+  "github",
+  "tapd",
+  "tencent-docs",
+];
 
 /**
  * Team display names for packages whose `plugin.json` carries no `displayName`.
@@ -473,7 +488,13 @@ export const UNSPECIFIED_LICENSE = "unspecified";
  * Deliberately short: the point of the manifest is that everything else says `redistributable: false`
  * so a human reviews it, rather than a permissive default quietly shipping marketplace content.
  */
-export const PERMISSIVE_LICENSES: readonly string[] = ["mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc"];
+export const PERMISSIVE_LICENSES: readonly string[] = [
+  "mit",
+  "apache-2.0",
+  "bsd-2-clause",
+  "bsd-3-clause",
+  "isc",
+];
 
 /** Attribution used when the source declares no author. */
 export const DEFAULT_ATTRIBUTION = "© WorkBuddy 能力市场";

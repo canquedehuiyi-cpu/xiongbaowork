@@ -25,11 +25,11 @@ from fastapi.responses import JSONResponse
 from .conversation import PausedRunsDb, add_run_context
 from .conversation import install as answer_from_the_whole_thread
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 def _model_id() -> str:
-    """`provider/model`, which is how litellm addresses one and how OpenBot stores the choice.
+    """`provider/model`, which is how litellm addresses one and how XiongBao stores the choice.
 
     The model half is whatever the endpoint publishes, slashes included. litellm takes the first
     path component as the provider and sends the rest as the model name, so a name that already
@@ -49,7 +49,7 @@ def _model_id() -> str:
 answer_from_the_whole_thread(_model_id())
 
 agent = Agent(
-    # In memory, because a Bot's history lives in OpenBot's database and not in the harness. Two
+    # In memory, because a Bot's history lives in XiongBao's database and not in the harness. Two
     # places remembering the same conversation is how they come to disagree. The server sends all
     # of it on every run, and `conversation.py` is what hands it to the model. The store holds only
     # a run that is waiting for a client tool's result, which is what the router resumes from.
@@ -61,7 +61,7 @@ agent = Agent(
     # for this one client, as the LlamaIndex Bot does.
     model=LiteLLM(id=_model_id(), request_params={"drop_params": True}),
     # No role, goal or backstory invented on somebody's behalf. A Bot answers the question it is
-    # asked, and anybody who wants a persona sets one in OpenBot where the rest of them live.
+    # asked, and anybody who wants a persona sets one in XiongBao where the rest of them live.
     instructions="Answer the question you are asked, briefly and correctly.",
 )
 

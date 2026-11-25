@@ -37,7 +37,7 @@ def _run(monkeypatch, environment, body):
 
         main = importlib.reload(main)
         response = TestClient(main.app).post(
-            "/agui", json=body, headers={"x-openbot-agent-token": TOKEN}
+            "/agui", json=body, headers={"x-xiongbao-agent-token": TOKEN}
         )
     assert response.status_code == 200
     assert [e["type"] for e in run_events(response.text) if e["type"].startswith("RUN_")] == [

@@ -35,8 +35,8 @@ function withDocker() {
   return runtime;
 }
 
-const IMAGE = `openbot-supervisor-fixture:${namespace}-one`;
-const OTHER = `openbot-supervisor-fixture:${namespace}-two`;
+const IMAGE = `xiongbao-supervisor-fixture:${namespace}-one`;
+const OTHER = `xiongbao-supervisor-fixture:${namespace}-two`;
 const fixtureImages: string[] = [];
 
 const BOT = "supervisortestbot";
@@ -78,7 +78,7 @@ async function remove(container: string) {
     const info = await docker.getContainer(container).inspect();
     const labels = info.Config?.Labels;
     if (
-      labels?.["openbot.test-fixture"] !== namespace &&
+      labels?.["xiongbao.test-fixture"] !== namespace &&
       !(
         labels?.["openbot.namespace"] === namespace &&
         labels?.["openbot.bot-id"] === BOT
@@ -160,7 +160,7 @@ afterAll(async () => {
   await removeNamespace();
   for (const image of fixtureImages) {
     const info = await withDocker().docker.getImage(image).inspect();
-    if (info.Config.Labels?.["openbot.test-fixture"] !== namespace)
+    if (info.Config.Labels?.["xiongbao.test-fixture"] !== namespace)
       throw new Error("Foreign fixture image");
     await withDocker().docker.getImage(image).remove();
   }
@@ -181,7 +181,7 @@ async function plant(labels: Record<string, string>, health?: boolean) {
   await withDocker().docker.createContainer({
     name: names.container,
     Image: IMAGE,
-    Labels: { ...labels, "openbot.test-fixture": namespace },
+    Labels: { ...labels, "xiongbao.test-fixture": namespace },
     ...(health
       ? {}
       : {
@@ -248,7 +248,7 @@ async function inVolumes(binds: string[], script: string): Promise<string> {
   const container = await docker.createContainer({
     Image: IMAGE,
     Labels: {
-      "openbot.test-fixture": namespace,
+      "xiongbao.test-fixture": namespace,
       "openbot.namespace": namespace,
     },
     Entrypoint: ["sh", "-c"],
@@ -497,7 +497,7 @@ describe("a computer built from an older image", () => {
   }, 180_000);
 
   /*
-   * Found on OpenBot Desktop: quit and opened again, compose removed its network and made a new one,
+   * Found on XiongBao Desktop: quit and opened again, compose removed its network and made a new one,
    * and the person's stopped computer still named the old one. Docker refused to start it ("network
    * not found") and the Bot said Docker was unreachable.
    */
@@ -617,31 +617,31 @@ describe("package installation on a computer", () => {
     // on an external package mirror. The executable really comes from an installed .deb.
     const output = await inComputer(String.raw`
 set -eu
-repo=/tmp/openbot-packages
+repo=/tmp/xiongbao-packages
 mkdir -p "$repo/build/DEBIAN" "$repo/build/usr/local/bin"
 cat > "$repo/build/DEBIAN/control" <<'CONTROL'
-Package: openbot-test-tool
+Package: xiongbao-test-tool
 Version: 1.0
 Architecture: all
-Maintainer: OpenBot Tests <test@example.invalid>
+Maintainer: XiongBao Tests <test@example.invalid>
 Description: Local package installation regression fixture
 CONTROL
-cat > "$repo/build/usr/local/bin/openbot-test-tool" <<'TOOL'
+cat > "$repo/build/usr/local/bin/xiongbao-test-tool" <<'TOOL'
 #!/bin/sh
 echo installed-by-apt
 TOOL
-chmod 755 "$repo/build/usr/local/bin/openbot-test-tool"
-chown 65534:65534 "$repo/build/usr/local/bin/openbot-test-tool"
+chmod 755 "$repo/build/usr/local/bin/xiongbao-test-tool"
+chown 65534:65534 "$repo/build/usr/local/bin/xiongbao-test-tool"
 dpkg-deb --build "$repo/build" "$repo/tool.deb" >/dev/null
 cp "$repo/build/DEBIAN/control" "$repo/Packages"
 printf 'Filename: ./tool.deb\nSize: %s\nSHA256: %s\n' "$(stat -c %s "$repo/tool.deb")" "$(sha256sum "$repo/tool.deb" | cut -d ' ' -f 1)" >> "$repo/Packages"
 printf 'deb [trusted=yes] file:%s ./\n' "$repo" > "$repo/sources.list"
 apt-get -o Dir::Etc::sourcelist="$repo/sources.list" -o Dir::Etc::sourceparts=- update
-DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Etc::sourcelist="$repo/sources.list" -o Dir::Etc::sourceparts=- install -y openbot-test-tool
-[ "$(stat -c %u:%g /usr/local/bin/openbot-test-tool)" = 65534:65534 ]
+DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Etc::sourcelist="$repo/sources.list" -o Dir::Etc::sourceparts=- install -y xiongbao-test-tool
+[ "$(stat -c %u:%g /usr/local/bin/xiongbao-test-tool)" = 65534:65534 ]
 # Root must still be able to work with files a package installed for another user.
-chmod 700 /usr/local/bin/openbot-test-tool
-/usr/local/bin/openbot-test-tool
+chmod 700 /usr/local/bin/xiongbao-test-tool
+/usr/local/bin/xiongbao-test-tool
 `);
     expect(output).toContain("installed-by-apt");
     const info = await withDocker()
@@ -860,7 +860,7 @@ describe("a private Bot's login, carried over to its owner", () => {
     await withDocker().docker.createContainer({
       name: LEGACY.container,
       Image: IMAGE,
-      Labels: { ...LEGACY_LABELS, "openbot.test-fixture": namespace },
+      Labels: { ...LEGACY_LABELS, "xiongbao.test-fixture": namespace },
       HostConfig: { Binds: [`${LEGACY.profileVolume}:/profiles`] },
     });
     await withDocker().docker.getContainer(LEGACY.container).start();

@@ -4,8 +4,8 @@
  *
  * A PERSON'S BROWSER IS NOT A BOT'S. A Bot's browser is a test browser on purpose: Playwright's
  * defaults make it deterministic, and nothing the person installs belongs in it. A person's browser
- * is their everyday browser (OpenBot Desktop opens their installed Chrome, or Edge, in a dedicated
- * OpenBot profile), and the same defaults would quietly take most of that away: no extensions, so
+ * is their everyday browser (XiongBao Desktop opens their installed Chrome, or Edge, in a dedicated
+ * XiongBao profile), and the same defaults would quietly take most of that away: no extensions, so
  * no password manager; no sync, so no Google sign-in; a mock keychain, so no saved passwords; no
  * component updates, so no streaming video. So a person's native browser is not launched by
  * Playwright at all (see `native-browser.ts`): it starts with exactly the switches below, and none
@@ -38,7 +38,7 @@ import type { BrowserRuntime } from "./browser-runtime";
 
 type Environment = Record<string, string | undefined>;
 
-/** An installed, branded browser OpenBot can open a person's window in, in the order it is preferred. */
+/** An installed, branded browser XiongBao can open a person's window in, in the order it is preferred. */
 export type InstalledBrowser = Extract<BrowserProduct, "chrome" | "msedge">;
 export const INSTALLED_BROWSERS: readonly InstalledBrowser[] = [
   "chrome",
@@ -81,7 +81,7 @@ export const LINUX_LAUNCHERS: Record<InstalledBrowser, readonly string[]> = {
  * Never a Flatpak or a Snap. The Flatpak builds of Chrome and Edge are community wrappers that run
  * the browser in a sandbox with no access to the folders it would need here (its profile, and the
  * Recorder in the deployment), and their exported launchers (`com.google.Chrome`) are not on the
- * list above. Neither browser is published as a Snap; the Snap Store's browser is Chromium. OpenBot
+ * list above. Neither browser is published as a Snap; the Snap Store's browser is Chromium. XiongBao
  * Desktop says so to the person when that is all a machine has.
  * https://github.com/flathub/com.google.Chrome
  */
@@ -285,7 +285,7 @@ export type PersonDisplay = { DISPLAY?: string; WAYLAND_DISPLAY?: string };
  * The environment a person's native browser starts in on Linux: the person's own display.
  *
  * A headed computer on Linux starts its own Xvfb and points `DISPLAY` at it, which is right for
- * every browser nobody sits in front of: a hosted computer's, and a Bot's on OpenBot Desktop. A
+ * every browser nobody sits in front of: a hosted computer's, and a Bot's on XiongBao Desktop. A
  * person's native window opened there would be drawn on a screen nobody can see. So it gets back
  * the display the person's session had (their X display, or their Wayland one with no X display at
  * all), and everything else keeps the virtual one. Elsewhere, and for the hosted browser shown on the
@@ -312,12 +312,12 @@ export function personBrowserEnv(
  * The command line a person's native browser starts with, all of it, and the environment it starts in.
  *
  * What it keeps of Playwright's own launch, and why:
- *   - `--remote-debugging-pipe` and `--user-data-dir`: how OpenBot holds the browser and keeps the
+ *   - `--remote-debugging-pipe` and `--user-data-dir`: how XiongBao holds the browser and keeps the
  *     dedicated profile separate from the person's own. A pipe, not a port: only this process can
  *     reach the browser.
  *   - `--no-first-run`: the first-run flow can hold the first window behind a modal, and the launch
  *     waits on that window. The person signs in to Chrome from its profile menu instead.
- *   - `--no-default-browser-check`: the OpenBot window does not ask to become the default browser.
+ *   - `--no-default-browser-check`: the XiongBao window does not ask to become the default browser.
  *     The person's default browser stays the one they chose.
  *   - `--enable-features=CDPScreenshotNewSurface`: how frames are captured for the live screen.
  *   - `--edge-skip-compat-layer-relaunch`: Edge on Windows can relaunch itself and drop the pipe.
@@ -356,7 +356,7 @@ export function personNativeLaunch(
        */
       "--disable-blink-features=AutomationControlled",
       // What lets `Extensions.loadUnpacked` install the Recorder. Branded Chrome ignores
-      // `--load-extension` since Chrome 137, and only OpenBot holds this browser's DevTools pipe.
+      // `--load-extension` since Chrome 137, and only XiongBao holds this browser's DevTools pipe.
       "--enable-unsafe-extension-debugging",
       ...(input.headless ? ["--headless"] : []),
     ],
@@ -388,7 +388,7 @@ export type RecorderLaunchOptions = {
  * Recorder (`shared/bot-browser.ts`), where it waits, disconnected, for a person holding the wheel to press Record.
  *
  * It keeps Playwright's focus emulation, which a native window drops (`native-browser.ts`): nobody sits at this
- * browser, so every tab of it says it is in front, and OpenBot itself decides which one is, from its own tab strip,
+ * browser, so every tab of it says it is in front, and XiongBao itself decides which one is, from its own tab strip,
  * and shows that one on the live screen. Bots' browsers keep it for the reason Playwright has it: a Bot acts in tabs
  * that are not in front, and each must behave as if it were.
  */
@@ -403,7 +403,7 @@ export function recorderLaunchOptions(
       `--disable-extensions-except=${input.recorderDir}`,
       `--load-extension=${input.recorderDir}`,
       // So the Recorder can be loaded again over DevTools when this profile's worker runs an earlier
-      // build of it (see `keepRecorderCurrent` in `recorder-in-browser.ts`). Only OpenBot holds the pipe.
+      // build of it (see `keepRecorderCurrent` in `recorder-in-browser.ts`). Only XiongBao holds the pipe.
       "--enable-unsafe-extension-debugging",
       /*
        * No "started debugging this browser" bar when the Recorder attaches `chrome.debugger` to
@@ -416,7 +416,7 @@ export function recorderLaunchOptions(
        * that warning, which it also skips for an extension installed by policy. The warning is
        * there to tell a person that an extension is reading their tabs; here the only extension
        * there can be is the Recorder (`--disable-extensions-except`), and the person pressed Record
-       * in OpenBot, which says it is recording. A native window keeps the bar: the person installs
+       * in XiongBao, which says it is recording. A native window keeps the bar: the person installs
        * their own extensions there, and it is the one signal that one of them attached.
        * https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/extensions/api/debugger/debugger_api.cc
        */
@@ -433,7 +433,7 @@ export function recorderLaunchOptions(
  * Where the person's own browser keeps the native messaging hosts their apps installed.
  *
  * User-level manifests live in the `NativeMessagingHosts` folder of the browser's user data
- * directory on macOS and Linux, so a browser started on OpenBot's dedicated profile looks in that
+ * directory on macOS and Linux, so a browser started on XiongBao's dedicated profile looks in that
  * profile's folder instead and finds none of them: 1Password's extension cannot reach the
  * 1Password app, and Touch ID unlock is gone. Windows registers hosts in the registry, which every
  * profile reads, so there is nothing to copy there. System-wide hosts (`/Library/...`, `/etc/...`)
@@ -506,14 +506,14 @@ export async function forgetRecorderPins(
 const MAX_HOST_MANIFEST_BYTES = 64 * 1024;
 
 /**
- * Make the OpenBot profile's `NativeMessagingHosts` folder hold exactly the person's installed host
+ * Make the XiongBao profile's `NativeMessagingHosts` folder hold exactly the person's installed host
  * manifests, at every launch, so an app installed or removed since last time is picked up.
  *
  * Manifests only: regular `.json` files of a manifest's size, read and written rather than linked, so
- * nothing else from the person's profile is ever copied or reachable from the OpenBot one. A folder
- * that is not there (no app installed a host) leaves the OpenBot one empty.
+ * nothing else from the person's profile is ever copied or reachable from the XiongBao one. A folder
+ * that is not there (no app installed a host) leaves the XiongBao one empty.
  *
- * Except OpenBot Desktop's own Recorder host. Its only job is to hand a newly installed Recorder a
+ * Except XiongBao Desktop's own Recorder host. Its only job is to hand a newly installed Recorder a
  * connect code, and in this browser the launcher connects the Recorder itself: copied, the host would
  * be asked first, and `connect` would wait behind it.
  */

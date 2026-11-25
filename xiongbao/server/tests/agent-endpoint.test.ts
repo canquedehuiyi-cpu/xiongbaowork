@@ -447,7 +447,7 @@ describe("dialling a stored agent endpoint", () => {
     },
     body: JSON.stringify({
       threadId: "t",
-      forwardedProps: { openbotBotId: "risk", openbotRun: "signed.run.token" },
+      forwardedProps: { xiongbaoBotId: "risk", openbotRun: "signed.run.token" },
     }),
   };
 
@@ -576,7 +576,7 @@ describe("dialling a stored agent endpoint", () => {
     expect(forwarded.forwardedProps?.openbotRun).toBeUndefined();
     // Only the credential is removed. The rest of the run is still the run.
     expect(forwarded.threadId).toBe("t");
-    expect(forwarded.forwardedProps?.openbotBotId).toBe("risk");
+    expect(forwarded.forwardedProps?.xiongbaoBotId).toBe("risk");
   });
 
   test("a hop that stays on the same host keeps them", async () => {

@@ -44,7 +44,7 @@ CACHE_SECONDS = 6 * 60 * 60
 RETRY_SECONDS = 5 * 60
 FETCH_TIMEOUT_SECONDS = 10
 
-# The reasoning efforts OpenBot's server and browser know by name. Codex has more (`ultra`,
+# The reasoning efforts XiongBao's server and browser know by name. Codex has more (`ultra`,
 # `persistent`, and values a model defines for itself); a model is offered with the ones in this
 # list, since an effort the picker cannot name is one nobody can pick.
 WIRE_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")

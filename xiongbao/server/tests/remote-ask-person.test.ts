@@ -153,7 +153,7 @@ test("a Bot that hands its tool calls back has its question to the person put by
       "ask-call",
     );
     // An endpoint that calls back for coordination is still told it may.
-    expect(f.requests[0]?.forwardedProps.openbotDeploymentTools).toContain(
+    expect(f.requests[0]?.forwardedProps.xiongbaoDeploymentTools).toContain(
       "ask_person",
     );
   } finally {

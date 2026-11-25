@@ -1,6 +1,6 @@
 """Every new Antigravity session answers from the thread the server sent, in the Bot's role.
 
-OpenBot restores a thread from Intelligence and sends all of it in `input.messages`, on every run,
+XiongBao restores a thread from Intelligence and sends all of it in `input.messages`, on every run,
 behind two system messages: the Bot's standing role and the summary of the tools it holds.
 `ag_ui_antigravity` (0.2.1) keeps the conversation inside the Go harness instead, and forwards to
 it only the newest user message it has not sent before (`AntigravityAgent._extract_prompt`). It
@@ -104,16 +104,16 @@ SEED_BUDGET = (SEED_TEXT_BYTES, SEED_MEDIA_BYTES, SEED_TOKENS)
 # client's tool signature. A context variable rather than an attribute, so two threads' runs in
 # flight at once each see their own. Set and never reset: each request runs in its own context.
 _run_instructions: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "openbot_antigravity_instructions", default=""
+    "xiongbao_antigravity_instructions", default=""
 )
 # This run's messages, for the same reason: what the session it is given must already hold.
 _run_messages: contextvars.ContextVar[tuple] = contextvars.ContextVar(
-    "openbot_antigravity_messages", default=()
+    "xiongbao_antigravity_messages", default=()
 )
 # The session this run is using, once the integration has handed it over, so the messages the run
 # streams can be recorded on it.
 _run_session: contextvars.ContextVar[Any] = contextvars.ContextVar(
-    "openbot_antigravity_session", default=None
+    "xiongbao_antigravity_session", default=None
 )
 
 
@@ -345,7 +345,7 @@ class _Held:
 
 
 def _held(session) -> Optional[_Held]:
-    return getattr(session, "openbot_held", None)
+    return getattr(session, "xiongbao_held", None)
 
 
 def _seeded(session) -> bool:
@@ -414,7 +414,7 @@ class _FreshSessions(SessionManager):
     """Sessions that start from the thread the server sent, never from what a harness kept.
 
     A new session is built with no conversation id to resume and no record of prompts already
-    forwarded, which is how `OpenBotAntigravityAgent._extract_prompt` knows to send the thread.
+    forwarded, which is how `XiongBaoAntigravityAgent._extract_prompt` knows to send the thread.
     The instructions are folded into the signature the integration already rebuilds on.
     """
 
@@ -436,7 +436,7 @@ class _FreshSessions(SessionManager):
             if built:
                 # No await since the session was made, so no run has used it yet.
                 session.forwarded_prompts = set()
-                session.openbot_held = _Held()
+                session.xiongbao_held = _Held()
                 return session
             reason = _divergence(session, messages)
             if reason is None:
@@ -461,7 +461,7 @@ class _FreshSessions(SessionManager):
                 await self._close_locked(thread_id)
 
 
-class OpenBotAntigravityAgent(AntigravityAgent):
+class XiongBaoAntigravityAgent(AntigravityAgent):
     """`AntigravityAgent`, answering from the whole thread and in this run's role."""
 
     def __init__(self, **kwargs):

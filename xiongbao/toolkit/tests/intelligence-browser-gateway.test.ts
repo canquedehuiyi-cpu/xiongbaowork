@@ -71,7 +71,7 @@ describe("the gateway address a browser is given", () => {
 /**
  * The same address is the Recorder's: the runtime's capture pass (`trajectory/connect`) names it as the socket a
  * recording streams on, and the Recorder opens a plain ws:// gateway only at 127.0.0.1 or [::1], never at the name
- * localhost (Decision 21). OpenBot Desktop is told its local gateway as `ws://localhost:<port>`, so every recording was
+ * localhost (Decision 21). XiongBao Desktop is told its local gateway as `ws://localhost:<port>`, so every recording was
  * refused at the socket after Intelligence had minted its join token, and was kept in the browser as never saved.
  */
 describe("the gateway address the Recorder is given", () => {
@@ -82,7 +82,7 @@ describe("the gateway address the Recorder is given", () => {
   };
 
   test("is one the Recorder opens, when the browser's address names localhost", () => {
-    // OpenBot Desktop's server container, as it runs.
+    // XiongBao Desktop's server container, as it runs.
     const client = new IntelligenceKnowingANewThread({
       ...desktop,
       browserWsUrl: "ws://localhost:51798",
@@ -106,7 +106,7 @@ describe("the gateway address the Recorder is given", () => {
     expect(client.ɵgetRunnerWsUrl()).toBe("ws://localhost:14401/runner");
   });
 
-  test("is one the Recorder opens, when OpenBot carries the socket and was reached at localhost", () => {
+  test("is one the Recorder opens, when XiongBao carries the socket and was reached at localhost", () => {
     const client = new IntelligenceKnowingANewThread({
       ...desktop,
       browserWsUrl: "/api/intelligence/client",

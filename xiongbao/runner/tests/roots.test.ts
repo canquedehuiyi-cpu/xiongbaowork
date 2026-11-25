@@ -21,7 +21,7 @@ import { createRootRegistry, ROOTS_FILE } from "../src/roots";
  * server as a reference and a name without the path.
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-roots-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-roots-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 let made = 0;
 

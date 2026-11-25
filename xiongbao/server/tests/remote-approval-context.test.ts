@@ -135,7 +135,7 @@ test("remote client tool captures real provider call and canonical conversation 
             message.toolCalls?.some((call) => call.id === "provider-call"),
         ),
     ).toBe(true);
-    expect(f.requests[0]?.forwardedProps.openbotDeploymentTools).toEqual([]);
+    expect(f.requests[0]?.forwardedProps.xiongbaoDeploymentTools).toEqual([]);
     expect(result.newMessages.some((message) => message.role === "tool")).toBe(
       false,
     );
@@ -160,7 +160,7 @@ for (const answered of [false, true]) {
     try {
       await f.agent.runAgent({ runId: "canonical-run" });
       expect(f.calls()).toBe(answered ? 0 : 1);
-      expect(f.requests[0]?.forwardedProps.openbotDeploymentTools).toEqual([
+      expect(f.requests[0]?.forwardedProps.xiongbaoDeploymentTools).toEqual([
         "ask_person",
       ]);
       if (!answered) expect(f.context()?.toolName).toBe("ask_person");

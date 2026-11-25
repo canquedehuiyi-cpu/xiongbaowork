@@ -228,7 +228,7 @@ export class PlanModel implements PlanLanguageModel {
               signal: AbortSignal.timeout(5000),
               headers: {
                 "content-type": "application/json",
-                "x-openbot-agent-token": config.token,
+                "x-xiongbao-agent-token": config.token,
               },
               body: JSON.stringify({ threadId: this.threadId }),
             },
@@ -292,7 +292,7 @@ export class PlanModel implements PlanLanguageModel {
     const names = new Set(tools.map((tool) => tool.name));
     const agent = new HttpAgent({
       url: this.config.endpoint.href,
-      headers: { "x-openbot-agent-token": this.config.token },
+      headers: { "x-xiongbao-agent-token": this.config.token },
       fetch: (url, init) =>
         fetch(url, {
           ...init,
@@ -336,16 +336,16 @@ export class PlanModel implements PlanLanguageModel {
               })),
             state: null,
             forwardedProps: {
-              openbotModelOnly: true,
-              openbotBotId: this.botId,
-              ...(this.choice ? { openbotModel: this.choice } : {}),
+              xiongbaoModelOnly: true,
+              xiongbaoBotId: this.botId,
+              ...(this.choice ? { xiongbaoModel: this.choice } : {}),
               /*
                * Claude must replace its still-running SDK query to change the tools it holds. The
                * harness does so whenever a step's `tools` differ from what that query started
                * with (a tool `search_tools` found, or none on the last step); see
                * agent-claude-sdk/src/adapter.py `run`.
                */
-              ...(answerOnly ? { openbotAnswerOnly: true } : {}),
+              ...(answerOnly ? { xiongbaoAnswerOnly: true } : {}),
             },
           })
           .subscribe({

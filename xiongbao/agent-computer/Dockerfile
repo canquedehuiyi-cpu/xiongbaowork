@@ -1,5 +1,5 @@
-# The Bot's computer installs only the Playwright browser it launches, and carries the built OpenBot
-# Recorder for the person's browser it opens (the OpenBot Browser).
+# The Bot's computer installs only the Playwright browser it launches, and carries the built XiongBao
+# Recorder for the person's browser it opens (the XiongBao Browser).
 #
 # The image tag and Playwright dependency must be pinned to the same exact version. Bump both or
 # neither.
@@ -100,7 +100,7 @@ COPY agent-computer/src ./src
 # erased), and the browser routes import ../../shared/xiongbao-browser and ../../shared/bot-browser,
 # so the files they need go where those paths resolve from /app/src.
 COPY shared/file-download.ts shared/env-aliases.ts shared/apply-env-aliases.ts /shared/
-# The OpenBot Browser's contract and a Bot's browser's, which the browser routes check requests
+# The XiongBao Browser's contract and a Bot's browser's, which the browser routes check requests
 # against. They import zod, and a module resolves its imports from its own directory upward, which
 # from /shared never reaches /app/node_modules: so /shared is given that tree to resolve from, rather
 # than a second install.

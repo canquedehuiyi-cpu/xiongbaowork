@@ -357,7 +357,7 @@ function listingRequest(
     if (!plan) return null;
     return {
       url: `${plan.endpoint.href.replace(/\/+$/, "")}/models`,
-      headers: { "x-openbot-agent-token": plan.token },
+      headers: { "x-xiongbao-agent-token": plan.token },
     };
   }
   if (source === "claude") {

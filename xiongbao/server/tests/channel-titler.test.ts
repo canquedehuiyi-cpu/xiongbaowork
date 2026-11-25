@@ -221,7 +221,7 @@ describe("a deployment signed in to a model plan instead of a key", () => {
           expect(new URL(request.url).pathname).toBe(
             provider === "claude" ? "/model" : "/",
           );
-          expect(request.headers.get("x-openbot-agent-token")).toBe(
+          expect(request.headers.get("x-xiongbao-agent-token")).toBe(
             "owned-harness-token",
           );
           const body: RunAgentInput = await request.json();
@@ -301,7 +301,7 @@ describe("a deployment signed in to a model plan instead of a key", () => {
         expect(requests[0]?.threadId).not.toBe(requests[1]?.threadId);
         for (const request of requests) {
           expect(request.tools).toEqual([]);
-          expect(request.forwardedProps.openbotModelOnly).toBe(true);
+          expect(request.forwardedProps.xiongbaoModelOnly).toBe(true);
           expect(JSON.stringify(request.context)).toContain(
             "You name conversations",
           );

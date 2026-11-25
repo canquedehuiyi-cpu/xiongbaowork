@@ -22,7 +22,7 @@ import { childEnv, launchSpec } from "../src/mcp-client";
  * adapter can start and whether they are signed in. Only booleans and a version leave the device.
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-agents-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-agents-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const KEYS = ["acpReady", "harness", "installed", "signedIn", "version"];

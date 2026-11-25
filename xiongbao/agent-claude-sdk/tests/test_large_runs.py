@@ -35,7 +35,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import START_FAILED, OpenBotClaudeAgentAdapter
+from src.adapter import START_FAILED, XiongBaoClaudeAgentAdapter
 from test_tool_continuation import started_with
 
 # Linux `MAX_ARG_STRLEN`: the most bytes one argv string may hold, its NUL included.
@@ -164,7 +164,7 @@ async def events(adapter, input_data):
 )
 def test_a_bot_holding_many_apps_still_starts(started, model_only, per_app):
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="large", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="large", model_only=model_only)
         try:
             names = tool_names(per_app)
             finished = await events(adapter, large_run(names))
@@ -209,7 +209,7 @@ def test_a_bot_that_cannot_start_says_so_in_the_conversation(monkeypatch, model_
     monkeypatch.setattr(claude_agent_sdk, "ClaudeSDKClient", Client)
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="unstartable", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="unstartable", model_only=model_only)
         try:
             finished = await events(adapter, large_run(tool_names()))
             assert [event.type for event in finished][0] == "RUN_STARTED"

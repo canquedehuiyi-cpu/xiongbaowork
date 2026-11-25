@@ -93,7 +93,7 @@ for (const provider of ["chatgpt", "claude"] as const) {
       ).toBe(true);
       expect(requests[2]?.tools).toEqual([]);
       expect(requests[2]?.forwardedProps).toMatchObject({
-        openbotAnswerOnly: true,
+        xiongbaoAnswerOnly: true,
       });
       expect(JSON.stringify(requests[2]?.messages)).toContain(
         "A collected source.",

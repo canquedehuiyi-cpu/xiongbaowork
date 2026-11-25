@@ -199,7 +199,7 @@ describe("a Bot at an address", () => {
       throw new Error("the Bot does not register");
     // What the runtime loader adds for an address this deployment runs.
     if (configuration.endpoint === PICKED)
-      agent.headers = { "x-openbot-agent-token": "managed-token" };
+      agent.headers = { "x-xiongbao-agent-token": "managed-token" };
     const requests: RunAgentInput[] = [];
     const sent = spyOn(HttpAgent.prototype, "run").mockImplementation(
       (input) => {

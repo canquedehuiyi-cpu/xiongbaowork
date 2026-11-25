@@ -41,7 +41,7 @@ describe("the model one run of a built-in Bot uses", () => {
     expect(
       await modelForRun(
         deployment,
-        run({ openbotModel: "gpt-4o", model: "anthropic/claude-opus-5-5" }),
+        run({ xiongbaoModel: "gpt-4o", model: "anthropic/claude-opus-5-5" }),
         async () => undefined,
       ),
     ).toBe(deployment);

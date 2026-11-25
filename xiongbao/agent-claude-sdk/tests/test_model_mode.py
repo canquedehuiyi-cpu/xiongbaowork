@@ -6,12 +6,12 @@ from ag_ui.core import RunAgentInput
 from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 from src.replay import conversation_content
 
 
 def test_model_mode_disables_native_and_ambient_tools():
-    adapter = OpenBotClaudeAgentAdapter(name="model", model_only=True)
+    adapter = XiongBaoClaudeAgentAdapter(name="model", model_only=True)
     request = RunAgentInput.model_validate(
         {
             "threadId": "knowledge-channel",
@@ -119,7 +119,7 @@ def test_model_history_keeps_role_labels_and_real_image_blocks():
 def test_full_bot_cannot_see_claude_code_web_search_or_shell():
     # Seen live: asked to search the web, a Claude Agent SDK Bot called Claude Code's WebSearch
     # four times, was refused each time, and asked the person to grant it.
-    adapter = OpenBotClaudeAgentAdapter(name="openbot")
+    adapter = XiongBaoClaudeAgentAdapter(name="xiongbao")
     request = RunAgentInput.model_validate(
         {
             "threadId": "channel",
