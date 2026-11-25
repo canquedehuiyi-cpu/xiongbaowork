@@ -642,8 +642,8 @@ test("carries per-Bot egress into the computer and the supervisor", () => {
 });
 
 /**
- * The personal edition's one computer is its one person's (scripts/start.sh sets `COMPUTER_PERSON_ID`), so Record runs
- * in their Bots' browsers there. Anywhere else it is unset, and the shared computer stays nobody's.
+ * The personal edition's one computer is its one person's (scripts/start.sh sets `COMPUTER_PERSON_ID`). Anywhere else
+ * it is unset, and the shared computer stays nobody's.
  */
 test("starts the shared computer as one person's only when told whose it is", () => {
   expect(
@@ -657,30 +657,7 @@ test("starts the shared computer as one person's only when told whose it is", ()
   ).toBe("");
 });
 
-/**
- * The personal edition's one computer runs the person's own browser beside their Bots, which it knows from the edition
- * (agent-computer's person-access.ts): the edition in `.env` has to reach it, as it reaches the server.
- */
-/**
- * A Recorder in the shared computer is handed the laptop's loopback addresses for XiongBao and a local gateway, which in
- * that container are the container: the desktop app names where each is reached instead, and the computer relays them
- * (agent-computer's loopback-relay.ts). The setting, and the host the gateway's relay names, have to reach it.
- */
-test("hands the shared computer the loopback addresses it relays, and this machine by name", () => {
-  const computer = runComposeConfig({
-    COMPUTER_LOOPBACK_RELAYS:
-      "3010=server:3001,14401=host.docker.internal:14401",
-  }).services["agent-computer"];
-  expect(computer?.environment.COMPUTER_LOOPBACK_RELAYS).toBe(
-    "3010=server:3001,14401=host.docker.internal:14401",
-  );
-  expect(computer?.extra_hosts).toEqual(["host.docker.internal=host-gateway"]);
-  expect(
-    runComposeConfig({}).services["agent-computer"]?.environment
-      .COMPUTER_LOOPBACK_RELAYS,
-  ).toBe("");
-});
-
+/** The edition in `.env` reaches the shared computer, as it reaches the server. */
 test("tells the shared computer which edition it runs in", () => {
   expect(
     runComposeConfig({ OPENBOT_EDITION: "personal" }).services["agent-computer"]

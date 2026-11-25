@@ -7,7 +7,7 @@ import {
   type InstalledBrowser,
   installedBrowser,
   NO_INSTALLED_BROWSER,
-} from "../agent-computer/src/person-launch";
+} from "../agent-computer/src/installed-browser";
 
 type Environment = Record<string, string | undefined>;
 

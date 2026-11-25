@@ -7,10 +7,6 @@ import { join } from "node:path";
 import { type ServerWebSocket, serve } from "bun";
 import type { ConsoleMessage, Page } from "playwright";
 import { downloadHeaders } from "../../shared/file-download";
-import {
-  isPersonBrowserId,
-  RECORDER_DIR_ENV,
-} from "../../shared/xiongbao-browser";
 import { createCloudAcp, isAcpPath } from "./acp-cloud";
 import { unfinishedAction } from "./action-failure";
 import {
@@ -27,7 +23,6 @@ import {
 } from "./authorisation";
 import { createBotBrowserHost, isBotBrowserPath } from "./bot-browser-host";
 import { isPlainBotId, seatIdFor } from "./bot-id";
-import { createBrowserHost, isBrowserPath } from "./browser-host";
 import { browserRuntimeFromEnv } from "./browser-runtime";
 import { detectChallenge } from "./challenge";
 import {
@@ -65,11 +60,6 @@ import {
 } from "./listeners";
 import { createLiveShell } from "./live-shell";
 import {
-  LOOPBACK_RELAYS_ENV,
-  parseLoopbackRelays,
-  startLoopbackRelays,
-} from "./loopback-relay";
-import {
   assertPageAccess,
   navigateWebPage,
   type PagePurpose,
@@ -85,16 +75,7 @@ import {
   XB_BOT_HELPER,
   XB_BOT_WORKSPACE,
 } from "./per-bot";
-import {
-  computerOwner,
-  NOT_ITS_OWN_COMPUTER_RECORD,
-  PERSONS_OWN_BROWSER,
-  personHoldsTheWheel,
-  personMayUse,
-  refusedHere,
-} from "./person-access";
 import { createProfiles, numberFromEnv, VIEWPORT } from "./profiles";
-import { createRealBrowserHost, isRealBrowserPath } from "./real-browser";
 import {
   parseExecTimeout,
   parseInputMessage,
@@ -199,18 +180,7 @@ if (!COMPUTER_TOKEN) {
 setDefaultAutoSelectFamily(false);
 
 const RUNTIME = browserRuntimeFromEnv(process.env);
-/** Whose this computer is, which decides whether a person's browser may run on it. See person-access.ts. */
-const OWNER = computerOwner(process.env);
 const BROWSER_MODE = RUNTIME.mode;
-/*
- * The display this process was started on, kept before the virtual one replaces it. A person's
- * native browser on XiongBao Desktop opens on the person's own desktop, never on the Xvfb display that
- * a Bot's headed browser uses on Linux. See `personBrowserEnv`.
- */
-const PERSON_DISPLAY = {
-  DISPLAY: process.env.DISPLAY,
-  WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
-};
 const VIRTUAL_DISPLAY = await startVirtualDisplay(
   RUNTIME.useVirtualDisplay ? "headed" : "headless",
 );
@@ -265,8 +235,6 @@ const TEXT_EXTRACT_LIMIT = 6000;
 const sessions = createSessions({
   isLive: (botId) => profiles.isLive(botId),
   profilesDirectory: process.env.PROFILES_DIR?.trim() || "/profiles",
-  // A recording in the Bot's browser is the person's who holds the wheel, and ends the moment they no longer do.
-  onWheelLeft: (botId) => botBrowser.wheelLeft(botId),
   // A navigation and the two element waits an action can make after it: past that, an action is not finishing.
   turnLimitMs: numberFromEnv(
     "BROWSER_TURN_LIMIT_MS",
@@ -414,19 +382,14 @@ const terminalSockets = createTerminalSockets<StreamData & TerminalSocketData>({
 // Only the running computer points its shell at it: a test that imports this module shares its
 // process with every later test.
 const egressFilter = await startEgressFilter({ forShell: import.meta.main });
-// The deployment's loopback addresses, where a browser here is handed one (XiongBao Desktop). Before any browser exists,
-// so a Recorder never connects to an address that is not there yet. See loopback-relay.ts.
-const loopbackRelays = parseLoopbackRelays(process.env[LOOPBACK_RELAYS_ENV]);
-if (import.meta.main) await startLoopbackRelays(loopbackRelays);
 /**
  * Every port this process listens on, which the forwarder (forward.ts) must never open: the API
- * itself, both egress filter listeners and the loopback relays. Chrome is held over a pipe, not a port.
+ * itself and both egress filter listeners. Chrome is held over a pipe, not a port.
  */
 const SELF_PORTS: readonly number[] = [
   PORT,
   egressFilter.port,
   egressFilter.browserPort,
-  ...loopbackRelays.map((relay) => relay.port),
   // Services of the platform that run as this process's own user, where a deployment has any. The
   // image has none: its API and database run as other users, which the owner check already refuses.
   ...parseDenyPorts(process.env.COMPUTER_FORWARD_DENY_PORTS),
@@ -434,25 +397,16 @@ const SELF_PORTS: readonly number[] = [
 const profiles = createProfiles(
   process.env.PROFILES_DIR?.trim() || "/profiles",
   async (botId) => {
-    // First, while the browser is still there: a recording in it ends, and its Recorder lets the person go.
-    await botBrowser.browserClosing(botId);
     if (sessions.get(botId)) sessions.renewRun(botId);
     await sessions.get(botId)?.viewer.releaseAll(COMPUTER_STOPPED);
   },
   {
-    personDisplay: PERSON_DISPLAY,
     // A Bot's browser a person is working in, or has been asked to, is never closed for memory, and
-    // none of its tabs are closed for being idle. A person's own browser has no Bot's wheel to hold:
-    // it is never closed for memory whoever is at it (`chooseForMemory`), and its tabs are never swept.
-    heldByPerson: (botId) =>
-      !isPersonBrowserId(botId) && sessions.personHasTheWheel(botId),
+    // none of its tabs are closed for being idle.
+    heldByPerson: (botId) => sessions.personHasTheWheel(botId),
   },
 );
 
-/**
- * The XiongBao Browser: a person's own browser with the Recorder in it, opened for them by the
- * server. See browser-host.ts, and person-access.ts for what a person's browser id may do here.
- */
 /**
  * A browser being cleared by the person working it is forgotten as a closed one is (a new run, no page), with the wheel
  * left where it is: the browser starts again under them (profiles.ts, `clear`).
@@ -461,16 +415,8 @@ const forgetClearedBrowser = (botId: string) => {
   if (sessions.get(botId)) sessions.renewRun(botId, { keepWheel: true });
 };
 
-const browserHost = createBrowserHost({
-  profiles,
-  recorderDir: () => process.env[RECORDER_DIR_ENV],
-  navigationTimeoutMs: NAVIGATION_TIMEOUT_MS,
-  forget: forgetClearedBrowser,
-});
-
 /**
- * A Bot's browser worked by a person holding its wheel: the bar above its screen, and the Recorder loaded in it,
- * which records that person and nobody else. See bot-browser-host.ts.
+ * A Bot's browser worked by a person holding its wheel: the bar above its screen. See bot-browser-host.ts.
  */
 const botBrowser = createBotBrowserHost({
   profiles,
@@ -481,18 +427,6 @@ const botBrowser = createBotBrowserHost({
   },
   forget: forgetClearedBrowser,
   navigationTimeoutMs: NAVIGATION_TIMEOUT_MS,
-  ...(OWNER.kind === "shared"
-    ? { recordRefused: NOT_ITS_OWN_COMPUTER_RECORD }
-    : {}),
-});
-
-/**
- * The person's own everyday Chrome or Edge, on XiongBao Desktop's computer only: brought forward, or
- * handed the Recorder's store page. See real-browser.ts.
- */
-const realBrowser = createRealBrowserHost({
-  backend: RUNTIME.backend,
-  display: PERSON_DISPLAY,
 });
 
 /**
@@ -718,9 +652,8 @@ async function currentPage(
   const session = sessions.for(botId);
   const page = await profiles.page(botId);
   sessions.observeBrowser(botId, page.context());
-  // A Bot's tools read web pages only. A person's browser is theirs, on whatever page they are on.
-  if (!isPersonBrowserId(botId))
-    assertPageAccess(RUNTIME.backend, page.url(), purpose);
+  // A Bot's tools read web pages only.
+  assertPageAccess(RUNTIME.backend, page.url(), purpose);
   // A ref names an element on the page it was taken from, so moving to a window the site opened has
   // to retire the outstanding ones exactly as a navigation does, or a click lands on the wrong document.
   if (session.livePage && session.livePage !== page) session.snapshotId += 1;
@@ -992,9 +925,6 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** Since when a person's browser has been theirs, which is always, so since this process started. */
-const PROCESS_STARTED_AT = new Date().toISOString();
-
 /** What a person watching is told when the browser they were watching went away. */
 const COMPUTER_STOPPED =
   "This computer stopped, so the screen ended. Start it again to carry on watching.";
@@ -1012,14 +942,13 @@ const FOLLOW_INTERVAL_MS = 1_000;
 
 /**
  * After a person's input on a Bot's screen lands: the field it filled is theirs, and the Bot reads only
- * that it was filled (see secret-masking.ts). A person's own browser has no Bot reading it. Never fails
- * the input, which has landed: a field that could not be marked is said in the log.
+ * that it was filled (see secret-masking.ts). Never fails the input, which has landed: a field that could not be marked is said in the log.
  */
 async function notePersonFilled(
   botId: string,
   fills: "typed" | "chose" | null,
 ): Promise<void> {
-  if (!fills || isPersonBrowserId(botId)) return;
+  if (!fills) return;
   try {
     await markPersonFilled(await currentPage(botId), fills === "typed");
   } catch (error) {
@@ -1206,10 +1135,7 @@ async function applyInput(
   // first only decides whether the input has anywhere to land.
   //
   // Refuse with an error so the surface can explain why input is ignored.
-  //
-  // A person's own browser needs no handover: nobody else works in it, so it starts, and stays,
-  // with the person holding the wheel.
-  if (!isPersonBrowserId(ws.data.botId) && !session.control.humanMayDrive()) {
+  if (!session.control.humanMayDrive()) {
     ws.send(JSON.stringify({ type: "input-error", error: TAKE_CONTROL_FIRST }));
     return;
   }
@@ -1403,19 +1329,6 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
     if (!isOpenPath(url.pathname) && named.seat === undefined) {
       return json({ error: "That is not a usable bot id." }, 400);
     }
-    // A person's browser only on a computer of its own, and nothing else on one: before the id reaches a profile, a
-    // policy or a shell. Asked of the id named, never of the seat made from it: on a computer people share, a person's
-    // browser id sent with a person would make a seat that no longer reads as a person's browser. The live screen
-    // names its browser in the query, which is the one it would show. See person-access.ts.
-    const refused = isOpenPath(url.pathname)
-      ? null
-      : refusedHere(
-          OWNER,
-          url.pathname === "/stream" || url.pathname === "/terminal"
-            ? seatOf(request, url.searchParams).bot
-            : requestBot,
-        );
-    if (refused) return json({ error: refused.error }, refused.status);
     // The admin network policy, pushed by the server on every change; applied without a restart.
     // The deployment's Web Bot Auth key rides the same push (see `web-bot-auth.ts`).
     if (url.pathname === "/egress-policy" && request.method === "PUT") {
@@ -1427,24 +1340,15 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
       if (applied.ok) await applyWebBotAuthPush(body?.webBotAuth);
       return applied;
     }
-    // A Bot's browser as a person holding its wheel works it. Ahead of the person's-browser rule below, so a
-    // person's browser id sent here is told it has the wrong routes rather than that it may not use them.
+    // A Bot's browser as a person holding its wheel works it.
     if (isBotBrowserPath(url.pathname))
       return botBrowser.handle(request, url.pathname, botId);
-    // A person's browser id reaches the person's browser routes, the live screen and the computer's
-    // housekeeping, and nothing a Bot acts or reads through. See person-access.ts.
-    if (isPersonBrowserId(botId) && !personMayUse(url.pathname))
-      return json({ error: PERSONS_OWN_BROWSER }, 403);
     // The external employees' channel (acp-cloud.ts). Behind the token above like every route; the
     // stream is long-lived, so the server's idle timeout does not apply to it.
     if (isAcpPath(url.pathname)) {
       if (url.pathname === "/acp/events") server.timeout(request, 0);
       return cloudAcp.handle(request, url, botId);
     }
-    if (isBrowserPath(url.pathname))
-      return browserHost.handle(request, url.pathname, botId);
-    if (isRealBrowserPath(url.pathname))
-      return realBrowser.handle(request, url.pathname, botId);
     /*
      * A program an employee runs on this computer, reached through the computer (forward.ts).
      * Behind the token and the seat checks above. Before `sessions.for`: it needs no browser, no shell and no wheel.
@@ -1552,15 +1456,13 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
 
       /*
        * The seat's live shell, as a terminal (live-shell.ts). Named in the query for the reason the
-       * stream is. A person's own browser has no shell, so its id is refused here. Where commands are
+       * stream is. Where commands are
        * turned off the socket still opens, to say so, which a refused upgrade could not.
        */
       if (url.pathname === "/terminal") {
         const named = seatOf(request, url.searchParams);
         if (named.seat === undefined)
           return json({ error: "That is not a usable bot id." }, 400);
-        if (isPersonBrowserId(named.bot))
-          return json({ error: PERSONS_OWN_BROWSER }, 403);
         // Opened to say so where commands are off. An employee with its own user has one too, as itself.
         const terminalRefused = !RUNTIME.allowExec
           ? TERMINAL_UNAVAILABLE
@@ -1586,8 +1488,6 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
       // Who has the wheel. Polled by the surface alongside the screen, so the person sees the Bot ask
       // for help without having to reload anything.
       if (url.pathname === "/control" && request.method === "GET") {
-        if (isPersonBrowserId(botId))
-          return json(personHoldsTheWheel(PROCESS_STARTED_AT));
         return json(
           session.control.get(url.searchParams.get("requestId") ?? undefined),
         );
@@ -1777,8 +1677,6 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
           url.pathname === "/control/cancel"
             ? session.control.cancel(body.requestId)
             : session.control.release(body.requestId);
-        // Answered once a recording the wheel took with it has ended, so what the caller reads next is true.
-        await botBrowser.settled(botId);
         return json(changed);
       }
 
@@ -1786,7 +1684,7 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
       // person addresses them by pointing, because they are looking at a picture. Different problem,
       // different endpoint, and only usable while they hold the wheel.
       if (HUMAN_INPUT.has(url.pathname) && request.method === "POST") {
-        if (!isPersonBrowserId(botId) && !session.control.humanMayDrive()) {
+        if (!session.control.humanMayDrive()) {
           return json({ error: TAKE_CONTROL_FIRST }, 409);
         }
         session.humanInputs += 1;
@@ -1902,7 +1800,6 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
             ?.restart(
               "The computer stopped, so the shell ended. A new one starts when it's next used.",
             );
-        await botBrowser.settled(botId);
         return json({ stopped: true, wasRunning });
       }
 
@@ -1953,7 +1850,6 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
             ?.restart(
               "The computer was reset, so the shell ended. A new one starts when it's next used.",
             );
-        await botBrowser.settled(botId);
         /*
          * And a new run, because the browser this session described is gone.
          *

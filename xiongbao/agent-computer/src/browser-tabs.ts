@@ -1,12 +1,9 @@
 /**
- * The bar above a browser XiongBao shows: its tabs (new, switch, close) and the tab in front's address, back, forward
- * and reload.
+ * The bar above a Bot's browser XiongBao shows: its tabs (new, switch, close) and the tab in front's address, back,
+ * forward and reload. A person works it only while they hold the Bot's wheel (`bot-browser-host.ts`, which decides who
+ * may use it); what the bar does, and what it says when a page does not open, lives here.
  *
- * Two browsers have it. A person's own (`browser-host.ts`), which is theirs at every moment, and a Bot's
- * (`bot-browser-host.ts`), which a person works only while they hold its wheel. Who may use the bar is each host's to
- * decide; what the bar does, and what it says when a page does not open, is the same in both and lives here.
- *
- * Playwright's own types, and nothing of either host's, so both hand it the browser they have.
+ * Playwright's own types, and nothing of the host's, so it is handed the browser as it is.
  */
 import type { BrowserContext, CDPSession, Page } from "playwright";
 import type {
@@ -29,7 +26,7 @@ export type TabbedBrowser = {
   active(): Page;
   /** Put a tab in front. */
   activate(page: Page): void;
-  /** The tabs, oldest first, never the Recorder's own pages. */
+  /** The tabs, oldest first, never an extension's own pages. */
   pages(): Page[];
 };
 
@@ -138,7 +135,7 @@ export function createTabBar(options: { navigationTimeoutMs: number }) {
     );
   };
 
-  /** Bring a tab to the front: in its window, and so on the live screen and for the Recorder. */
+  /** Bring a tab to the front: in its window, and so on the live screen. */
   const putInFront = async (browser: TabbedBrowser, page: Page) => {
     browser.activate(page);
     await page.bringToFront().catch(() => undefined);
@@ -271,3 +268,49 @@ export function createTabBar(options: { navigationTimeoutMs: number }) {
 }
 
 export type TabBar = ReturnType<typeof createTabBar>;
+
+/**
+ * Make a hosted browser's window hold exactly the page the live screen shows, as each tab opens.
+ *
+ * Playwright sizes the window to the viewport with its own allowance for the browser's toolbars, and
+ * that allowance is none when headless, though headless Chromium lays its toolbars out all the same
+ * (87 pixels here). The page is told it is 800 high, and a tab that has been laid out again (switched
+ * away from and back, say) is then shown in what is left of the window: the live screen lost the
+ * bottom of the page, 713 of 800, while the page's own viewport still said 800. Measured on bundled
+ * Chromium, headless, with Playwright 1.62.1. `Browser.setContentsSize` grows the window around the
+ * contents, so the toolbars come out of the window and not the page, headed or headless. After
+ * Playwright's own resize, which it makes as each tab starts and then leaves alone.
+ *
+ * Settles once the tabs open now are fitted; each tab opened later is fitted as it opens.
+ * https://chromedevtools.github.io/devtools-protocol/tot/Browser/#method-setContentsSize
+ */
+export async function fitWindowsToViewport(
+  context: BrowserContext,
+  viewport: { width: number; height: number },
+  botId: string,
+): Promise<void> {
+  const fit = async (page: Page) => {
+    const session = await context.newCDPSession(page);
+    try {
+      const { windowId } = await session.send("Browser.getWindowForTarget");
+      await session.send("Browser.setContentsSize", { windowId, ...viewport });
+    } finally {
+      await session.detach().catch(() => undefined);
+    }
+  };
+  const fitting = (page: Page) =>
+    fit(page).catch((error: unknown) => {
+      // A tab that closed while it was being fitted needs nothing; anything else is said, because
+      // the live screen then shows less than the whole page.
+      if (page.isClosed()) return;
+      console.info(
+        JSON.stringify({
+          type: "computer-window-not-fitted",
+          botId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    });
+  context.on("page", (page) => void fitting(page));
+  await Promise.all(context.pages().map(fitting));
+}

@@ -67,8 +67,6 @@ function fromPlaywright(session: CDPSession): Target {
 type BrowserNetwork = {
   target: Target;
   headless: boolean;
-  /** Whether this browser's requests carry the deployment's Web Bot Auth signature: a Bot's do, a person's never. */
-  signs: boolean;
   /** The words a headless browser sends that a headed one does not, and what to send instead. */
   wire?: { userAgent: string; dropBrand: string };
   intercepting: boolean;
@@ -85,7 +83,7 @@ onWebBotAuthChange(() => {
 /** Intercept while there is something to change: always when headless, and while signing is on. */
 function follow(browser: BrowserNetwork) {
   browser.chain = browser.chain.then(async () => {
-    const want = browser.headless || (browser.signs && webBotAuthEnabled());
+    const want = browser.headless || webBotAuthEnabled();
     if (want === browser.intercepting) return;
     browser.intercepting = want;
     try {
@@ -140,25 +138,24 @@ async function continueRequest(browser: BrowserNetwork, event: RequestPaused) {
   const original = event.request.headers;
   const fixed = headedHeaders(original, browser.wire);
   let headers: { name: string; value: string }[] | undefined;
-  if (browser.signs)
-    try {
-      headers = await signedHeaders(
-        event.request.method,
-        event.request.url,
-        fixed,
+  try {
+    headers = await signedHeaders(
+      event.request.method,
+      event.request.url,
+      fixed,
+    );
+  } catch (error) {
+    // Sent unsigned rather than held: a request that never continues is a page that never loads.
+    if (!signingFailureLogged) {
+      signingFailureLogged = true;
+      console.warn(
+        JSON.stringify({
+          type: "computer-web-bot-auth-sign-failed",
+          error: error instanceof Error ? error.message : String(error),
+        }),
       );
-    } catch (error) {
-      // Sent unsigned rather than held: a request that never continues is a page that never loads.
-      if (!signingFailureLogged) {
-        signingFailureLogged = true;
-        console.warn(
-          JSON.stringify({
-            type: "computer-web-bot-auth-sign-failed",
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        );
-      }
     }
+  }
   if (!headers && fixed !== original) {
     headers = Object.entries(fixed).map(([name, value]) => ({ name, value }));
   }
@@ -172,12 +169,11 @@ async function continueRequest(browser: BrowserNetwork, event: RequestPaused) {
 
 /**
  * Attach a launched browser. Awaited before its first navigation, so the first request a site sees is
- * already signed and already says `Chrome`. `signs: false` for a person's browser: it says `Chrome` as a
- * Bot's does, but a person browsing is not the deployment's automated agent, so it never signs.
+ * already signed and already says `Chrome`.
  */
 export async function attachBrowserNetwork(
   context: BrowserContext,
-  options: { headless: boolean; signs?: boolean },
+  options: { headless: boolean },
 ): Promise<void> {
   const owner = context.browser();
   if (!owner) {
@@ -194,7 +190,6 @@ export async function attachBrowserNetwork(
   const browser: BrowserNetwork = {
     target,
     headless: options.headless,
-    signs: options.signs ?? true,
     intercepting: false,
     chain: Promise.resolve(),
   };

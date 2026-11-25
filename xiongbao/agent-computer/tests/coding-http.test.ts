@@ -34,7 +34,7 @@ let child: ReturnType<typeof Bun.spawn> | undefined;
 
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "coding-http-"));
-  for (const name of ["profiles", "workspace", "recorder"])
+  for (const name of ["profiles", "workspace"])
     await mkdir(join(root, name), { recursive: true });
   const port = await freePort();
   base = `http://127.0.0.1:${port}`;

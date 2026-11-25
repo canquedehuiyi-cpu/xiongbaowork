@@ -22,7 +22,6 @@ import {
   type Server,
 } from "node:http";
 import { BlockList, connect, isIP, type Socket } from "node:net";
-import { isPersonBrowserId } from "../../shared/xiongbao-browser";
 import { HEADER } from "./wire-headers";
 
 /** A proxy as Playwright wants it: credentials separated from the URL. */
@@ -432,46 +431,16 @@ export function isAlwaysDenied(addressInput: string): boolean {
   return alwaysDenied.check(candidate, version === 4 ? "ipv4" : "ipv6");
 }
 
-/**
- * Who a refusal is said to. A Bot's computer, which is what most connections here are; a person's own
- * browser (`person-` ids), whose refusal page the person reads in their browser; or `anyone`, when the
- * connection could be either, which is said without naming a Bot or a person.
- */
-export type EgressAudience = "bot" | "person" | "anyone";
-
-/** Why a connection was refused, in the words of whoever is refused. */
+/** Why a connection was refused, in the words of the Bot's computer that is refused. */
 const REFUSALS = {
-  alwaysDenied: {
-    bot: (host: string) =>
-      `${host} is a cloud metadata or link-local address, which no Bot may reach.`,
-    person: (host: string) =>
-      `This browser never opens ${host}: it is a cloud metadata or link-local address, not a website.`,
-    anyone: (host: string) =>
-      `${host} is a cloud metadata or link-local address, which XiongBao never opens.`,
-  },
-  off: {
-    bot: "Network access is turned off for this Bot's computer.",
-    person: "Network access is turned off for this browser.",
-    anyone: "Network access is turned off here.",
-  },
-  notAllowed: {
-    bot: (where: string) =>
-      `${where} is not on this deployment's network allowlist.`,
-    person: (where: string) => `This browser may not open ${where}.`,
-    anyone: (where: string) =>
-      `${where} is not on this deployment's network allowlist.`,
-  },
-  unresolved: {
-    bot: (host: string) => `${host} could not be resolved.`,
-    person: (host: string) => `${host} could not be found.`,
-    anyone: (host: string) => `${host} could not be resolved.`,
-  },
-  noPolicy: {
-    bot: "No network policy has reached this computer yet, so nothing may leave it.",
-    person: "This browser cannot reach the network yet. Try again in a moment.",
-    anyone:
-      "No network policy has reached this computer yet, so nothing may leave it.",
-  },
+  alwaysDenied: (host: string) =>
+    `${host} is a cloud metadata or link-local address, which no Bot may reach.`,
+  off: "Network access is turned off for this Bot's computer.",
+  notAllowed: (where: string) =>
+    `${where} is not on this deployment's network allowlist.`,
+  unresolved: (host: string) => `${host} could not be resolved.`,
+  noPolicy:
+    "No network policy has reached this computer yet, so nothing may leave it.",
 } as const;
 
 /**
@@ -490,22 +459,19 @@ function hostPort(host: string, port: number): string {
  * that resolved inside the range. Every resolved address must be inside an allowed range, so a name
  * that resolves partly outside is refused rather than connected to whichever address came first.
  * Either kind of rule allows only its `ports` when it names some.
- *
- * `audience` is who a refusal is worded for (see `EgressAudience`); it never changes the decision.
  */
 export function egressDecision(
   policy: EgressPolicy,
   hostInput: string,
   port: number,
   resolved: readonly string[] = [],
-  audience: EgressAudience = "bot",
 ): EgressDecision {
   const host = normalizeHost(hostInput);
   const denied = [host, ...resolved].find(isAlwaysDenied);
   if (denied !== undefined) {
     return {
       allowed: false,
-      reason: REFUSALS.alwaysDenied[audience](host),
+      reason: REFUSALS.alwaysDenied(host),
     };
   }
   if (policy.mode === "allow_all") {
@@ -515,7 +481,7 @@ export function egressDecision(
     };
   }
   if (policy.mode === "deny_all") {
-    return { allowed: false, reason: REFUSALS.off[audience] };
+    return { allowed: false, reason: REFUSALS.off };
   }
   const domains: { value: string; ports?: string }[] = [
     ...(policy.mode === "defaults_plus_allowlist"
@@ -545,7 +511,7 @@ export function egressDecision(
   }
   return {
     allowed: false,
-    reason: REFUSALS.notAllowed[audience](hostPort(host, port)),
+    reason: REFUSALS.notAllowed(hostPort(host, port)),
   };
 }
 
@@ -616,25 +582,6 @@ function policiesFor(
   return [...policies.entries()];
 }
 
-/**
- * Who a refusal is worded for: the credentials' owner when there are some, else the owners of the
- * policies judging the connection when they are all people's browsers or all Bots, else anyone.
- *
- * A browser's connection has its owner in it (see `startEgressFilter`), so the rest is for one
- * without: a shell command's, judged by every policy on the computer, which on one shared by Bots
- * and a person could be anybody's, and is said so.
- */
-function audienceFor(
-  botId: string | undefined,
-  owners: readonly string[],
-): EgressAudience {
-  if (botId) return isPersonBrowserId(botId) ? "person" : "bot";
-  if (owners.length === 0) return "bot";
-  if (owners.every(isPersonBrowserId)) return "person";
-  if (!owners.some(isPersonBrowserId)) return "bot";
-  return "anyone";
-}
-
 async function decide(
   botId: string | undefined,
   host: string,
@@ -643,15 +590,8 @@ async function decide(
 ): Promise<EgressDecision & { addresses?: string[] }> {
   const judging = policiesFor(botId);
   if (judging === "refuse") {
-    return {
-      allowed: false,
-      reason: REFUSALS.noPolicy[audienceFor(botId, [])],
-    };
+    return { allowed: false, reason: REFUSALS.noPolicy };
   }
-  const audience = audienceFor(
-    botId,
-    judging.map(([owner]) => owner),
-  );
   let resolved: string[] = [];
   /*
    * Resolved whenever this filter makes the connection itself, so the address checked is the
@@ -667,14 +607,14 @@ async function decide(
     try {
       resolved = await resolver(normalizeHost(host));
     } catch {
-      return { allowed: false, reason: REFUSALS.unresolved[audience](host) };
+      return { allowed: false, reason: REFUSALS.unresolved(host) };
     }
   }
   // Checked even with no policy to judge by, which EGRESS_POLICY_REQUIRED=0 allows.
   for (const policy of judging.length > 0
     ? judging.map(([, policy]) => policy)
     : [{ mode: "allow_all" as const, rules: [] }]) {
-    const decision = egressDecision(policy, host, port, resolved, audience);
+    const decision = egressDecision(policy, host, port, resolved);
     if (!decision.allowed) return decision;
   }
   // Connect only to the addresses that were checked, so a second lookup cannot answer differently.
@@ -847,16 +787,6 @@ function refuse(socket: Socket, reason: string) {
  */
 const PROXY_CHALLENGE =
   'HTTP/1.1 407 Proxy Authentication Required\r\nproxy-authenticate: Basic realm="XiongBao"\r\ncontent-type: text/plain\r\nconnection: close\r\ncontent-length: 0\r\n\r\n';
-
-/**
- * The host a browser asks the filter for once as it starts, so that it holds the filter's credentials
- * before anything Playwright does not answer for asks it anything (`holdFilterCredentials`). A name no
- * network has (RFC 2606 reserves `.invalid`), answered by the filter itself once the credentials are
- * in the request, before any policy, lookup or upstream proxy, so the question never leaves the
- * computer.
- * https://www.rfc-editor.org/rfc/rfc2606#section-2
- */
-export const FILTER_CREDENTIALS_HOST = "openbot-egress-credentials.invalid";
 
 /** Open a tunnel to host:port, through the upstream proxy when there is one. */
 function tunnel(
@@ -1044,11 +974,6 @@ export async function startEgressFilter(
     }
     if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
       refuse(client, "A CONNECT names host:port.");
-      return;
-    }
-    // The browser asking only so that it holds its credentials: answered here, and nothing is reached.
-    if (asks && normalizeHost(host) === FILTER_CREDENTIALS_HOST) {
-      refuse(client, "Nothing is here: the browser now holds its credentials.");
       return;
     }
     const upstream = upstreamFor(botId ?? "", env);
