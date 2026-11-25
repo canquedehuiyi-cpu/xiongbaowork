@@ -124,7 +124,6 @@ function renderNarrowApp(start = "/channel/models") {
   queryClient.setQueryData(userPreferencesQueryOptions("dana").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
-    narration: null,
     skin: "xiongbao",
     proactive: "on",
   });

@@ -53,7 +53,6 @@ function serving() {
     const preferences = () => ({
       messageListEmphasis: "thread",
       selfHostBannerDismissed: true,
-      narration: null,
       skin: "xiongbao",
       proactive,
     });

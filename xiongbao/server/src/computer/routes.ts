@@ -2,7 +2,6 @@ import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
 } from "@xiongbao/shared/desktop-control";
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -23,8 +22,6 @@ import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
 import type { BotBrowser } from "../browser/bot-browser";
-import { ownsPersonBrowser } from "../browser/person";
-import { stampNarrationArrival } from "../browser/routes";
 import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
 import { capabilityFor } from "../tenant/context";
@@ -86,9 +83,6 @@ import {
  * this file passes through a policy decision and audit row before it reaches the computer.
  */
 
-/** What a person's own browser answers under this router: the reads its live screen makes. */
-const PERSON_BROWSER_READS = new Set(["control", "status", "screenshot"]);
-
 /** The three file routes a scope may name, each answered by the same rule (`resolveFileRequest`). */
 const SCOPED_FILE_ROUTES = new Set(["download", "preview", "text"]);
 
@@ -137,8 +131,8 @@ export function createComputerRoutes(
    */
   adminScope?: Pick<AdminScope, "adminCapability" | "asAdminPlatform">,
   /**
-   * The bar above a Bot's screen and Record, for the person holding its wheel (browser/bot-browser.ts), at
-   * `/:botId/browser`. Absent where this XiongBao has no Recorder: nothing about it is mounted.
+   * The bar above a Bot's screen, for the person holding its wheel (browser/bot-browser.ts), at `/:botId/browser`.
+   * Absent: nothing about it is mounted.
    */
   botBrowser?: BotBrowser,
   /**
@@ -156,11 +150,6 @@ export function createComputerRoutes(
   const routes = new Hono<{ Variables: AppVariables }>();
   const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
     adminScope?.adminCapability ?? ((_context, next) => next());
-
-  // A phrase's arrival, noted before the guard below signs the person in and asks about the Bot, which can take any
-  // time: the narration's times are moved onto this server's clock from it (browser/routes.ts).
-  if (botBrowser)
-    routes.use("/:botId/browser/narration", stampNarrationArrival);
 
   /*
    * Whatever the preview and text routes answer that is not a file (a refusal, a 415, an error, the
@@ -211,23 +200,6 @@ export function createComputerRoutes(
     }
 
     /*
-     * A person's own XiongBao browser, named for the person (browser/person.ts), answers here only what its live screen
-     * reads, and only to that person: who holds the wheel, whether it is up, and a picture of the page. Asked here and
-     * not of `canUseBot`, which a deployment with no profile store answers yes to for everybody. Nothing that acts as a
-     * Bot (a click through the boundary, a command, a file) reaches a person's browser: no Bot uses one yet.
-     */
-    if (botId && isPersonBrowserId(botId)) {
-      const route = path.slice(
-        path.lastIndexOf(`/${botId}/`) + botId.length + 2,
-      );
-      return context.req.method === "GET" &&
-        PERSON_BROWSER_READS.has(route) &&
-        ownsPersonBrowser(context.var.actor, botId)
-        ? next()
-        : context.json({ error: "There is no such Bot." }, 404);
-    }
-
-    /*
      * A download, preview or text read that names where its file was announced is decided by that
      * rule alone, in the route itself (`artifactScopeOf`), and is not asked whether the person may use
      * the Bot: a member of a group chat may fetch what the chat was shown without being able to drive
@@ -261,7 +233,7 @@ export function createComputerRoutes(
       context.var.actor.id,
     );
 
-  // After the guard, so everything under it has passed it: a person's own browser id never gets here.
+  // After the guard, so everything under it has passed it.
   if (botBrowser) routes.route("/:botId/browser", botBrowser.routes);
 
   routes.get("/:botId/status", async (context) => {
@@ -590,38 +562,17 @@ export function createComputerRoutes(
     ),
   );
 
-  /*
-   * Handing the wheel back, or the Bot's request being cancelled, ends any recording in the Bot's browser (the computer
-   * ends it), and every Recorder connection the browser holds goes with it: the Bot's network stops letting the Recorder
-   * out (browser/bot-browser.ts). A Bot whose wheel a person held acts again only once it is handed back here.
-   */
+  /* A Bot whose wheel a person held acts again only once it is handed back here. */
   routes.post("/:botId/control/release", (context) =>
-    act(context, gateway.seatFor, async (seat, actor, body) => {
-      let state: Awaited<ReturnType<typeof gateway.releaseControl>>;
-      try {
-        state = await gateway.releaseControl(seat, actor, handoffId(body));
-      } catch (error) {
-        // The computer may have handed it back though its answer never came (a timeout): what it says now decides.
-        await botBrowser?.wheelMayHaveReturned(seat);
-        throw error;
-      }
-      await botBrowser?.wheelReturned(seat);
-      return state;
-    }),
+    act(context, gateway.seatFor, (seat, actor, body) =>
+      gateway.releaseControl(seat, actor, handoffId(body)),
+    ),
   );
 
   routes.post("/:botId/control/cancel", (context) =>
-    act(context, gateway.seatFor, async (seat, actor, body) => {
-      let state: Awaited<ReturnType<typeof gateway.cancelControl>>;
-      try {
-        state = await gateway.cancelControl(seat, actor, handoffId(body));
-      } catch (error) {
-        await botBrowser?.wheelMayHaveReturned(seat);
-        throw error;
-      }
-      await botBrowser?.wheelReturned(seat);
-      return state;
-    }),
+    act(context, gateway.seatFor, (seat, actor, body) =>
+      gateway.cancelControl(seat, actor, handoffId(body)),
+    ),
   );
 
   /** The Bot asking for a value it must not be told. */

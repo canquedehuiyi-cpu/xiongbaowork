@@ -230,17 +230,18 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // and the GitHub callback's "is this person still active" reads the deployment's people table.
   // M3: upstream's wiring adds "who is this" reads, each commented where it is made: the session,
   // roles and Entra token of a request not yet framed, a Bot's isolation switch and owner for its
-  // computer seat, people's names and their XiongBao browsers for the admin computer list, every live
-  // Recorder connection, the boot-time model check; and the background translator of
-  // `text_translations` (no tenant column). Task 14 removed seven with Automatic Learning: the three
-  // auto-assign rounds, the Learning space's name lookup, and Learning's open sources, withheld
-  // skills and people.
+  // computer seat, people's names for the admin computer list, the boot-time model check; and the
+  // background translator of `text_translations` (no tenant column). Task 14 removed seven with
+  // Automatic Learning: the three auto-assign rounds, the Learning space's name lookup, and Learning's
+  // open sources, withheld skills and people. Task 14b removed two with the browser Recorder: whose
+  // XiongBao browser each listed computer is (read off the Recorder connections), and every live
+  // Recorder connection.
   // The three `runAsTenant("platform")` are that translator and, from main, the boot refresh of
   // XiongBao's own apps' saved tools (`refreshOwnListings`) and the broker relist rounds
   // (`relistOutdatedBrokeredApps`), described above.
   // M5: one `asPlatform` is `adminRead`, the reads behind upstream's admin drafting
   // routes (audit questions, what-if, grant decisions), taken only while the capability is held.
-  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 12 },
+  "src/index.ts": { 'runAsTenant("platform"': 3, "asPlatform(": 10 },
   "src/memory/ingestion.ts": { 'runAsTenant("platform"': 2 },
   "src/pipeline/reap.ts": { 'runAsTenant("platform"': 1 },
   // Which run holds an approval (I3), and WF7's restart sweep for parents waiting on an ended child;
@@ -275,12 +276,6 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // and closes runs a dead process left `running`. Each person then learns in their own frame.
   "src/local-learning/engine.ts": { "asPlatform(": 2 },
   "src/quota/routes.ts": { 'runAsTenant("platform"': 1 },
-  // M3: the Recorder (upstream): a connect code is spent before anybody is known, so its refusals,
-  // the code's owner and every live connection are read as `platform`; the connection itself is made
-  // in the owner's frame.
-  "src/recorder/connections.ts": { "asPlatform(": 3 },
-  "src/recorder/routes.ts": { "asPlatform(": 1 },
-  "src/recorder/wiring.ts": { "asPlatform(": 3 },
   "src/recovery/abandoned-work.ts": { 'runAsTenant("platform"': 1 },
   // The interrupted-turn sweep finds every tenant's stale running turns; each is closed in its own frame (期九·二).
   "src/recovery/interrupted-runs.ts": { 'runAsTenant("platform"': 1 },

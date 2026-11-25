@@ -278,9 +278,8 @@ export function createEntra(options: {
        * The sign-in made a session, as a browser's does, and nothing will ever use it: the token
        * stands in for a session on every request it arrives with, and the session's own token was
        * handed to nobody. So it goes now, by its token, rather than one being left behind for every
-       * first arrival. Deleted directly and not through Better Auth, whose session hooks are for a
-       * session somebody ended and would end every Recorder the person has (`signOutRecorders`).
-       * The sign-in itself stays on the trail, as `session.signed_in`.
+       * first arrival. Deleted directly by its token. The sign-in itself stays on the trail, as
+       * `session.signed_in`.
        */
       if ("token" in signedIn && typeof signedIn.token === "string") {
         await options.database

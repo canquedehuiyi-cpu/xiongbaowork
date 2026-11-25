@@ -174,7 +174,6 @@ function renderSidebar() {
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
-    narration: null,
     skin: "xiongbao",
     proactive: "on",
   });
@@ -253,7 +252,6 @@ test("message emphasis updates mounted rows from the account preferences cache",
     clients[0]?.setQueryData(userPreferencesQueryOptions("user").queryKey, {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
     }),

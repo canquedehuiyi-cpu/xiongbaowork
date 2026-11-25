@@ -1329,7 +1329,6 @@ const copilotInfo = (agents: AgentProfile[]): CopilotRuntimeInfo => ({
 const PREFERENCES: UserPreferences = {
   messageListEmphasis: "thread",
   selfHostBannerDismissed: true,
-  narration: null,
   skin: "xiongbao",
   proactive: "on",
 };

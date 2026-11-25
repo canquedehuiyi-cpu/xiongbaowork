@@ -46,30 +46,6 @@ const {
 } = baseEnvironment;
 
 describe("deployment configuration", () => {
-  test.each([undefined, "", "stale-legacy-key"])(
-    "uses the CLI runtime key with legacy value %s",
-    (legacy) => {
-      const config = loadConfig({
-        ...baseEnvironment,
-        INTELLIGENCE_API_KEY: legacy,
-        CPK_INTELLIGENCE_API_KEY: "  cpk-current-project  ",
-      });
-      // Optional Intelligence here (R0), so the key is on `intelligence`, not on the runtime.
-      expect(config.intelligence?.apiKey).toBe("cpk-current-project");
-    },
-  );
-
-  test("an empty CLI key preserves legacy-only deployments", () => {
-    expect(
-      // The fork's base deployment has no Intelligence (R0), so the legacy key is given here.
-      loadConfig({
-        ...baseEnvironment,
-        INTELLIGENCE_API_KEY: "tenant-api-key",
-        CPK_INTELLIGENCE_API_KEY: "  ",
-      }).intelligence?.apiKey,
-    ).toBe("tenant-api-key");
-  });
-
   test("organization authority disables the standalone actor without requiring local provider secrets", () => {
     const config = loadConfig({
       ...withoutSignIn,
@@ -184,6 +160,14 @@ describe("deployment configuration", () => {
     });
     expect(config.runtime).toEqual({ mode: "local", durableHistory: true });
     expect(config).not.toHaveProperty("learning");
+    expect(config).not.toHaveProperty("intelligence");
+    // An address without its key is ignored too, rather than refused at boot as half of a back end.
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        INTELLIGENCE_API_URL: "http://localhost:7100",
+      }),
+    ).not.toHaveProperty("intelligence");
   });
 
   test("rejects incomplete OAuth client configuration", () => {

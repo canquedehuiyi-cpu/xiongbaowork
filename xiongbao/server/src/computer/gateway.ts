@@ -33,7 +33,6 @@ import {
   desktopActionWordsOf,
   snapshotForStorage,
 } from "@xiongbao/shared/desktop-control";
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import type { TurnArtifact } from "../../../shared/turn-artifacts";
 import { HEADER } from "../../../shared/wire-headers";
@@ -430,11 +429,6 @@ export type ComputerGatewayOptions = {
   people?: (
     ids: string[],
   ) => Promise<Map<string, { name: string | null; email: string }>>;
-  /**
-   * Whose XiongBao browser each of these computers is (`person-` ids, browser/person.ts), as user ids. A person's browser
-   * is a computer of its own named by a hash, so without this the admin screen cannot say whose it is.
-   */
-  browserOwners?: (computerIds: string[]) => Promise<Map<string, string>>;
 };
 
 /** One computer, or one seat on the shared computer, as the admin screen lists it. */
@@ -2811,24 +2805,12 @@ export function createComputerGateway(
       const botIdOf = (computer: (typeof computers)[number]) =>
         computer.botId ??
         (computer.key.kind === "bot" ? computer.key.botId : undefined);
-      // A person's own XiongBao browser (Teach a Bot's) is listed under its own id, which is no Bot's: say whose it is.
-      const browserIds = computers.flatMap((computer) => {
-        const id = botIdOf(computer);
-        return id && isPersonBrowserId(id) ? [id] : [];
-      });
-      const owners =
-        browserIds.length > 0 && options.browserOwners
-          ? await options
-              .browserOwners(browserIds)
-              .catch(() => new Map<string, string>())
-          : new Map<string, string>();
       const personIds = [
-        ...new Set([
-          ...computers.flatMap((computer) =>
+        ...new Set(
+          computers.flatMap((computer) =>
             computer.key.kind === "person" ? [computer.key.personId] : [],
           ),
-          ...owners.values(),
-        ]),
+        ),
       ];
       const people =
         personIds.length > 0 && options.people
@@ -2838,13 +2820,10 @@ export function createComputerGateway(
         isolation: provider.isolation,
         computers: computers.map((computer): FleetComputer => {
           const botId = botIdOf(computer);
-          const owner = botId ? owners.get(botId) : undefined;
           const person =
             computer.key.kind === "person"
               ? people.get(computer.key.personId)
-              : owner
-                ? people.get(owner)
-                : undefined;
+              : undefined;
           return {
             computer: computerKeyText(computer.key),
             kind: computer.key.kind,

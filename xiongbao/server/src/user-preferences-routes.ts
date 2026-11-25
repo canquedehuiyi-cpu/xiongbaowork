@@ -48,7 +48,6 @@ const preferencesPatch = z
   .strictObject({
     messageListEmphasis: z.enum(["agent", "thread"]).optional(),
     selfHostBannerDismissed: z.boolean().optional(),
-    narration: z.enum(["on", "off"]).optional(),
     skin: z
       .string()
       .refine(isKnownSkinInput)
@@ -208,7 +207,7 @@ export function userPreferencesRoutes(
     if (!parsed.success) {
       return context.json(
         {
-          error: `Choose agent or thread for message list emphasis, true or false for the self-host banner, on or off for narration or check-ins, one of these skins: ${SKIN_IDS.join(", ")}, or work hours as HH:MM with a known time zone.`,
+          error: `Choose agent or thread for message list emphasis, true or false for the self-host banner, on or off for check-ins, one of these skins: ${SKIN_IDS.join(", ")}, or work hours as HH:MM with a known time zone.`,
         },
         400,
       );

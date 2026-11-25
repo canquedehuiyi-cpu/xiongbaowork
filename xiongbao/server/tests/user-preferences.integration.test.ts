@@ -52,7 +52,6 @@ test("database defaults and writes survive a new store and remain scoped to the 
     expect(await store.read(alice)).toEqual({
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: DEFAULT_HOURS,
@@ -60,7 +59,6 @@ test("database defaults and writes survive a new store and remain scoped to the 
     expect(await store.patch(alice, { messageListEmphasis: "agent" })).toEqual({
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: DEFAULT_HOURS,
@@ -68,7 +66,6 @@ test("database defaults and writes survive a new store and remain scoped to the 
     expect(await createUserPreferencesStore(database).read(alice)).toEqual({
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: DEFAULT_HOURS,
@@ -78,7 +75,6 @@ test("database defaults and writes survive a new store and remain scoped to the 
     expect(await store.read(bob)).toEqual({
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: DEFAULT_HOURS,
@@ -120,20 +116,34 @@ test("missing users do not appear successfully saved", async () => {
   });
 });
 
-test("the narration choice is kept in the database beside the others", async () => {
+test("a row saved with the retired narration choice reads as it did, its other preferences intact", async () => {
+  // Narration was the browser recording's choice, gone with it; a row that still holds the key reads without error.
   const id = await person();
   // Their own preferences, read and written in their own tenant.
   await runAsTenant(id, async () => {
-    expect((await store.read(id)).narration).toBe(null);
-    await store.patch(id, { narration: "on" });
-    expect(await createUserPreferencesStore(database).read(id)).toEqual({
+    await database
+      .update(users)
+      .set({
+        preferences: sql`'{"narration":"on","skin":"openduet","proactive":"off"}'::jsonb`,
+      })
+      .where(eq(users.id, id));
+    expect(await store.read(id)).toMatchObject({
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: "on",
-      skin: "xiongbao",
-      proactive: "on",
+      skin: "openduet",
+      proactive: "off",
       workHours: DEFAULT_HOURS,
     });
+    // A save of another preference keeps the row readable, and leaves the old key where it was.
+    expect(
+      (await store.patch(id, { messageListEmphasis: "agent" }))
+        .messageListEmphasis,
+    ).toBe("agent");
+    const [row] = await database
+      .select({ narration: sql<string>`${users.preferences}->>'narration'` })
+      .from(users)
+      .where(eq(users.id, id));
+    expect(row?.narration).toBe("on");
   });
 });
 
@@ -144,7 +154,6 @@ test("the skin is saved on the account and survives a new store", async () => {
     expect(await store.patch(id, { skin: "openmuse" })).toEqual({
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "openmuse",
       proactive: "on",
       workHours: DEFAULT_HOURS,
@@ -181,7 +190,6 @@ test("check-ins are on for a person who never chose, and their off is kept in th
     expect(await createUserPreferencesStore(database).read(id)).toEqual({
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "openduet",
       proactive: "off",
       workHours: DEFAULT_HOURS,
@@ -212,13 +220,13 @@ test("concurrent starter claims across pools keep one winner and unrelated prefe
       await Promise.all([
         store.claimStarterTour(id, "first"),
         secondStore.claimStarterTour(id, "second"),
-        store.patch(id, { narration: "on" }),
+        store.patch(id, { messageListEmphasis: "agent" }),
       ]);
       const saved = await secondStore.read(id);
       expect(["first", "second"]).toContain(saved.starterTourChannelId ?? "");
       expect(saved).toMatchObject({
         skin: "openduet",
-        narration: "on",
+        messageListEmphasis: "agent",
       });
       expect(saved).toHaveProperty("futurePreference", true);
       await secondStore.claimStarterTour(id, "later");
@@ -297,6 +305,8 @@ test("a stored skin under the old default's name reads as the new default, and a
       .update(users)
       .set({ preferences: sql`'{"skin":"openbot"}'::jsonb` })
       .where(eq(users.id, id));
-    expect((await store.patch(id, { narration: "on" })).skin).toBe("xiongbao");
+    expect((await store.patch(id, { messageListEmphasis: "agent" })).skin).toBe(
+      "xiongbao",
+    );
   });
 });

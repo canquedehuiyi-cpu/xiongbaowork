@@ -649,30 +649,6 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 - name: OPENBOT_PROACTIVE_DEFAULTS
   value: "false"
 {{- end }}
-{{- /*
-  The Recorder's optional back end (Task 14b removes it with the Recorder): written only when it was
-  configured, and the server runs on its own PostgreSQL without any of them.
-*/}}
-{{- $intelligence := .Values.config.intelligence | default dict }}
-{{- with $intelligence.apiUrl }}
-- name: INTELLIGENCE_API_URL
-  value: {{ . | quote }}
-{{- end }}
-{{- with $intelligence.gatewayWsUrl }}
-- name: INTELLIGENCE_GATEWAY_WS_URL
-  value: {{ . | quote }}
-{{- end }}
-{{- $intelligenceKey := include "xiongbao.secretKeySource" (dict "root" . "key" "intelligence-api-key" "literal" (.Values.secrets).intelligenceApiKey) }}
-{{- if $intelligenceKey }}
-- name: INTELLIGENCE_API_KEY
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "xiongbao.secretName" . }}
-      key: intelligence-api-key
-      {{- if eq $intelligenceKey "unknown" }}
-      optional: true
-      {{- end }}
-{{- end }}
 {{- with .Values.config.managedAgent.url }}
 - name: MANAGED_AGENT_AG_UI_URL
   value: {{ . | quote }}

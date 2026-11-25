@@ -1,11 +1,6 @@
 import { DEV_ACTOR } from "./auth/dev-actor";
 import type { XiongBaoRole } from "./auth/roles";
 import type { IdentifyActor, IdentifyUser } from "./copilot";
-import {
-  RECORDER_BEARER_PREFIX,
-  type RecorderResolver,
-} from "./recorder/guard";
-import { isTrajectoryConnectPath } from "./recorder/trajectory-gate";
 
 type RequestActor = { id: string; name: string; role: XiongBaoRole };
 
@@ -46,7 +41,6 @@ export function actorName(user: {
  */
 export function createRequestActor(deps: {
   singleUser: boolean;
-  resolveRecorder?: RecorderResolver;
   getSession(headers: Headers): Promise<SessionLike | null | undefined>;
   rolesForUser(userId: string): Promise<XiongBaoRole[]>;
 }): {
@@ -55,22 +49,6 @@ export function createRequestActor(deps: {
   identifyActor: IdentifyActor;
 } {
   async function resolveRequestActor(request: Request): Promise<RequestActor> {
-    // A Recorder token is answered only on the capture pass, in every auth mode: it can never run a Bot.
-    if (
-      request.headers.get("authorization")?.startsWith(RECORDER_BEARER_PREFIX)
-    ) {
-      if (
-        deps.resolveRecorder &&
-        isTrajectoryConnectPath(new URL(request.url).pathname)
-      ) {
-        const resolution = await deps.resolveRecorder(request);
-        if (resolution && "actor" in resolution) {
-          const { actor } = resolution;
-          return { id: actor.id, name: actorName(actor), role: actor.role };
-        }
-      }
-      throw new Error("An agent run requires a signed-in user.");
-    }
     if (deps.singleUser) {
       return { id: DEV_ACTOR.id, name: DEV_ACTOR.email, role: DEV_ACTOR.role };
     }

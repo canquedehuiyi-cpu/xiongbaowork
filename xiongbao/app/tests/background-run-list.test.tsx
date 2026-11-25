@@ -76,7 +76,6 @@ beforeEach(() => {
     preferences: {
       messageListEmphasis: "thread",
       selfHostBannerDismissed: true,
-      narration: null,
       skin: null,
       proactive: "on",
     },

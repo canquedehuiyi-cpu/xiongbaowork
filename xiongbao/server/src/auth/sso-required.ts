@@ -27,30 +27,6 @@ export async function revokeSessionsWithoutSso(
   return ended.length;
 }
 
-/**
- * Which of these people SSO-required signs out: the same people {@link revokeSessionsWithoutSso} ends the sessions of,
- * asked of a list rather than of the sessions table, so what else they are signed in with (their Recorders) can be
- * ended first, and again on a retry once their sessions are already gone.
- */
-export async function peopleWithoutSso(
-  database: Database,
-  initialAdminEmails: readonly string[],
-  among: readonly string[],
-  keepUserId?: string,
-): Promise<string[]> {
-  if (among.length === 0) return [];
-  const rows = await database
-    .select({ id: users.id })
-    .from(users)
-    .where(
-      and(
-        inArray(users.id, [...among]),
-        withoutSso(database, initialAdminEmails, users.id, keepUserId),
-      ),
-    );
-  return rows.map((row) => row.id);
-}
-
 /** A person (`userId`, a column holding one) with no account at a registered identity provider, who is neither a
  * break-glass address nor `keepUserId`. */
 function withoutSso(

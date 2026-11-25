@@ -405,7 +405,6 @@ function renderApp(path: string, user: SignedIn, skin: SkinId) {
   queryClient.setQueryData(userPreferencesQueryOptions(user.id).queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
-    narration: null,
     skin,
     proactive: "on",
   });

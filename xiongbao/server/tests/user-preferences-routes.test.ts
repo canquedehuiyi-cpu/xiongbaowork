@@ -86,7 +86,6 @@ test("preferences default to thread and persist separately for each authenticate
     preferences: {
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: WORK_HOURS,
@@ -101,7 +100,6 @@ test("preferences default to thread and persist separately for each authenticate
     preferences: {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: WORK_HOURS,
@@ -111,7 +109,6 @@ test("preferences default to thread and persist separately for each authenticate
     preferences: {
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: WORK_HOURS,
@@ -124,8 +121,8 @@ test.each([
   null,
   { selfHostBannerDismissed: "yes" },
   { messageListEmphasis: "invalid" },
-  { narration: "always" },
-  { narration: null },
+  // The browser recording's narration choice, gone with it: a save of it is refused like any unknown key.
+  { narration: "on" },
   { messageListEmphasis: "agent", userId: "bob" },
   { skin: "retired-skin" },
   { skin: "" },
@@ -171,7 +168,6 @@ test("saves the self-host banner dismissal without touching message list emphasi
     preferences: {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: true,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: WORK_HOURS,
@@ -181,41 +177,11 @@ test("saves the self-host banner dismissal without touching message list emphasi
     preferences: {
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "xiongbao",
       proactive: "on",
       workHours: WORK_HOURS,
     },
   });
-});
-
-test("keeps the person's narration choice without touching the others, and starts with none made", async () => {
-  // The Browser page asks before the first recording, and the microphone stays closed until it is answered.
-  const { appFor } = fixture();
-  const alice = appFor("alice");
-  expect((await (await alice.request(path)).json()).preferences.narration).toBe(
-    null,
-  );
-  await alice.request(path, patch({ messageListEmphasis: "agent" }));
-  const saved = await alice.request(path, patch({ narration: "on" }));
-  expect(saved.status).toBe(200);
-  expect(await (await appFor("alice").request(path)).json()).toEqual({
-    preferences: {
-      messageListEmphasis: "agent",
-      selfHostBannerDismissed: false,
-      narration: "on",
-      skin: "xiongbao",
-      proactive: "on",
-      workHours: WORK_HOURS,
-    },
-  });
-  await alice.request(path, patch({ narration: "off" }));
-  expect(
-    (await (await appFor("alice").request(path)).json()).preferences.narration,
-  ).toBe("off");
-  expect(
-    (await (await appFor("bob").request(path)).json()).preferences.narration,
-  ).toBe(null);
 });
 
 test("saves the skin on the account without touching the other preferences", async () => {
@@ -228,7 +194,6 @@ test("saves the skin on the account without touching the other preferences", asy
     preferences: {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "opendots",
       proactive: "on",
       workHours: WORK_HOURS,
@@ -239,7 +204,6 @@ test("saves the skin on the account without touching the other preferences", asy
     preferences: {
       messageListEmphasis: "agent",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "opendots",
       proactive: "on",
       workHours: WORK_HOURS,
@@ -280,7 +244,6 @@ test("check-ins start on, and a person's off is kept without touching the others
     preferences: {
       messageListEmphasis: "thread",
       selfHostBannerDismissed: false,
-      narration: null,
       skin: "openduet",
       proactive: "off",
       workHours: WORK_HOURS,

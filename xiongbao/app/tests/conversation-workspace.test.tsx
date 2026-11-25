@@ -201,7 +201,6 @@ function renderApp(
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
-    narration: null,
     skin: "xiongbao",
     proactive: "on",
   });

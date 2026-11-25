@@ -32,7 +32,6 @@ beforeEach(() => {
       preferences: {
         messageListEmphasis: "thread",
         selfHostBannerDismissed: true,
-        narration: null,
         skin: "xiongbao",
         proactive: "on",
       },
@@ -90,7 +89,6 @@ function setup({
   const preferences: UserPreferences = {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: dismissed,
-    narration: null,
     skin: "xiongbao",
     proactive: "on",
   };

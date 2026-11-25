@@ -3,7 +3,6 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESSES, type Harness } from "@xiongbao/shared/harnesses";
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import {
   and,
   desc,
@@ -18,7 +17,7 @@ import {
 } from "drizzle-orm";
 import { parse } from "yaml";
 import { emptyPersona, type Persona } from "../../shared/persona";
-import { englishName, productName } from "./brand";
+import { englishName } from "./brand";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
 import {
@@ -795,13 +794,6 @@ function parseAgents(
     if (DEPLOYMENT_ROUTES.has(id)) {
       throw new Error(
         `${source}: agent.id "${id}" is reserved for a deployment route and cannot name a Bot`,
-      );
-    }
-    // Nor after a person's own XiongBao browser, which is a computer named the same way a Bot's is: a Bot with that id
-    // would share its computer with the person whose browser it is.
-    if (isPersonBrowserId(id)) {
-      throw new Error(
-        `${source}: agent.id "${id}" is the shape of a person's ${productName()} browser and cannot name a Bot`,
       );
     }
     if (type === "remote_ag_ui" || type === "remote_mastra") {

@@ -25,7 +25,6 @@
  * standard, where a person's Bots share their browser sessions too. A Bot that must be kept apart is
  * made Isolated.
  */
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { agentProfiles } from "../db/schema";
@@ -113,9 +112,7 @@ export function seatOf(
   bot: BotOwnership | null,
   isolated: boolean,
 ): ComputerSeat {
-  // A person's own browser runs only on a computer of its own (browser/host.ts), never beside their Bots, where a
-  // Bot's shell could read what they signed in to by hand off the disk.
-  if (isolated || isPersonBrowserId(botId)) return botSeat(botId);
+  if (isolated) return botSeat(botId);
   return {
     ...personSeat(personId, botId),
     ...(bot?.visibility === "private" && bot.ownerUserId === personId
@@ -158,7 +155,6 @@ export function createComputerSeatResolver(
 ): ComputerSeatResolver {
   return {
     async seatFor(botId, personId) {
-      if (isPersonBrowserId(botId)) return botSeat(botId);
       const isolated =
         options.canIsolate && (await options.runsIsolated(botId));
       const bot = isolated ? null : await options.bot(botId);

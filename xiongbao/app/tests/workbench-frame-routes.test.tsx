@@ -63,7 +63,6 @@ function preferences(skin: UserPreferences["skin"]): UserPreferences {
   return {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
-    narration: null,
     skin,
     proactive: "on",
   };

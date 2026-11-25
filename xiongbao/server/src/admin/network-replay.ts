@@ -14,7 +14,6 @@
  * page's own requests, is decided on the computer and never recorded, so it cannot be replayed. The
  * screen says so beside the answer.
  */
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import type { AuditEvent } from "../audit";
 import {
   type EgressPolicy,
@@ -127,9 +126,7 @@ export function visitingBots(events: readonly AuditEvent[]): string[] {
     ...new Set(
       events.flatMap((event) => {
         const bot = event.payload.bot;
-        return typeof bot === "string" && bot && !isPersonBrowserId(bot)
-          ? [bot]
-          : [];
+        return typeof bot === "string" && bot ? [bot] : [];
       }),
     ),
   ];
@@ -176,8 +173,7 @@ export function replayNetworkPolicy(input: {
       continue;
     const bot = event.payload.bot;
     const page = event.payload.page;
-    // A person's own browser is under its own policy (browser/egress.ts), never this one.
-    if (typeof bot !== "string" || !bot || isPersonBrowserId(bot)) continue;
+    if (typeof bot !== "string" || !bot) continue;
     const destination =
       typeof page === "string" && page ? destinationOf(page) : null;
     if (!destination) continue;

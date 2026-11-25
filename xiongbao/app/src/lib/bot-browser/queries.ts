@@ -3,8 +3,11 @@ import {
   type BotBrowserApiState,
   botBrowserApiPaths,
 } from "@xiongbao/shared/bot-browser";
-import { BROWSER_POLL_MS } from "@/lib/browser/queries";
 import { client } from "@/lib/client";
+
+/** How often a Bot's browser's state is asked again while it is on screen, the same once a second the computer's control
+ * state is read. */
+const BROWSER_POLL_MS = 1000;
 
 export const botBrowserKeys = {
   all: ["bot-browser"] as const,

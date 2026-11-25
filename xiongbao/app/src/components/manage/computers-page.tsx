@@ -5,12 +5,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { type ReactNode, useState } from "react";
-import {
-  ClearBrowserDialog,
-  useClearBrowserData,
-} from "@/components/browser/browser-bar";
 import {
   PageEmpty,
   PageRows,
@@ -38,7 +33,6 @@ import { Separator } from "@/components/ui/separator";
 import { useBotNames } from "@/lib/agents/bot-names";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { shortName } from "@/lib/brand";
-import { clearBrowserMutationOptions } from "@/lib/browser/mutations";
 import {
   type HostAccessPendingOperation,
   type HostFolderGrant,
@@ -58,13 +52,6 @@ import { useManagePaths } from "@/lib/manage-paths";
 /** One row's identity: the computer, and on a shared computer the Bot's seat on it. */
 function rowId(computer: ComputerProfile): string {
   return `${computer.computer}|${computer.botId ?? ""}`;
-}
-
-/**
- * A person's own XiongBao browser. It is listed beside the Bots' browsers, under an id that is no Bot's, so it read "A Bot no longer here" until it was named for what it is.
- */
-function isOwnBrowser(computer: ComputerProfile): boolean {
-  return computer.botId !== undefined && isPersonBrowserId(computer.botId);
 }
 
 /**
@@ -89,12 +76,6 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
     useState<ComputerProfile | null>(null);
   const queryClient = useQueryClient();
   const nameFor = useBotNames();
-  /*
-   * The person's own XiongBao browser is cleared through its own route (`/api/browser/clear`), which wipes its profile
-   * and opens it again if it was open.
-   */
-  const clearOwnBrowser = useMutation(clearBrowserMutationOptions(queryClient));
-  const clearing = useClearBrowserData(clearOwnBrowser);
 
   const fleet = useQuery(computerFleetQueryOptions());
   const hostAccess = useQuery(hostAccessQueryOptions());
@@ -151,13 +132,6 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
    * computer a row is one person's seat on one Bot, so it names both.
    */
   const titleOf = (computer: ComputerProfile): string => {
-    if (isOwnBrowser(computer)) {
-      if (personal) return `你的${shortName()}浏览器`;
-      const owner = computer.person?.name ?? computer.person?.email;
-      return owner
-        ? `${owner} 的${shortName()}浏览器`
-        : `某个人的${shortName()}浏览器`;
-    }
     // One person, so a row is one of their Bots.
     if (personal) return computer.botId ? nameFor(computer.botId) : "电脑";
     const person =
@@ -172,7 +146,6 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
 
   /** What a row carries, said once before its state. */
   const scopeOf = (computer: ComputerProfile): string => {
-    if (isOwnBrowser(computer)) return "这个人自己的浏览器";
     if (computer.kind === "person") {
       return computer.botId
         ? "这个人为这位员工保留的浏览器资料和文件夹"
@@ -188,9 +161,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
     const since = computer.running
       ? `浏览器从 ${new Date(computer.startedAt ?? "").toLocaleTimeString("zh-CN")} 起在运行`
       : "没有浏览器在运行";
-    if (!isOwnBrowser(computer))
-      return computer.running ? since : `${since}。员工下次需要时会启动。`;
-    return since;
+    return computer.running ? since : `${since}。员工下次需要时会启动。`;
   };
 
   return (
@@ -312,27 +283,14 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
                     >
                       {busy === rowId(computer) ? "正在处理…" : "停止浏览器"}
                     </Button>
-                    {personal && isOwnBrowser(computer) ? (
-                      <Button
-                        disabled={
-                          busy === rowId(computer) || clearOwnBrowser.isPending
-                        }
-                        onClick={clearing.ask}
-                        size="sm"
-                        variant="outline"
-                      >
-                        清除浏览器数据
-                      </Button>
-                    ) : (
-                      <Button
-                        disabled={busy === rowId(computer)}
-                        onClick={() => setConfirming(computer)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        重置
-                      </Button>
-                    )}
+                    <Button
+                      disabled={busy === rowId(computer)}
+                      onClick={() => setConfirming(computer)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      重置
+                    </Button>
                   </ItemActions>
                 </Item>
                 {index !== computers.length - 1 && <Separator />}
@@ -366,9 +324,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
             <DialogDescription>
               {confirming?.kind === "person" && !confirming.botId
                 ? "这个人电脑上每位员工的浏览器资料都会被删除，每位员工都会退出所有服务，从头开始。"
-                : confirming && isOwnBrowser(confirming)
-                  ? "它的浏览器资料会被删除，这个人在里面登录过的每个网站都会退出。"
-                  : "它的浏览器资料会被删除，这位员工会退出所有服务，从头开始。"}
+                : "它的浏览器资料会被删除，这位员工会退出所有服务，从头开始。"}
               这一步不能撤销。
             </DialogDescription>
           </DialogHeader>
@@ -395,12 +351,6 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ClearBrowserDialog
-        clear={clearOwnBrowser}
-        onOpenChange={clearing.setAsking}
-        open={clearing.asking}
-      />
 
       <Dialog
         onOpenChange={(open) => {
@@ -447,12 +397,6 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
         <p className="mt-4 text-muted-foreground text-sm">
           <strong>停止浏览器</strong>会关掉浏览器但保留登录，下次需要时再启动。
           <strong>重置</strong>会删除员工的浏览器资料，让它退出所有登录。
-          {computers?.some(isOwnBrowser) ? (
-            <>
-              <strong>清除浏览器数据</strong>对你的{shortName()}
-              浏览器做同样的事。
-            </>
-          ) : null}
           每一项都会记在
           <Link className="underline" {...paths.audit()}>
             {paths.auditLabel}

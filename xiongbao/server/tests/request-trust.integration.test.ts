@@ -8,7 +8,6 @@ import {
 } from "bun:test";
 import { connect } from "node:net";
 import { networkInterfaces } from "node:os";
-import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { mintRunAssertion } from "../src/agents/callback-token";
 import { createApp } from "../src/app";
@@ -47,7 +46,8 @@ const AGENT_TOOL_TOKEN = "request-trust-agent-tool-token";
 const WORKER_SECRET = "request-trust-worker-secret";
 const EVIL = "https://evil.example";
 const APP_ORIGIN = "http://127.0.0.1:3010";
-const EXTENSION_ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
+/** A browser extension's pages, which this server no longer trusts as its own: the Recorder that was is gone. */
+const EXTENSION_ORIGIN = `chrome-extension://${"a".repeat(32)}`;
 const REBOUND = "rebind.evil.example";
 const CROSS_SITE =
   "The server only takes this from its own pages. Open the app and try again there.";
@@ -486,7 +486,7 @@ describe("XiongBao's own callers", () => {
     expect(screen).toEqual({ opened: true, first: "frame" });
   });
 
-  test("the Recorder extension posts, and the runtime answers its preflight", async () => {
+  test("a browser extension is another site: its post is refused, and the runtime gives its preflight no CORS", async () => {
     const posted = await fetch(
       `${local.base}/api/delivery/conversations/channel-1/messages`,
       {
@@ -496,26 +496,22 @@ describe("XiongBao's own callers", () => {
           "sec-fetch-site": "none",
           "content-type": "application/json",
         },
-        body: turn("from the Recorder"),
+        body: turn("from an extension"),
       },
     );
-    expect(posted.status).toBe(202);
-    local.turns.length = 0;
+    expect(posted.status).toBe(403);
+    expect(await posted.json()).toEqual({ error: CROSS_SITE });
+    expect(local.turns).toEqual([]);
 
-    const preflight = await fetch(
-      `${local.base}/api/runtime/trajectory/00000000-0000-4000-8000-000000000000/connect`,
-      {
-        method: "OPTIONS",
-        headers: {
-          origin: EXTENSION_ORIGIN,
-          "access-control-request-method": "POST",
-          "access-control-request-headers": "authorization,content-type",
-        },
+    const preflight = await fetch(`${local.base}/api/runtime/info`, {
+      method: "OPTIONS",
+      headers: {
+        origin: EXTENSION_ORIGIN,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type",
       },
-    );
-    expect(preflight.headers.get("access-control-allow-origin")).toBe(
-      EXTENSION_ORIGIN,
-    );
+    });
+    expect(preflight.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   test("a client that is not a browser, with neither Origin nor Sec-Fetch-Site, still posts", async () => {

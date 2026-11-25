@@ -207,7 +207,6 @@ function renderSidebar(
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: false,
-    narration: null,
     skin: "xiongbao",
     proactive: "on",
   });

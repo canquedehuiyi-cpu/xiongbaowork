@@ -1,5 +1,3 @@
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
-import { ownsPersonBrowser } from "../browser/person";
 import { TenantContextError } from "../tenant/context";
 import type { AgentProfileStore } from "./profile-store";
 import type { AgentActor } from "./profile-types";
@@ -46,22 +44,16 @@ export function canUseComputer(
 /**
  * The access check the computer routes and the live screen use, read from the profile store.
  *
- * A person's own XiongBao browser is a computer too, named for its person rather than a Bot (browser/person.ts), and only
- * that person reaches it: there is no profile to read, and an administrator who may watch any Bot's screen may not watch
- * a person's own browser.
- *
  * A failed read is "no such Bot", except a missing tenant frame: that is the caller's bug, not an
  * answer, and swallowing it is how the live screen once told owners their own Bot did not exist.
  */
 export function computerAccessCheck(store: Pick<AgentProfileStore, "get">) {
   return async (actor: AgentActor, botId: string) =>
-    isPersonBrowserId(botId)
-      ? ownsPersonBrowser(actor, botId)
-      : canUseComputer(
-          await store.get(actor, botId).catch((error) => {
-            if (error instanceof TenantContextError) throw error;
-            return null;
-          }),
-          actor,
-        );
+    canUseComputer(
+      await store.get(actor, botId).catch((error) => {
+        if (error instanceof TenantContextError) throw error;
+        return null;
+      }),
+      actor,
+    );
 }

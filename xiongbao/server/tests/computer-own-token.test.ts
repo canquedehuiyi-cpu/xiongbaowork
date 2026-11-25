@@ -20,9 +20,7 @@ import { environmentFor } from "../../supervisor/src/environment";
 import { reservePort } from "../../tests/support/reserved-port";
 import type { AgentProfileStore } from "../src/agents/profile-store";
 import type { AuditEventInput } from "../src/audit";
-import { withPersonBrowsers } from "../src/browser/host";
-import { personBrowserId } from "../src/browser/person";
-import { botSeat, personSeat } from "../src/computer/computer-key";
+import { personSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import {
   pushEgressPolicies,
@@ -75,7 +73,7 @@ async function startComputer(
 ): Promise<Computer> {
   const dir = await mkdtemp(join(tmpdir(), "xiongbao-own-token-"));
   await Promise.all(
-    ["profiles", "workspace", "recorder"].map((name) => mkdir(join(dir, name))),
+    ["profiles", "workspace"].map((name) => mkdir(join(dir, name))),
   );
   const port = await reservePort();
   const child = Bun.spawn([process.execPath, "--no-env-file", "src/index.ts"], {
@@ -87,7 +85,6 @@ async function startComputer(
       PORT: String(port),
       PROFILES_DIR: join(dir, "profiles"),
       WORKSPACE_DIR: join(dir, "workspace"),
-      OPENBOT_RECORDER_DIR: join(dir, "recorder"),
       COMPUTER_BROWSER_BACKEND: "managed",
       COMPUTER_BROWSER_MODE: "headless",
       ...environment,
@@ -362,9 +359,9 @@ describe("the server calling a person's computer", () => {
 });
 
 describe("the computers that keep the deployment's token", () => {
-  test("the one shared computer, and XiongBao Desktop's host-side browser computer, are sent the deployment's token", () => {
-    // Neither is a boundary between people: the shared computer is documented as one computer for everybody, and
-    // Desktop's runs the person's own browsers, and no Bot, on their own machine. Both are started with it.
+  test("the one shared computer is sent the deployment's token", () => {
+    // Not a boundary between people: the shared computer is documented as one computer for everybody, and is
+    // started with it.
     const audit = { insert: async () => undefined };
     const policy = () => undefined;
     const shared = createComputerGateway({
@@ -377,32 +374,5 @@ describe("the computers that keep the deployment's token", () => {
       token: DEPLOYMENT_TOKEN,
     });
     expect(shared.tokenFor(personSeat("ada", BOT))).toBe(DEPLOYMENT_TOKEN);
-
-    const browser = personBrowserId("ada");
-    const desktop = createComputerGateway({
-      provider: withPersonBrowsers(
-        createDockerSupervisorProvider({ baseUrl: "http://127.0.0.1:4500" }),
-        "http://127.0.0.1:4101",
-      ),
-      auditStore: audit,
-      policy,
-      token: DEPLOYMENT_TOKEN,
-    });
-    expect(desktop.tokenFor(botSeat(browser))).toBe(DEPLOYMENT_TOKEN);
-    // While a Bot's computer there is still its own.
-    expect(desktop.tokenFor(personSeat("ada", BOT))).toBe(
-      ownToken("person", "ada"),
-    );
-    // And without Desktop's computer, a person's browser is a computer of its own like any other.
-    const hosted = createComputerGateway({
-      provider: withPersonBrowsers(
-        createDockerSupervisorProvider({ baseUrl: "http://127.0.0.1:4500" }),
-        undefined,
-      ),
-      auditStore: audit,
-      policy,
-      token: DEPLOYMENT_TOKEN,
-    });
-    expect(hosted.tokenFor(botSeat(browser))).toBe(ownToken("bot", browser));
   });
 });

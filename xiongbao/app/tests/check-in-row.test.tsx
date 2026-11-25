@@ -106,7 +106,6 @@ function serving() {
         preferences: {
           messageListEmphasis: "thread",
           selfHostBannerDismissed: true,
-          narration: null,
           skin: "xiongbao",
           proactive: "on",
         },
