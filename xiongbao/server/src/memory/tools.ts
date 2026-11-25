@@ -18,22 +18,7 @@ import {
 } from "./types";
 
 /** 个人记忆中间件放进 `RunAgentInput.context` 的那一条的描述；对话侧栏按它把这部分算作「记忆」。 */
-export const PERSONAL_MEMORY_CONTEXT = "XiongBao personal memory";
-
-/**
- * 改名前同一条的描述。审批续跑快照存着当时的 context，续跑时原样带回（toolkit/src/run-turn.ts），
- * 所以过滤与识别都要认它，否则旧条目留在里面、记忆出现两份。
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的记忆条目
- */
-export const LEGACY_PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
-
-/** 这一条是不是个人记忆中间件放进去的（新旧两种描述都算）。 */
-export function isPersonalMemoryContext(description: string): boolean {
-  return (
-    description === PERSONAL_MEMORY_CONTEXT ||
-    description === LEGACY_PERSONAL_MEMORY_CONTEXT
-  );
-}
+export const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
 
 /**
  * The server half of every ref XiongBao's own memory tools carry (`memory/recall_personal_memory`).
@@ -111,7 +96,7 @@ export class PersonalMemoryMiddleware extends Middleware {
             ],
             context: [
               ...input.context.filter(
-                (entry) => !isPersonalMemoryContext(entry.description),
+                (entry) => entry.description !== PERSONAL_MEMORY_CONTEXT,
               ),
               ...(content
                 ? [{ description: PERSONAL_MEMORY_CONTEXT, value: content }]

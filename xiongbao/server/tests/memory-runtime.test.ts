@@ -93,14 +93,14 @@ test("disabled or deleted memory removes stale replayed context", async () => {
     content: "deleted fact",
   });
   request.context.push({
-    description: "XiongBao personal memory",
+    description: "OpenBot personal memory",
     value: "deleted fact",
   });
   const next = await run(async () => "", request);
   expect(next?.messages).toHaveLength(1);
   expect(next?.context).toHaveLength(0);
 });
-test("a continuation replaying the entry under its name before the rename still carries one memory", async () => {
+test("a continuation replaying its memory entry still carries one memory", async () => {
   // An approval's continuation snapshot keeps the context the run was sent and replays it as-is.
   const request = input();
   request.context.push({
@@ -109,17 +109,8 @@ test("a continuation replaying the entry under its name before the rename still 
   });
   const next = await run(async () => "fresh fact", request);
   expect(next?.context).toEqual([
-    { description: "XiongBao personal memory", value: "fresh fact" },
+    { description: "OpenBot personal memory", value: "fresh fact" },
   ]);
-});
-test("with memory off, the entry under its earlier name is dropped too", async () => {
-  const request = input();
-  request.context.push({
-    description: "OpenBot personal memory",
-    value: "deleted fact",
-  });
-  const next = await run(async () => "", request);
-  expect(next?.context).toEqual([]);
 });
 test("personal memory retains Automatic Learning catalog and tool authority", async () => {
   const request = input();

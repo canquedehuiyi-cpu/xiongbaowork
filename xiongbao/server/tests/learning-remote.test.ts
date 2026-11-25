@@ -102,7 +102,7 @@ describe("remote Automatic Learning delivery", () => {
     expect(remote.inputs).toHaveLength(2);
     for (const request of remote.inputs) {
       expect(request.context).toContainEqual({
-        description: "XiongBao learned skills",
+        description: "OpenBot learned skills",
         value: "catalog revision-one",
       });
       expect(
@@ -255,7 +255,7 @@ describe("remote Automatic Learning delivery", () => {
     expect(output.at(-1)?.type).toBe(EventType.RUN_ERROR);
   });
 
-  test("a continuation replaying the catalog under its name before the rename sends one catalog", async () => {
+  test("a continuation replaying its catalog entry sends one catalog", async () => {
     // An approval's continuation snapshot keeps the context the run was sent and replays it as-is.
     const remote = new Remote(() => of(start, finish));
     const replayed: RunAgentInput = {
@@ -270,23 +270,8 @@ describe("remote Automatic Learning delivery", () => {
       replayed,
     );
     expect(remote.inputs[0]?.context).toEqual([
-      { description: "XiongBao learned skills", value: "catalog revision-one" },
+      { description: "OpenBot learned skills", value: "catalog revision-one" },
     ]);
-  });
-
-  test("with delivery off, the catalog under its earlier name is dropped too", async () => {
-    const remote = new Remote(() => of(start, finish));
-    await events(
-      new RemoteLearnedSkillsMiddleware("bot", async () => undefined),
-      remote,
-      {
-        ...input,
-        context: [
-          { description: "OpenBot learned skills", value: "catalog stale" },
-        ],
-      },
-    );
-    expect(remote.inputs[0]?.context).toEqual([]);
   });
 
   test("unconfigured delivery preserves the original run and never invents tools", async () => {
@@ -474,7 +459,7 @@ test("disabled delivery removes a catalog replayed in a remote message snapshot"
       ],
       context: [
         {
-          description: "XiongBao learned skills",
+          description: "OpenBot learned skills",
           value: "old published catalog",
         },
       ],

@@ -176,15 +176,15 @@ describe("XiongBao Mastra receiver instructions", () => {
       buildXiongBaoInstructions({
         requestContext: requestContextWith([
           {
-            description: "XiongBao learned skills",
+            description: "OpenBot learned skills",
             value: "Published skill: refunds",
           },
           {
-            description: "XiongBao signed run assertion",
+            description: "OpenBot signed run assertion",
             value: "secret-assertion",
           },
           {
-            description: "XiongBao standing role",
+            description: "OpenBot standing role",
             value: "Follow company policy.",
           },
         ]),
@@ -201,15 +201,15 @@ describe("XiongBao Mastra receiver instructions", () => {
     const instructions = buildXiongBaoInstructions({
       requestContext: requestContextWith([
         {
-          description: "XiongBao granted tools guidance",
+          description: "OpenBot granted tools guidance",
           value: "Use only the granted Slack tool.",
         },
         {
-          description: "XiongBao standing role",
+          description: "OpenBot standing role",
           value: "Use MODEL_BOUNDARY_MANAGED_ROLE in the answer.",
         },
         {
-          description: "XiongBao Bot id",
+          description: "OpenBot Bot id",
           value: "packaged-mastra-managed",
         },
       ]),
@@ -235,17 +235,17 @@ describe("XiongBao Mastra receiver instructions", () => {
           value: "CALLER_CATALOG_MARKER",
         },
         {
-          description: "XiongBao standing role",
+          description: "OpenBot standing role",
           value: "Follow company policy.",
         },
         {
-          description: "XiongBao signed run assertion",
+          description: "OpenBot signed run assertion",
           value: "secret-assertion",
         },
-        { description: "XiongBao Bot id", value: "packaged-mastra-managed" },
-        { description: "XiongBao deployment tools", value: '["message_bot"]' },
+        { description: "OpenBot Bot id", value: "packaged-mastra-managed" },
+        { description: "OpenBot deployment tools", value: '["message_bot"]' },
         // Untrusted data: it reaches the model as a quoted conversation row, never as instructions.
-        { description: "XiongBao personal memory", value: "QUOTED_MEMORY" },
+        { description: "OpenBot personal memory", value: "QUOTED_MEMORY" },
         { description: "Blank", value: "   " },
       ]),
     });
@@ -256,25 +256,6 @@ describe("XiongBao Mastra receiver instructions", () => {
         "Follow company policy.",
         "Components you can draw: CALLER_CATALOG_MARKER",
       ].join("\n\n"),
-    );
-  });
-
-  test("a replayed entry under the server's name before the rename is never an instruction", () => {
-    // An approval's continuation snapshot keeps the run's context and the server replays it.
-    const instructions = buildXiongBaoInstructions({
-      requestContext: requestContextWith([
-        { description: "OpenBot personal memory", value: "QUOTED_MEMORY" },
-        { description: "OpenBot signed run assertion", value: "secret" },
-        { description: "OpenBot standing role", value: "Stale role." },
-        {
-          description: "XiongBao standing role",
-          value: "Follow company policy.",
-        },
-      ]),
-    });
-
-    expect(instructions).toBe(
-      [xiongbaoBaseInstructions, "Follow company policy."].join("\n\n"),
     );
   });
 

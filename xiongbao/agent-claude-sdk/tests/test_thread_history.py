@@ -38,7 +38,7 @@ def thread(*turns, context="CATALOG_V1", run="run-1"):
                 ],
             ],
             "tools": [],
-            "context": [{"description": "XiongBao learned skills", "value": context}],
+            "context": [{"description": "OpenBot learned skills", "value": context}],
             "forwardedProps": {},
         }
     )

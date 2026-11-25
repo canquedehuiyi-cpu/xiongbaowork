@@ -162,7 +162,6 @@ import { desktopTelemetryProperties } from "./desktop-telemetry";
 import { currentEdition } from "./edition";
 import {
   LEARNED_SKILL_TOOL_COUNT,
-  LEGACY_CATALOG_CONTEXT,
   RemoteLearnedSkillsMiddleware,
 } from "./learning/remote";
 import {
@@ -171,7 +170,6 @@ import {
   type LearnedSkillInvocation,
 } from "./learning/runtime";
 import {
-  LEGACY_PERSONAL_MEMORY_CONTEXT,
   type LoadPersonalMemory,
   PersonalMemoryMiddleware,
 } from "./memory/tools";
@@ -3861,36 +3859,17 @@ function remoteAgentWithStandingRole(
 }
 
 const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set([
-  "XiongBao standing role",
-  "XiongBao granted tools guidance",
-  "XiongBao Bot id",
-  "XiongBao deployment tools",
-  "XiongBao signed run assertion",
-  "XiongBao learned skills",
-]);
-
-/**
- * What this server called the same entries before the rename. An approval's continuation snapshot
- * keeps the run's context and replays it, so an entry under one of these is a stale copy of what
- * this run sends afresh, and a Mastra harness that only knows the current names would take it as the
- * caller's own instruction. Dropped, never forwarded.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的上下文标题
- */
-const LEGACY_MASTRA_CONTEXT_DESCRIPTIONS = new Set([
   "OpenBot standing role",
   "OpenBot granted tools guidance",
   "OpenBot Bot id",
   "OpenBot deployment tools",
   "OpenBot signed run assertion",
-  LEGACY_CATALOG_CONTEXT,
-  LEGACY_PERSONAL_MEMORY_CONTEXT,
+  "OpenBot learned skills",
 ]);
 
-export function callerMastraContext(context: AgentContext[]): AgentContext[] {
+function callerMastraContext(context: AgentContext[]): AgentContext[] {
   return context.filter(
-    (entry) =>
-      !RESERVED_MASTRA_CONTEXT_DESCRIPTIONS.has(entry.description) &&
-      !LEGACY_MASTRA_CONTEXT_DESCRIPTIONS.has(entry.description),
+    (entry) => !RESERVED_MASTRA_CONTEXT_DESCRIPTIONS.has(entry.description),
   );
 }
 
@@ -3909,29 +3888,29 @@ function mastraXiongBaoContext({
 }): AgentContext[] {
   return [
     {
-      description: "XiongBao standing role",
+      description: "OpenBot standing role",
       value: standingMessage.content,
     },
     ...(holdingsMessage
       ? [
           {
-            description: "XiongBao granted tools guidance",
+            description: "OpenBot granted tools guidance",
             value: holdingsMessage.content,
           },
         ]
       : []),
     {
-      description: "XiongBao Bot id",
+      description: "OpenBot Bot id",
       value: botId,
     },
     {
-      description: "XiongBao deployment tools",
+      description: "OpenBot deployment tools",
       value: JSON.stringify(deploymentTools),
     },
     ...(runAssertion
       ? [
           {
-            description: "XiongBao signed run assertion",
+            description: "OpenBot signed run assertion",
             value: runAssertion,
           },
         ]

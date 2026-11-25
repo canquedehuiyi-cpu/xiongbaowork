@@ -182,7 +182,7 @@ def assert_learning_delivery(monkeypatch, harness, route="/"):
                 {"id": "openbot:learned-skills", "role": "system", "content": CATALOG},
                 {"id": "user", "role": "user", "content": "Apply the refund policy."},
             ],
-            "context": [{"description": "XiongBao learned skills", "value": CATALOG}],
+            "context": [{"description": "OpenBot learned skills", "value": CATALOG}],
             "tools": TOOLS, "forwardedProps": {"xiongbaoDeploymentTools": []},
         }
 

@@ -84,9 +84,9 @@ export const xiongbaoBaseInstructions =
   "Answer the question you are asked, briefly and correctly.";
 
 const OPENBOT_CONTEXT_DESCRIPTIONS = [
-  "XiongBao standing role",
-  "XiongBao granted tools guidance",
-  "XiongBao learned skills",
+  "OpenBot standing role",
+  "OpenBot granted tools guidance",
+  "OpenBot learned skills",
 ] as const;
 
 type XiongBaoInstructionArgs = {
@@ -128,28 +128,15 @@ function isUsableEntry(entry: unknown): entry is ContextEntry {
  * What the model is told: the base line, XiongBao's three model-visible entries in a fixed order,
  * then whatever the calling surface sent, as `description: value`.
  *
- * Every other `XiongBao …` entry is for this process, not the model: the Bot id, the deployment's
+ * Every other `OpenBot …` entry is for this process, not the model: the Bot id, the deployment's
  * tool list, and the signed run assertion, which is a credential. The server keeps callers out of
  * that namespace (`RESERVED_MASTRA_CONTEXT_DESCRIPTIONS` in server/src/copilot.ts), so the prefix
- * is a safe line to draw. `XiongBao personal memory` is for the model, but as untrusted data, not
+ * is a safe line to draw. `OpenBot personal memory` is for the model, but as untrusted data, not
  * as an instruction: the server sends the same records as a quoted conversation row
  * (`quotedConversationRow` in server/src/copilot.ts), so it stays out of here too. Caller context
  * used to be dropped here altogether, although the server forwards it and every other harness puts
  * it in front of the model.
  */
-/**
- * Whether an entry is the server's own rather than the caller's. The prefix the server wrote before
- * the rename counts too: an approval's continuation snapshot keeps a run's context and the server
- * replays it, and an old entry taken as the caller's would put a stale role, a credential or quoted
- * memory into the instructions.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的上下文标题前缀
- */
-function isServerEntry(description: string): boolean {
-  return (
-    description.startsWith("XiongBao ") || description.startsWith("OpenBot ")
-  );
-}
-
 export function buildXiongBaoInstructions({
   requestContext,
 }: XiongBaoInstructionArgs = {}) {
@@ -162,7 +149,7 @@ export function buildXiongBaoInstructions({
         .map((entry) => entry.value.trim()),
   );
   const callerInstructions = contextEntries
-    .filter((entry) => !isServerEntry(entry.description))
+    .filter((entry) => !entry.description.startsWith("OpenBot "))
     .map((entry) =>
       entry.description.trim()
         ? `${entry.description.trim()}: ${entry.value.trim()}`

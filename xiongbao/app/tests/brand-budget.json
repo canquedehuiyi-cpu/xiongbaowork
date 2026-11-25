@@ -170,11 +170,6 @@
     "lines": 6
   },
   {
-    "rule": "legacy-context-title",
-    "scope": "server/src",
-    "lines": 7
-  },
-  {
     "rule": "mit-attribution",
     "scope": "desktop-device/src-tauri",
     "lines": 1

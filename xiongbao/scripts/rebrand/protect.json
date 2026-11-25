@@ -1687,57 +1687,111 @@
     "reason": "断言旧名 openbot-apt 的链接、路径与 sudoers 条目已不在镜像里：旧名就是被测对象"
   },
   {
-    "file": "xiongbao/server/src/memory/tools.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "file": "xiongbao/worker/tests/readiness.test.ts",
+    "pattern": "facts\\(\"openbot\"|\"openbot is a superuser\"",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前全仓不改；写法：readiness 测试里超级用户样例的角色名与报告原文"
   },
   {
-    "file": "xiongbao/server/src/learning/remote.ts",
+    "file": "xiongbao/agent-agno/tests/test_conversation_contract.py",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/server/src/copilot.ts",
+    "file": "xiongbao/agent-claude-sdk/tests/test_large_runs.py",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/server/tests/memory-runtime.test.ts",
+    "file": "xiongbao/agent-claude-sdk/tests/test_thread_history.py",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/server/tests/learning-remote.test.ts",
+    "file": "xiongbao/agent-claude-sdk/tests/test_tool_continuation.py",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/server/tests/mastra-legacy-context.test.ts",
+    "file": "xiongbao/agent-langgraph-agui/tests/test_tool_protocol.py",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
     "file": "xiongbao/agent-mastra/src/mastra/index.test.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
     "file": "xiongbao/agent-mastra/src/mastra/index.ts",
-    "text": "startsWith(\"OpenBot \")",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
     "until": "R3",
-    "reason": "落库：审批续跑快照存着 run 的 context，续跑时原样带回（toolkit/src/run-turn.ts），改名前的上下文标题要继续认出来并丢弃（legacy-compat，与同一对象的 id openbot:personal-memory、openbot:learned-skills 一样保护到 R3），Task 22 迁移后删除"
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
   },
   {
-    "file": "xiongbao/worker/tests/readiness.test.ts",
-    "pattern": "facts\\(\"openbot\"|\"openbot is a superuser\"",
-    "until": "R4",
-    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前全仓不改；写法：readiness 测试里超级用户样例的角色名与报告原文"
+    "file": "xiongbao/agent-strands/tests/test_conversation_contract.py",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/src/copilot.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/src/learning/remote.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/src/memory/tools.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/tests/context-usage.test.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-remote.test.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/tests/memory-runtime.test.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/server/tests/tool-selection.integration.test.ts",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/tests/learning_harness_contract.py",
+    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/agent-mastra/src/mastra/index.ts",
+    "pattern": "startsWith\\(\"OpenBot \"\\)|`OpenBot …`",
+    "until": "R3",
+    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）；agent-mastra 按这个前缀把服务器的条目与调用方的分开"
   }
 ]

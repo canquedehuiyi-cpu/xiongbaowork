@@ -181,7 +181,7 @@ def test_a_row_the_run_also_sends_as_context_is_said_once(monkeypatch):
     records = f"Personal memory. {memory}"
     body = conversation()
     body["messages"].insert(0, {"id": "openbot:personal-memory", "role": "system", "content": records})
-    body["context"] = [{"description": "XiongBao personal memory", "value": records}]
+    body["context"] = [{"description": "OpenBot personal memory", "value": records}]
 
     with fake_provider() as (base, bodies):
         _post(TestClient(_app(monkeypatch, openai_environment, base)), body)

@@ -50,19 +50,6 @@ export const SIGNING_DOMAINS = [
   "openbot computer token v1",
 ];
 
-// Context entry titles the server wrote before the rename. An approval's continuation snapshot keeps a
-// run's context and replays it, so the server still recognises these to drop the stale copies.
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的上下文标题
-export const LEGACY_CONTEXT_TITLES = [
-  "OpenBot standing role",
-  "OpenBot granted tools guidance",
-  "OpenBot Bot id",
-  "OpenBot deployment tools",
-  "OpenBot signed run assertion",
-  "OpenBot learned skills",
-  "OpenBot personal memory",
-];
-
 // Wire headers peers send and read: the server and every managed Bot image must spell them the same.
 export const WIRE_HEADERS = ["x-xiongbao-agent-token"];
 
@@ -191,12 +178,6 @@ export const RULES: Rule[] = [
     ),
     reason:
       "Global Constraints「绝对不改」: persisted markers and signing domains",
-  },
-  {
-    id: "legacy-context-title",
-    pattern: new RegExp(LEGACY_CONTEXT_TITLES.map(escapeRegExp).join("|"), "g"),
-    reason:
-      "context titles replayed from approval continuation snapshots, recognised until the data is migrated",
   },
   {
     id: "mit-attribution",
