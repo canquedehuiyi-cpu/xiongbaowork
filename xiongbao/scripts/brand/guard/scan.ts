@@ -46,7 +46,6 @@ export const SIGNING_DOMAINS = [
   "openbot-bearer",
   "openbot-automation-hook-signing:v1",
   "openbot web-bot-auth ed25519 v1",
-  "openbot-product",
   "openbot computer token v1",
 ];
 
