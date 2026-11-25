@@ -242,7 +242,6 @@ describe("server copy a customer can read takes its name from the brand", () => 
       false,
       false,
       false,
-      false,
     ]);
     expect(JSON.stringify(bare)).not.toContain("github.com");
   });
