@@ -93,7 +93,7 @@ MSYS_NO_PATHCONV=1 docker run --rm \
   -v $B/server/src:/app/server/src -v $B/server/tests:/app/server/tests \
   -v $B/server/drizzle:/app/server/drizzle -v $B/server/scripts:/app/server/scripts \
   -v $B/shared:/app/shared -v $B/examples:/app/examples -v $B/.env:/app/.env \
-  xiongbao-dev \
+  openbot-dev \
   bash -lc "cd /app/server && bunx tsc --noEmit && bun test tests/<file>.test.ts"
 ```
 
@@ -114,7 +114,7 @@ app 侧对应 `-v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests`（凡 
 docker run --rm -v $B/server/scripts:/app/server/scripts -v $B/server/src:/app/server/src \
   -v $B/shared:/app/shared \
   -e DATABASE_URL="postgres://openbot:openbot@host.docker.internal:5433/openbot_test" \
-  xiongbao-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
+  openbot-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
 ```
 
 全量套件约 7–8 分钟；期间**别再开第二个碰同一个库的容器**，也别跑吃 CPU 的任务——那族参数化用例会被拖慢，制造出并不存在的"回归"。
@@ -128,7 +128,7 @@ docker run --rm -v $B/server/scripts:/app/server/scripts -v $B/server/src:/app/s
 ## 7. 还没有的部分（别按"部署完成"理解这份文档）
 
 - 卡片回收器（无人值守 run 崩溃后留下的 `running` 卡）有方法、有测试，**但还没接回扫描器**：它一度挂在 `index.ts` 的模块级定时器上，会在几十个测试文件 import 时全局改 `tasks` 表，已撤；正确落点是 `routines/sweep.ts`，且要先看账本行再动卡。
-- 侧边栏/登录页/看板等界面的中文文案（见 `tickets/024`）；组团任务流水线整票未开工（见 `tickets/021` 的 A/B 决定）；managed Intelligence 死代码收缩与 README/CONTEXT 的上游化整理（见 `tickets/025`）。
+- 侧边栏/登录页/看板等界面的中文文案（见 `tickets/024`）；组团任务流水线整票未开工（见 `tickets/021` 的 A/B 决定）；managed Intelligence 死代码收缩与 README/CONTEXT 的整理（见 `tickets/025`）。
 
 ## 5b. 全量测试怎么跑才算数（2026-10-07 实测）
 
@@ -168,13 +168,13 @@ done
     -v $B/server/src:/app/server/src -v $B/server/drizzle:/app/server/drizzle \
     -v $B/server/scripts:/app/server/scripts -v $B/shared:/app/shared \
     -v $B/examples:/app/examples -v $B/.env:/app/.env \
-    xiongbao-dev bash -lc "cd /app/server && bun --env-file=../.env src/index.ts"
+    openbot-dev bash -lc "cd /app/server && bun --env-file=../.env src/index.ts"
   # app 必须与 server 共享网络命名空间：vite 的代理目标是字面量 http://localhost:${SERVER_PORT}
   MSYS_NO_PATHCONV=1 docker run -d --name xiongbao-g2-app --network container:xiongbao-g2-server \
     -e SERVER_PORT=3001 -e APP_PORT=3010 \
     -v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests -v $B/shared:/app/shared \
     -v $B/server/src:/app/server/src -v $B/examples:/app/examples -v $B/scripts:/app/scripts -v $B/.env:/app/.env \
-    xiongbao-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
+    openbot-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
   docker rm -f xiongbao-g2-app xiongbao-g2-server   # 收摊
   ```
 - **`INTELLIGENCE_MODE` 现在是"会被读、会被拒"而不是"必须给"**：给 `local` 或不给都行；给 `managed` 会在启动时报 `INTELLIGENCE_MODE must be "local" or unset: this deployment keeps its threads in its own PostgreSQL…` 并拒绝起来。**旧的"不给平台三件套就拒启"（`CopilotKit Intelligence is required and is not configured`）随 034 一起删掉了**——会话存的本机 `threads`/`thread_runs`/`thread_run_events`，`INTELLIGENCE_API_URL`/`_GATEWAY_WS_URL`/`_API_KEY` 与 `COPILOTKIT_LICENSE_TOKEN` **根本不被读**，留着只是让 `.env` 说假话。上面配方里的 `-e INTELLIGENCE_MODE=local` 因此可以删（保留也无害，只是把模式说明写在命令行上）。
@@ -190,17 +190,17 @@ done
 - **A1 实测通过**（结构快照，本机浏览器没有可见 surface，截不了图）：`/tasks` 渲染出 `heading "任务看板"`、副标题「从工作本身出发：员工做了什么、什么需要你、什么等你查收。」、筛选「全部/进行中/需要操作/查收结果/已完成/失败」、`region "需要关注"` 里两个计数页签「需要操作 (0)」「查收结果 (0)」与 A7 的原句「暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里」、空态「看板上还没有任务——和员工说句话，工作就会出现在这里。」、设备筛选出现「studio-pc · 休眠」，URL 带 `?machineId=&crew=`（与 CONTEXT.md 记的两轴口径一致）。
 - **A1 与 spec 字面有一处差异要认**：spec 写的是"统计条：任务总数/进行中/需要操作/已结束"，实屏是**筛选页签 + 需要关注区的双计数**，没有并列的四个总数。0 任务时也不见周期选择器（一周/一月/全部）。**这是渲染分支还是缺功能，下一轮要用有数据的库验**，别现在写成已符合。
 - **白标的一处真缺陷（已定位、属配置不属代码）**：跑起来后页面顶部挂着一条英文的自托管推广条（链到外部的联系工程师页面）。它是**能力位控制的**（`self-host-banner.tsx:30` 读 `capabilities.selfHostBanner`），开关是 `OPENBOT_SELF_HOST_BANNER=false`，`.env.example:54` 的注释正好写着"为自己组织部署时可以给所有人关掉"。**本部署现已带上这个开关**，`/api/capabilities` 回 `selfHostBanner:false`。
-- 另一处品牌残留（**未修**）：`app/index.html:6` 的 `<title>` 硬编码了英文产品名，浏览器标签与 `RootWebArea` 的名字都是它；而 `appConfig.brand.productName`（生成物 `src/lib/generated/application-config.ts` 里已是「熊宝数字员工」）已经被侧栏、登录页、onboarding 用了三处。走查时页面标题仍是上游英文名，属 024 未完项。
+- 另一处品牌残留（**未修**）：`app/index.html:6` 的 `<title>` 硬编码了英文产品名，浏览器标签与 `RootWebArea` 的名字都是它；而 `appConfig.brand.productName`（生成物 `src/lib/generated/application-config.ts` 里已是「熊宝数字员工」）已经被侧栏、登录页、onboarding 用了三处。走查时页面标题仍是硬编码的英文名，属 024 未完项。
 
 ## 10. D1（数字员工页）实测 + 走查工具的本机限制（2026-10-07）
 - **白标那条推广条确实没了**：带上 `OPENBOT_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有那条自托管推广条（`complementary`），`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
 - **D1 成立**：`heading "数字员工"` + 双页签「员工 / 小组」（小组 = D3 的入口已存在）+ 状态筛选带计数「全部 (16) / 运行中 (0) / 待命 (16) / 已停用 (0)」，卡片「打开」链到 `/agents?agent=<id>`（D5 的入口）。
 - **品牌包真的同步进来了**：16 位员工里有 `后端工程师/Backend Engineer`、`代码审核员/Code Reviewer`、`运营助手/Operations`、`测试工程师/QA Engineer`、`我的分身/个人分身`（当时以为是 CONTEXT.md 里 `avatar-<tenant>` 那位；**更正（2026-11-06）**：这张卡其实是品牌包的公共员工 `general-assistant`，它和本人的分身同名。现在它叫「通用助手/General Assistant」，默认对话「我的分身」由本人的 `avatar-<tenant>` 接，见 #283）。
-- ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是上游英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/xiongbao/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。
+- ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是 fintech 示例包的英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/xiongbao/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。
 - **走查工具在本机的形状**（省下一轮时间）：`navigate_page` 对 vite dev server **经常 30s 超时**（HMR 长连让 load 事件不结），**但页面其实没导航成功与否要看重试**——原样再调一次通常立刻成功；`take_screenshot` 不可用（`NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`，`visibilityState=hidden`），`list_network_requests` 恒返回 `No requests found`，所以**只能靠 `take_snapshot` 的结构树当证据**。SPA 全客户端渲染，`curl` 只能拿到空壳，替代不了浏览器。
 
 ## 11. 更正上一条的最后一节：那 11 个英文名**不是 024 的活**（我写错了，实测为证）
-上一条说"16 位里 11 位是上游英文名，下一刀改 `examples/xiongbao/agents.yaml`"。**错了，而且错的方向是危险的**：把一个数据库残留当成了产品缺陷。实测：
+上一条说"16 位里 11 位是 fintech 示例包的英文名，下一刀改 `examples/xiongbao/agents.yaml`"。**错了，而且错的方向是危险的**：把一个数据库残留当成了产品缺陷。实测：
 - `grep -rl "Ticket Triage"` 全仓只命中 **`examples/fintech/agents/ticket-triage.yaml`** —— 另一个示例包。
 - `select name, tenant_id, package_id from agents where name in ('Ticket Triage','Vendor Review','Expense Review')` ⇒ 三行都是 `tenant_id='system'`、同一个 `package_id=90f73a05-…`（fintech 包那次同步留下的）。`select tenant_id, count(*) from agents group by 1` ⇒ **16 行全在 `system`**。
 - 所以 qoderwake 品牌包**自己**只声明 5 位（`general-assistant / backend-engineer / code-reviewer / qa-engineer / ops-assistant`，见 `examples/xiongbao/agents.yaml`），这 5 位显示名**都是中文**；它们的 `title` 是英文（`Backend Engineer` 等）是**包里就这么写的**，不是漏翻。
@@ -229,7 +229,7 @@ done
 
 **`/resources` 是 024 剩下最大的一块，精确到串**（这一屏的**框架文案整片是英文**，而品牌包灌进去的技能是中文——两种语言并排出现在同一屏上）：
 - 屏名与分区：`Capabilities & resources`、`Models`、`Skills`、`Connectors`、`Knowledge sources`、`Components`；按钮 `Connect`/`Write`/`Manage`；状态词 `not granted`/`granted to 1`/`published`。
-- 技能区里 **6 条上游英文技能**（`Check a claim against a source`、`Find a document`、`Find a Notion page`、`Research the public web`、`What changed recently`、`Who owns this`）与 **5 条品牌包中文技能**（代码审阅 / 在我电脑上跑 / 派活 / 造员工 / 造技能）并存 ⇒ **品牌包确实把技能同步进去了**（这是 024/003 的正向证据），但上游默认技能目录没有跟着本地化。
+- 技能区里 **6 条内置英文技能**（`Check a claim against a source`、`Find a document`、`Find a Notion page`、`Research the public web`、`What changed recently`、`Who owns this`）与 **5 条品牌包中文技能**（代码审阅 / 在我电脑上跑 / 派活 / 造员工 / 造技能）并存 ⇒ **品牌包确实把技能同步进去了**（这是 024/003 的正向证据），但内置的默认技能目录没有跟着本地化。
 - 组件区 11 个 `published` 条目全英文名（Activity report、Checklist、Data table、Headline figures、Notice、Quotation、Record、Area/Bar/Donut/Line chart）——同一条纹：目录是平台的，`examples/xiongbao` 没覆盖它。
 - `/plans` 的额度行也是英文拼出来的：`coworkers · tasks a month · machines · the deployment's models only`，而这一屏的标题/说明/按钮已是中文。
 - `app/index.html:6` 的 `<title>` 依旧是英文产品名（每个页面的 RootWebArea 名字都是它）。

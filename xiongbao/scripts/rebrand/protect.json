@@ -2123,8 +2123,38 @@
   },
   {
     "file": "xiongbao/docs/development-environment-xiongbao.md",
-    "pattern": "(?<=:5433/)openbot(?:_test)?\\b|openbot-postgres-1|`openbot_test`|`openbot`(?= 是开发库)|(?<=for DB in )openbot openbot_test",
-    "until": "R3",
-    "reason": "这台开发机上已有的开发库、测试库与 PostgreSQL 容器（开发 compose 改名前建的旧卷），开发笔记写的是机器上的实际名字；R3 随库名迁移"
+    "pattern": "(?<=:5433/)openbot(?:_test)?\\b|openbot-postgres-1|`openbot_test`|`openbot`(?= 是开发库)|(?<=for DB in )openbot openbot_test|(?<![\\w-])openbot-dev(?![\\w-])",
+    "until": "R4",
+    "reason": "这台开发机上已有的开发库、测试库、PostgreSQL 容器与 openbot-dev 镜像（开发 compose 改名前建的旧卷与旧镜像），开发笔记写的是机器上的实际名字；与同文件的历史日志一起在 R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/task-workbench/A2.md",
+    "pattern": "openbot",
+    "until": "R4",
+    "reason": "历史取证记录（当时的检出路径、冻结叶与基线原文），保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/task-workbench/A5.md",
+    "pattern": "openbot",
+    "until": "R4",
+    "reason": "历史取证记录（当时的检出路径、冻结叶与基线原文），保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/task-workbench/A6.md",
+    "pattern": "openbot",
+    "until": "R4",
+    "reason": "历史取证记录（当时的检出路径、冻结叶与基线原文），保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/task-workbench/A7-contracts.md",
+    "pattern": "openbot",
+    "until": "R4",
+    "reason": "历史取证记录（当时的检出路径、冻结叶与基线原文），保持原样，R4 决定归档或删除"
+  },
+  {
+    "file": "xiongbao/docs/cloud-repair/telemetry/C2-plan-and-results.md",
+    "pattern": "openbot",
+    "until": "R4",
+    "reason": "历史取证记录（当时的检出路径、冻结叶与基线原文），保持原样，R4 决定归档或删除"
   }
 ]

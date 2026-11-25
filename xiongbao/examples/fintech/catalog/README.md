@@ -14,10 +14,10 @@ deliberately unlike each other: finance, meetings, releases, support, onboarding
 reliability, procurement and product feedback.
 
 Each file has two pieces of text, for two readers. `role_description` is the one sentence a person
-reads under the Bot's name, and what XiongBao reads when it picks a Bot for a message. A Bot that
+reads under the Bot's name, and what XiongBao Work reads when it picks a Bot for a message. A Bot that
 runs here is not given it as instructions. `system_prompt` is what the Bot runs on, and it is the part worth copying:
 who the work is for, what to do in what order, what it must not do and why, and what to deliver
 when part of the work comes back empty. Each one stays under the 1,000 characters the Bot form
-allows, in plain sentences that give the reason for each rule. XiongBao's own prompt already tells
+allows, in plain sentences that give the reason for each rule. XiongBao Work's own prompt already tells
 every Bot how to work (use what it has, take the step in the same reply, retry once, deliver with
 gaps named), so a Bot's instructions only need to say what that means for its job.

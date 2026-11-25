@@ -186,6 +186,12 @@
     "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
   },
   {
+    "word": "openbot-dev",
+    "category": "developer-only",
+    "plan": "keep",
+    "note": "开发环境文档里的本地容器名"
+  },
+  {
     "word": "openbot-postgres-1",
     "category": "developer-only",
     "plan": "keep",

@@ -1345,29 +1345,27 @@ names a computer; it does not yet gate anything.
 
 ## Images
 
-Every service `docker-compose.yml` can build is published by a release, so a machine can run the
-stack without a toolchain and without waiting for Chromium to build.
+A release publishes one image, the single container described in [deployment.md](deployment.md)
+(`linux/amd64`, at `ghcr.io/canquedehuiyi-cpu/xiongbaowork`). The other services
+`docker-compose.yml` runs are not published; each one's image is named by a setting:
 
-| Service           | Setting             | Published image                            |
-| ----------------- | ------------------- | ------------------------------------------ |
-| `agent-computer`  | `COMPUTER_IMAGE`    | `ghcr.io/copilotkit/openbot-agent-computer` |
-| `supervisor`      | `SUPERVISOR_IMAGE`  | `ghcr.io/copilotkit/openbot-supervisor`     |
-| `agent-bot`       | `BOT_IMAGE`         | `ghcr.io/copilotkit/openbot-agent-bot`      |
-| `agent-langgraph` | `LANGGRAPH_IMAGE`   | `ghcr.io/copilotkit/openbot-agent-langgraph`|
-| `migrate`         | `SERVER_IMAGE`      | `ghcr.io/copilotkit/openbot-server`         |
+| Service           | Setting             |
+| ----------------- | ------------------- |
+| `agent-computer`  | `COMPUTER_IMAGE`    |
+| `supervisor`      | `SUPERVISOR_IMAGE`  |
+| `agent-bot`       | `BOT_IMAGE`         |
+| `agent-langgraph` | `LANGGRAPH_IMAGE`   |
+| `migrate`         | `SERVER_IMAGE`      |
 
 Unset, each names a local tag and Compose builds it, which is what a checkout of this repository
-does. Set to a published reference, pinned by digest, together with `IMAGE_PULL_POLICY=missing`,
-Compose pulls instead. Both architectures are in every image, so the same reference works on an
-arm64 laptop and an amd64 server.
+does. Set to a reference in a registry of your own, pinned by digest, together with
+`IMAGE_PULL_POLICY=missing`, Compose pulls instead.
 
 `IMAGE_PULL_POLICY` is needed because a service carrying a `build` section builds by default
 however its image is named. It is also not a promise that nothing is built: a pull that fails falls
 back to building, which suits a developer and does not suit a machine with no toolchain, where the
 useful answer is that the image could not be fetched. Somewhere that must never build, override the
 `build` sections away instead.
-
-`docs/releasing.md` shows reading the digests straight out of a release's `container-images.json`.
 
 ## Setup checklist
 

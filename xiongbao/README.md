@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="app/src/assets/xiongbao-logo.png" alt="" width="72">
+<img src="app/src/assets/brand/xiongbao-logo-256.png" alt="" width="72">
 
 # XiongBao Work
 
