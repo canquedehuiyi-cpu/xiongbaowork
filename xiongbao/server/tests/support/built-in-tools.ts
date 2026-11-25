@@ -3,7 +3,7 @@
  * Every tool XiongBao itself offers a model, read out of the source where each one is registered.
  *
  * WHY THE SOURCE AND NOT A LIST. The guard this feeds exists because tools shipped with no words for
- * the transcript (`copilotkit_load_skill`, `list_bots`, `remember_personal_fact`) and the person saw
+ * the transcript (`list_bots`, `remember_personal_fact`) and the person saw
  * the identifier. A hand-kept list of tool names would have been missing exactly those, for the same
  * reason the label table was. So the names are read from the registrations themselves, and a tool
  * added tomorrow is in the scan the day it lands.

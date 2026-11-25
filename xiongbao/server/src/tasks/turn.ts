@@ -88,12 +88,6 @@ export function createTaskTurn(deps: {
         ...scope,
         ...(input.tenantId ? { tenantId: input.tenantId } : {}),
         routineId: input.runId,
-        telemetry: {
-          trigger: "human",
-          surface: "web",
-          rootTaskId: input.askId,
-          attempt: input.attempt,
-        },
         instruction: input.text,
         userMessage: { id: input.askId, role: "user", content: input.text },
         initiator: PERSON_INITIATOR,

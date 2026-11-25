@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { BaseEvent } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
-import { retryingDroppedConnection } from "../src/copilotkit/last-step";
 import { droppedConnection, modelNetRetryOn } from "../src/network-error";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
+import { retryingDroppedConnection } from "../src/runtime/last-step";
 
 /**
  * A model call whose connection dropped is made again once, but only while nothing of the answer was

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/client";
-import { answersOnLastStep, startRun } from "../src/copilotkit/last-step";
+import { answersOnLastStep, startRun } from "../src/runtime/last-step";
 import {
   reasoningByToolCall,
   withReplayedReasoning,
-} from "../src/copilotkit/replayed-reasoning";
+} from "../src/runtime/replayed-reasoning";
 
 /*
  * 期三：DeepSeek 的思考模式要求调过工具的那一步的思考，之后每一轮都原样带回。运行时把对话发给模型时会丢掉

@@ -297,7 +297,7 @@ function BrowserStep() {
 function conversation(selected: AgentChannel) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <BrowserStep />
         {/* Keyed as the channel route keys it, so another conversation is a fresh mount. */}
         <ChannelChat

@@ -91,7 +91,6 @@ describe("never-change strings survive", () => {
 
   for (const value of [
     ...new Set([...NEVER_CHANGE, ...SIGNING_DOMAINS, ...WIRE_HEADERS]),
-    "/api/copilotkit",
   ]) {
     test(`${value} is still spelled verbatim`, () => {
       expect(corpus.includes(value)).toBe(true);

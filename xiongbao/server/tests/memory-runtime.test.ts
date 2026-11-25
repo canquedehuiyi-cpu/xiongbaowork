@@ -112,25 +112,6 @@ test("a continuation replaying its memory entry still carries one memory", async
     { description: "OpenBot personal memory", value: "fresh fact" },
   ]);
 });
-test("personal memory retains Automatic Learning catalog and tool authority", async () => {
-  const request = input();
-  request.messages.unshift({
-    id: "openbot:learned-skills",
-    role: "system",
-    content: "approved catalog",
-  });
-  request.tools.push({
-    name: "copilotkit_load_skill",
-    description: "Learned skill",
-    parameters: {},
-  });
-  const next = await run(async () => "fact", request);
-  expect(
-    next?.messages.some((message) => message.id === "openbot:learned-skills"),
-  ).toBe(true);
-  expect(next?.tools).toEqual(request.tools);
-  expect(next?.forwardedProps).toEqual(request.forwardedProps);
-});
 test("personal memory retains canonical user messages and continuation state", async () => {
   const request = input();
   const next = await run(async () => "fact", request);

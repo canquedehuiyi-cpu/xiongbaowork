@@ -3,7 +3,6 @@ import {
   IconBrain,
   IconBuildingBank,
   IconBuildingSkyscraper,
-  IconBulb,
   IconChecks,
   IconCode,
   IconDeviceDesktop,
@@ -94,11 +93,6 @@ const GROUPS: {
         title: "技能",
         icon: IconSlash,
         linkOptions: { to: "/admin/skills" },
-      },
-      {
-        title: "自动学习",
-        icon: IconBulb,
-        linkOptions: { to: "/admin/learning" },
       },
       {
         title: "主动巡检",

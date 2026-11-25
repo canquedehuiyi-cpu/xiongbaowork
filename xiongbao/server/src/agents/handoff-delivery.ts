@@ -18,14 +18,9 @@ import {
   type RunAgentInput,
 } from "@ag-ui/client";
 import { answeredBy, answerMessageId } from "@xiongbao/shared/handoff-markers";
-import { THREAD_LOCK_TTL_SECONDS } from "@xiongbao/toolkit/copilotkit/thread-lock";
 import { keepLease } from "@xiongbao/toolkit/lease";
 import type { ThreadLock, TurnAdmission } from "@xiongbao/toolkit/ports";
-import {
-  observeDetachedRun,
-  type PlatformRun,
-  type StopRecorder,
-} from "@xiongbao/toolkit/run-stop";
+import { THREAD_LOCK_TTL_SECONDS } from "@xiongbao/toolkit/runtime/thread-lock";
 import { from, type Observable } from "rxjs";
 import { modelNamedIn, recordHeadlessModelUsage } from "../admin/controls";
 import type { AuditInitiator } from "../audit";
@@ -56,48 +51,12 @@ export type ThreadRunner = {
     input: unknown;
     /** What the conversation keeps, when that is not the whole of what the model was sent. */
     persistedInputMessages?: readonly unknown[];
-    /** Called by a runner that records its own stops with Intelligence. */
-    recordStop?: StopRecorder;
   }) => Observable<BaseEvent>;
   /** Stop a run in flight, as a pause does for every other turn. */
   stop?: (input: { threadId: string; runId: string }) => Promise<unknown>;
 };
 
 export function createHandoffDelivery(options: {
-  prepareRunInput?: (
-    input: {
-      threadId: string;
-      runId: string;
-      messages: unknown[];
-      tools: never[];
-      context: never[];
-      state: object;
-      forwardedProps: { openbotRun: string };
-    },
-    work: import("./handoff-runner").HandoffWork,
-  ) => Promise<unknown>;
-  /**
-   * The hop's analytics context, for the thread lock alone. Asked for before the lock, since the
-   * lock is what starts the run on the platform; the run input never carries it.
-   */
-  /**
-   * The run's `recordStop`, so a hop stopped here (a pause, the deadline) reads as cancelled on the
-   * platform. Absent, or answering undefined, where the client cannot record a stop.
-   */
-  recordStopFor?: (
-    run: PlatformRun,
-    holdsLock: () => boolean,
-  ) => StopRecorder | undefined;
-  /** A stop this delivery knows it made, a pause, or one Intelligence relayed. Never a lost lock. */
-  onKnownStop?: (
-    actorId: string,
-    runId: string,
-    reason: "cancelled",
-  ) => Promise<void>;
-  analyticsContextFor?: (
-    run: { threadId: string; runId: string },
-    work: import("./handoff-runner").HandoffWork,
-  ) => Promise<Record<string, unknown> | undefined>;
   /**
    * The addressed Bot, built for the person whose conversation this is.
    *
@@ -423,17 +382,6 @@ export function createHandoffDelivery(options: {
          * be a run that does not exist.
          */
         const requested = { threadId: where.threadId, runId: newRunId() };
-        const analyticsContext = await options
-          .analyticsContextFor?.(requested, work)
-          .catch(() => {
-            console.warn(
-              JSON.stringify({
-                type: "product-telemetry",
-                reason: "handoff_context_failed",
-              }),
-            );
-            return undefined;
-          });
         /*
          * Waited for, a little, when somebody else is running in it. An answer going home usually
          * lands while the Bot that asked is still finishing the sentence that said it had asked,
@@ -447,7 +395,6 @@ export function createHandoffDelivery(options: {
               ...requested,
               userId: work.actorId,
               agentId: work.toBotId,
-              ...(analyticsContext ? { analyticsContext } : {}),
             }),
           busyWaitMs,
           paused,
@@ -532,29 +479,6 @@ export function createHandoffDelivery(options: {
           onLost: (error) => lockLost.abort(error),
         });
 
-        let stoppingHere = false;
-        const knownStop = () => {
-          void options
-            .onKnownStop?.(work.actorId, runId, "cancelled")
-            .catch(() => {
-              console.warn(
-                JSON.stringify({
-                  type: "product-telemetry",
-                  reason: "stop_observation_failed",
-                }),
-              );
-            });
-        };
-        observeDetachedRun(agent, () => stoppingHere, knownStop);
-        const recordStop = options.recordStopFor?.(
-          {
-            threadId: where.threadId,
-            runId,
-            userId: work.actorId,
-            agentId: work.toBotId,
-          },
-          () => !lockLost.signal.aborted,
-        );
         try {
           /*
            * The month is asked before the hop is filed, the way a firing asks it (`routines/runner.ts`):
@@ -593,7 +517,6 @@ export function createHandoffDelivery(options: {
           await suppressRunnerCard(async () =>
             settled(
               runner.run({
-                ...(recordStop ? { recordStop } : {}),
                 threadId: where.threadId,
                 agent,
                 /*
@@ -621,36 +544,28 @@ export function createHandoffDelivery(options: {
                  * What makes this run legitimate is the lock itself: the gateway compares the run id on
                  * every event to the one the lock holds. Taking the lock is the whole of the ceremony.
                  */
-                input: await (
-                  options.prepareRunInput ?? (async (input) => input)
-                )(
-                  {
-                    threadId: where.threadId,
-                    runId,
-                    /*
-                     * The same conversation the agent was given, so the run's own record of what it was
-                     * asked agrees with what it read.
-                     */
-                    messages: asked,
-                    tools: [],
-                    context: [],
-                    state: {},
-                    /*
-                     * The deployment's own statement of what this run is, carrying how deep the chain has
-                     * gone. It is what stops the addressed Bot handing the work on for ever, and it is
-                     * signed, so the Bot cannot edit its own depth on the way past.
-                     */
-                    forwardedProps: { openbotRun: assertion },
-                  },
-                  work,
-                ),
+                input: {
+                  threadId: where.threadId,
+                  runId,
+                  /*
+                   * The same conversation the agent was given, so the run's own record of what it was
+                   * asked agrees with what it read.
+                   */
+                  messages: asked,
+                  tools: [],
+                  context: [],
+                  state: {},
+                  /*
+                   * The deployment's own statement of what this run is, carrying how deep the chain has
+                   * gone. It is what stops the addressed Bot handing the work on for ever, and it is
+                   * signed, so the Bot cannot edit its own depth on the way past.
+                   */
+                  forwardedProps: { openbotRun: assertion },
+                },
               }),
               deadlineMs,
               AbortSignal.any([paused, lockLost.signal]),
               () => {
-                stoppingHere = true;
-                // A pause is a cancel. A lost lock is a failure, and is not reported as a stop.
-                if (!lockLost.signal.aborted) knownStop();
                 return runner
                   .stop?.({ threadId: where.threadId, runId })
                   .catch(() => undefined);

@@ -339,7 +339,7 @@ function RouteComponent() {
 }
 
 /**
- * A channel with exactly one coworker is its CopilotKit chat. One with several is a group, which
+ * A channel with exactly one coworker is its agent SDK chat. One with several is a group, which
  * redirects to its shared transcript at `/group/$channelId`.
  */
 function ChannelBody({
@@ -384,7 +384,7 @@ function ChannelBody({
     );
   }
 
-  // Remount on channel changes so CopilotKit agent/thread state cannot leak between channels.
+  // Remount on channel changes so the agent SDK agent/thread state cannot leak between channels.
   return (
     <ChannelChat
       channel={channel}

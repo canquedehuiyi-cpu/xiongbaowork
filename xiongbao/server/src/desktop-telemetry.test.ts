@@ -19,7 +19,7 @@ describe("desktop runtime metadata", () => {
         OPENBOT_OS_VERSION: "15.6.1",
         OPENBOT_ENGINE: "podman",
         OPENAI_API_KEY: "synthetic-secret",
-        CPK_TELEMETRY_ID: "identity-belongs-in-the-transport",
+        TELEMETRY_ID: "identity-belongs-in-the-transport",
         HOME: "/Users/private-name",
         OPENBOT_BASE_URL: "https://private.example",
       }),

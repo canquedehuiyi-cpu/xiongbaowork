@@ -2,7 +2,6 @@ import {
   IconBrain,
   IconBuildingBank,
   IconBuildingSkyscraper,
-  IconBulb,
   IconChecks,
   IconChevronRight,
   IconCode,
@@ -112,13 +111,6 @@ const SECTIONS: {
         description: "任何人都能用斜杠调用的具名指令。",
         icon: IconSlash,
         linkOptions: { to: "/admin/skills" },
-      },
-      {
-        title: "自动学习",
-        description:
-          "从结束的对话里学习，审核它提出的技能，并决定大家能否分享自己的技能。",
-        icon: IconBulb,
-        linkOptions: { to: "/admin/learning" },
       },
       {
         title: "主动巡检",

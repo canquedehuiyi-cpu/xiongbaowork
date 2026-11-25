@@ -124,7 +124,6 @@ RUN set -eu; mkdir -p /out/server/dist; \
     bundle server/scripts/fire-routines.ts fire-routines; \
     bundle server/scripts/cull-idle-computers.ts cull-idle-computers; \
     bundle server/scripts/cull-staged-attachments.ts cull-staged-attachments main; \
-    bundle server/src/learning/ensure-container.ts ensure-container main; \
     bundle scripts/composio-smoke.ts composio-smoke
 
 # The source half of the runtime tree, with what a running container never reads taken out. The

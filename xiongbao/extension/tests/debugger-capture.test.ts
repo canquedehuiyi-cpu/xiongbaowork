@@ -374,7 +374,7 @@ test("calls to XiongBao itself are ignored, by the steps and by the agent events
   // Intelligence run does, and neither is ever followed.
   request(7, {
     id: "1",
-    url: `${XIONGBAO}/api/copilotkit/trajectory/x/connect`,
+    url: `${XIONGBAO}/api/runtime/trajectory/x/connect`,
     method: "POST",
     postData: "{}",
     body: '{"joinToken":"join-token-1","realtime":{"clientUrl":"wss://intelligence.example.test/client","topic":"trajectory:x"}}',

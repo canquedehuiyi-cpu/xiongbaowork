@@ -28,7 +28,7 @@ import { testEnvironment } from "./support/environment";
 
 /*
  * Who this server trusts, through the real thing: the app index.ts builds, on the real front door
- * (startHttpServer) on a real port, with the real CopilotKit runtime mounted, and real requests and
+ * (startHttpServer) on a real port, with the real agent runtime mounted, and real requests and
  * real WebSocket handshakes carrying the headers a browser, another machine, a rebinding page, a Bot
  * and the worker each send. Only what sits behind the routes is a stand-in: the conversation a Bot
  * turn would run in, the computer a live screen shows, the tool a Bot calls.
@@ -375,13 +375,13 @@ beforeEach(() => {
 
 describe("a page on another website", () => {
   test("cannot read the runtime: no CORS for a foreign origin, on an answer or a preflight", async () => {
-    const info = await fetch(`${local.base}/api/copilotkit/info`, {
+    const info = await fetch(`${local.base}/api/runtime/info`, {
       headers: { origin: EVIL, "sec-fetch-site": "cross-site" },
     });
     expect(info.headers.get("access-control-allow-origin")).toBeNull();
 
     const preflight = await fetch(
-      `${local.base}/api/copilotkit/agent/general-assistant/run`,
+      `${local.base}/api/runtime/agent/general-assistant/run`,
       {
         method: "OPTIONS",
         headers: {
@@ -466,7 +466,7 @@ describe("XiongBao's own callers", () => {
     expect(local.turns).toEqual(["hello"]);
     local.turns.length = 0;
 
-    const info = await fetch(`${local.base}/api/copilotkit/info`, {
+    const info = await fetch(`${local.base}/api/runtime/info`, {
       headers: { origin: APP_ORIGIN, host: "127.0.0.1:3010" },
     });
     expect(info.status).toBe(200);
@@ -503,7 +503,7 @@ describe("XiongBao's own callers", () => {
     local.turns.length = 0;
 
     const preflight = await fetch(
-      `${local.base}/api/copilotkit/trajectory/00000000-0000-4000-8000-000000000000/connect`,
+      `${local.base}/api/runtime/trajectory/00000000-0000-4000-8000-000000000000/connect`,
       {
         method: "OPTIONS",
         headers: {
@@ -558,11 +558,11 @@ describe("a page whose name was pointed at this machine (DNS rebinding)", () => 
     expect(posted.status).toBe(403);
     expect(local.turns).toEqual([]);
 
-    const info = await fetch(`${local.base}/api/copilotkit/info`, {
+    const info = await fetch(`${local.base}/api/runtime/info`, {
       headers: { host },
     });
     expect(info.status).toBe(403);
-    const single = await fetch(`${local.base}/api/copilotkit`, {
+    const single = await fetch(`${local.base}/api/runtime`, {
       method: "POST",
       headers: { host, "content-type": "application/json" },
       body: JSON.stringify({ method: "info" }),
@@ -708,7 +708,7 @@ describe.skipIf(!lanIsPrivate)("another machine on the network", () => {
     expect(local.turns).toEqual([]);
     const info = await overTheNetwork({
       port: local.port,
-      path: "/api/copilotkit/info",
+      path: "/api/runtime/info",
     });
     expect(info.status).toBe(403);
     for (const path of [

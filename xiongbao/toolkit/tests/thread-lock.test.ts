@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createIntelligenceThreadLock,
   type ThreadLockClient,
-} from "../src/copilotkit/thread-lock";
+} from "../src/runtime/thread-lock";
 
 /**
  * The lock a hop takes on a conversation, as the platform issues it.
@@ -28,7 +28,6 @@ function platformError(status: number): Error {
 function harness(
   options: {
     acquire?: () => unknown;
-    container?: string;
     onRunBusy?: (input: { threadId: string; busy: boolean }) => void;
   } = {},
 ) {
@@ -53,13 +52,6 @@ function harness(
   } as unknown as ThreadLockClient;
   const lock = createIntelligenceThreadLock({
     client,
-    ...(options.container
-      ? {
-          learning: {
-            containerForThread: async () => options.container,
-          },
-        }
-      : {}),
     onRunBusy:
       options.onRunBusy ??
       ((input) => {
@@ -110,16 +102,6 @@ describe("taking a conversation's lock", () => {
     });
 
     await expect(lock.acquire(INPUT)).rejects.toThrow("socket hang up");
-  });
-
-  test("the thread and the lock both carry the Learning container when there is one", async () => {
-    const { lock, calls } = harness({ container: "container-1" });
-
-    await lock.acquire(INPUT);
-
-    for (const call of calls) {
-      expect(call.input.learningContainerId).toBe("container-1");
-    }
   });
 
   test("lights the conversation as busy once the lock is held", async () => {

@@ -1,6 +1,6 @@
 /**
- * A vanilla install from the licence and the model key alone, rendered by real Helm from the real
- * chart: the README's secrets file is those two lines, and the chart makes everything else.
+ * A vanilla install from the model key alone, rendered by real Helm from the real chart: the
+ * README's secrets file is that one line, and the chart makes everything else.
  *
  * What must not regress, because each one is a person stuck before XiongBao ever starts, or a database
  * locked out of itself on the next upgrade:
@@ -138,110 +138,103 @@ function credentials(docs: Doc[]) {
   };
 }
 
-describe.skipIf(!helm)(
-  "a vanilla install from the licence and the model key",
-  () => {
-    test("generates the key encryption key, the computer token and the database password, into Secrets kept on uninstall", () => {
-      const docs = render();
-      const { refs, kek, token, password } = credentials(docs);
+describe.skipIf(!helm)("a vanilla install from the model key", () => {
+  test("generates the key encryption key, the computer token and the database password, into Secrets kept on uninstall", () => {
+    const docs = render();
+    const { refs, kek, token, password } = credentials(docs);
 
-      const key = Buffer.from(kek ?? "", "base64");
-      expect(key.length).toBe(32);
-      // Not the public example key, which is thirty-two zero bytes.
-      expect(key.some((byte) => byte !== 0)).toBe(true);
-      expect(token?.length ?? 0).toBeGreaterThanOrEqual(32);
-      expect(password?.length ?? 0).toBeGreaterThanOrEqual(24);
+    const key = Buffer.from(kek ?? "", "base64");
+    expect(key.length).toBe(32);
+    // Not the public example key, which is thirty-two zero bytes.
+    expect(key.some((byte) => byte !== 0)).toBe(true);
+    expect(token?.length ?? 0).toBeGreaterThanOrEqual(32);
+    expect(password?.length ?? 0).toBeGreaterThanOrEqual(24);
 
-      // One Secret under each name, so the subchart's own does not render beside the chart's.
-      for (const name of new Set(
-        Object.values(refs).map((r) => r?.name ?? ""),
-      )) {
-        const found = secrets(docs, name);
-        expect(found.length).toBe(1);
-        expect(
-          found[0]?.metadata.annotations?.["helm.sh/resource-policy"],
-        ).toBe("keep");
-      }
-    });
-
-    test("generates fresh values rather than shipping them", () => {
-      const once = credentials(render());
-      const twice = credentials(render());
-      expect(twice.kek).not.toBe(once.kek);
-      expect(twice.token).not.toBe(once.token);
-      expect(twice.password).not.toBe(once.password);
-    });
-
-    test("uses the values given", () => {
-      const kek = randomBytes(32).toString("base64");
-      const given = credentials(
-        render(
-          "--set-string",
-          `secrets.keyEncryptionKey=${kek}`,
-          "--set-string",
-          "secrets.computerToken=the-operators-token",
-          "--set-string",
-          "postgresql.auth.password=the-operators-password",
-        ),
+    // One Secret under each name, so the subchart's own does not render beside the chart's.
+    for (const name of new Set(Object.values(refs).map((r) => r?.name ?? ""))) {
+      const found = secrets(docs, name);
+      expect(found.length).toBe(1);
+      expect(found[0]?.metadata.annotations?.["helm.sh/resource-policy"]).toBe(
+        "keep",
       );
-      expect(given.kek).toBe(kek);
-      expect(given.token).toBe("the-operators-token");
-      expect(given.password).toBe("the-operators-password");
-    });
+    }
+  });
 
-    test("reads the operator's own Secret and writes none of these", () => {
-      const docs = render(
-        "--set-string",
-        "secrets.existingSecret=mine",
-        "--set-string",
-        "postgresql.auth.existingSecret=mine",
-      );
-      const { refs } = credentials(docs);
-      expect(Object.values(refs).map((r) => r?.name)).toEqual([
-        "mine",
-        "mine",
-        "mine",
-      ]);
-      // The chart still rendered: its server Deployment is there, only its Secrets are not.
-      expect(docs.some((d) => d.metadata.name === "xiongbao-server")).toBe(
-        true,
-      );
-      expect(secrets(docs, "xiongbao-secrets")).toEqual([]);
-      expect(secrets(docs, "xiongbao-postgresql")).toEqual([]);
-    });
+  test("generates fresh values rather than shipping them", () => {
+    const once = credentials(render());
+    const twice = credentials(render());
+    expect(twice.kek).not.toBe(once.kek);
+    expect(twice.token).not.toBe(once.token);
+    expect(twice.password).not.toBe(once.password);
+  });
 
-    test("with a database of the operator's, still requires the key encryption key and the computer token", () => {
-      const external = [
-        "--set",
-        "postgresql.enabled=false",
+  test("uses the values given", () => {
+    const kek = randomBytes(32).toString("base64");
+    const given = credentials(
+      render(
         "--set-string",
-        "database.url=postgres://openbot:secret@db.example.com:5432/openbot?sslmode=require",
-        // The fork's role writer (migration 0109) has a URL of its own beside the API's.
+        `secrets.keyEncryptionKey=${kek}`,
         "--set-string",
-        "database.roleWriterUrl=postgres://openbot_role_writer:secret@db.example.com:5432/openbot?sslmode=require",
-        // The migrations Job runs as the owner, never as the API's role (validation.yaml refuses the URL alone).
+        "secrets.computerToken=the-operators-token",
         "--set-string",
-        "database.migrationUrl=postgres://xiongbao_owner:secret@db.example.com:5432/openbot?sslmode=require",
-      ];
-      expect(
-        refusal(
-          ...external,
-          "--set-string",
-          "secrets.computerToken=the-operators-token",
-        ),
-      ).toContain(
-        "secrets.keyEncryptionKey is required with a database of your own",
-      );
-      expect(
-        refusal(
-          ...external,
-          "--set-string",
-          `secrets.keyEncryptionKey=${randomBytes(32).toString("base64")}`,
-        ),
-      ).toContain("A computer needs a token");
-    });
-  },
-);
+        "postgresql.auth.password=the-operators-password",
+      ),
+    );
+    expect(given.kek).toBe(kek);
+    expect(given.token).toBe("the-operators-token");
+    expect(given.password).toBe("the-operators-password");
+  });
+
+  test("reads the operator's own Secret and writes none of these", () => {
+    const docs = render(
+      "--set-string",
+      "secrets.existingSecret=mine",
+      "--set-string",
+      "postgresql.auth.existingSecret=mine",
+    );
+    const { refs } = credentials(docs);
+    expect(Object.values(refs).map((r) => r?.name)).toEqual([
+      "mine",
+      "mine",
+      "mine",
+    ]);
+    // The chart still rendered: its server Deployment is there, only its Secrets are not.
+    expect(docs.some((d) => d.metadata.name === "xiongbao-server")).toBe(true);
+    expect(secrets(docs, "xiongbao-secrets")).toEqual([]);
+    expect(secrets(docs, "xiongbao-postgresql")).toEqual([]);
+  });
+
+  test("with a database of the operator's, still requires the key encryption key and the computer token", () => {
+    const external = [
+      "--set",
+      "postgresql.enabled=false",
+      "--set-string",
+      "database.url=postgres://openbot:secret@db.example.com:5432/openbot?sslmode=require",
+      // The fork's role writer (migration 0109) has a URL of its own beside the API's.
+      "--set-string",
+      "database.roleWriterUrl=postgres://openbot_role_writer:secret@db.example.com:5432/openbot?sslmode=require",
+      // The migrations Job runs as the owner, never as the API's role (validation.yaml refuses the URL alone).
+      "--set-string",
+      "database.migrationUrl=postgres://xiongbao_owner:secret@db.example.com:5432/openbot?sslmode=require",
+    ];
+    expect(
+      refusal(
+        ...external,
+        "--set-string",
+        "secrets.computerToken=the-operators-token",
+      ),
+    ).toContain(
+      "secrets.keyEncryptionKey is required with a database of your own",
+    );
+    expect(
+      refusal(
+        ...external,
+        "--set-string",
+        `secrets.keyEncryptionKey=${randomBytes(32).toString("base64")}`,
+      ),
+    ).toContain("A computer needs a token");
+  });
+});
 
 /*
  * Against a real API server, because `lookup` sees nothing under `helm template`. Rendered as
@@ -380,13 +373,11 @@ function podAnnotations(
 }
 
 describe.skipIf(!helm)("an upgrade that changes a secret", () => {
-  // A changed Secret does not change a pod, so without these an upgrade with a new model key or
-  // licence left every pod on the old one: the release looked upgraded and every Bot turn kept
+  // A changed Secret does not change a pod, so without these an upgrade with a new model key left
+  // every pod on the old one: the release looked upgraded and every Bot turn kept
   // failing on the key it was meant to replace.
   const given = (...extra: string[]) =>
     render(
-      "--set-string",
-      "secrets.licenseToken=licence-a",
       "--set-string",
       "secrets.computerToken=computer-token-a-0123456789abcdef",
       ...extra,

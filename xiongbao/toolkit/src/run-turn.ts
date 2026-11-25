@@ -78,11 +78,6 @@ import type {
   TurnAnswered,
   TurnScope,
 } from "./ports";
-import {
-  observeDetachedRun,
-  type StopRecorder,
-  stopRecorder,
-} from "./run-stop";
 import { historyOrEmpty } from "./thread-history";
 
 /** Everything a headless turn needs, injectable so tests never dial a model. */
@@ -142,16 +137,6 @@ export type TurnRunner = (input: {
   boardCard?: boolean;
   /** How deep in a Bot-to-Bot chain this turn is. Absent is a person's own turn, depth zero. */
   depth?: number;
-  /** Trusted host context, never a browser-provided analytics claim. */
-  telemetry?: {
-    trigger: "human" | "routine" | "followup" | "subagent" | "unknown";
-    surface?: "web" | "desktop" | "mobile" | "external_channel" | "unknown";
-    rootTaskId?: string;
-    /** The root task this turn works for, as its parent run's context already states it. */
-    inheritedRootTaskId?: string;
-    parentRunId?: string;
-    attempt?: number;
-  };
   /** The reply so far, each time more of it arrives, for a surface that shows a turn in progress. */
   onText?: (text: string) => void;
   /**
@@ -211,7 +196,7 @@ type ThreadHistoryMessage = {
  * The platform client, named by the methods this file calls and nothing else.
  *
  * Narrow and structural on purpose. It is what lets the tests drive every exit path without a
- * gateway, and it is the honest documentation of how much of `CopilotKitIntelligence` a headless turn
+ * gateway, and it is the honest documentation of how much of the platform client a headless turn
  * depends on. The real client satisfies it; see the seam note above about the `ɵ` shapes being
  * restatements rather than imports.
  */
@@ -220,7 +205,6 @@ export type IntelligenceLike = {
     threadId: string;
     userId: string;
     agentId: string;
-    learningContainerId?: string;
   }): Promise<unknown>;
   getThreadMessages(params: {
     threadId: string;
@@ -232,13 +216,6 @@ export type IntelligenceLike = {
     userId: string;
     agentId: string;
     ttlSeconds?: number;
-    learningContainerId?: string;
-    /**
-     * The run's analytics context, which the platform records with the run. Sent on the wire only
-     * by a runtime that knows the field, as the one XiongBao installs does; `@copilotkit/runtime`
-     * 1.83.0 dropped it and locked as before.
-     */
-    analyticsContext?: Record<string, unknown>;
   }): Promise<unknown>;
   /** NOTE: no `userId` and no `agentId` — renew is identified by the thread and the run alone. */
   ɵrenewThreadLock(params: {
@@ -249,14 +226,6 @@ export type IntelligenceLike = {
   ɵcleanupThreadLock(params: {
     threadId: string;
     runId: string;
-  }): Promise<void>;
-  /** Records a stop XiongBao made; absent before `@copilotkit/runtime` has it. See `run-stop.ts`. */
-  ɵrecordRunStop?(params: {
-    threadId: string;
-    runId: string;
-    userId: string;
-    agentId: string;
-    signal?: AbortSignal;
   }): Promise<void>;
 };
 
@@ -279,8 +248,6 @@ export type RunnerLike = {
     agent: AbstractAgent;
     input: RunAgentInput;
     persistedInputMessages?: Message[];
-    /** Called by a runner that records its own stops; ignored by one that does not. */
-    recordStop?: StopRecorder;
   }): EventStream;
   stop(request: {
     threadId: string;
@@ -518,40 +485,6 @@ export function turnInput(input: {
 }
 
 /**
- * Where a host leaves a run's analytics context: the forwardedProps key CopilotKit's runtime reads
- * for a browser run and sends, as `analyticsContext`, on the thread lock. This file is that engine
- * for a turn with no browser, so it reads the same key.
- */
-const ANALYTICS_CONTEXT = "__copilotkitAnalyticsContext";
-
-/** The run's input without the analytics context, and the context when it is an object. */
-function takeAnalyticsContext(input: RunAgentInput): {
-  input: RunAgentInput;
-  analyticsContext?: Record<string, unknown>;
-} {
-  const props: unknown = input.forwardedProps;
-  if (
-    typeof props !== "object" ||
-    props === null ||
-    Array.isArray(props) ||
-    !Object.hasOwn(props, ANALYTICS_CONTEXT)
-  )
-    return { input };
-  const { [ANALYTICS_CONTEXT]: context, ...rest } = props as Record<
-    string,
-    unknown
-  >;
-  return {
-    input: { ...input, forwardedProps: rest },
-    ...(typeof context === "object" &&
-    context !== null &&
-    !Array.isArray(context)
-      ? { analyticsContext: context as Record<string, unknown> }
-      : {}),
-  };
-}
-
-/**
  * The thread's lock for one run, held until it is released.
  *
  * Acquired with this run's own id and renewed on a heartbeat with the same id, so the lock the
@@ -578,8 +511,6 @@ async function takeLease(input: {
   userId: string;
   agentId: string;
   ttlSeconds: number;
-  learningContainerId?: string;
-  analyticsContext?: Record<string, unknown>;
   heartbeatMs: number;
   onLost: (error: unknown) => void;
 }): Promise<Lease> {
@@ -590,8 +521,6 @@ async function takeLease(input: {
     userId,
     agentId,
     ttlSeconds,
-    learningContainerId,
-    analyticsContext,
     heartbeatMs,
     onLost,
   } = input;
@@ -601,8 +530,6 @@ async function takeLease(input: {
     userId,
     agentId,
     ttlSeconds,
-    ...(learningContainerId ? { learningContainerId } : {}),
-    ...(analyticsContext ? { analyticsContext } : {}),
   });
 
   const heartbeat = keepLease({
@@ -766,11 +693,6 @@ export function createTurnRunner(options: {
   runner: RunnerLike;
   /** Checked before anything else; see `serverTurnAdmission` in agents/turn-admission.ts. */
   admission: TurnAdmission;
-  learningContainerForThread?: (input: {
-    threadId: string;
-    agentId: string;
-    userId: string;
-  }) => Promise<string | undefined>;
   /** The owner's coworkers, resolved as the owner. Built per turn, keyed by registry id. */
   buildAgentFor: (input: {
     ownerUserId: string;
@@ -812,17 +734,6 @@ export function createTurnRunner(options: {
    * leave those events unheard. Added to `abortGraceMs`.
    */
   observeGraceMs?: number;
-  /** Host-owned input enrichment before the runner publishes RUN_STARTED.input. */
-  prepareRunInput?: (
-    input: RunAgentInput,
-    turn: Parameters<TurnRunner>[0],
-  ) => Promise<RunAgentInput>;
-  /** A cancellation/timeout this host actually observed, separate from stream completion. */
-  onKnownStop?: (
-    actorUserId: string,
-    runId: string,
-    outcome: "cancelled" | "timeout",
-  ) => Promise<void>;
   /** Reads the model a streamed event names; the first one named is what `answered` is told. */
   modelNamedIn?: ModelObserver;
   /** What the host does with a turn that answered, beyond handing back the reply. */
@@ -845,7 +756,6 @@ export function createTurnRunner(options: {
     runner,
     admission,
     buildAgentFor,
-    learningContainerForThread,
     toolsForTurn,
     components,
     turnTimeoutMs: lightTurnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
@@ -921,16 +831,10 @@ export function createTurnRunner(options: {
      * of. `getOrCreateThread` is public API, idempotent, and already handles the 409 create-race
      * (`client.d.mts:603-621`), so it is safe on the thousandth firing as well as the first.
      */
-    const learningContainerId = await learningContainerForThread?.({
-      threadId,
-      agentId,
-      userId: ownerUserId,
-    });
     await intelligence.getOrCreateThread({
       threadId,
       userId: ownerUserId,
       agentId,
-      ...(learningContainerId ? { learningContainerId } : {}),
     });
 
     /*
@@ -990,28 +894,6 @@ export function createTurnRunner(options: {
       ...(depth ? { depth } : {}),
     });
     agent.threadId = threadId;
-    /*
-     * A Stop this turn did not make itself: a person pressing Stop on the thread, which Intelligence
-     * relays to the runner. Known here as a cancel, like the turn's own. A lost lock is the turn's
-     * own stop and is not reported as one.
-     */
-    let stoppingHere = false;
-    observeDetachedRun(
-      agent,
-      () => stoppingHere,
-      () => {
-        void options
-          .onKnownStop?.(ownerUserId, runId, "cancelled")
-          .catch(() => {
-            console.warn(
-              JSON.stringify({
-                type: "product-telemetry",
-                reason: "stop_observation_failed",
-              }),
-            );
-          });
-      },
-    );
     agent.setMessages(messages);
     if (continuation) agent.setState(continuation.snapshot.state);
     const computerTools =
@@ -1051,7 +933,7 @@ export function createTurnRunner(options: {
     }
     if (signal?.aborted) throw new Error("The headless turn was cancelled.");
 
-    let input = turnInput({
+    const input = turnInput({
       threadId,
       runId,
       messages,
@@ -1060,29 +942,6 @@ export function createTurnRunner(options: {
       ...(continuation ? { continuation } : {}),
       ...(skill ? { skill } : {}),
     });
-
-    let stated = false;
-    if (options.prepareRunInput) {
-      try {
-        input = await options.prepareRunInput(input, hostTurn);
-        stated = true;
-      } catch {
-        console.warn(
-          JSON.stringify({
-            type: "product-telemetry",
-            reason: "headless_context_failed",
-          }),
-        );
-      }
-    }
-    /*
-     * The analytics context goes on the lock and nowhere else, as the runtime does for a browser
-     * run: the agent and the run's stored events never see it. Only a context the host stated for
-     * THIS turn is sent; one left in a resumed run's forwardedProps is dropped with the key.
-     */
-    const taken = takeAnalyticsContext(input);
-    input = taken.input;
-    const analyticsContext = stated ? taken.analyticsContext : undefined;
 
     /*
      * The reply is recovered by diffing the agent, because the runner throws away what `runAgent`
@@ -1141,7 +1000,6 @@ export function createTurnRunner(options: {
     let deadline: ReturnType<typeof setTimeout> | undefined;
     let backstop: ReturnType<typeof setTimeout> | undefined;
     let heartbeatError: unknown;
-    let lockLost = false;
     let waiting: HeadlessToolSuspension | undefined;
     /** The first model the stream named — what a remote Bot, which chooses its own, is recorded as. */
     let observedModel: string | undefined;
@@ -1162,7 +1020,6 @@ export function createTurnRunner(options: {
 
     /** Stop this exact run, both ends: the agent's own abort and the runner's stop flag. */
     const stopTurn = () => {
-      stoppingHere = true;
       try {
         agent.abortRun();
       } catch {
@@ -1181,8 +1038,6 @@ export function createTurnRunner(options: {
       userId: ownerUserId,
       agentId,
       ttlSeconds: lockTtlSeconds,
-      ...(learningContainerId ? { learningContainerId } : {}),
-      ...(analyticsContext ? { analyticsContext } : {}),
       heartbeatMs,
       /*
        * A lock we no longer hold means somebody else is in this thread — the person, most likely,
@@ -1191,7 +1046,6 @@ export function createTurnRunner(options: {
        */
       onLost: (error) => {
         heartbeatError = error;
-        lockLost = true;
         stopTurn();
       },
     });
@@ -1199,16 +1053,6 @@ export function createTurnRunner(options: {
     try {
       const cancelled = new Promise<never>((_resolve, reject) => {
         cancelTurn = () => {
-          void options
-            .onKnownStop?.(ownerUserId, runId, "cancelled")
-            .catch(() => {
-              console.warn(
-                JSON.stringify({
-                  type: "product-telemetry",
-                  reason: "stop_observation_failed",
-                }),
-              );
-            });
           stopTurn();
           reject(new Error("The headless turn was cancelled."));
         };
@@ -1218,23 +1062,12 @@ export function createTurnRunner(options: {
       const completed = new Promise<void>((resolve, reject) => {
         let terminal: Error | undefined;
         let began = false;
-        /*
-         * A stop this turn makes (its cancel, a pause, the deadline) is recorded with Intelligence
-         * before the run's terminal event, so the run reads as cancelled. The runner does the
-         * recording and bounds it; see `run-stop.ts`.
-         */
-        const recordStop = stopRecorder(
-          intelligence,
-          { threadId, runId, userId: ownerUserId, agentId },
-          () => !lockLost,
-        );
         runner
           .run({
             threadId,
             agent,
             input,
             persistedInputMessages,
-            ...(recordStop ? { recordStop } : {}),
           })
           .subscribe({
             /*
@@ -1289,16 +1122,6 @@ export function createTurnRunner(options: {
       const timeout = new Promise<never>((_resolve, reject) => {
         deadline = setTimeout(() => {
           stopped = true;
-          void options
-            .onKnownStop?.(ownerUserId, runId, "timeout")
-            .catch(() => {
-              console.warn(
-                JSON.stringify({
-                  type: "product-telemetry",
-                  reason: "stop_observation_failed",
-                }),
-              );
-            });
           stopTurn();
         }, turnTimeoutMs);
         deadline.unref?.();

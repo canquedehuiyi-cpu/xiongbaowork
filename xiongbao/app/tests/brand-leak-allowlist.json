@@ -21,20 +21,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/routes/_authed/admin/learning.tsx",
-    "text": "需要接入 CopilotKit Intelligence",
-    "reason": "external-name: names the third-party service an admin must sign up for",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/routes/_authed/admin/learning.tsx",
-    "text": "名为 openbot 的容器",
-    "reason": "persisted-identifier: the Learning container id that is actually created",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/components/routes.ts",
     "text": "\"openbot:personal-defaults\"",
     "reason": "persisted-identifier: granted_by marker stored on grants",
@@ -203,20 +189,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/config.ts",
-    "text": "CopilotKit Intelligence is optional, and is half configured",
-    "reason": "external-name: names the third-party service whose settings are half given",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/config.ts",
-    "text": "creates the openbot Learning container",
-    "reason": "persisted-identifier: names the Learning container id the operator must create",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/audit-retention.ts",
     "text": "openbot.audit_retention_days",
     "reason": "persisted-identifier: Postgres setting the RLS/retention SQL reads",
@@ -224,45 +196,10 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/app.ts",
-    "text": "没有接入 CopilotKit Intelligence",
-    "reason": "external-name: admin-only API reply naming the third-party service to sign up for",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/request-actor.ts",
-    "text": "A CopilotKit run requires",
-    "reason": "external-name: guard error naming the third-party runtime that asked; request-actor.test.ts asserts the sentence",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/db/apply-migrations.ts",
     "text": "\"openbot:apply-migrations\"",
     "reason": "persisted-identifier: advisory lock key",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/model-endpoint.ts",
-    "text": "\"openbot-learning\"",
-    "reason": "persisted-identifier: internal client id of the Learning model endpoint",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/remote.ts",
-    "text": "\"openbot:learned-skills\"",
-    "reason": "persisted-identifier: catalogue id stored in Intelligence",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/remote.ts",
-    "text": "\"OpenBot learned skills\"",
-    "reason": "parsed-exact-text: context heading copilot.ts and the agents match verbatim",
-    "category": "parsed-exact-text",
     "plan": "keep"
   },
   {
@@ -371,132 +308,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "api.intelligence.copilotkit.ai",
-    "reason": "external-name: the third-party Intelligence API host",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "\"x-copilotkit-ei-service-token\"",
-    "reason": "persisted-identifier: header the third-party Intelligence API reads",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "id: \"openbot\",",
-    "reason": "persisted-identifier: Learning container id already created in Intelligence projects",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "CopilotKit returned an invalid setup response",
-    "reason": "external-name: names the vendor whose API answered",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "copilotkit-auth-nodejs",
-    "reason": "external-name: the vendor CLI's own config path",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "Learning container with ID \"openbot\"",
-    "reason": "persisted-identifier: the container id an admin must create",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "sign in to CopilotKit in the browser it opens",
-    "reason": "external-name: the vendor CLI's sign-in an operator must do",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "only on a CopilotKit local evaluation install",
-    "reason": "external-name: names the vendor's install type",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": ".copilotkit/project.json",
-    "reason": "external-name: the vendor CLI's project file",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "The CopilotKit CLI's selected project",
-    "reason": "external-name: names the vendor CLI",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "no CopilotKit CLI login is here",
-    "reason": "external-name: names the vendor CLI",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "this CopilotKit CLI login can see",
-    "reason": "external-name: names the vendor CLI",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "\"openbot-learning-\"",
-    "reason": "persisted-identifier: temp directory prefix",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "the openbot Learning container with the configured runtime key",
-    "reason": "persisted-identifier: names the container id",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "The openbot container exists",
-    "reason": "persisted-identifier: names the container id",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "Created an openbot container",
-    "reason": "persisted-identifier: names the container id",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "Automatic Learning: no credential here could create the openbot container",
-    "reason": "persisted-identifier: names the Learning container id",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "Automatic Learning: the openbot container is",
-    "reason": "persisted-identifier: names the Learning container id",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
     "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
     "reason": "persisted-identifier: old sidecar name the cleanup looks for on upgraded machines",
@@ -522,13 +333,6 @@
     "text": "\"openbotmobile://\"",
     "reason": "persisted-identifier: legacy mobile URL scheme the server still accepts for sign-in return (dual-accept with xiongbao: //)",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/learning/ensure-container.ts",
-    "text": "copilotkit@latest",
-    "reason": "external-name: the vendor CLI's npm package an operator runs",
-    "category": "third-party-name",
     "plan": "keep"
   },
   {
@@ -637,20 +441,6 @@
     "plan": "keep"
   },
   {
-    "file": "extension/src/background/network/index.ts",
-    "text": "OPENBOT_AGENT_RUN",
-    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit agent route",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "extension/src/background/network/index.ts",
-    "text": "OPENBOT_RUNTIME_INFO",
-    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit runtime route",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "extension/src/background/connection.ts",
     "text": "\"openbot-browser\"",
     "reason": "persisted-identifier: stored connection `via` value, written by earlier versions and read back",
@@ -676,34 +466,6 @@
     "text": "Could not connect to OpenBot's back end",
     "reason": "parsed-exact-text: matches the gateway's own error text verbatim to choose retry over hold; rewording stops the match",
     "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/intelligence-entitlement-check.ts",
-    "text": "COPILOTKIT_LICENSE_TOKEN",
-    "reason": "external-name: the third party's own variable, named in boot-time advice",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/setup/checklist.ts",
-    "text": "COPILOTKIT_LICENSE_TOKEN",
-    "reason": "external-name: the third party's own variable, named in setup advice",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/index.ts",
-    "text": "COPILOTKIT_OPENAI_API",
-    "reason": "external-name: the runtime's own switch, named in a start-up message",
-    "category": "third-party-name",
-    "plan": "keep"
-  },
-  {
-    "file": "docker/delivery.env.example",
-    "text": "CopilotKit",
-    "reason": "external-name: names the third-party product whose licence and cloud the optional Intelligence settings need",
-    "category": "third-party-name",
     "plan": "keep"
   },
   {
@@ -742,14 +504,7 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/learning/remote.ts",
-    "text": "\"OPENBOT_LEARNED_SKILLS_ERROR\"",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "toolkit/src/copilotkit/agents.ts",
+    "file": "toolkit/src/runtime/agents.ts",
     "text": "\"OPENBOT_TOOL_LIMIT_EXCEEDED\"",
     "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",

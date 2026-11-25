@@ -1,5 +1,5 @@
 <!--
-  The pattern behind empty states: CopilotKit's square-dot matrix, one 108px tile of 5px squares on a
+  The pattern behind empty states: a square-dot matrix, one 108px tile of 5px squares on a
   9px pitch, each at its own opacity. Used as a mask, so only each shape's opacity matters; the colour
   is the empty-pattern-color token in theme.css. Replace this file, or point the empty-pattern token
   at another, to change the pattern. Any tile that repeats works.

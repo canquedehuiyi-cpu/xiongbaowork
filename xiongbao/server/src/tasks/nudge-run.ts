@@ -166,7 +166,6 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
           source: `task-nudge:${taskId}`,
           taskId,
           initiator: { kind: "routine", id: `task-nudge:${taskId}` },
-          telemetry: { trigger: "routine", rootTaskId: `task-nudge:${taskId}` },
           messagePrefix: "task-nudge",
         },
       );

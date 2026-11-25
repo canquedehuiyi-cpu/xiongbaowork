@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { Prompt } from "../src/copilotkit/last-step";
+import type { Prompt } from "../src/runtime/last-step";
 import {
   FOLD_KEEP_STEPS,
   FOLDED_PREFIX,
@@ -7,7 +7,7 @@ import {
   foldCallsOn,
   foldEarlyResults,
   foldedSummary,
-} from "../src/copilotkit/turn-folding";
+} from "../src/runtime/turn-folding";
 
 /*
  * token 第五轮：折叠「怎么折」。摘要更短（只留工具、字数、退出码、头尾各一句、路径），

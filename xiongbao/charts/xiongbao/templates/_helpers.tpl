@@ -175,50 +175,6 @@ name it. Nothing else in the chart consults it.
 {{- $cidr -}}
 {{- end -}}
 
-{{/*
-AWS Partner Revenue Measurement: the tag that credits CopilotKit for the AWS resources this chart
-has a controller create, folded into the operator's own tag annotation. Called with the annotations
-map the operator gave, the annotation that carries tags, and the values path it came from.
-
-The key is CopilotKit's Partner Central account and the value its product code, the same pair the
-bundled Intelligence puts on its own Ingress. Constants rather than values, so every install carries
-them and nothing turns them off. The account-suffixed key lets up to ten partners tag one resource
-independently.
-
-Only our own key can conflict. The operator's tags are kept in order with ours appended. Another
-partner's `aws-apn-id-<account>` key is kept, and so is a legacy `aws-apn-id` carrying another
-partner's value. A legacy `aws-apn-id` carrying our value is ours from before the suffixed key, and
-is dropped so the load balancer is not attributed twice. Our key with any other value is refused.
-*/}}
-{{- define "xiongbao.awsAttributionTags" -}}
-{{- $key := "aws-apn-id-058264219587" -}}
-{{- $value := "pc:avjdxr516uh0mgsqob730tzgy" -}}
-{{- $existing := index (.annotations | default dict) .annotation | default "" | toString -}}
-{{- $found := false -}}
-{{- $kept := list -}}
-{{- range $entry := splitList "," $existing -}}
-  {{- $parts := splitList "=" $entry -}}
-  {{- $entryKey := trim (first $parts) -}}
-  {{- $entryValue := ternary (trim (last $parts)) "" (eq (len $parts) 2) -}}
-  {{- if eq $entryKey $key -}}
-    {{- if ne $entryValue $value -}}
-      {{- fail (printf "%s %s sets %s to a value other than %s; remove that entry" $.path $.annotation $key $value) -}}
-    {{- end -}}
-    {{- if not $found -}}
-      {{- $kept = append $kept $entry -}}
-    {{- end -}}
-    {{- $found = true -}}
-  {{- else if and (eq $entryKey "aws-apn-id") (eq $entryValue $value) -}}
-  {{- else if ne (trim $entry) "" -}}
-    {{- $kept = append $kept $entry -}}
-  {{- end -}}
-{{- end -}}
-{{- if not $found -}}
-  {{- $kept = append $kept (printf "%s=%s" $key $value) -}}
-{{- end -}}
-{{- join "," $kept -}}
-{{- end -}}
-
 {{- define "xiongbao.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}
 {{- default (include "xiongbao.fullname" .) .Values.serviceAccount.name -}}
@@ -683,21 +639,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   value: {{ $maxDepth | quote }}
 - name: BOT_HANDOFF_MAX_PER_RUN
   value: {{ $maxPerRun | quote }}
-{{- $learning := .Values.config.learning | default dict }}
-{{- with $learning.containerId }}
-- name: CPK_INTELLIGENCE_LEARNING_CONTAINER_ID
-  value: {{ . | quote }}
-{{- end }}
-{{- with $learning.revision }}
-- name: CPK_INTELLIGENCE_SKILLS_REVISION
-  value: {{ . | quote }}
-{{- end }}
-{{- /* Absent, as it is under `--reuse-values`, means on: only an explicit false is written. */}}
-{{- if eq (toString $learning.autoAssign) "false" }}
-- name: OPENBOT_LEARNING_AUTO_ASSIGN
-  value: "false"
-{{- end }}
-{{- /* Absent, as under `--reuse-values`, means on, like autoAssign: only an explicit false is written. */}}
+{{- /* Absent, as under `--reuse-values`, means on: only an explicit false is written. */}}
 {{- $memory := .Values.config.memory | default dict }}
 {{- if eq (toString $memory.sourceDefaults) "false" }}
 - name: OPENBOT_MEMORY_SOURCE_DEFAULTS
@@ -708,25 +650,10 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   value: "false"
 {{- end }}
 {{- /*
-  CopilotKit Intelligence is OPTIONAL in this fork (R0): every variable below is written only when it
-  was configured, or when this chart installs Intelligence itself (`intelligence.enabled: true`, off
-  by default), and the server runs on its own PostgreSQL without any of them.
+  The Recorder's optional back end (Task 14b removes it with the Recorder): written only when it was
+  configured, and the server runs on its own PostgreSQL without any of them.
 */}}
 {{- $intelligence := .Values.config.intelligence | default dict }}
-{{- if include "xiongbao.intelligenceBundled" . }}
-- name: INTELLIGENCE_API_URL
-  value: {{ include "xiongbao.intelligenceApiUrl" . | quote }}
-- name: INTELLIGENCE_GATEWAY_WS_URL
-  value: {{ include "xiongbao.intelligenceGatewayWsUrl" . | quote }}
-{{ include "xiongbao.intelligenceApiKeyEnv" . }}
-{{- /*
-  The bundled Intelligence has no address a browser can reach, only Services in this cluster, and
-  the browser opens the gateway's socket itself. So the server carries it, on its own address, and
-  tells the browser that address (server/src/intelligence-gateway-proxy.ts).
-*/}}
-- name: INTELLIGENCE_GATEWAY_PROXY
-  value: "on"
-{{- else }}
 {{- with $intelligence.apiUrl }}
 - name: INTELLIGENCE_API_URL
   value: {{ . | quote }}
@@ -743,20 +670,6 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
       name: {{ include "xiongbao.secretName" . }}
       key: intelligence-api-key
       {{- if eq $intelligenceKey "unknown" }}
-      optional: true
-      {{- end }}
-{{- end }}
-{{- end }}
-{{- /* From a store or an existingSecret too: emitted for the literal alone, a synced token reached
-     the Secret and never the pod, and a self-hosted Intelligence ran unlicensed. */}}
-{{- $license := include "xiongbao.secretKeySource" (dict "root" . "key" "license-token" "literal" .Values.secrets.licenseToken) }}
-{{- if $license }}
-- name: COPILOTKIT_LICENSE_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "xiongbao.secretName" . }}
-      key: license-token
-      {{- if eq $license "unknown" }}
       optional: true
       {{- end }}
 {{- end }}
@@ -1217,32 +1130,6 @@ than anything that names the cause.
 {{- end -}}
 
 {{- /*
-  The operator's credential for creating the xiongbao Learning container (values: config.learning.setup).
-
-  Read through `default dict` at every level, because `setup` is a key this chart did not have before
-  and `helm upgrade --reuse-values` hands back the previous release's values without it.
-*/}}
-{{- define "xiongbao.learningSetup" -}}
-{{- $learning := .Values.config.learning | default dict -}}
-{{- toYaml ($learning.setup | default dict) -}}
-{{- end -}}
-
-{{- /* INTELLIGENCE_SERVICE_TOKEN and INTELLIGENCE_PROJECT_ID, when the operator named a token Secret. */}}
-{{- define "xiongbao.learningServiceTokenEnv" -}}
-{{- $setup := include "xiongbao.learningSetup" . | fromYaml -}}
-{{- $token := $setup.serviceTokenSecret | default dict -}}
-{{- if $token.name }}
-- name: INTELLIGENCE_SERVICE_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: {{ $token.name | quote }}
-      key: {{ $token.key | default "token" | quote }}
-- name: INTELLIGENCE_PROJECT_ID
-  value: {{ $setup.projectId | toString | quote }}
-{{- end }}
-{{- end -}}
-
-{{- /*
   A number from values written out in digits, which is how the computer reads its settings.
 
   A whole number in a values file arrives as a float, because Helm reads values through JSON, and a
@@ -1257,105 +1144,6 @@ than anything that names the cause.
 {{- end -}}
 
 {{/*
-Whether this release installs Intelligence itself (`intelligence.enabled`), answered the way Helm
-answers it for the dependency: only a boolean false turns it off.
-
-With no `intelligence.enabled` at all, which is what `helm upgrade --reuse-values` from a chart
-before it leaves, Helm turns the dependency ON (and `.Values.intelligence` still holds that chart's
-own defaults, so the map is never simply missing). That release is refused by name in
-validation.yaml, and this answers false for it so nothing else fails first with a message about a
-value nobody set.
-*/}}
-{{- define "xiongbao.intelligenceBundled" -}}
-{{- $values := .Values.intelligence | default dict -}}
-{{- if hasKey $values "enabled" -}}
-{{- if not (and (kindIs "bool" $values.enabled) (not $values.enabled)) -}}true{{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-A name the bundled Intelligence chart gives one of its objects, worked out the way that chart and its
-Bitnami subcharts work it out, so the addresses here are the Services there. Called with
-(dict "root" . "values" <that chart's values> "chart" <its chart name>).
-*/}}
-{{- define "xiongbao.subchartFullname" -}}
-{{- $values := .values | default dict -}}
-{{- if $values.fullnameOverride -}}
-{{- $values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
-{{- else -}}
-{{- $name := default .chart $values.nameOverride -}}
-{{- if contains $name .root.Release.Name -}}
-{{- .root.Release.Name | trunc 63 | trimSuffix "-" -}}
-{{- else -}}
-{{- printf "%s-%s" .root.Release.Name $name | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "xiongbao.intelligenceFullname" -}}
-{{- include "xiongbao.subchartFullname" (dict "root" . "values" .Values.intelligence "chart" "intelligence") -}}
-{{- end -}}
-
-{{/* Intelligence's API and gateway, as the XiongBao server reaches them inside the cluster. */}}
-{{- define "xiongbao.intelligenceApiUrl" -}}
-{{- if include "xiongbao.intelligenceBundled" . -}}
-{{- $appApi := (.Values.intelligence | default dict).appApi | default dict -}}
-{{- $port := (($appApi.service | default dict).port | default 4201) -}}
-{{- printf "http://%s-app-api:%v" (include "xiongbao.intelligenceFullname" .) $port -}}
-{{- else -}}
-{{- .Values.config.intelligence.apiUrl -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "xiongbao.intelligenceGatewayWsUrl" -}}
-{{- if include "xiongbao.intelligenceBundled" . -}}
-{{- $gateway := (.Values.intelligence | default dict).realtimeGateway | default dict -}}
-{{- $port := (($gateway.service | default dict).port | default 4401) -}}
-{{- printf "ws://%s-realtime-gateway:%v" (include "xiongbao.intelligenceFullname" .) $port -}}
-{{- else -}}
-{{- .Values.config.intelligence.gatewayWsUrl -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Where the bundled Intelligence's runtime key lives, as YAML {name, key}: the first
-`intelligence.bootstrap.projects` entry with an `apiKey`. This chart generates the key into that
-Secret (templates/intelligence/secrets.yaml), Intelligence's bootstrap Job stores its hash, and the
-server reads it, so all three name one Secret. Empty when no project carries a key, which
-validation.yaml refuses.
-*/}}
-{{- define "xiongbao.intelligenceKeyRef" -}}
-{{- $values := .Values.intelligence | default dict -}}
-{{- $ref := dict -}}
-{{- range (($values.bootstrap | default dict).projects | default list) -}}
-{{- $apiKey := .apiKey | default dict -}}
-{{- if and (not $ref.name) $apiKey.existingSecret -}}
-{{- $ref = dict "name" $apiKey.existingSecret "key" ($apiKey.key | default "api-key") -}}
-{{- end -}}
-{{- end -}}
-{{- toYaml $ref -}}
-{{- end -}}
-
-{{/*
-INTELLIGENCE_API_KEY, from wherever it is: the bundled Intelligence's project key Secret (see
-`xiongbao.intelligenceKeyRef`), or `secrets.intelligenceApiKey` in this chart's Secret for one that
-already runs.
-*/}}
-{{- define "xiongbao.intelligenceApiKeyEnv" -}}
-{{- $ref := include "xiongbao.intelligenceKeyRef" . | fromYaml -}}
-- name: INTELLIGENCE_API_KEY
-  valueFrom:
-    secretKeyRef:
-      {{- if include "xiongbao.intelligenceBundled" . }}
-      name: {{ $ref.name }}
-      key: {{ $ref.key }}
-      {{- else }}
-      name: {{ include "xiongbao.secretName" . }}
-      key: intelligence-api-key
-      {{- end }}
-{{- end -}}
-
-{{/*
 A generated credential that stays what it was.
 
 Read back from the Secret already in the cluster when there is one, so an upgrade does not hand
@@ -1366,7 +1154,7 @@ Called with (dict "root" . "secret" <name> "key" <key> "generate" <a fresh value
 {{- /*
   A hash of every secret an operator gives this chart, for the pods that read them to roll on.
 
-  A changed Secret does not change a pod, so without this an upgrade with a new model key or licence
+  A changed Secret does not change a pod, so without this an upgrade with a new model key
   left every replica on the old one: the release looked upgraded and every Bot turn kept failing on
   the key it was meant to replace. The values given are hashed rather than the rendered Secret,
   because a generated value is drawn afresh on every render until `lookup` finds it kept, and hashing
@@ -1379,7 +1167,7 @@ Called with (dict "root" . "secret" <name> "key" <key> "generate" <a fresh value
 {{- end -}}
 
 {{- /*
-  The same, for the computer: only what it reads, which is its token. A model key or licence change
+  The same, for the computer: only what it reads, which is its token. A model key change
   must not restart it, because that drops every browser and shell session on it.
 */}}
 {{- define "xiongbao.computerTokenChecksum" -}}

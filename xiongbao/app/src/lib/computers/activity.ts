@@ -355,7 +355,7 @@ const KINDS: Record<string, ComputerActivity["kind"]> = {
   computer_list_files: "list_files",
 };
 
-/** CopilotKit's stand-in for a frontend tool's answer that has not been given yet. */
+/** The agent SDK's stand-in for a frontend tool's answer that has not been given yet. */
 const FORWARDED_TO_CLIENT = "Forwarded to client";
 
 /**
@@ -365,7 +365,7 @@ const FORWARDED_TO_CLIENT = "Forwarded to client";
  * Three shapes reach a computer call's result. The computer's own answer, as JSON: from the
  * browser's handler, or the gate's `{ result }`, or the server's continuation after a decision, which
  * stores the same object. A placeholder while the answer is on its way: `{ waiting: true }`, which
- * the browser's handler returns when the gate holds the step for a person, and CopilotKit's own. And
+ * the browser's handler returns when the gate holds the step for a person, and the agent SDK's own. And
  * a sentence instead of an answer: the server's, for a step the Bot did not carry out (declined,
  * refused when it was checked again, its outcome unknown, or done by the person themselves), or the
  * SDK's `Error: <message>` for a handler that threw. A sentence is drawn as not done, with the
@@ -709,17 +709,17 @@ export function useConversationActivity(
   computerId: string,
   messages: readonly Message[],
 ): void {
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   useEffect(
     () =>
-      copilotkit.subscribe({
+      copilotCore.subscribe({
         onToolExecutionStart: ({ toolCallId, toolName }) => {
           // A card's handler starts when it is drawn to be answered, here.
           if (KINDS[toolName] || toolName === ASK_APPROVAL)
             noteWatched(toolCallId);
         },
       }).unsubscribe,
-    [copilotkit],
+    [copilotCore],
   );
   useEffect(() => {
     recordActivity(computerId, conversationActivity(messages));

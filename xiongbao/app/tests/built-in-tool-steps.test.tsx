@@ -11,9 +11,9 @@ import { settleReactWork } from "./settle-react-work";
 /**
  * XiongBao's own tools read as words in the conversation, never as their identifiers.
  *
- * Seen on a live install: the step lines of one conversation read `copilotkit_load_skill`,
+ * Seen on a live install: the step lines of one conversation read tool identifiers such as
  * `list_bots` and `remember_personal_fact`, between lines that read "Searched the web" and "Asked
- * Knowledge". None of the three has a component of its own, so each is drawn as a plain line, and a
+ * Knowledge". None of them has a component of its own, so each is drawn as a plain line, and a
  * plain line named any tool missing from the label table by its identifier.
  */
 
@@ -104,15 +104,15 @@ test("the tools a live conversation showed by identifier read as what they did",
       role: "user",
       content: "Who else here could help with invoices?",
     },
-    ...step("copilotkit_load_skill", '{"instructions":"..."}'),
+    ...step("list_skills", '{"skills":[]}'),
     ...step("list_bots", "Finance Bot: yours"),
     ...step("remember_personal_fact", '{"id":"m1"}'),
   ]);
-  expect(await view.findByText("使用了技能")).toBeTruthy();
+  expect(await view.findByText("查看了已有技能")).toBeTruthy();
   expect(await view.findByText("查看了已有员工")).toBeTruthy();
   expect(await view.findByText("保存了记忆")).toBeTruthy();
   for (const identifier of [
-    "copilotkit_load_skill",
+    "list_skills",
     "list_bots",
     "remember_personal_fact",
   ])

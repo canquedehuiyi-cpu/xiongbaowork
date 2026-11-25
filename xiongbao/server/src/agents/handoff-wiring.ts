@@ -18,11 +18,6 @@ import {
 } from "../db/schema";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
-import type { ProductTelemetry } from "../telemetry/product";
-import {
-  productHandoffAnalyticsContext,
-  productHandoffInput,
-} from "../telemetry/product-boundaries";
 import { repeatAfterEach } from "../work/loop";
 import {
   createWorkQueue,
@@ -108,7 +103,6 @@ export function botNamesFrom(database: Database) {
  * the mounted runtime runs a person's turns through (the local thread store, R0).
  */
 export async function startHandoffDelivery(deps: {
-  productTelemetry?: ProductTelemetry;
   config: DeploymentConfig;
   database: Database;
   bootAuditStore: AuditStore;
@@ -134,7 +128,6 @@ export async function startHandoffDelivery(deps: {
     groupConversations,
     channelStore,
   } = deps;
-  const productTelemetry = deps.productTelemetry;
   const runner = createHandoffRunner({
     queue: createWorkQueue(database),
     owner: workOwner("handoff"),
@@ -149,25 +142,6 @@ export async function startHandoffDelivery(deps: {
     onSettled: (work) => channelStore.signalWork(work.threadId),
     answerGone: answerGoneFrom(database),
     delivery: createHandoffDelivery({
-      ...(productTelemetry
-        ? {
-            prepareRunInput: (input, work) =>
-              productHandoffInput(
-                productTelemetry,
-                input,
-                work.actorId,
-                work.runId,
-              ),
-            onKnownStop: productTelemetry.stopKnown,
-            analyticsContextFor: (run, work) =>
-              productHandoffAnalyticsContext(
-                productTelemetry,
-                run,
-                work.actorId,
-                work.runId,
-              ),
-          }
-        : {}),
       admission: serverTurnAdmission,
       // The hop is board work under the run that asked for it (ticket 020)...
       ...(deps.board ? { board: deps.board } : {}),
@@ -193,8 +167,6 @@ export async function startHandoffDelivery(deps: {
       },
       history: copilotRuntime.history,
       lock: copilotRuntime.threadLock,
-      // M3: upstream passes `recordStopFor: copilotRuntime.stopRecorder`, which records a stop on
-      // Intelligence's run. This runtime keeps its threads in the local runner (R0) and has none.
       /*
        * A scratch thread of the addressed Bot's own, one per hop.
        *

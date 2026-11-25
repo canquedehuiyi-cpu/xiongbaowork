@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { createAuditStore } from "../src/audit";
+import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
 import { personalMemories } from "../src/db/schema/memory";
-import { createAuditStore } from "../src/audit";
-import { createCredentialStore } from "../src/credentials";
 import { createMemoryExtractor } from "../src/memory/extract";
 import { createMemoryIngestion } from "../src/memory/ingestion";
-import { createPluginStore } from "../src/plugins/store";
 import { createMemoryStore } from "../src/memory/store";
+import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 

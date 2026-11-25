@@ -3,8 +3,7 @@
 ## Setup
 
 Install Docker, [Bun](https://bun.sh) 1.4+ (the tests need it), `lsof`, `openssl`, and `curl`.
-`scripts/start.sh` uses `openssl` to mint the generated secrets on a first run; connecting the optional
-Intelligence below also needs `npx` (Node).
+`scripts/start.sh` uses `openssl` to mint the generated secrets on a first run.
 
 ```sh
 cp .env.example .env
@@ -14,37 +13,6 @@ bun install
 Nothing is provisioned first. Conversations, memory and skills live in this deployment's own
 PostgreSQL, so there is no platform key to mint and no container to create. Add `OPENAI_API_KEY` to
 `.env` — that is what the shipped Bots answer with.
-
-CopilotKit Intelligence is optional (it only adds Admin → 自动学习's published skills). To connect
-one, provision it after `.env` exists:
-
-```sh
-npx --yes copilotkit@latest login
-npx --yes copilotkit@latest project select
-bun scripts/setup-learning.ts
-```
-
-For fresh managed setup, the helper provisions the selected project's key and creates or reuses
-its `openbot` Learning container. It writes `INTELLIGENCE_API_KEY` and
-`CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` to `.env` only after verifying the container. Existing
-keys and custom targets are preserved. For fresh self-hosted setup, set `INTELLIGENCE_API_URL`
-to the deployment's HTTPS API origin and run only `bun scripts/setup-learning.ts`. Install
-Chrome or Edge first: the helper opens an isolated browser window for the deployment's usual
-sign-in, lets you choose an accessible project, and creates or reuses `openbot` before minting
-its runtime key. Local development may use a loopback HTTP origin. Existing key-only setups
-use authenticated Intelligence administration to create a container and assign it in XiongBao Work Admin.
-There is no managed licence step.
-
-The same CLI sign-in also prepares Composio on the first `bash scripts/start.sh`;
-`bun run setup:composio` runs that step alone, independently of Learning. A failure
-does not stop the start: XiongBao Work runs with apps unavailable until a retry succeeds. A supplied
-`COMPOSIO_API_KEY` is preserved.
-The helper saves a stable installation UUID privately before any provisioning request,
-then the CLI saves this installation's Composio project key in `.env`. Keep
-`.env.openbot-installation-id` with the installation when restarting or retrying;
-new installations generate their own file. A compatible published CLI and enabled hosted
-provisioning service must be available before adopting this startup flow. See
-[automatic project setup](plugins/composio.md#automatic-project-setup).
 
 Start the stack:
 
@@ -78,7 +46,7 @@ Ubuntu 26.04.
    ```
 
 4. Clone into your Ubuntu home directory, for example `~/xiongbaowork`, and follow [Setup](#setup) from
-   there. `npx --yes copilotkit@latest login` opens the sign-in page in your Windows browser.
+   there.
 
 5. Keep an Ubuntu terminal open while you use XiongBao Work. WSL stops Ubuntu shortly after its last
    terminal closes, and the app, the API server and Docker stop with it.

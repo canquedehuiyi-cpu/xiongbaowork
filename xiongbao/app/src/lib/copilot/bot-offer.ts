@@ -248,19 +248,19 @@ export function offerItsOwnTools(
  * tools.
  */
 export function BotOffers(): null {
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   const queries = useQueryClient();
   useEffect(() => {
     const give = (agent: AbstractAgent) =>
       offerItsOwnTools(agent, botOfAgent(agent), queries);
-    for (const agent of Object.values(copilotkit.agents)) give(agent);
-    const subscription = copilotkit.subscribe({
+    for (const agent of Object.values(copilotCore.agents)) give(agent);
+    const subscription = copilotCore.subscribe({
       onAgentsChanged: ({ agents }) => {
         for (const agent of Object.values(agents)) give(agent);
       },
       onAgentRunStarted: ({ agent }) => give(agent),
     });
     return () => subscription.unsubscribe();
-  }, [copilotkit, queries]);
+  }, [copilotCore, queries]);
   return null;
 }

@@ -20,11 +20,9 @@ import { createComputerProvider } from "../src/computer/provider";
 import { loadConfig } from "../src/config";
 import type { CredentialStatus } from "../src/credentials";
 import type { ModelCheckOutcome } from "../src/model-availability-check";
-import type { RuntimeEntitlementResponse } from "../src/self-host-banner";
 import {
   ANSWER_KEPT_MS,
   createSetupSources,
-  intelligenceFact,
   modelKeyOf,
   modelVerdict,
   RECHECK_INTERVAL_MS,
@@ -52,7 +50,6 @@ import { testEnvironment } from "./support/environment";
 const PRODUCT = "XiongBao";
 
 const READY: SetupFacts = {
-  intelligence: { state: "ready" },
   model: {
     provider: "openai",
     source: "environment",
@@ -66,7 +63,6 @@ const READY: SetupFacts = {
 };
 
 const UNSET: SetupFacts = {
-  intelligence: { state: "ready" },
   model: {
     provider: "openai",
     source: null,
@@ -76,25 +72,6 @@ const UNSET: SetupFacts = {
   computer: false,
   apps: { configured: false },
   chat: false,
-};
-
-/** An entitlement answer Intelligence gives a self-hosted deployment with no licence. */
-const UNLICENSED: RuntimeEntitlementResponse = {
-  status: "misconfigured",
-  error: {
-    code: "RUNTIME_ENTITLEMENTS_SELF_HOSTED_MISCONFIGURED",
-    message: "No licence.",
-    retryable: false,
-  },
-};
-const ENTITLED: RuntimeEntitlementResponse = {
-  status: "ready",
-  entitlement: {
-    active: true,
-    source: "selfHostedDeploymentLicense",
-    features: {},
-    limits: {},
-  },
 };
 
 const row = (rows: SetupRow[], id: SetupRow["id"]) => {
@@ -108,7 +85,6 @@ describe("setup rows", () => {
     const rows = setupRows(READY, { productName: PRODUCT, audience: "admin" });
 
     expect(rows.map((candidate) => candidate.id)).toEqual([
-      "intelligence",
       "model",
       "computer",
       "apps",
@@ -121,11 +97,11 @@ describe("setup rows", () => {
     }
   });
 
-  test("only Intelligence and the model are required", () => {
+  test("only the model is required", () => {
     const rows = setupRows(READY, { productName: PRODUCT, audience: "admin" });
     expect(
       rows.filter((candidate) => candidate.required).map((c) => c.id),
-    ).toEqual(["intelligence", "model"]);
+    ).toEqual(["model"]);
   });
 
   test("an admin is told what each gap costs and how to close it", () => {
@@ -241,53 +217,6 @@ describe("setup rows", () => {
       detail: "It's set up but hasn't been checked yet.",
       fix: null,
     });
-  });
-
-  test("Intelligence that did not confirm the entitlement needs setup, with its own advice", () => {
-    const refused = intelligenceFact(UNLICENSED);
-    expect(refused.state).toBe("refused");
-    const admin = setupRows(
-      { ...READY, intelligence: refused },
-      { productName: PRODUCT, audience: "admin" },
-    );
-    expect(row(admin, "intelligence")).toMatchObject({
-      status: "needs_setup",
-      required: true,
-      fix: null,
-    });
-    expect(row(admin, "intelligence").detail).toBe(
-      "The back end has no valid licence. Set COPILOTKIT_LICENSE_TOKEN on the back end's own deployment.",
-    );
-    // The boot log's Helm keys stay in the log.
-    expect(row(admin, "intelligence").detail).not.toContain("appApi");
-
-    const member = setupRows(
-      { ...READY, intelligence: refused },
-      { productName: PRODUCT, audience: "member" },
-    );
-    expect(row(member, "intelligence").detail).toBe("Your admin sets this up.");
-    expect(JSON.stringify(member)).not.toContain("COPILOTKIT_LICENSE_TOKEN");
-  });
-
-  test("Intelligence that could not be reached needs setup, and names its variables to an admin", () => {
-    const rows = setupRows(
-      { ...READY, intelligence: intelligenceFact(new Error("timeout")) },
-      { productName: PRODUCT, audience: "admin" },
-    );
-    expect(row(rows, "intelligence")).toMatchObject({
-      status: "needs_setup",
-      detail:
-        "XiongBao couldn't reach its back end. Check its address and key.",
-      fix: {
-        kind: "env",
-        names: [
-          "INTELLIGENCE_API_URL",
-          "INTELLIGENCE_GATEWAY_WS_URL",
-          "INTELLIGENCE_API_KEY",
-        ],
-      },
-    });
-    expect(intelligenceFact(ENTITLED)).toEqual({ state: "ready" });
   });
 });
 
@@ -445,7 +374,6 @@ describe("where the model key comes from", () => {
 /** Every secret this server reads from its environment, each set to a value no row may contain. */
 const SENTINELS = {
   INTELLIGENCE_API_KEY: "sentinel-intelligence-key-0f3a",
-  COPILOTKIT_LICENSE_TOKEN: "sentinel-licence-token-91bc",
   OPENAI_API_KEY: "sentinel-openai-key-7d21",
   ANTHROPIC_API_KEY: "sentinel-anthropic-key-4e88",
   COMPOSIO_API_KEY: "sentinel-composio-key-2b6f",
@@ -483,7 +411,7 @@ const PEOPLE = {
 
 /**
  * The real route, mounted by `createApp`, with sources built from a real configuration. Only the
- * stores, Intelligence and the model provider are stand-ins.
+ * stores, the computers and the model provider are stand-ins.
  */
 function appWith(input: {
   environment: Record<string, string | undefined>;
@@ -492,7 +420,6 @@ function appWith(input: {
   modelCheckAtBoot?: ModelCheckOutcome;
   /** What asking the provider again hears; counted in `checks`. */
   modelCheck?: () => ModelCheckOutcome;
-  entitlements?: () => Promise<RuntimeEntitlementResponse>;
   computer?: boolean;
   computerCheck?: () => Promise<"ready" | "needs_setup" | "not_checked">;
   apps?: boolean;
@@ -529,7 +456,6 @@ function appWith(input: {
             }),
           }
         : {}),
-      entitlements: input.entitlements ?? (async () => ENTITLED),
       computer: input.computer ?? Boolean(config.computer),
       computerCheck: input.computerCheck ?? (async () => "ready"),
       apps: { configured: input.apps ?? false },
@@ -623,33 +549,6 @@ describe("GET /api/setup", () => {
       apps: "env",
       chat: "env",
     });
-    // Intelligence answered ready and active, so that row is the one that holds.
-    expect(row(checklist.rows, "intelligence").ready).toBe(true);
-  });
-
-  test("Intelligence is read from its entitlement answer, not from its address being set", async () => {
-    const unlicensed = await checklistFrom(
-      appWith({
-        who: "admin",
-        environment: {},
-        entitlements: async () => UNLICENSED,
-      }),
-    );
-    expect(row(unlicensed.checklist.rows, "intelligence").status).toBe(
-      "needs_setup",
-    );
-
-    const down = await checklistFrom(
-      appWith({
-        who: "admin",
-        environment: {},
-        entitlements: () => Promise.reject(new Error("ECONNREFUSED")),
-      }),
-    );
-    expect(row(down.checklist.rows, "intelligence")).toMatchObject({
-      status: "needs_setup",
-      fix: { kind: "env" },
-    });
   });
 
   test("a key added since the boot check is not checked, and the next read has its answer", async () => {
@@ -701,24 +600,6 @@ describe("GET /api/setup", () => {
     expect(row(read.checklist.rows, "model").status).toBe("needs_setup");
   });
 
-  test("Check again asks Intelligence again too", async () => {
-    let answers = 0;
-    const app = appWith({
-      who: "admin",
-      environment: {},
-      entitlements: async () => {
-        answers += 1;
-        return answers === 1 ? UNLICENSED : ENTITLED;
-      },
-    });
-    const before = await checklistFrom(app);
-    expect(row(before.checklist.rows, "intelligence").status).toBe(
-      "needs_setup",
-    );
-    const after = await checklistFrom(app, "POST");
-    expect(row(after.checklist.rows, "intelligence").status).toBe("ready");
-  });
-
   test("Check again asks who is signed in", async () => {
     const app = appWith({ environment: {}, who: "member", signedIn: false });
     const response = await app.request(
@@ -758,7 +639,6 @@ describe("GET /api/setup", () => {
       appWith({
         who: "member",
         environment: { OPENAI_API_KEY: undefined },
-        entitlements: async () => UNLICENSED,
       }),
     );
     expect(checklist.audience).toBe("member");
@@ -785,7 +665,6 @@ describe("GET /api/setup", () => {
           ...environment,
           AGENT_COMPUTER_URL: "http://localhost:4100",
         },
-        entitlements: async () => UNLICENSED,
         credentials: [
           {
             id: "credential-1",
@@ -817,34 +696,11 @@ describe("GET /api/setup", () => {
 
 /*
  * The answers that need another service are kept between reads, and a read asks again for any
- * that failed or are old. Without that, an Intelligence slower to start than XiongBao read red until
+ * that failed or are old. Without that, a key nobody could check at boot read "not checked" until
  * somebody pressed Check again, and a key refused days after boot still read Ready.
  */
 describe("answers a read asks again for", () => {
-  test("a failed answer is asked again, so the next read has the new one", async () => {
-    let asked = 0;
-    const app = appWith({
-      who: "admin",
-      environment: {},
-      entitlements: async () => {
-        asked += 1;
-        if (asked === 1) throw new Error("ECONNREFUSED");
-        return ENTITLED;
-      },
-    });
-    const first = await checklistFrom(app);
-    expect(row(first.checklist.rows, "intelligence").status).toBe(
-      "needs_setup",
-    );
-    await settled();
-    expect(asked).toBe(2);
-    const next = await checklistFrom(app);
-    expect(row(next.checklist.rows, "intelligence").status).toBe("ready");
-  });
-
   test("an answer older than a few minutes is asked again, so a later failure shows", async () => {
-    let refused = false;
-    let asked = 0;
     const app = appWith({
       who: "member",
       environment: { OPENAI_API_KEY: "sk-set" },
@@ -859,29 +715,20 @@ describe("answers a read asks again for", () => {
           fix: "replace it",
         },
       }),
-      entitlements: async () => {
-        asked += 1;
-        return refused ? UNLICENSED : ENTITLED;
-      },
     });
     try {
       const fresh = await checklistFrom(app);
       await settled();
-      expect(row(fresh.checklist.rows, "intelligence").ready).toBe(true);
       expect(row(fresh.checklist.rows, "model").ready).toBe(true);
       // Working answers inside the window are served as they are.
-      expect([asked, app.counts.checks]).toEqual([1, 0]);
+      expect(app.counts.checks).toBe(0);
 
-      refused = true;
       setSystemTime(new Date(Date.now() + ANSWER_KEPT_MS + 1));
       const stale = await checklistFrom(app);
-      expect(row(stale.checklist.rows, "intelligence").ready).toBe(true);
+      expect(row(stale.checklist.rows, "model").ready).toBe(true);
       await settled();
-      expect([asked, app.counts.checks]).toEqual([2, 1]);
+      expect(app.counts.checks).toBe(1);
       const next = await checklistFrom(app);
-      expect(row(next.checklist.rows, "intelligence").status).toBe(
-        "needs_setup",
-      );
       expect(row(next.checklist.rows, "model").status).toBe("needs_setup");
     } finally {
       setSystemTime();
@@ -889,12 +736,11 @@ describe("answers a read asks again for", () => {
   });
 
   test("reads inside the interval share one ask, whoever reads", async () => {
-    let asked = 0;
+    // A key nobody could ask the provider about: every read after the interval asks again.
     const admin = appWith({
       who: "admin",
-      environment: {},
-      entitlements: async () => {
-        asked += 1;
+      environment: { OPENAI_API_KEY: "sk-set" },
+      modelCheck: () => {
         throw new Error("ECONNREFUSED");
       },
     });
@@ -909,23 +755,17 @@ describe("answers a read asks again for", () => {
     await checklistFrom(member);
     await checklistFrom(admin);
     await settled();
-    // Once at boot, and once for every read in the interval after it.
-    expect(asked).toBe(2);
+    // Once for every read in the interval after boot.
+    expect(admin.counts.checks).toBe(1);
   });
 
   test("a read never waits on an ask in flight", async () => {
     const slow = Promise.withResolvers<"ready">();
     let asked = 0;
-    let entitlements = 0;
     const app = appWith({
       who: "admin",
-      environment: {},
-      // Intelligence not answering at boot is what makes the first read ask again.
-      entitlements: async () => {
-        entitlements += 1;
-        if (entitlements === 1) throw new Error("ECONNREFUSED");
-        return ENTITLED;
-      },
+      // A key nobody has asked the provider about yet is what makes the first read ask again.
+      environment: { OPENAI_API_KEY: "sk-set" },
       computer: true,
       computerCheck: () => {
         asked += 1;
@@ -963,16 +803,17 @@ test("healthy sequential computer pushes keep their own deadlines in the checkli
   ];
   const requested: string[] = [];
   let listings = 0;
-  let entitlements = 0;
   jest.useFakeTimers();
   try {
     const app = appWith({
-      environment: {},
       who: "admin",
       computer: true,
-      entitlements: async () => {
-        if (++entitlements === 2) recheckStarted.resolve();
-        return ENTITLED;
+      // Check again asks the provider about the key too, and that is how the test knows it began.
+      environment: { OPENAI_API_KEY: "sk-set" },
+      modelCheckAtBoot: { kind: "available" },
+      modelCheck: () => {
+        recheckStarted.resolve();
+        return { kind: "available" };
       },
       computerCheck: createComputerCheck({
         provider: {
@@ -1248,11 +1089,10 @@ test("a configured computer with none running says it is set up, and sends no re
 /*
  * A definite refusal is not changed by asking again, so a read leaves it to Check again and to the
  * answer growing old. Otherwise every signed-in person's read, at most every ten seconds, started a
- * round at Intelligence, the provider and every running computer for an answer nobody could change.
+ * round at the provider and every running computer for an answer nobody could change.
  */
 describe("answers a read does not ask again for", () => {
-  test("a refused licence, a refused key and a refused policy wait for Check again", async () => {
-    let entitlements = 0;
+  test("a refused key and a refused policy wait for Check again", async () => {
     let computers = 0;
     const app = appWith({
       who: "member",
@@ -1267,10 +1107,6 @@ describe("answers a read does not ask again for", () => {
           fix: "replace it",
         },
       },
-      entitlements: async () => {
-        entitlements += 1;
-        return UNLICENSED;
-      },
       computer: true,
       computerCheck: async () => {
         computers += 1;
@@ -1280,9 +1116,6 @@ describe("answers a read does not ask again for", () => {
     try {
       for (let read = 0; read < 3; read += 1) {
         const answer = await checklistFrom(app);
-        expect(row(answer.checklist.rows, "intelligence").status).toBe(
-          "needs_setup",
-        );
         expect(row(answer.checklist.rows, "model").status).toBe("needs_setup");
         expect(row(answer.checklist.rows, "computer").status).toBe(
           "needs_setup",
@@ -1291,28 +1124,29 @@ describe("answers a read does not ask again for", () => {
         setSystemTime(new Date(Date.now() + RECHECK_INTERVAL_MS + 1));
       }
       // Boot's ask, and nothing a read started.
-      expect([entitlements, app.counts.checks, computers]).toEqual([1, 0, 1]);
+      expect([app.counts.checks, computers]).toEqual([0, 1]);
 
       // Check again still asks every one of them.
       await checklistFrom(app, "POST");
-      expect([entitlements, app.counts.checks, computers]).toEqual([2, 1, 2]);
+      expect([app.counts.checks, computers]).toEqual([1, 2]);
     } finally {
       setSystemTime();
     }
   });
 
   test("a slow round finishing after a later one leaves the later answer", async () => {
-    const slow = Promise.withResolvers<RuntimeEntitlementResponse>();
-    let entitlements = 0;
+    const slow = Promise.withResolvers<"ready" | "needs_setup">();
+    let computers = 0;
     const app = appWith({
       who: "admin",
       environment: {},
-      entitlements: () => {
-        entitlements += 1;
+      computer: true,
+      computerCheck: () => {
+        computers += 1;
         // Boot answers at once; the first recheck hangs; the second refuses.
-        if (entitlements === 1) return Promise.resolve(ENTITLED);
-        if (entitlements === 2) return slow.promise;
-        return Promise.resolve(UNLICENSED);
+        if (computers === 1) return Promise.resolve("ready");
+        if (computers === 2) return slow.promise;
+        return Promise.resolve("needs_setup");
       },
     });
     try {
@@ -1320,13 +1154,13 @@ describe("answers a read does not ask again for", () => {
       setSystemTime(new Date(Date.now() + RECHECK_INTERVAL_MS + 1));
       await app.setup.recheck();
       expect(
-        row((await checklistFrom(app)).checklist.rows, "intelligence").status,
+        row((await checklistFrom(app)).checklist.rows, "computer").status,
       ).toBe("needs_setup");
 
-      slow.resolve(ENTITLED);
+      slow.resolve("ready");
       await first;
       expect(
-        row((await checklistFrom(app)).checklist.rows, "intelligence").status,
+        row((await checklistFrom(app)).checklist.rows, "computer").status,
       ).toBe("needs_setup");
     } finally {
       setSystemTime();

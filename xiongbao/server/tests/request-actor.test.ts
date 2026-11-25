@@ -34,7 +34,7 @@ function actorFor(options: {
   return { ...functions, calls };
 }
 
-const request = () => new Request("http://127.0.0.1/api/copilotkit");
+const request = () => new Request("http://127.0.0.1/api/runtime");
 
 describe("createRequestActor", () => {
   test("single-user mode answers every request as the dev actor without asking for a session", async () => {
@@ -96,17 +96,17 @@ describe("createRequestActor", () => {
   test("a request with no session throws, and so does identifyUser", async () => {
     const { resolveRequestActor, identifyUser } = actorFor({});
     await expect(resolveRequestActor(request())).rejects.toThrow(
-      "A CopilotKit run requires a signed-in user.",
+      "An agent run requires a signed-in user.",
     );
     await expect(identifyUser(request())).rejects.toThrow(
-      "A CopilotKit run requires a signed-in user.",
+      "An agent run requires a signed-in user.",
     );
   });
 
   test("a user with no authorized role throws", async () => {
     const { resolveRequestActor } = actorFor({ user: { id: "u6" }, roles: [] });
     await expect(resolveRequestActor(request())).rejects.toThrow(
-      "A CopilotKit run requires an authorized user.",
+      "An agent run requires an authorized user.",
     );
   });
 
@@ -132,7 +132,7 @@ describe("createRequestActor", () => {
 
   describe("a Recorder bearer", () => {
     const bearer = `Bearer obr_${"a".repeat(43)}`;
-    const passRequest = (pathname = "/api/copilotkit/trajectory/t-1/connect") =>
+    const passRequest = (pathname = "/api/runtime/trajectory/t-1/connect") =>
       new Request(`http://127.0.0.1${pathname}`, {
         method: "POST",
         headers: { authorization: bearer },
@@ -177,14 +177,14 @@ describe("createRequestActor", () => {
           },
         });
         for (const path of [
-          "/api/copilotkit/agent/bot/run",
-          "/api/copilotkit/trajectory/t-1/connect/extra",
-          "/api/copilotkit/trajectory/connect",
+          "/api/runtime/agent/bot/run",
+          "/api/runtime/trajectory/t-1/connect/extra",
+          "/api/runtime/trajectory/connect",
           // The id the runtime would decode: one that does not decode is no trajectory.
-          "/api/copilotkit/trajectory/%E0%A4%A/connect",
+          "/api/runtime/trajectory/%E0%A4%A/connect",
         ]) {
           await expect(resolveRequestActor(passRequest(path))).rejects.toThrow(
-            "A CopilotKit run requires a signed-in user.",
+            "An agent run requires a signed-in user.",
           );
           expect(await identifyActor(passRequest(path))).toEqual({
             id: "",
@@ -207,7 +207,7 @@ describe("createRequestActor", () => {
           resolveRecorder: async () => resolution,
         });
         await expect(resolveRequestActor(passRequest())).rejects.toThrow(
-          "A CopilotKit run requires a signed-in user.",
+          "An agent run requires a signed-in user.",
         );
       }
     });
@@ -226,7 +226,7 @@ describe("createRequestActor", () => {
         user: { id: "u1", role: "admin" },
       });
       await expect(resolveRequestActor(passRequest())).rejects.toThrow(
-        "A CopilotKit run requires a signed-in user.",
+        "An agent run requires a signed-in user.",
       );
     });
   });

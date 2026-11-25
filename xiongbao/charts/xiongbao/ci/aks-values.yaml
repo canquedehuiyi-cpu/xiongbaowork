@@ -34,9 +34,6 @@ externalSecrets:
     - secretKey: computer-token
       remoteRef:
         key: xiongbao/computer-token
-    - secretKey: license-token
-      remoteRef:
-        key: xiongbao-license-token
 ingress:
   enabled: true
   className: webapprouting.kubernetes.azure.com
@@ -48,7 +45,3 @@ ingress:
 
 computers:
   mode: shared
-
-# Managed Intelligence, named in config.intelligence above, rather than the one the chart installs.
-intelligence:
-  enabled: false

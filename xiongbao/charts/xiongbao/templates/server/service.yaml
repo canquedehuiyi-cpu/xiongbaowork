@@ -1,15 +1,5 @@
 {{- $component := "server" -}}
-{{/*
-A LoadBalancer is the one type that has the cloud create something, so it alone carries the AWS usage
-tag (`xiongbao.awsAttributionTags`). Both the AWS Load Balancer Controller and the in-tree AWS
-provider read this annotation, for an NLB and a Classic Load Balancer alike, and other clouds ignore
-it.
-*/}}
-{{- $annotations := deepCopy (.Values.server.service.annotations | default dict) -}}
-{{- if eq .Values.server.service.type "LoadBalancer" -}}
-{{- $tags := "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags" -}}
-{{- $_ := set $annotations $tags (include "xiongbao.awsAttributionTags" (dict "annotations" .Values.server.service.annotations "annotation" $tags "path" "server.service.annotations")) -}}
-{{- end }}
+{{- $annotations := .Values.server.service.annotations | default dict }}
 apiVersion: v1
 kind: Service
 metadata:

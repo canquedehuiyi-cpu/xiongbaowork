@@ -245,7 +245,7 @@ describe("a step that was refused or declined", () => {
 
 /*
  * gallery 调用没画出东西（上游 #1132）。三种失败各有标记：Claude Agent SDK 适配器的包装、
- * Claude Code 的 <tool_use_error>、CopilotKit 自己的 "Error: "。
+ * Claude Code 的 <tool_use_error>、运行时库自己的 "Error: "。
  */
 describe("a gallery call that failed instead of drawing", () => {
   test("only the harness's exact wrapper is a flagged failure", () => {

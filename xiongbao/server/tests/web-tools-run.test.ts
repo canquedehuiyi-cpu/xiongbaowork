@@ -113,7 +113,6 @@ describe("what a Bot holding them is told", () => {
         null,
         undefined,
         undefined,
-        undefined,
         now,
         undefined,
         undefined,

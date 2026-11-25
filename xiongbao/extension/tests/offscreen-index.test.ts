@@ -194,7 +194,7 @@ async function setup(): Promise<Harness> {
       return Response.json({ error: "Not found." }, { status: 404 });
     }
     if (!gateway || request.method !== "POST") return null;
-    const pass = /^\/api\/copilotkit\/trajectory\/([^/]+)\/connect$/.exec(path);
+    const pass = /^\/api\/runtime\/trajectory\/([^/]+)\/connect$/.exec(path);
     if (pass) {
       const trajectoryId = decodeURIComponent(pass[1]);
       xiongbao.passes.push({
@@ -469,7 +469,7 @@ describe("offscreen controller", () => {
       "the first events",
     );
     expect(h.log[0]).toBe(
-      `fetch /api/copilotkit/trajectory/${session.trajectoryId}/connect`,
+      `fetch /api/runtime/trajectory/${session.trajectoryId}/connect`,
     );
     expect(h.names(session.trajectoryId)).toEqual([
       "recording.started",

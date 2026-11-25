@@ -10,8 +10,6 @@ import {
   guardDeliveryStore,
   guardHostAccess,
   installEnterpriseControls,
-  skillSharingAllowed,
-  skillSharingInSnapshot,
   summaryCallRefusal,
 } from "../src/admin/controls";
 import { createEnterpriseGate } from "../src/admin/gate";
@@ -224,13 +222,13 @@ function appFor(actor: { id: string; email: string; role: "admin" | "user" }) {
   app.post("/api/channels/:id/compact", (context) =>
     context.json({ compacted: true }),
   );
-  // Mounted the way app.ts mounts the CopilotKit runtime: a basePath sub-app that takes every path
+  // Mounted the way app.ts mounts the agent runtime: a basePath sub-app that takes every path
   // under it. The runtime then matches a run by its TRAILING segments (fetch-router `matchSegments`:
   // `.../agent/<id>/run` anywhere under the base), so this stub answers whatever path reaches it.
   app.route(
     "/",
     new Hono()
-      .basePath("/api/copilotkit")
+      .basePath("/api/runtime")
       .all("*", (context) => context.json({ ran: true })),
   );
   return app;
@@ -462,7 +460,7 @@ describe("models", () => {
     await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
       value: { enabled: true, models: ["anthropic/claude-test"] },
     });
-    const refused = await asMember.request(`/api/copilotkit/agent/${bot}/run`, {
+    const refused = await asMember.request(`/api/runtime/agent/${bot}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ threadId: "t", runId: "r" }),
@@ -472,7 +470,7 @@ describe("models", () => {
     await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
       value: { enabled: true, models: ["openai/gpt-test"] },
     });
-    const ran = await asMember.request(`/api/copilotkit/agent/${bot}/run`, {
+    const ran = await asMember.request(`/api/runtime/agent/${bot}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ threadId: "t", runId: "r2" }),
@@ -528,12 +526,12 @@ describe("the gate cannot be stepped around", () => {
     await setCapability("useBots", false);
     try {
       for (const path of [
-        `/api/copilotkit/agent/${bot}/run`,
-        `/api/copilotkit/x/agent/${bot}/run`,
-        `/api/copilotkit/x/agent/${bot}/connect`,
+        `/api/runtime/agent/${bot}/run`,
+        `/api/runtime/x/agent/${bot}/run`,
+        `/api/runtime/x/agent/${bot}/connect`,
         // Suggestions run the Bot's model too, with whatever messages the caller sends.
-        `/api/copilotkit/agent/${bot}/suggest`,
-        `/api/copilotkit/x/agent/${bot}/suggest`,
+        `/api/runtime/agent/${bot}/suggest`,
+        `/api/runtime/x/agent/${bot}/suggest`,
       ]) {
         const response = await asMember.request(path, {
           method: "POST",
@@ -554,7 +552,7 @@ describe("the gate cannot be stepped around", () => {
     try {
       for (const action of ["run", "suggest"]) {
         const response = await asMember.request(
-          `/api/copilotkit/x/agent/${bot}/${action}`,
+          `/api/runtime/x/agent/${bot}/${action}`,
           {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -1040,64 +1038,6 @@ describe("offboarding", () => {
     stopped.length = 0;
     const result = await controls.terminateInactiveComputers();
     expect(result?.stopped).toEqual([`bot:${bot}`]);
-  });
-});
-
-describe("Skill sharing", () => {
-  test("is off until an administrator turns it on, everywhere a person's change and a run read it, and the change is on the trail", async () => {
-    // A person's change and a run read it in that person's frame.
-    const sharingAllowed = () => asMemberTenant(() => skillSharingAllowed());
-    // Off by default: nobody may open their Skills to every Bot, and runs offer nobody else's.
-    expect(await sharingAllowed()).toBe(false);
-    expect(skillSharingInSnapshot()).toBe(false);
-    expect(
-      (
-        await put(asMember, "/api/admin/enterprise/settings/skillSharing", {
-          value: true,
-        })
-      ).status,
-    ).toBe(403);
-    expect(await sharingAllowed()).toBe(false);
-
-    const saved = await put(
-      asAdmin,
-      "/api/admin/enterprise/settings/skillSharing",
-      { value: true },
-    );
-    expect(saved.status).toBe(200);
-    expect(await sharingAllowed()).toBe(true);
-    // The saving replica refreshes its snapshot before answering; the others on the NOTIFY.
-    expect(skillSharingInSnapshot()).toBe(true);
-    const [row] = await asPlatform(() =>
-      database
-        .select()
-        .from(auditEvents)
-        .where(
-          and(
-            eq(auditEvents.eventType, "enterprise.setting_changed"),
-            eq(auditEvents.targetId, "skillSharing"),
-            eq(auditEvents.actorUserId, admin.id),
-          ),
-        ),
-    );
-    expect(row?.payload).toMatchObject({
-      setting: "skillSharing",
-      before: false,
-      after: true,
-    });
-
-    expect(
-      (
-        await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
-          value: "yes",
-        })
-      ).status,
-    ).toBe(400);
-    await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
-      value: false,
-    });
-    expect(await sharingAllowed()).toBe(false);
-    expect(skillSharingInSnapshot()).toBe(false);
   });
 });
 

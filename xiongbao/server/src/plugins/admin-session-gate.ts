@@ -83,17 +83,6 @@ export const ENTERPRISE_ADMIN_PATHS: readonly AdminPathRule[] = [
 ];
 
 /**
- * 自动学习（接了 Intelligence 时）：设置写进 `learning_settings`（没有行安全），审批会发布或驳回别人学到
- * 的技能，读的是每个人的学习内容。整组只做 `requireAdmin`，所以整组都管。
- */
-export const LEARNING_ADMIN_PATHS: readonly AdminPathRule[] = [
-  {
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    path: /^\/api\/admin\/learning(\/.*)?$/,
-  },
-];
-
-/**
  * 换套餐：`subscriptions` 的行安全允许本人租户的行，会话说是管理员就能给自己免费换成高档套餐。路由由
  * `src/index.ts` 挂在 `createApp` 返回的同一个 app 上，在这道门之后注册，所以门先于它执行。
  */

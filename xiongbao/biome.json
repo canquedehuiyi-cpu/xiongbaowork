@@ -37,7 +37,7 @@
       }
     },
     {
-      "includes": ["toolkit/src/**", "!toolkit/src/copilotkit/**"],
+      "includes": ["toolkit/src/**", "!toolkit/src/runtime/**"],
       "linter": {
         "rules": {
           "style": {
@@ -51,11 +51,11 @@
                   },
                   {
                     "group": [
-                      "./copilotkit/**",
-                      "@xiongbao/toolkit/copilotkit",
-                      "@xiongbao/toolkit/copilotkit/**"
+                      "./runtime/**",
+                      "@xiongbao/toolkit/runtime",
+                      "@xiongbao/toolkit/runtime/**"
                     ],
-                    "message": "The toolkit core does not depend on CopilotKit. Code that needs @copilotkit/runtime lives in toolkit/src/copilotkit and imports the core, not the other way round."
+                    "message": "The toolkit core does not depend on the agent runtime library. Code that needs it lives in toolkit/src/runtime and imports the core, not the other way round."
                   },
                   {
                     "group": [
@@ -65,7 +65,7 @@
                       "hono",
                       "hono/**"
                     ],
-                    "message": "The toolkit core depends on @ag-ui, rxjs, zod and @xiongbao/shared only. CopilotKit-specific code goes in toolkit/src/copilotkit."
+                    "message": "The toolkit core depends on @ag-ui, rxjs, zod and @xiongbao/shared only. Code specific to the agent runtime library goes in toolkit/src/runtime."
                   }
                 ]
               }
@@ -106,7 +106,7 @@
       }
     },
     {
-      "includes": ["toolkit/src/copilotkit/**"],
+      "includes": ["toolkit/src/runtime/**"],
       "linter": {
         "rules": {
           "style": {
@@ -116,7 +116,7 @@
                 "patterns": [
                   {
                     "group": ["../../**"],
-                    "message": "The CopilotKit adapters run without the server. Take what they need as a port or a constructor option instead of importing server code."
+                    "message": "The runtime adapters run without the server. Take what they need as a port or a constructor option instead of importing server code."
                   },
                   {
                     "group": [
@@ -125,7 +125,7 @@
                       "hono",
                       "hono/**"
                     ],
-                    "message": "The CopilotKit adapters do not reach the database or the HTTP framework."
+                    "message": "The runtime adapters do not reach the database or the HTTP framework."
                   }
                 ]
               }

@@ -275,7 +275,6 @@ test("the runtime hands the message through to the memory context", async () => 
       },
       syncDue: async () => {},
     },
-    store: { mirrorPending: async () => {} },
   } as unknown as Parameters<typeof createMemoryRuntime>[0]);
   expect(
     await runtime.loadForActor?.("u1")("bot", "who owns Orion?", "t-1"),

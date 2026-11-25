@@ -390,7 +390,6 @@ describe("context breakdown", () => {
           undefined,
           undefined,
           undefined,
-          undefined,
           async () => "The person prefers short answers in Chinese.",
           undefined,
           undefined,

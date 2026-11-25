@@ -15,15 +15,16 @@
  * 每一次醒来先把下一次排进队列再做这一次的事，所以一次出错、一次被挡下都不会让这串心跳断掉。受安静时段管：
  * 在安静时段里这一次不做，下一次排到时段结束；受每天次数上限管：和巡检合起来数，超了这一次不做。
  */
-import { HeadlessToolSuspension } from "../../../toolkit/src/headless-tools";
-import { EmptyTurnError, type TurnRunner } from "../../../toolkit/src/run-turn";
+
 import {
   type HeartbeatSettings,
   isHeartbeatQuiet,
 } from "../../../shared/heartbeat";
-import type { AuditInitiator } from "../audit";
-import type { AgentActor } from "../agents/profile-types";
+import { HeadlessToolSuspension } from "../../../toolkit/src/headless-tools";
+import { EmptyTurnError, type TurnRunner } from "../../../toolkit/src/run-turn";
 import { BotPausedError } from "../agents/lifecycle";
+import type { AgentActor } from "../agents/profile-types";
+import type { AuditInitiator } from "../audit";
 import type { AgentChannel } from "../channels/routes";
 import type { TaskProjector } from "../tasks/projector";
 import {
@@ -33,13 +34,13 @@ import {
 } from "../tenant/context";
 import type { QuietUntil } from "../user-preferences";
 import type { WorkQueue } from "../work/queue";
-import type { HeartbeatStore } from "./store";
 import {
   HEARTBEAT_KIND,
   type HeartbeatPayload,
   heartbeatInstruction,
   nextSlot,
 } from "./schedule";
+import type { HeartbeatStore } from "./store";
 
 /** 心跳醒来的发起者 id 前缀，`agents/light-model.ts` 靠它认出这是轻量轮。 */
 export const HEARTBEAT_INITIATOR_PREFIX = "heartbeat:";
@@ -330,10 +331,6 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
             initiator: heartbeatInitiator(runId),
             runId,
             signal,
-            telemetry: {
-              trigger: "routine",
-              rootTaskId: `heartbeat:${runId}`,
-            },
             // 看板上的卡由这里决定开不开：没事的这一次不开。
             cardOwnedByCaller: true,
           }));
@@ -449,11 +446,10 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
       } finally {
         clearInterval(renew);
         if (chain.settled) await finish();
-        else
-          /*
-           * 下一次还没排上就出了错（读设置、排队失败）：这一串不能就此断掉。放回队列、一分钟后重来，不算一次尝试；
-           * 放回也失败了，租约到期后同一条会被再领出来（见 `maxAttempts`）。
-           */
+        /*
+         * 下一次还没排上就出了错（读设置、排队失败）：这一串不能就此断掉。放回队列、一分钟后重来，不算一次尝试；
+         * 放回也失败了，租约到期后同一条会被再领出来（见 `maxAttempts`）。
+         */ else
           await deps.queue
             .release({
               kind: HEARTBEAT_KIND,

@@ -21,13 +21,11 @@ import {
   type SignRun,
   type ToolSelection,
 } from "../copilot";
-import type { AcquireLearnedSkills } from "../learning/runtime";
 import type { LoadPersonalMemory } from "../memory/tools";
 import type { AgentModelResolver } from "../models/runtime-resolver";
 import { NameContextMiddleware } from "../people/name-context";
 import { isProactiveInitiator } from "../proactive/initiator";
 import { computerGuidanceForRun } from "../proactive/restriction";
-import type { ProductTelemetry } from "../telemetry/product";
 import type { RunCompaction } from "../threads/compaction";
 import type { RecordContextBreakdown } from "../threads/context-usage";
 import type { AgentActor } from "./profile-types";
@@ -62,7 +60,6 @@ export type ActorAgentResolver = {
 };
 
 export type ActorAgentResolverDependencies = {
-  productTelemetry?: Pick<ProductTelemetry, "middleware">;
   loadNameForActor?: (actorId: string) => Promise<string | null>;
   loadAgents: LoadAgentsForActor;
   model: RuntimeModel;
@@ -97,12 +94,6 @@ export type ActorAgentResolverDependencies = {
   loadInstructionsForActor?: (actorId: string) => LoadInstructions;
   loadAttachmentForActor?: (actorId: string) => LoadAttachment;
   markAttachmentsSentForActor?: (actorId: string) => MarkAttachmentsSent;
-  /**
-   * Published Automatic Learning skills for a Bot's run. Only with a connected CopilotKit
-   * Intelligence (R0, optional); absent, every Bot is built exactly as without learning. Bound to
-   * the person asking below, so their own Learning space and opened Skills join the Bot's own.
-   */
-  acquireLearnedSkills?: AcquireLearnedSkills;
   loadPersonalMemoryForActor?: (actorId: string) => LoadPersonalMemory;
   /**
    * The model a person picked for the conversation a run answers in. Absent, the deployment's. Given
@@ -156,15 +147,6 @@ export function createActorAgentResolver(
     context?: AgentResolutionContext,
   ) => {
     /*
-     * Learned Skills for this person's run: the Bot's own, plus the person's own Learning space and every Skill another
-     * person opened (learning/runtime.ts). Bound here, where the person is known, so every path that builds a Bot for
-     * them (a turn, a hop, a routine, a remote Bot) asks for the same set.
-     */
-    const acquire = deps.acquireLearnedSkills;
-    const acquireForActor: AcquireLearnedSkills | undefined = acquire
-      ? (agentId, signal) => acquire(agentId, signal, actor.id)
-      : undefined;
-    /*
      * A CHECK-IN RUNS EVERY BOT ON XIONGBAO'S OWN RUNNER, and offers it everything it may read.
      *
      * A Bot on another framework is built as XiongBao would build it (`onXiongBaoRunner`), so its own
@@ -203,7 +185,6 @@ export function createActorAgentResolver(
       context?.initiator,
       deps.loadAttachmentForActor?.(actor.id),
       deps.markAttachmentsSentForActor?.(actor.id),
-      acquireForActor,
       deps.loadPersonalMemoryForActor?.(actor.id),
       deps.recordToolLimitRefusalForActor?.(actor.id, context?.initiator),
       context?.holdsTools,
@@ -224,10 +205,6 @@ export function createActorAgentResolver(
           );
         }
       }
-      if (deps.productTelemetry)
-        for (const agent of Object.values(agents)) {
-          agent.use(deps.productTelemetry.middleware(actor.id));
-        }
       return agents;
     });
   };

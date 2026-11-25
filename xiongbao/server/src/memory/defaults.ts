@@ -15,8 +15,7 @@
  *
  * Isolation is unchanged, because nothing here is a new path to a memory: a default source is an
  * ordinary `memory_sources` row owned by the person and bound to one Bot, and what it imports is
- * recalled by that Bot only, unreviewed until the person confirms it (so not mirrored to
- * Intelligence until then). A default research setting is an ordinary `proactive_settings` row.
+ * recalled by that Bot only, unreviewed until the person confirms it. A default research setting is an ordinary `proactive_settings` row.
  *
  * NEVER SWITCHED BACK ON. Turning either off keeps its row with `enabled = false`, and a row of any
  * kind means there is nothing to adopt. Removing one writes `default_opt_outs`, which adoption reads

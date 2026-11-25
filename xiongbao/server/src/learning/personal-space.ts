@@ -6,8 +6,9 @@ import { eq } from "drizzle-orm";
 import { englishName } from "../brand";
 import type { Database } from "../db/client";
 import { learningPersonSpaces } from "../db/schema/learning";
-import type { LearningContainerSpec } from "./ensure-container";
 
+/** A Learning container to make: its id and the name the vendor's dashboard shows. */
+export type LearningContainerSpec = { id: string; name: string };
 /**
  * A person's own Learning space: one Intelligence Learning container per XiongBao person, which every recording they make
  * joins, whichever Bot they later use, and whose published Skills reach every Bot they run (learning/runtime.ts).
@@ -122,9 +123,8 @@ function until<T>(promise: Promise<T>, signal?: AbortSignal) {
 /**
  * Each person's own Learning space, created on first need.
  *
- * THE RUNTIME KEY CANNOT CREATE A CONTAINER (learning/ensure-container.ts): only a service token on a local evaluation
- * install, or a CopilotKit CLI login against managed Intelligence, can. `create` is whichever of those this deployment
- * holds, and absent when it holds neither; then a space that does not exist cannot be made here, and the person is told
+ * Kept only for the Recorder, which Task 14b removes together with this file. `create` is how a space would be
+ * made, and absent when nothing here can make one; then a space that does not exist cannot be made here, and the person is told
  * so. A service token creates in one request, well inside the capture pass's deadline; the CLI takes longer than that,
  * which is why the space is also made when the browser connects (`kick`), so it is there before the first recording.
  *

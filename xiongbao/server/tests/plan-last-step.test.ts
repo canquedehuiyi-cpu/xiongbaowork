@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { RunAgentInput } from "@ag-ui/client";
-import { BuiltInAgentWithSaneHistory } from "@xiongbao/toolkit/copilotkit/agents";
 import { parametersFor } from "@xiongbao/toolkit/granted-tool";
+import { BuiltInAgentWithSaneHistory } from "@xiongbao/toolkit/runtime/agents";
 import { PlanModel } from "../src/agents/plan-model";
 
 for (const provider of ["chatgpt", "claude"] as const) {

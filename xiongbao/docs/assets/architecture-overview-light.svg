@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 592" width="920" height="592" role="img" aria-labelledby="arch-title arch-desc" font-family="Arial, Helvetica, sans-serif">
 <title id="arch-title">XiongBao Work architecture</title>
-<desc id="arch-desc">XiongBao Work frontends (Mac, Windows, Web, iOS, Android, Slack and Teams) connect to the XiongBao Work backend. Inside your infrastructure, deployed on Kubernetes with Helm, the backend provides the workspace API, identity and permissions, policy and approvals, and audit, enforced at its API. CopilotKit Intelligence is deployed separately alongside it and provides durable conversations, memory, learning and enterprise governance services. The backend connects to three lanes, each with an option inside your infrastructure and a bring-your-own option outside it. Agents use AG-UI: Built-in Bots run in-process in the XiongBao Work server, and your agents run on any agent execution platform; either or both can serve the same workspace. Computers use the computer provider interface: Kubernetes by default, providing browser, files and shell, or your own sandbox provider through an adapter, for example Daytona, E2B or Modal. Tools share a common interface: built-in tools such as Routines, MCP servers and hubs, and other adapters. On a laptop, setup runs this stack locally.</desc>
+<desc id="arch-desc">XiongBao Work frontends (Mac, Windows, Web, iOS, Android, Slack and Teams) connect to the XiongBao Work backend. Inside your infrastructure, deployed on Kubernetes with Helm, the backend provides the workspace API, identity and permissions, policy and approvals, and audit, enforced at its API. The backend connects to three lanes, each with an option inside your infrastructure and a bring-your-own option outside it. Agents use AG-UI: Built-in Bots run in-process in the XiongBao Work server, and your agents run on any agent execution platform; either or both can serve the same workspace. Computers use the computer provider interface: Kubernetes by default, providing browser, files and shell, or your own sandbox provider through an adapter, for example Daytona, E2B or Modal. Tools share a common interface: built-in tools such as Routines, MCP servers and hubs, and other adapters. On a laptop, setup runs this stack locally.</desc>
 <!-- Platform icons: Tabler Icons, https://tabler.io/icons
 MIT License
 
@@ -62,18 +62,10 @@ SOFTWARE.
 <path d="M212.062 146 V160" fill="none" stroke="#cfc4ec" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="224.062" y="157.5" font-size="14" fill="#21172f" font-weight="700">Kubernetes + Helm</text>
 <text x="884" y="157" font-size="13" fill="#7a7389" text-anchor="end">On a laptop, setup runs this stack locally</text>
-<rect x="36" y="176" width="556" height="112" rx="11" fill="#ffffff" stroke="#a996dd" stroke-width="1.5"/>
+<rect x="36" y="176" width="848" height="112" rx="11" fill="#ffffff" stroke="#a996dd" stroke-width="1.5"/>
 <text x="54" y="209" font-size="18" fill="#21172f" font-weight="700">XiongBao Work backend</text>
 <text x="54" y="236" font-size="13.5" fill="#21172f">Workspace API · identity &amp; permissions · policy &amp; approvals · audit</text>
 <text x="54" y="258" font-size="13" fill="#5d566b">Controls enforced at the XiongBao Work API</text>
-<rect x="620" y="176" width="264" height="112" rx="11" fill="#ffffff" stroke="#a996dd" stroke-width="1.25"/>
-<text x="636" y="209" font-size="17" fill="#21172f" font-weight="700">CopilotKit Intelligence</text>
-<text x="636" y="229" font-size="13" fill="#5d566b">Deployed separately</text>
-<text x="636" y="253" font-size="13" fill="#21172f">Durable conversations · memory</text>
-<text x="636" y="271" font-size="13" fill="#21172f">Learning · enterprise governance</text>
-<path d="M599 232 H613" fill="none" stroke="#8a76c9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M619 232 L613 228.28 L613 235.72 Z" fill="#8a76c9"/>
-<path d="M593 232 L599 228.28 L599 235.72 Z" fill="#8a76c9"/>
 <path d="M460 288 V335 M168 335 V312 H752 V335" fill="none" stroke="#8a76c9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M168 335 L163.66 328 L172.34 328 Z" fill="#8a76c9"/>
 <path d="M460 335 L455.66 328 L464.34 328 Z" fill="#8a76c9"/>

@@ -452,7 +452,6 @@ function enterprise(data: boolean): EnterpriseOverview {
         models: data ? ["claude-sonnet-4-5", "gpt-4.1"] : [],
       },
       mcpAllowlist: { enabled: false, servers: [] },
-      skillSharing: false,
       proactiveDailyRuns: 24,
       modelSelection: false,
     },

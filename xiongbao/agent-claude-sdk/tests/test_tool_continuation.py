@@ -248,7 +248,7 @@ async def events(adapter, input_data):
 
 @pytest.mark.parametrize("streaming", [False, True])
 @pytest.mark.parametrize("model_only", [False, True])
-@pytest.mark.parametrize("tool_name", ["computer_navigate", "copilotkit_load_skill", "copilotkit_read_skill_file"])
+@pytest.mark.parametrize("tool_name", ["computer_navigate", "client_lookup", "client_read_file"])
 def test_client_result_resumes_original_sdk_query(sdk, streaming, model_only, tool_name):
     async def scenario():
         adapter = XiongBaoClaudeAgentAdapter(

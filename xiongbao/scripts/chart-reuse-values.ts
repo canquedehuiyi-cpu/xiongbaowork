@@ -5,11 +5,11 @@
  * there either: `--reuse-values` replaces the new chart's values.yaml with the old release's
  * computed values. For a key of this chart's own, `--set <key>=null` reproduces that.
  *
- * NOT FOR A KEY UNDER A DEPENDENCY'S BLOCK (`intelligence.…`, `postgresql.…`). There, null also
- * deletes the dependency chart's own default beneath the key, which `--reuse-values` never does:
- * the old release's computed values carry that chart's defaults, and the new one's are merged under
- * them when it renders. Nulling `intelligence.learning.queue` takes away the Intelligence chart's
- * whole queue block and its templates fail on it, on an upgrade that in fact renders. So a key under
+ * NOT FOR A KEY UNDER A DEPENDENCY'S BLOCK (`postgresql.…`). There, null also deletes the
+ * dependency chart's own default beneath the key, which `--reuse-values` never does: the old
+ * release's computed values carry that chart's defaults, and the new one's are merged under them
+ * when it renders. Nulling a key of a block takes away the dependency's whole default block and its
+ * templates fail on it, on an upgrade that in fact renders. So a key under
  * a dependency is taken out of a copy of values.yaml instead, which leaves the dependency's own
  * default in force exactly as an upgrade does.
  */

@@ -130,12 +130,8 @@ export function MemoryScreen({
 }
 /**
  * What a memory's status line says: who formed it and where its review stands.
- *
- * A memory CopilotKit Intelligence holds for this person keeps only its words there, so it is never
- * paused or reviewed: it says where it is kept instead (and the card offers only 保存 and 忘掉).
  */
 export function memoryStatus(memory: MemoryRecord, botName: string): string {
-  if (memory.formedBy === "intelligence") return "保存在后端";
   if (!memory.enabled) return "已停用";
   if (memory.formedBy === "bot")
     return `由 ${botName} 记下${memory.reviewState === "unreviewed" ? " · 待复核" : ""}`;
@@ -145,9 +141,6 @@ export function memoryStatus(memory: MemoryRecord, botName: string): string {
 /**
  * One memory: its words in a box saved in place, then whether it is in use, confirming it and
  * forgetting it.
- *
- * A memory Intelligence holds (`formedBy: "intelligence"`) can only be edited or forgotten: the back
- * end keeps no switch or review for it, and the server refuses both, so neither is offered.
  */
 export function MemoryCard({ memory }: { memory: MemoryRecord }) {
   const [content, setContent] = useState(memory.content);
@@ -163,7 +156,6 @@ export function MemoryCard({ memory }: { memory: MemoryRecord }) {
     enabled?: boolean;
     reviewState?: "confirmed";
   }) => save.mutate({ id: memory.id, input });
-  const heldByIntelligence = memory.formedBy === "intelligence";
   return (
     <article className="grid gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap justify-between gap-2">
@@ -209,7 +201,7 @@ export function MemoryCard({ memory }: { memory: MemoryRecord }) {
         >
           保存
         </Button>
-        {!heldByIntelligence && memory.reviewState === "unreviewed" && (
+        {memory.reviewState === "unreviewed" && (
           <Button
             size="sm"
             variant="outline"
@@ -218,15 +210,13 @@ export function MemoryCard({ memory }: { memory: MemoryRecord }) {
             确认
           </Button>
         )}
-        {heldByIntelligence ? null : (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => update({ enabled: !memory.enabled })}
-          >
-            {memory.enabled ? "停用" : "启用"}
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => update({ enabled: !memory.enabled })}
+        >
+          {memory.enabled ? "停用" : "启用"}
+        </Button>
         <Button
           size="sm"
           variant="outline"

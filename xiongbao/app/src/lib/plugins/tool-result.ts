@@ -194,7 +194,7 @@ export function flaggedFailure(answer: string): string | undefined {
  * - Claude Agent SDK 适配器：参数解析不了，Claude Code 在调用到达浏览器之前就拒绝了，
  *   包装成 {@link flaggedFailure}；
  * - 适配器保留包装之前的历史：Claude Code 裸的 `<tool_use_error>`；
- * - CopilotKit 自己跑不了的调用（参数解析不了、处理函数抛错）：`Error: ` 加原因。
+ * - 运行时库自己跑不了的调用（参数解析不了、处理函数抛错）：`Error: ` 加原因。
  */
 export function browserCallFailed(result: string | undefined): boolean {
   if (result === undefined) return false;

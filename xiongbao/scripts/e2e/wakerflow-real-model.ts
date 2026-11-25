@@ -310,7 +310,6 @@ const serverEnv: Record<string, string> = {
   // The deployment's model is the stub: nothing may reach it (asserted at the end).
   OPENAI_BASE_URL: `http://127.0.0.1:${deploymentStub.port}/v1`,
   OPENAI_API_KEY: "g4-deployment-stub-not-a-secret",
-  COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
   // The mock provider listens on loopback over plain http; development-only switch (audit defect
   // #6). Mock mode only: against the real provider the SSRF guard stays fully on.

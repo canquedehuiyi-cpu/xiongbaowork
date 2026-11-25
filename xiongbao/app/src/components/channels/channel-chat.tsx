@@ -499,7 +499,7 @@ export function ChannelChat({
   compactionDivider?: (compaction: LastCompaction) => ReactNode;
 }) {
   // The core attaches the frontend tool registry; direct agent runs do not.
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   // Mentions are scoped to the channel's permitted agents.
   const { data: agentProfiles } = useQuery(agentListQueryOptions());
   // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.
@@ -834,7 +834,7 @@ export function ChannelChat({
         joined = await joinWithin({
           // A turn too: restoring a thread can run the calls it left unanswered.
           connect: whileObserved(agent, () =>
-            copilotkit.connectAgent({ agent }),
+            copilotCore.connectAgent({ agent }),
           ),
           deadline: afterMs(JOIN_DEADLINE_MS),
           detach: () => agent.detachActiveRun(),
@@ -884,7 +884,7 @@ export function ChannelChat({
         if (isCurrent) {
           // The gateway snapshot can lag the store. Keep its valid local rows even when the
           // corresponding stored row is unreadable, while restoring other readable additions.
-          // The snapshot's interfaces are read in the A2UI version CopilotKit reads now, as the
+          // The snapshot's interfaces are read in the A2UI version the agent SDK reads now, as the
           // store's are (thread-messages.ts), or the local copy kept here would not draw.
           const messages = mergeStoredMessages(
             withCurrentA2uiVersions(agent.messages),
@@ -917,7 +917,7 @@ export function ChannelChat({
       current = false;
     };
   }, [
-    copilotkit,
+    copilotCore,
     agent,
     isReady,
     channel.id,
@@ -1121,7 +1121,7 @@ export function ChannelChat({
    * WHY THIS TURN ENDED WITHOUT AN ANSWER, KEPT WHERE `deliver` CAN STILL SEE IT — because the one
    * thing that knows is a subscriber, and the one thing that has to act on it is an `await`.
    *
-   * `copilotkit.runAgent` DOES NOT REJECT ON A FAILED RUN. `CopilotKitCore.runAgent` catches
+   * `copilotCore.runAgent` DOES NOT REJECT ON A FAILED RUN. The core's `runAgent` catches
    * everything the agent throws, reports it through `emitError` as `AGENT_RUN_FAILED`, and returns
    * `{ result: undefined, newMessages: [] }` — a value indistinguishable from a run that finished
    * with nothing to say. So a gateway 503, a stream that dies, a model that refuses the request:
@@ -1144,7 +1144,7 @@ export function ChannelChat({
    * Two overlapping turns — a component button pressed during a composer send — would have the
    * second clear the first's reason, which reports the earlier turn as successful. That is the
    * pre-existing shape of `awaitingReply`, not a new one, and narrowing it means giving a run a
-   * handle that `copilotkit.runAgent` does not hand back.
+   * handle that `copilotCore.runAgent` does not hand back.
    */
   const turnFailure = useRef<string | null>(null);
   const assistantMessagesBeforeRun = useRef<Set<string>>(new Set());
@@ -1159,7 +1159,7 @@ export function ChannelChat({
    * what decides whether the next thing typed is sent or parked, and what tells the queue its wait
    * is over.
    *
-   * `runsInFlight` counts what Stop can actually reach: the run `copilotkit.runAgent` opens, and
+   * `runsInFlight` counts what Stop can actually reach: the run `copilotCore.runAgent` opens, and
    * nothing before it. A turn can be in flight for a second and a half before that, while `say`
    * waits for the runtime agent, and a Stop drawn in that window aborts a controller nobody has
    * made yet.
@@ -1358,7 +1358,7 @@ export function ChannelChat({
     /*
      * Whether the run got past the agent's own checks and left the browser. One refused there (an
      * interrupt something else still waits on) never reaches a subscriber's `onRunFailed`, and
-     * `copilotkit.runAgent` resolves as if it had answered, so without this the message was counted
+     * `copilotCore.runAgent` resolves as if it had answered, so without this the message was counted
      * as sent: the box emptied, and the words were gone on the next reload.
      */
     let started = false;
@@ -1369,8 +1369,8 @@ export function ChannelChat({
     });
     setRunsInFlight((count) => count + 1);
     try {
-      await withVoiceContext(copilotkit, target.agentId, voiceHistory, () =>
-        whileObserved(target, () => copilotkit.runAgent({ agent: target })),
+      await withVoiceContext(copilotCore, target.agentId, voiceHistory, () =>
+        whileObserved(target, () => copilotCore.runAgent({ agent: target })),
       );
     } finally {
       watching.unsubscribe();
@@ -1684,7 +1684,7 @@ export function ChannelChat({
   const stopTask = () => {
     awaitingReply.current = false;
     stopEpoch.current++;
-    copilotkit.stopAgent({ agent });
+    copilotCore.stopAgent({ agent });
   };
 
   /**
@@ -1998,7 +1998,7 @@ export function ChannelChat({
                     setRunsInFlight((count) => count + 1);
                     try {
                       await whileObserved(agent, () =>
-                        copilotkit.runAgent({ agent }),
+                        copilotCore.runAgent({ agent }),
                       );
                     } finally {
                       setRunsInFlight((count) => count - 1);

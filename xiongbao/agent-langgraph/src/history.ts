@@ -48,7 +48,7 @@ export function toLangChainMessages(
         ),
       }),
     ),
-    // AG-UI carries application context separately from conversation history. CopilotKit puts
+    // AG-UI carries application context separately from conversation history. The agent SDK puts
     // the A2UI catalog and tool instructions here; dropping it leaves the model guessing the
     // component schema and can strand the renderer on an invalid, never-painted surface.
     ...(input.context ?? []).map(

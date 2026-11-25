@@ -2,17 +2,12 @@
   {
     "rule": "copilotkit-handle",
     "scope": "app/src",
-    "lines": 25
-  },
-  {
-    "rule": "copilotkit-handle",
-    "scope": "desktop-device/src-tauri",
-    "lines": 1
+    "lines": 7
   },
   {
     "rule": "copilotkit-handle",
     "scope": "server/src",
-    "lines": 8
+    "lines": 7
   },
   {
     "rule": "copilotkit-handle",
@@ -32,7 +27,7 @@
   {
     "rule": "copilotkit-package",
     "scope": "server/src",
-    "lines": 26
+    "lines": 17
   },
   {
     "rule": "copilotkit-package",
@@ -56,23 +51,13 @@
   },
   {
     "rule": "env-name",
-    "scope": "docker/defaults.env",
-    "lines": 1
-  },
-  {
-    "rule": "env-name",
-    "scope": "docker/delivery.env.example",
-    "lines": 2
-  },
-  {
-    "rule": "env-name",
     "scope": "runner/src",
     "lines": 3
   },
   {
     "rule": "env-name",
     "scope": "server/src",
-    "lines": 58
+    "lines": 43
   },
   {
     "rule": "env-name",
@@ -117,7 +102,7 @@
   {
     "rule": "identifier",
     "scope": "server/src",
-    "lines": 96
+    "lines": 61
   },
   {
     "rule": "identifier",
@@ -141,11 +126,6 @@
   },
   {
     "rule": "identifier",
-    "scope": "shared/tool-name.ts",
-    "lines": 2
-  },
-  {
-    "rule": "identifier",
     "scope": "shared/waiting.ts",
     "lines": 1
   },
@@ -157,17 +137,7 @@
   {
     "rule": "identifier",
     "scope": "toolkit/src",
-    "lines": 27
-  },
-  {
-    "rule": "import-close",
-    "scope": "server/src",
-    "lines": 1
-  },
-  {
-    "rule": "import-path",
-    "scope": "server/src",
-    "lines": 6
+    "lines": 26
   },
   {
     "rule": "mit-attribution",
@@ -177,7 +147,7 @@
   {
     "rule": "never-change",
     "scope": "server/src",
-    "lines": 12
+    "lines": 11
   },
   {
     "rule": "never-change",
@@ -193,21 +163,6 @@
     "rule": "never-change",
     "scope": "toolkit/src",
     "lines": 3
-  },
-  {
-    "rule": "runtime-path",
-    "scope": "app/src",
-    "lines": 2
-  },
-  {
-    "rule": "runtime-path",
-    "scope": "server/src",
-    "lines": 5
-  },
-  {
-    "rule": "runtime-path",
-    "scope": "shared/recorder-api.ts",
-    "lines": 1
   },
   {
     "rule": "wire-dom",

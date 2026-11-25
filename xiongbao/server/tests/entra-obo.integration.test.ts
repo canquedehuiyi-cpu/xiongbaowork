@@ -581,7 +581,7 @@ describe("an app calls XiongBao with a person's Entra token", () => {
         asPlatform(() => createRoleRepository(database).rolesForUser(id)),
     });
     const actor = await resolveRequestActor(
-      new Request("http://127.0.0.1:7480/api/copilotkit", {
+      new Request("http://127.0.0.1:7480/api/runtime", {
         method: "POST",
         headers: { authorization: `Bearer ${await tokenToXiongBao(ada)}` },
       }),

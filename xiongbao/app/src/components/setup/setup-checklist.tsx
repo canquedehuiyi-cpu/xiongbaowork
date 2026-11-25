@@ -1,6 +1,5 @@
 import {
   IconApps,
-  IconBrain,
   IconDeviceDesktop,
   IconMessages,
   IconSparkles,
@@ -30,8 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
 
-const ICONS: Record<SetupRowId, typeof IconBrain> = {
-  intelligence: IconBrain,
+const ICONS: Record<SetupRowId, typeof IconSparkles> = {
   model: IconSparkles,
   computer: IconDeviceDesktop,
   apps: IconApps,
@@ -73,7 +71,7 @@ export function SetupChecklist({
   const recheck = useMutation(recheckSetupMutationOptions(queryClient));
 
   /*
-   * Check again asks the server to ask Intelligence, the model provider and the computers again,
+   * Check again asks the server to ask the model provider and the computers again,
    * and waits for their answers. A plain refetch is answered from what they last said, and asks
    * again only for the read after it, once an answer failed or is a few minutes old. A checklist
    * that could not be read at all is read again first.

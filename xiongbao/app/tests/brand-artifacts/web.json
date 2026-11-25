@@ -36,24 +36,6 @@
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
-    "word": "/api/copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "库约定路径，品牌去痕决定保留"
-  },
-  {
-    "word": "/api/copilotkit/threads/$",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "库约定路径，品牌去痕决定保留"
-  },
-  {
-    "word": "/api/copilotkit/trajectory/$",
-    "category": "third-party-name",
-    "plan": "keep",
-    "note": "库约定路径，品牌去痕决定保留"
-  },
-  {
     "word": "/copilotkit_knowledge_base_shell/",
     "category": "third-party-name",
     "plan": "keep",

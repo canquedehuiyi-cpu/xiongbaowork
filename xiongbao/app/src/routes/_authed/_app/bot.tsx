@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { ConversationApprovals } from "@/components/approvals/inline-approval";
-import { TelemetryAssistantMessage } from "@/components/channels/telemetry-assistant-message";
+import { AssistantAnswerMessage } from "@/components/channels/assistant-answer-message";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerViewPanel } from "@/components/computer/computer-panel";
 import { DetailPanel } from "@/components/layout/detail-panel";
@@ -348,7 +348,7 @@ function BotChat({ agentId, name }: { agentId: string; name: string }) {
               agentId={agentId}
               messageView={{
                 ...BOT_CHAT_VIEW,
-                assistantMessage: TelemetryAssistantMessage,
+                assistantMessage: AssistantAnswerMessage,
               }}
               key={`${agentId}:${threadId}`}
               labels={BOT_CHAT_LABELS}

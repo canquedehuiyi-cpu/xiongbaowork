@@ -699,7 +699,6 @@ async function startServer() {
       // 部署自己的模型是个只回 503 的桩：所有模型调用都必须走员工绑定的模型库条目（结束时断言）。
       OPENAI_BASE_URL: `http://127.0.0.1:${deploymentStub.port}/v1`,
       OPENAI_API_KEY: "eval-deployment-stub-not-a-secret",
-      COPILOTKIT_TELEMETRY_DISABLED: "true",
       DO_NOT_TRACK: "1",
       // 提示词瘦身开关（`EVAL_PROMPT_SLIM=on|off`，不写就用服务器的默认：开）。off 用来做对照。
       ...(process.env.EVAL_PROMPT_SLIM?.trim()

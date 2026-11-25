@@ -561,8 +561,8 @@ jobs:
   # app's own code (desktop/src-tauri/src/release_images.rs) from this commit's Compose file, the
   # images above and the CLI the installers bundle. `github-release` attaches it as
   # desktop-images.json when it publishes the release, so the release never exists without it.
-  # Downloads sync copies those images, and every image container-images.json names, to
-  # downloads.copilotkit.ai (scripts/downloads-images.ts).
+  # Downloads sync copies those images, and every image container-images.json names, to the
+  # downloads host.
   image-list:
     name: image list
     needs: [metadata, verify, images]

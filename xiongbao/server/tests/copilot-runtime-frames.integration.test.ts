@@ -30,7 +30,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /*
- * G01-E P16f: the CopilotKit runtime through the wiring `index.ts` gives it — `mountCopilotRuntime`
+ * G01-E P16f: the agent runtime through the wiring `index.ts` gives it — `mountCopilotRuntime`
  * over the real roster loader, the real thread runner, the vault's deployment-key read and the plugin
  * store's grants, mounted into `createApp` — answers every route in the frame of the person asking.
  *
@@ -200,8 +200,7 @@ function mountApp(runner: PostgresAgentRunner): ReturnType<typeof createApp> {
     }),
     async (request) => {
       const actor = await identifyActor(request);
-      if (!actor.id)
-        throw new Error("A CopilotKit run requires a signed-in user.");
+      if (!actor.id) throw new Error("An agent run requires a signed-in user.");
       return { id: actor.id, name: actor.id };
     },
     identifyActor,
@@ -236,12 +235,9 @@ const as = (person: string | null) =>
   person ? { [PERSON_HEADER]: person } : ({} as Record<string, string>);
 
 async function info(person: string | null) {
-  const response = await app.request(
-    "http://xiongbao.local/api/copilotkit/info",
-    {
-      headers: as(person),
-    },
-  );
+  const response = await app.request("http://xiongbao.local/api/runtime/info", {
+    headers: as(person),
+  });
   const body = (await response.json().catch(() => null)) as {
     agents?: Record<string, unknown>;
   } | null;
@@ -360,18 +356,18 @@ describe("the runtime answers in the frame of the person asking (G01-E P16f)", (
     expect(
       (
         await post(
-          `/api/copilotkit/agent/${bots.catalogue}/connect`,
+          `/api/runtime/agent/${bots.catalogue}/connect`,
           null,
           runInput(threadId),
         )
       ).status,
     ).toBe(401);
     expect(
-      (await get(`/api/copilotkit/threads?agentId=${bots.catalogue}`, null))
+      (await get(`/api/runtime/threads?agentId=${bots.catalogue}`, null))
         .status,
     ).toBe(401);
     expect(
-      (await get(`/api/copilotkit/threads/${threadId}/messages`, null)).status,
+      (await get(`/api/runtime/threads/${threadId}/messages`, null)).status,
     ).toBe(401);
   });
 
@@ -379,7 +375,7 @@ describe("the runtime answers in the frame of the person asking (G01-E P16f)", (
     const threadId = `rtf-thread-${suite}`;
     threadIds.push(threadId);
     const ran = await post(
-      `/api/copilotkit/agent/${bots.aliceRemote}/run`,
+      `/api/runtime/agent/${bots.aliceRemote}/run`,
       alice,
       runInput(threadId),
     );
@@ -399,14 +395,14 @@ describe("the runtime answers in the frame of the person asking (G01-E P16f)", (
     expect(stamps.map((row) => row.tenantId)).toEqual([alice]);
 
     const mine = await get(
-      `/api/copilotkit/threads?agentId=${bots.aliceRemote}`,
+      `/api/runtime/threads?agentId=${bots.aliceRemote}`,
       alice,
     );
     expect(mine.status).toBe(200);
     expect(threadIdsIn(mine.body)).toContain(threadId);
 
     const messages = await get(
-      `/api/copilotkit/threads/${threadId}/messages`,
+      `/api/runtime/threads/${threadId}/messages`,
       alice,
     );
     expect(messages.status).toBe(200);
@@ -416,17 +412,14 @@ describe("the runtime answers in the frame of the person asking (G01-E P16f)", (
       ),
     ).toBe(true);
 
-    const events = await get(
-      `/api/copilotkit/threads/${threadId}/events`,
-      alice,
-    );
+    const events = await get(`/api/runtime/threads/${threadId}/events`, alice);
     expect(events.status).toBe(200);
     expect(((events.body?.events ?? []) as unknown[]).length).toBeGreaterThan(
       0,
     );
 
     const connected = await post(
-      `/api/copilotkit/agent/${bots.aliceRemote}/connect`,
+      `/api/runtime/agent/${bots.aliceRemote}/connect`,
       alice,
       runInput(threadId),
     );
@@ -434,26 +427,23 @@ describe("the runtime answers in the frame of the person asking (G01-E P16f)", (
     expect(connected.text).toContain("RUN_STARTED");
 
     // Bob, signed in, asking about the same conversation: none of it is his.
-    const his = await get(`/api/copilotkit/threads`, bob);
+    const his = await get(`/api/runtime/threads`, bob);
     expect(his.status).toBe(200);
     expect(threadIdsIn(his.body)).not.toContain(threadId);
     const hisMessages = await get(
-      `/api/copilotkit/threads/${threadId}/messages`,
+      `/api/runtime/threads/${threadId}/messages`,
       bob,
     );
     expect(hisMessages.status).toBe(200);
     expect(hisMessages.body?.messages).toEqual([]);
-    const hisEvents = await get(
-      `/api/copilotkit/threads/${threadId}/events`,
-      bob,
-    );
+    const hisEvents = await get(`/api/runtime/threads/${threadId}/events`, bob);
     expect(hisEvents.status).toBe(200);
     expect(hisEvents.body?.events).toEqual([]);
     // And Alice's private Bot is not one he can connect to.
     expect(
       (
         await post(
-          `/api/copilotkit/agent/${bots.aliceRemote}/connect`,
+          `/api/runtime/agent/${bots.aliceRemote}/connect`,
           bob,
           runInput(threadId),
         )
@@ -476,7 +466,7 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
     const threadId = `rtf-p17-${randomUUID()}`;
     threadIds.push(threadId);
     const ran = await post(
-      `/api/copilotkit/agent/${bots.aliceRemote}/run`,
+      `/api/runtime/agent/${bots.aliceRemote}/run`,
       alice,
       runInput(threadId),
     );
@@ -497,14 +487,14 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
     const threadId = await alicesThread();
 
     const his = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      `/api/runtime/agent/${bots.catalogue}/connect`,
       bob,
       runInput(threadId),
     );
     expect(his.status).toBe(200);
     // Exactly what an id nobody ever ran answers.
     const unknown = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      `/api/runtime/agent/${bots.catalogue}/connect`,
       bob,
       runInput(`rtf-p17-never-${randomUUID()}`),
     );
@@ -514,7 +504,7 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
       expect(his.text).not.toContain(leaked);
 
     const hers = await post(
-      `/api/copilotkit/agent/${bots.aliceRemote}/connect`,
+      `/api/runtime/agent/${bots.aliceRemote}/connect`,
       alice,
       runInput(threadId),
     );
@@ -525,15 +515,12 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
 
   test("Bob running with Alice's thread id is refused: nothing is appended to her thread and none of it becomes his", async () => {
     const threadId = await alicesThread();
-    const before = await get(
-      `/api/copilotkit/threads/${threadId}/events`,
-      alice,
-    );
+    const before = await get(`/api/runtime/threads/${threadId}/events`, alice);
     const hersBefore = (before.body?.events ?? []) as unknown[];
     expect(hersBefore.length).toBeGreaterThan(0);
 
     const ran = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/run`,
+      `/api/runtime/agent/${bots.catalogue}/run`,
       bob,
       runInput(threadId),
     );
@@ -544,21 +531,18 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     // Nothing of hers became readable to him by way of the run...
-    const hisEvents = await get(
-      `/api/copilotkit/threads/${threadId}/events`,
-      bob,
-    );
+    const hisEvents = await get(`/api/runtime/threads/${threadId}/events`, bob);
     expect(hisEvents.body?.events).toEqual([]);
     const hisMessages = await get(
-      `/api/copilotkit/threads/${threadId}/messages`,
+      `/api/runtime/threads/${threadId}/messages`,
       bob,
     );
     expect(hisMessages.body?.messages).toEqual([]);
     expect(
-      threadIdsIn((await get(`/api/copilotkit/threads`, bob)).body),
+      threadIdsIn((await get(`/api/runtime/threads`, bob)).body),
     ).not.toContain(threadId);
     const hisConnect = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      `/api/runtime/agent/${bots.catalogue}/connect`,
       bob,
       runInput(threadId),
     );
@@ -574,25 +558,18 @@ describe("a thread id that is not the caller's replays and continues nothing (G0
     expect(runs.map((row) => row.tenantId)).toEqual([alice]);
 
     // ...and the thread is still hers, as it was.
-    const after = await get(
-      `/api/copilotkit/threads/${threadId}/events`,
-      alice,
-    );
+    const after = await get(`/api/runtime/threads/${threadId}/events`, alice);
     expect(after.body?.events).toEqual(hersBefore);
     expect(
       threadIdsIn(
-        (
-          await get(
-            `/api/copilotkit/threads?agentId=${bots.aliceRemote}`,
-            alice,
-          )
-        ).body,
+        (await get(`/api/runtime/threads?agentId=${bots.aliceRemote}`, alice))
+          .body,
       ),
     ).toContain(threadId);
 
     // Her own next turn on it still runs.
     const again = await post(
-      `/api/copilotkit/agent/${bots.aliceRemote}/run`,
+      `/api/runtime/agent/${bots.aliceRemote}/run`,
       alice,
       runInput(threadId),
     );
@@ -643,7 +620,7 @@ describe("after a restart a person's stored threads are theirs again, and nobody
     const threadId = `rtf-p18-${randomUUID()}`;
     threadIds.push(threadId);
     const ran = await post(
-      `/api/copilotkit/agent/${bot}/run`,
+      `/api/runtime/agent/${bot}/run`,
       person,
       runInput(threadId),
     );
@@ -678,9 +655,9 @@ describe("after a restart a person's stored threads are theirs again, and nobody
     hers = await finishedTurn(alice, bots.aliceRemote);
     his = await finishedTurn(bob, bots.catalogue);
     hersBefore = {
-      events: ((await get(`/api/copilotkit/threads/${hers}/events`, alice)).body
+      events: ((await get(`/api/runtime/threads/${hers}/events`, alice)).body
         ?.events ?? []) as unknown[],
-      messages: ((await get(`/api/copilotkit/threads/${hers}/messages`, alice))
+      messages: ((await get(`/api/runtime/threads/${hers}/messages`, alice))
         .body?.messages ?? []) as unknown[],
     };
     expect(hersBefore.events.length).toBeGreaterThan(0);
@@ -728,7 +705,7 @@ describe("after a restart a person's stored threads are theirs again, and nobody
     // The restart. Memory first: each person's threads leave the store, their rows stay.
     for (const person of [alice, bob])
       expect(
-        (await post(`/api/copilotkit/threads/clear`, person, {})).status,
+        (await post(`/api/runtime/threads/clear`, person, {})).status,
       ).toBe(204);
     expect(runsInMemory(hers)).toBeUndefined();
     expect(runsInMemory(his)).toBeUndefined();
@@ -745,12 +722,12 @@ describe("after a restart a person's stored threads are theirs again, and nobody
 
   test("Bob's first access lists, reads, replays and continues none of Alice's, and loads none of it", async () => {
     // His own thread is back for him, history and all.
-    const list = await get(`/api/copilotkit/threads`, bob, restarted);
+    const list = await get(`/api/runtime/threads`, bob, restarted);
     expect(list.status).toBe(200);
     expect(threadIdsIn(list.body)).toContain(his);
     expect(threadIdsIn(list.body)).not.toContain(hers);
     const ownMessages = await get(
-      `/api/copilotkit/threads/${his}/messages`,
+      `/api/runtime/threads/${his}/messages`,
       bob,
       restarted,
     );
@@ -762,15 +739,15 @@ describe("after a restart a person's stored threads are theirs again, and nobody
 
     // Hers is not his, by any door.
     expect(
-      (await get(`/api/copilotkit/threads/${hers}/messages`, bob, restarted))
-        .body?.messages,
+      (await get(`/api/runtime/threads/${hers}/messages`, bob, restarted)).body
+        ?.messages,
     ).toEqual([]);
     expect(
-      (await get(`/api/copilotkit/threads/${hers}/events`, bob, restarted)).body
+      (await get(`/api/runtime/threads/${hers}/events`, bob, restarted)).body
         ?.events,
     ).toEqual([]);
     const connected = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/connect`,
+      `/api/runtime/agent/${bots.catalogue}/connect`,
       bob,
       runInput(hers),
       restarted,
@@ -781,7 +758,7 @@ describe("after a restart a person's stored threads are theirs again, and nobody
 
     // P17's refusal still holds with an empty index: claim() asks the row, which is not his.
     const ran = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/run`,
+      `/api/runtime/agent/${bots.catalogue}/run`,
       bob,
       runInput(hers),
       restarted,
@@ -803,15 +780,11 @@ describe("after a restart a person's stored threads are theirs again, and nobody
 
   test("Alice's first access, however many requests it is at once, brings back her list, history, events and replay", async () => {
     const [list, messages, events, connected] = await Promise.all([
-      get(
-        `/api/copilotkit/threads?agentId=${bots.aliceRemote}`,
-        alice,
-        restarted,
-      ),
-      get(`/api/copilotkit/threads/${hers}/messages`, alice, restarted),
-      get(`/api/copilotkit/threads/${hers}/events`, alice, restarted),
+      get(`/api/runtime/threads?agentId=${bots.aliceRemote}`, alice, restarted),
+      get(`/api/runtime/threads/${hers}/messages`, alice, restarted),
+      get(`/api/runtime/threads/${hers}/events`, alice, restarted),
       post(
-        `/api/copilotkit/agent/${bots.aliceRemote}/connect`,
+        `/api/runtime/agent/${bots.aliceRemote}/connect`,
         alice,
         runInput(hers),
         restarted,
@@ -831,23 +804,23 @@ describe("after a restart a person's stored threads are theirs again, and nobody
 
   test("a second access loads nothing twice, for her or for him", async () => {
     for (const person of [alice, bob]) {
-      await get(`/api/copilotkit/threads`, person, restarted);
-      await get(`/api/copilotkit/threads/${hers}/events`, person, restarted);
+      await get(`/api/runtime/threads`, person, restarted);
+      await get(`/api/runtime/threads/${hers}/events`, person, restarted);
     }
     expect(runsInMemory(hers)).toBe(1);
     expect(runsInMemory(his)).toBe(1);
     expect(
-      (await get(`/api/copilotkit/threads/${hers}/events`, alice, restarted))
-        .body?.events,
+      (await get(`/api/runtime/threads/${hers}/events`, alice, restarted)).body
+        ?.events,
     ).toEqual(hersBefore.events);
     expect(
-      threadIdsIn((await get(`/api/copilotkit/threads`, bob, restarted)).body),
+      threadIdsIn((await get(`/api/runtime/threads`, bob, restarted)).body),
     ).not.toContain(hers);
   });
 
   test("Alice's next turn continues her restored thread, after its history", async () => {
     const again = await post(
-      `/api/copilotkit/agent/${bots.aliceRemote}/run`,
+      `/api/runtime/agent/${bots.aliceRemote}/run`,
       alice,
       runInput(hers),
       restarted,
@@ -861,18 +834,16 @@ describe("after a restart a person's stored threads are theirs again, and nobody
 
   test("a system-stamped legacy thread loads read-only: listed and readable, never continued", async () => {
     expect(
-      threadIdsIn(
-        (await get(`/api/copilotkit/threads`, alice, restarted)).body,
-      ),
+      threadIdsIn((await get(`/api/runtime/threads`, alice, restarted)).body),
     ).toContain(legacy);
     const legacyMessages = (
-      await get(`/api/copilotkit/threads/${legacy}/messages`, alice, restarted)
+      await get(`/api/runtime/threads/${legacy}/messages`, alice, restarted)
     ).body?.messages as { content?: string }[] | undefined;
     expect(legacyMessages?.map((message) => message.content)).toEqual([
       "legacy question",
     ]);
     const ran = await post(
-      `/api/copilotkit/agent/${bots.catalogue}/run`,
+      `/api/runtime/agent/${bots.catalogue}/run`,
       alice,
       runInput(legacy),
       restarted,
@@ -895,7 +866,7 @@ describe("clearing threads clears only the caller's own (G01-E P17)", () => {
     const threadId = `rtf-p17-clear-${randomUUID()}`;
     threadIds.push(threadId);
     const ran = await post(
-      `/api/copilotkit/agent/${bot}/run`,
+      `/api/runtime/agent/${bot}/run`,
       person,
       runInput(threadId),
     );
@@ -914,13 +885,13 @@ describe("clearing threads clears only the caller's own (G01-E P17)", () => {
   /** What `person` can still read of `threadId` out of the runtime. */
   async function readable(person: string, threadId: string, bot: string) {
     const listed = threadIdsIn(
-      (await get(`/api/copilotkit/threads`, person)).body,
+      (await get(`/api/runtime/threads`, person)).body,
     );
     const events = (
-      await get(`/api/copilotkit/threads/${threadId}/events`, person)
+      await get(`/api/runtime/threads/${threadId}/events`, person)
     ).body?.events as unknown[] | undefined;
     const connected = await post(
-      `/api/copilotkit/agent/${bot}/connect`,
+      `/api/runtime/agent/${bot}/connect`,
       person,
       runInput(threadId),
     );
@@ -936,7 +907,7 @@ describe("clearing threads clears only the caller's own (G01-E P17)", () => {
     const his = await turn(bob, bots.catalogue);
     const intact = { listed: true, replays: true };
 
-    const cleared = await post(`/api/copilotkit/threads/clear`, bob, {});
+    const cleared = await post(`/api/runtime/threads/clear`, bob, {});
     expect(cleared.status).toBe(204);
     expect(await readable(alice, hers, bots.aliceRemote)).toMatchObject(intact);
     expect(
@@ -950,9 +921,9 @@ describe("clearing threads clears only the caller's own (G01-E P17)", () => {
     });
 
     const his2 = await turn(bob, bots.catalogue);
-    expect(
-      (await post(`/api/copilotkit/threads/clear`, alice, {})).status,
-    ).toBe(204);
+    expect((await post(`/api/runtime/threads/clear`, alice, {})).status).toBe(
+      204,
+    );
     expect(await readable(alice, hers, bots.aliceRemote)).toEqual({
       listed: false,
       events: 0,

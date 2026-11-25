@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
  * same day: every model of OpenAI's catalogue asked for a tool on both APIs.
  *
  * It stands for a gateway or a proxy in front of OpenAI (LiteLLM, Portkey, a company's own proxy): it sits at an
- * address that is not OpenAI's, so the CopilotKit runtime treats it as any OpenAI-compatible server, and it applies
+ * address that is not OpenAI's, so the agent runtime treats it as any OpenAI-compatible server, and it applies
  * OpenAI's rules to the model after the last slash, because a gateway that publishes `openai/gpt-5.6-terra` hands
  * OpenAI `gpt-5.6-terra`. With `responsesApi: false` it is a server that only speaks Chat Completions, which answers
  * the Responses API's path as OpenAI answers a path it does not serve: 404, no body.

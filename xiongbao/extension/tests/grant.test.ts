@@ -376,7 +376,7 @@ describe("fetchGrant", () => {
       auth: "Bearer tok",
       bot: null,
       body: "{}",
-      path: `/api/copilotkit/trajectory/${id}/connect`,
+      path: `/api/runtime/trajectory/${id}/connect`,
     });
   });
 

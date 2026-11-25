@@ -254,7 +254,7 @@ function gateFor(actor: { id: string; email: string }) {
     }),
   );
   app.post(
-    "/api/copilotkit/agent/:id/run",
+    "/api/runtime/agent/:id/run",
     () =>
       new Response(
         'data: {"type":"RUN_STARTED","model":"anthropic/claude-frames"}\n\n',
@@ -290,7 +290,7 @@ const usageFor = (runId: string) =>
 describe("a governed run, inside the person's own frame", () => {
   const gate = gateFor(person);
   const run = (agentId: string, runId: string) =>
-    gate.request(`/api/copilotkit/agent/${agentId}/run`, {
+    gate.request(`/api/runtime/agent/${agentId}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ threadId: `t-${suite}`, runId }),

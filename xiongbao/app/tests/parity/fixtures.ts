@@ -82,7 +82,7 @@ export const SCENARIOS: readonly Scenario[] = ["data", "empty"];
 
 /**
  * One answer. `body` is sent as JSON unless `contentType` is given, in which case it must be the raw
- * string to send (used for CopilotKit's server-sent event stream).
+ * string to send (used for the agent SDK's server-sent event stream).
  */
 export type FixtureResponse = {
   status: number;
@@ -1305,7 +1305,7 @@ const CAPABILITIES: CapabilitiesBody = {
 };
 
 /**
- * CopilotKit's runtime identification (`GET /api/copilotkit/info`), the subset of `RuntimeInfo` from
+ * The agent SDK's runtime identification (`GET /api/runtime/info`), the subset of `RuntimeInfo` from
  * `@copilotkit/shared` that `@copilotkit/core` reads. `agents` must be an object: core calls
  * `Object.entries(runtimeInfo.agents)`, which is the "Cannot convert undefined or null to object"
  * error a bare `[]`/`{}` body produces.
@@ -1809,7 +1809,7 @@ const FLOW_MODEL_CHOICES: FlowModelChoice[] = [
 ];
 
 /* ------------------------------------------------------------------------------------------------ */
-/* The Bot's conversation (CopilotKit / AG-UI)                                                       */
+/* The Bot's conversation (the agent SDK / AG-UI)                                                       */
 /* ------------------------------------------------------------------------------------------------ */
 
 const BOT_THREAD_ID = "thread-bot-demo";
@@ -1829,7 +1829,7 @@ const BOT_MESSAGES: Message[] = [
 ];
 
 /**
- * What `POST /api/copilotkit/agent/:id/connect` streams for a stored thread: the runtime replays the
+ * What `POST /api/runtime/agent/:id/connect` streams for a stored thread: the runtime replays the
  * thread's history as AG-UI events. Empty scenario: a stream that ends at once, which is what the
  * runtime sends for a thread it has never seen.
  */
@@ -1905,11 +1905,11 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
           : "",
       }),
   ],
-  ["GET", /^\/api\/copilotkit\/info$/, (c) => ok(copilotInfo(list(c, AGENTS)))],
+  ["GET", /^\/api\/runtime\/info$/, (c) => ok(copilotInfo(list(c, AGENTS)))],
   [
-    // CopilotKit's single-route transport: the same identification, asked as `{ method: "info" }`.
+    // The agent SDK's single-route transport: the same identification, asked as `{ method: "info" }`.
     "POST",
-    /^\/api\/copilotkit$/,
+    /^\/api\/runtime$/,
     (c) =>
       (c.body as { method?: unknown } | undefined)?.method === "info"
         ? ok(copilotInfo(list(c, AGENTS)))
@@ -2208,7 +2208,7 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   ["POST", /^\/api\/threads\/mint$/, () => ok({ threadId: BOT_THREAD_ID })],
   [
     "POST",
-    /^\/api\/copilotkit\/agent\/([^/]+)\/connect$/,
+    /^\/api\/runtime\/agent\/([^/]+)\/connect$/,
     (c) => ({
       status: 200,
       contentType: "text/event-stream",

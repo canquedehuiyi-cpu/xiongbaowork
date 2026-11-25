@@ -198,17 +198,10 @@ if (!baseline.ok) {
 const alreadyEmpty = emptyKeys(baseline.out);
 
 /*
- * Keys whose absence is refused, by name, rather than survived.
- *
- * `intelligence` is a subchart's whole values block, and Helm switches a dependency ON when its
- * condition key is missing, so a release from before it would install an Intelligence on that
- * chart's bare defaults beside the one it already uses, and render cleanly doing it. There is no
- * absent-safe reading of that, so validation.yaml refuses it with a message saying what to set. What
- * is asserted is that the refusal is that one, and not some nil dereference on the way.
+ * Keys whose absence is refused, by name, rather than survived: none today. A key listed here is
+ * asserted to be refused with that message, and not by some nil dereference on the way.
  */
-const refusedWhenAbsent: Record<string, string> = {
-  intelligence: "this release's values have no `intelligence` key",
-};
+const refusedWhenAbsent: Record<string, string> = {};
 
 /*
  * A key under a dependency's block is taken out of a copy of values.yaml rather than nulled, so the

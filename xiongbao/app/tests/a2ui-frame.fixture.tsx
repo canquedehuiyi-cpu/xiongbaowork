@@ -12,7 +12,7 @@ import { generativeUiProviderOptions, OPENBOT_UI } from "@/lib/copilot/a2ui";
 /**
  * A conversation with interfaces a Bot drew, as a page of its own for a2ui-frame.test.tsx to bundle
  * and load in Chromium. Each interface arrives the way the runtime delivers it, as a
- * `generative-ui-surface` activity, so CopilotKit's own renderer draws its frame around it.
+ * `generative-ui-surface` activity, so the agent SDK's own renderer draws its frame around it.
  *
  * `?only=<surface>` draws one of them, under the starter request that asks for a trip budget.
  */
@@ -152,7 +152,7 @@ if (root) {
   createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <CopilotKitProvider
-        runtimeUrl="/api/copilotkit"
+        runtimeUrl="/api/runtime"
         {...generativeUiProviderOptions(true)}
       >
         <CopilotChatConfigurationProvider agentId="default" threadId={THREAD}>

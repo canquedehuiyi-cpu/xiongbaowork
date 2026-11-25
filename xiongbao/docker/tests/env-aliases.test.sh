@@ -117,13 +117,13 @@ expect_file "$d" OPENBOT_BUILD_VERSION v2
 #     under a XIONGBAO_ or OPENBOT_ name, and the deployment's own value is left alone
 d=$T/third-party-none; mkdir "$d"
 sh "$SCRIPT" "$d" "$DEFAULTS" 2>/dev/null || fail "third-party default, none set: exited non-zero"
-expect_file "$d" COPILOTKIT_TELEMETRY_DISABLED 1
-[ ! -e "$d/XIONGBAO_COPILOTKIT_TELEMETRY_DISABLED" ] || fail "third-party default: XIONGBAO_ copy was written"
-[ ! -e "$d/OPENBOT_COPILOTKIT_TELEMETRY_DISABLED" ] || fail "third-party default: OPENBOT_ copy was written"
+expect_file "$d" DO_NOT_TRACK 1
+[ ! -e "$d/XIONGBAO_DO_NOT_TRACK" ] || fail "third-party default: XIONGBAO_ copy was written"
+[ ! -e "$d/OPENBOT_DO_NOT_TRACK" ] || fail "third-party default: OPENBOT_ copy was written"
 d=$T/third-party-set; mkdir "$d"
-printf %s 0 > "$d/COPILOTKIT_TELEMETRY_DISABLED"
+printf %s 0 > "$d/DO_NOT_TRACK"
 sh "$SCRIPT" "$d" "$DEFAULTS" 2>/dev/null || fail "third-party default, set to 0: exited non-zero"
-expect_file "$d" COPILOTKIT_TELEMETRY_DISABLED 0
+expect_file "$d" DO_NOT_TRACK 0
 
 [ "$rc" -eq 0 ] && echo "env-aliases.sh: all passed"
 exit "$rc"

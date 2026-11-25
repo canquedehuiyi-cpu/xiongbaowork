@@ -686,12 +686,7 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   deliver_task: { running: "正在交付", done: "交付了成果" },
   request_extension: { running: "正在申请延期", done: "申请了延期" },
 
-  // Skills: the ones it learned, and the ones a person writes with it.
-  copilotkit_load_skill: { running: "正在使用技能", done: "使用了技能" },
-  copilotkit_read_skill_file: {
-    running: "正在读取技能里的文件",
-    done: "读取了技能里的文件",
-  },
+  // Skills: the ones a person writes with it.
   list_skills: {
     running: "正在查看已有技能",
     done: "查看了已有技能",

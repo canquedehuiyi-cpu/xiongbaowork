@@ -6,7 +6,7 @@
 chrome.runtime.onMessage.addListener((message, _sender, reply) => {
   if (message?.type !== "pass") return false;
   const url = new URL(
-    `/api/copilotkit/trajectory/${encodeURIComponent(message.trajectoryId)}/connect`,
+    `/api/runtime/trajectory/${encodeURIComponent(message.trajectoryId)}/connect`,
     message.openbotUrl,
   );
   fetch(url, {

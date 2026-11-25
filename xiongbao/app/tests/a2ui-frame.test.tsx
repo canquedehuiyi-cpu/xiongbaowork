@@ -7,17 +7,17 @@ import { compile } from "tailwindcss";
 /**
  * An interface a Bot draws inside a Card shows one frame in the conversation, not two.
  *
- * CopilotKit draws its own frame, a border and 12px of padding, around every interface in a chat.
+ * The agent SDK draws its own frame, a border and 12px of padding, around every interface in a chat.
  * The catalog's Card draws a border too, and a Bot puts most interfaces in one, so the trip budget
  * the starter task asks for showed a box inside a box with a gap between them. When the interface's
  * top component is a Card that draws a box, the frame gives up its border and padding and the Card
  * is the one frame, the way the app's other cards sit in a conversation. An interface without one
  * (a bare Column, or a Card drawn as a borderless section) keeps the frame, its only box.
  *
- * Rendered in a real Chromium, because whether two boxes are drawn is the cascade of CopilotKit's
+ * Rendered in a real Chromium, because whether two boxes are drawn is the cascade of the agent SDK's
  * stylesheet, the app's and the catalog's inline styles. The transcript is the real component, the
- * interfaces arrive as the runtime's activities and CopilotKit's renderer draws them; the
- * stylesheets are CopilotKit's and the app's own, in the order main.tsx imports them.
+ * interfaces arrive as the runtime's activities and the agent SDK's renderer draws them; the
+ * stylesheets are the agent SDK's and the app's own, in the order main.tsx imports them.
  *
  *   OPENBOT_APP_BROWSER=1 bun test app/tests/a2ui-frame.test.tsx
  *
@@ -156,7 +156,7 @@ async function open(
       ]),
     ),
   ]);
-  // CopilotKit's stylesheet first, then the app's, as main.tsx imports them.
+  // The agent SDK's stylesheet first, then the app's, as main.tsx imports them.
   await page.addStyleTag({
     content: readFileSync(
       packageStylesheet("@copilotkit/react-core/v2/styles.css"),
@@ -169,7 +169,7 @@ async function open(
 }
 
 /**
- * For each interface: which of the boxes around the whole of it draw a border (CopilotKit's frame,
+ * For each interface: which of the boxes around the whole of it draw a border (the agent SDK's frame,
  * and the interface's own top component), how far the interface sits inside the frame, and the
  * frame's padding.
  */

@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { SUBAGENT_TOOL } from "@xiongbao/shared/subagent";
-import { RUNTIME_STATE_TOOLS } from "@xiongbao/toolkit/copilotkit/agents";
 import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
+import { RUNTIME_STATE_TOOLS } from "@xiongbao/toolkit/runtime/agents";
 import { inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
@@ -28,7 +28,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
- * The runs the CopilotKit runtime makes for itself on a Bot hold none of the Bot's tools.
+ * The runs the agent runtime makes for itself on a Bot hold none of the Bot's tools.
  *
  * The runtime names a new conversation by building the conversation's Bot again and running it
  * in-process on a title prompt, and it answers `agent/<id>/suggest` by running the Bot on whatever
@@ -253,7 +253,7 @@ async function personAsks(
   const threadId = `thread-${randomUUID()}`;
   const runId = `run-${randomUUID()}`;
   const response = await runtime.handler.fetch(
-    new Request(`http://127.0.0.1/api/copilotkit/agent/${botId}/run`, {
+    new Request(`http://127.0.0.1/api/runtime/agent/${botId}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -432,13 +432,13 @@ beforeAll(async () => {
   environmentBefore = {
     OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    COPILOTKIT_TELEMETRY_DISABLED: process.env.COPILOTKIT_TELEMETRY_DISABLED,
+    DO_NOT_TRACK: process.env.DO_NOT_TRACK,
     MANAGED_AGENT_TOKEN: process.env.MANAGED_AGENT_TOKEN,
   };
   process.env.MANAGED_AGENT_TOKEN = MANAGED_AGENT_TOKEN;
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${relay.port}/v1`;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
+  process.env.DO_NOT_TRACK = "true";
 
   roster.push({
     id: BUILT_IN,
@@ -583,7 +583,7 @@ test("a turn sends the endpoint the component catalog once, as the guide, and no
     ),
   ).toBe(true);
   // And the catalog only that once: the envelope it was built from stays with the runtime.
-  expect(Object.hasOwn(turn.forwardedProps, "copilotkit")).toBe(false);
+  expect(turn.forwardedProps).not.toHaveProperty(["copilotkit"]);
   expect(body.split(marker).length - 1).toBe(1);
 });
 
@@ -603,7 +603,7 @@ test("a suggestion holds none of the Bot's tools, even when it carries everythin
 
   for (const botId of [BUILT_IN, REMOTE]) {
     const response = await runtime.handler.fetch(
-      new Request(`http://127.0.0.1/api/copilotkit/agent/${botId}/suggest`, {
+      new Request(`http://127.0.0.1/api/runtime/agent/${botId}/suggest`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

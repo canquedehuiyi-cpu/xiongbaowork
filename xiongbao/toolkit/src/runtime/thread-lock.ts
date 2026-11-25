@@ -35,28 +35,14 @@ export type ThreadLockClient = Pick<
  */
 export function createIntelligenceThreadLock(options: {
   client: ThreadLockClient;
-  learning?: {
-    containerForThread: (input: {
-      agentId: string;
-      threadId: string;
-      userId: string;
-    }) => Promise<string | undefined>;
-  };
   onRunBusy?: (input: { threadId: string; busy: boolean }) => void;
 }): ThreadLock {
-  const { client, learning, onRunBusy } = options;
+  const { client, onRunBusy } = options;
   return {
     acquire: async (input) => {
       try {
-        const learningContainerId = await learning?.containerForThread(input);
-        await client.getOrCreateThread({
-          ...input,
-          ...(learningContainerId ? { learningContainerId } : {}),
-        });
-        const held = await client.ɵacquireThreadLock({
-          ...input,
-          ...(learningContainerId ? { learningContainerId } : {}),
-        });
+        await client.getOrCreateThread(input);
+        const held = await client.ɵacquireThreadLock(input);
         // A run started on this thread. Side effect only, never awaited: a channel showing it is
         // working is worth nothing next to the lock the run depends on.
         try {

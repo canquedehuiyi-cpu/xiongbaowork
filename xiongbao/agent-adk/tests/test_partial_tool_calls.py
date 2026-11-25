@@ -1,17 +1,9 @@
-"""Exercise learned skill reads through the real bundled framework."""
+"""A tool call streamed in pieces reaches AG-UI once, whole, without losing the text around it."""
 
-import sys
 from pathlib import Path
+import sys
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tests"))
-sys.path.insert(0, str(ROOT / "agent-adk"))
-
-from learning_harness_contract import assert_learning_delivery
-
-
-def test_learned_catalog_and_both_read_tools_reach_the_model(monkeypatch):
-    assert_learning_delivery(monkeypatch, "agent-adk", "/")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def test_partial_tool_arguments_wait_without_dropping_neighboring_text(monkeypatch):
@@ -27,10 +19,10 @@ def test_partial_tool_arguments_wait_without_dropping_neighboring_text(monkeypat
     async def provider(self, request, stream=False):
         yield LlmResponse(partial=True, content=types.Content(role="model", parts=[
             types.Part(text="Looking up the policy."),
-            types.Part(function_call=types.FunctionCall(id="call", name="copilotkit_load_skill", will_continue=True)),
+            types.Part(function_call=types.FunctionCall(id="call", name="demo_client_tool", will_continue=True)),
         ]))
         yield LlmResponse(partial=False, content=types.Content(role="model", parts=[
-            types.Part(function_call=types.FunctionCall(id="call", name="copilotkit_load_skill", args={"skill_name": "refunds"})),
+            types.Part(function_call=types.FunctionCall(id="call", name="demo_client_tool", args={"topic": "refunds"})),
         ]))
 
     monkeypatch.setattr(LiteLlm, "generate_content_async", provider)
@@ -41,5 +33,5 @@ def test_partial_tool_arguments_wait_without_dropping_neighboring_text(monkeypat
 
     responses = asyncio.run(collect())
     assert responses[0].content.parts == [types.Part(text="Looking up the policy.")]
-    assert responses[1].content.parts[0].function_call.args == {"skill_name": "refunds"}
+    assert responses[1].content.parts[0].function_call.args == {"topic": "refunds"}
     assert responses[1].content.parts[0].function_call.id == "call"

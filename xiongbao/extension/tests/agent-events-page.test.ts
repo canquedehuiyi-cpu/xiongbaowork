@@ -411,7 +411,7 @@ const composer = (mark: FixtureMark): CapturedEvent[] =>
         mark.wall,
       );
 
-const RUN_URL = "/api/copilotkit/agent/general-assistant/run";
+const RUN_URL = "/api/runtime/agent/general-assistant/run";
 
 /** The Thread of the run XiongBao's Send started, from the run's body (past 64 KiB, so read with getRequestPostData). */
 function sentThread(fixture: Fixture): string | undefined {

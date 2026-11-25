@@ -199,7 +199,7 @@ function runRequest(signal?: AbortSignal) {
   started.push(threadId);
   return {
     threadId,
-    request: new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/run`, {
+    request: new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -296,11 +296,11 @@ beforeAll(async () => {
   environmentBefore = {
     OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    COPILOTKIT_TELEMETRY_DISABLED: process.env.COPILOTKIT_TELEMETRY_DISABLED,
+    DO_NOT_TRACK: process.env.DO_NOT_TRACK,
   };
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${relay.port}/v1`;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
+  process.env.DO_NOT_TRACK = "true";
   roster.push({
     id: BOT,
     name: "Worker",
@@ -513,7 +513,7 @@ describe("a Stop", () => {
     await began;
     const stop = await serving.handler.fetch(
       new Request(
-        `http://127.0.0.1/api/copilotkit/agent/${BOT}/stop/${threadId}`,
+        `http://127.0.0.1/api/runtime/agent/${BOT}/stop/${threadId}`,
         { method: "POST" },
       ),
     );

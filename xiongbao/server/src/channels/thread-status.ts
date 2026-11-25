@@ -4,7 +4,7 @@ import type { ThreadReader } from "./thread-routes";
  * Build a {@link ThreadReader} from Intelligence's own thread lookup.
  *
  * `getThread` is typed as narrowly as this file needs it — a method that takes a thread and a
- * person and either resolves or throws — rather than as the concrete `CopilotKitIntelligence`
+ * person and either resolves or throws — rather than as the concrete platform
  * client. That keeps this file from importing a vendor class just to describe one call on it, and
  * means a test can hand it a stub with no client to construct.
  *

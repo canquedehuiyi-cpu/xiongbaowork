@@ -10,12 +10,7 @@ import { client } from "@/lib/client";
  * their admin sets it up. The browser draws what it is given and never decides who may see a fix.
  * Nothing on it is a secret's value: a key is reported as there or not there.
  */
-export type SetupRowId =
-  | "intelligence"
-  | "model"
-  | "computer"
-  | "apps"
-  | "chat";
+export type SetupRowId = "model" | "computer" | "apps" | "chat";
 
 export type SetupFix =
   | {

@@ -3,14 +3,8 @@
 Runs XiongBao Work on any Kubernetes cluster: EKS, GKE, AKS, or your own. One chart, five targets, and the
 only difference between them is values.
 
-**CopilotKit Intelligence is optional.** Conversations, memory and history stay in
-the PostgreSQL this chart brings up (or the one you point `database` at), and the server runs without
-Intelligence. Intelligence only adds Admin → 自动学习's published skills. You can point XiongBao Work at
-managed Intelligence or one you already run ([the alternative](#with-managed-intelligence-or-one-you-already-run)),
-or have this chart install one beside it, self-hosted, on its own bundled PostgreSQL and Redis
-([the bundled Intelligence](#with-the-bundled-intelligence)). The bundled one is OFF by default
-(`intelligence.enabled: false`) because a self-hosted Intelligence needs a CopilotKit licence.
-[The vanilla install](#vanilla-install) below is XiongBao Work alone in three steps.
+Conversations, memory and history stay in the PostgreSQL this chart brings up (or the one you point
+`database` at). [The vanilla install](#vanilla-install) below is XiongBao Work in three steps.
 
 ## Vanilla install
 
@@ -97,55 +91,11 @@ it, with the keys `model-api-key` (or `anthropic-api-key`, or both), `key-encryp
 one there only if something outside this chart fires routines too, and otherwise the chart generates
 one.
 
-### With the bundled Intelligence
-
-Add Intelligence to the install above with `intelligence.enabled: true` and your CopilotKit licence
-(`secrets.licenseToken`; a self-hosted Intelligence needs it on its own deployment, and the chart
-refuses the bundle without it):
-
-```sh
-helm upgrade --install xiongbao charts/xiongbao \
-  --namespace xiongbao --create-namespace \
-  --values charts/xiongbao/ci/vanilla-values.yaml \
-  --values xiongbao-secrets.yaml \
-  --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
-  --set config.extraEnv[0].value=warn \
-  --set intelligence.enabled=true \
-  --set-string secrets.licenseToken="<your CopilotKit licence>" \
-  --timeout 15m
-```
-
-The chart then installs Intelligence (whose embeddings image is amd64 only too), generates every
-credential it needs as Secrets that are kept across upgrades and uninstalls, including XiongBao Work's
-runtime key in `openbot-intel-api-key`, and gives it the licence (XiongBao Work gets the same one).
-Intelligence's bootstrap Job then creates XiongBao Work's organization and project, stores that key for it,
-and creates the `openbot` Learning container. Nobody signs in to anything. The log of the
-`xiongbao-intelligence-bootstrap` Job says what Intelligence set up. The browser reaches
-Intelligence's gateway through XiongBao Work's own address, so the one port-forward is all it needs. Leave
-`config.intelligence` and `secrets.intelligenceApiKey` empty: the chart wires the bundled one itself
-and refuses an address of your own beside it.
-
-Intelligence does not receive conversations (they stay in XiongBao Work's PostgreSQL), so its
-Learning agent has none of XiongBao Work's conversations to learn from; what reaches the Bots is the skills
-published in it. See [Automatic Learning](#automatic-learning-optional).
-
-**Automatic Learning spends your model key.** Learning is on in the bundled Intelligence, whose
-Learning agent proposes skills with `openai/gpt-5.5` on the key in `secrets.modelApiKey`, or with
-`anthropic/claude-sonnet-5-5` on `secrets.anthropicApiKey` when that is the only key.
-
-With the secrets in a Secret of your own, add `license-token` to it and set
-`intelligence.appApi.licenseSecret.existingSecret` to it too, so Intelligence reads the same licence.
-Intelligence's Learning agent reads `model-api-key` and `anthropic-api-key` from that Secret as well:
-the chart copies them at install and on every upgrade, so a new key there reaches Learning on its next
-run after `helm upgrade`, and picks Learning's model from which of them is there (adding or removing
-one wants a restart, see [Automatic Learning](#automatic-learning-optional)). `values.yaml` under
-`intelligence` explains every value the bundle sets.
-
 ## What a cluster needs first
 
 Four things this chart assumes and does not create.
 
-**An image the cluster can pull.** A release publishes `ghcr.io/copilotkit/openbot:vX.Y.Z`
+**An image the cluster can pull.** A release publishes `ghcr.io/canquedehuiyi-cpu/xiongbaowork:vX.Y.Z`
 publicly, and that tag is what `image.tag` wants. It is built for **`linux/amd64` only**, so an
 arm64 node group (Graviton on EKS, Tau T2A on GKE, Ampere on AKS) cannot run it: the pods sit in
 `ImagePullBackOff`, which is the same thing a wrong tag or a missing pull secret looks like, so the
@@ -153,16 +103,15 @@ node pool being the wrong shape is the last thing anybody checks. Either run amd
 architecture you have and push it somewhere the cluster can reach. Check before assuming:
 
 ```sh
-docker manifest inspect ghcr.io/copilotkit/openbot:v0.0.9 | grep architecture
+docker manifest inspect ghcr.io/canquedehuiyi-cpu/xiongbaowork:v0.0.9 | grep architecture
 ```
 
 **A model key.** Nothing else has to be acquired before the first install. Conversations, memory and
 skills live in the PostgreSQL this chart brings up, or in the managed database you point `database`
 at, so there is no platform project to create and no runtime key to mint.
 
-**On kind, on an Apple Silicon Mac**, the node is arm64 and XiongBao Work's image is amd64 only, as is
-`ghcr.io/huggingface/text-embeddings-inference:cpu-*` when the chart installs Intelligence; everything
-else it renders is multi-arch. `kind load docker-image` prints `loading...` for them and the node then
+**On kind, on an Apple Silicon Mac**, the node is arm64 and XiongBao Work's image is amd64 only;
+everything else it renders is multi-arch. `kind load docker-image` prints `loading...` for it and the node then
 silently drops the amd64 image, so the pod still cannot pull it. Import each one into the node's
 containerd by platform instead, and Docker Desktop's Rosetta emulation runs it, slowly on the first
 start, which the server's startup probe tolerates:
@@ -172,12 +121,6 @@ docker pull --platform linux/amd64 "$IMAGE"
 docker save --platform linux/amd64 "$IMAGE" \
   | docker exec -i kind-control-plane ctr -n k8s.io images import --all-platforms --platform linux/amd64 -
 ```
-
-**CopilotKit Intelligence is optional.** Set `secrets.intelligenceApiKey` (from
-`npx --yes copilotkit@latest project select`) to connect one, and Admin → 自动学习 delivers the
-skills published in it. A self-hosted Intelligence also needs `config.intelligence.apiUrl` and its
-CopilotKit licence in `secrets.licenseToken`; that Intelligence needs the licence on its own deployment
-too. A URL or licence set without the key is refused at boot as half-configured.
 
 **A default StorageClass**, or a named one. Both a Bot's computer and the bundled database ask for
 a volume, and a fresh cluster often has no class marked default. See
@@ -253,15 +196,11 @@ managedNodeGroups:
     disablePodIMDS: true
 ```
 
-**Why three nodes.** The scheduler places a pod by what it requests, not by what it uses, and the
-vanilla install with the bundled Intelligence requests about 3.25 vCPU for as long as it runs (XiongBao Work
-alone, the default here, asks for less): summing `resources.requests.cpu` over the
-Deployments and StatefulSets in
-`helm template xiongbao charts/xiongbao -f charts/xiongbao/ci/vanilla-values.yaml --set intelligence.enabled=true`,
-times their replicas, gives 2200m for the Deployments (XiongBao Work's two servers and Intelligence's API, gateway,
-embeddings and Learning) and 1050m for the StatefulSets (both databases, Redis, object storage and
-the shared computer, which alone asks for 500m). The install Jobs add about 400m while they run. A
-t3.large leaves about 1.93 vCPU allocatable, and EKS's own pods (the VPC CNI, kube-proxy, CoreDNS,
+**Why three nodes.** The scheduler places a pod by what it requests, not by what it uses: sum
+`resources.requests.cpu` over the Deployments and StatefulSets in
+`helm template xiongbao charts/xiongbao -f charts/xiongbao/ci/vanilla-values.yaml`, times their
+replicas (the shared computer alone asks for 500m), and add what the install Jobs take while they
+run. A t3.large leaves about 1.93 vCPU allocatable, and EKS's own pods (the VPC CNI, kube-proxy, CoreDNS,
 metrics-server and the EBS CSI driver) take several hundred millicores of that, so two nodes come
 out a few hundred millicores short. Nothing errors: both nodes fill to 90% or more of their
 allocatable CPU in requests, and the last pod to be scheduled, usually `xiongbao-computer-0`, stays
@@ -327,30 +266,6 @@ from the cluster's own security group. `aws eks describe-cluster` names both. Ke
 [The vanilla install](#vanilla-install) above is the shortest thing that works. Everything below adds
 to it: sign-in for a team, your own database, a cloud's features.
 
-### With managed Intelligence, or one you already run
-
-`intelligence.enabled: false` installs XiongBao Work alone and points it at an Intelligence that already
-runs: managed Intelligence, or a self-hosted one installed from its own chart. Name it in
-`config.intelligence` and give its key as `secrets.intelligenceApiKey` (see
-[What a cluster needs first](#what-a-cluster-needs-first)):
-
-```sh
-helm dependency build charts/xiongbao
-helm upgrade --install xiongbao charts/xiongbao \
-  --namespace xiongbao --create-namespace \
-  --set intelligence.enabled=false \
-  --set-string config.intelligence.apiUrl=https://api.intelligence.copilotkit.ai \
-  --set-string config.intelligence.gatewayWsUrl=wss://realtime.intelligence.copilotkit.ai \
-  --set-string secrets.intelligenceApiKey="<cpk-... runtime key>" \
-  --set config.singleUser=true \
-  --set postgresql.enabled=true \
-  --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
-  --set config.extraEnv[0].value=warn \
-  --set-string postgresql.auth.password="<a password you keep>" \
-  --set-string secrets.keyEncryptionKey="<a key you keep: openssl rand -base64 32>" \
-  --set-string secrets.computerToken="$(openssl rand -hex 32)"
-```
-
 For a team rather than one person, configure an identity provider instead of `config.singleUser`:
 `config.auth` in `values.yaml`, with its client secret under `secrets`, `secrets.betterAuthSecret`,
 `config.publicUrl` and `config.initialAdminEmails`.
@@ -372,12 +287,6 @@ The two `extraEnv` lines are the bundled database's price: it connects the API a
 `postgres`, which row-level security does not bind, and the server refuses that in production unless
 told otherwise. The chart refuses to render without them rather than leave the API crash-looping. See
 [the RLS upgrade note](#coming-from-a-release-that-only-warned-the-server-now-refuses-a-superuser).
-
-**Upgrading a release from before the bundled Intelligence.** Its values have no `intelligence` key,
-and Helm installs a dependency whose switch is missing, so the chart refuses the upgrade by name rather
-than install an Intelligence nobody asked for. Add `--set intelligence.enabled=false` to keep running
-as before, with no Intelligence or the one you have. The same applies with `--reuse-values`, which
-keeps the old values and drops the new chart's defaults.
 
 `secrets.keyEncryptionKey` encrypts the credential vault. With the bundled database the chart
 generates it; with a database of your own it is required, because that database outlives the
@@ -600,10 +509,7 @@ The chart fails the install, naming the value to change, when: there is no datab
 the bundled database's `postgres` superuser is used with no `OPENBOT_RLS_ENFORCE` in `config.extraEnv`;
 nobody could sign in or nobody would be an administrator; an identity provider is configured without
 `secrets.betterAuthSecret` or `config.publicUrl`; `singleUser` is combined with a public URL or a
-public LoadBalancer; with the bundled Intelligence (`intelligence.enabled: true`), an Intelligence
-address or key of your own is named beside it, the licence is missing, or it has no project key for
-XiongBao Work; the release predates the bundle (no `intelligence.enabled` at all);
-`secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; with a
+public LoadBalancer; `secrets.keyEncryptionKey` is not a base64 32-byte value, or is the public example key; with a
 database of your own, there is no `secrets.keyEncryptionKey` or no `secrets.computerToken`;
 `computers.mode` is `external` with no `computers.url`, or `sandbox` on a cluster with no Sandbox
 CRD; both an Ingress and an HTTPRoute are enabled; both `externalSecrets` and an existing Secret are
@@ -613,12 +519,8 @@ for inside more than one API replica; `networkPolicy.enabled` is set with an ext
 `networkPolicy.extraEgress`, or with `computers.mode: sandbox` and no
 `networkPolicy.kubernetesApiCidr`; a computer proxy is named that the network policy blocks, or
 `computers.egressProxy` is turned on with policies and no `networkPolicy.computerExtraEgress`, or with
-no `secrets.egressProxyUrl` where this chart writes the Secret; a tag annotation gives CopilotKit's
-AWS tag key a different value (see [AWS usage attribution](#aws-usage-attribution));
-`config.model.provider` is anything but `openai` or `anthropic`; `config.learning.model` is not
-`provider/model` or the Learning agent's `env` would never read it, or
-`intelligence.learning.agent.model` names a model beside the one the chart sets (see
-[Automatic Learning](#automatic-learning-optional)). Not on this list, because the chart
+no `secrets.egressProxyUrl` where this chart writes the Secret; `config.model.provider` is anything
+but `openai` or `anthropic`. Not on this list, because the chart
 generates them wherever nobody else holds one: the routines worker's secret (see
 [The routines sweep](#the-routines-sweep)), and, with the bundled database, the key encryption key,
 the computer token and the database password.
@@ -643,79 +545,6 @@ Left empty, this deployment has the Bots its tenant package declares as built-in
 somebody creates in the app without an endpoint runs here on its role description. A package entry
 pointing at an endpoint that resolves to nothing is dropped rather than registered as a coworker
 nobody can talk to.
-
-## Automatic Learning (optional)
-
-Only with a connected CopilotKit Intelligence (`secrets.intelligenceApiKey`, or the bundled one);
-without one, Admin → 自动学习 says so and nothing below applies. XiongBao Work keeps conversations in its
-own PostgreSQL, so they are not sent to Intelligence as learning evidence: the skills it delivers are
-the ones produced and published in Intelligence itself.
-
-**With the bundled Intelligence** (`intelligence.enabled: true`, off by default) there is nothing to
-set up. Learning is on in Intelligence too (`intelligence.learning`), Intelligence creates the
-project's `openbot` container at install, and the server assigns it as the default. Intelligence's
-Learning agent spends the same key your Bots do, on a model that follows the keys you give:
-
-| Keys | Learning's model | Key it spends |
-| --- | --- | --- |
-| `secrets.modelApiKey` | `openai/gpt-5.5` | the OpenAI key |
-| `secrets.anthropicApiKey` alone | `anthropic/claude-sonnet-5-5` | the Anthropic key |
-| both | `openai/gpt-5.5` | the OpenAI key |
-
-`config.learning.model` names another, as `provider/model` (`anthropic/claude-opus-4-8`, say). The
-chart writes the model and each key, under its own name, into `openbot-intel-learning`, and the agent
-reads them from there as `LEARNING_AGENT_MODEL`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
-(`intelligence.learning.agent`), so the Anthropic key never reaches it under the OpenAI name. Leave
-`intelligence.learning.agent.model` empty: it would set the model a second time, and the chart refuses
-it. With the keys in a store, the chart cannot see which is there and picks `openai/gpt-5.5`; set
-`config.learning.model` for a store with an Anthropic key alone.
-
-The agent re-reads its keys before every run, so a new key reaches it on its next run after
-`helm upgrade`. It reads its model only when it starts, so after changing `config.learning.model`, or
-adding or removing a key (which can change the model), restart it once `helm upgrade` is done:
-
-```sh
-kubectl -n xiongbao rollout restart deployment/xiongbao-intelligence-learning-agent
-```
-
-Intelligence receives no conversations of XiongBao Work's, so it learns only from what reaches it
-otherwise. What it learns is kept in an object store the release runs
-(`intelligence.localObjectStorage`). Admin → 自动学习 chooses the default container and which Bots
-receive its published skills; a review screen (proposed skills, Approve, Reject, Learn now)
-is not in the web app yet. Intelligence's own dashboard is not installed by default
-(`intelligence.appFrontend`); turn it on, with `intelligence.auth.issuer` and an Ingress, to review
-skills in Intelligence itself.
-
-**With an Intelligence of your own** (`intelligence.enabled: false`), Learning needs a container in its
-project before it delivers anything. With nothing saved in Admin and no
-`config.learning.containerId`, the server assigns the project's `openbot` container as the default by
-itself once it exists. A current Intelligence lets the runtime key create it, and the server does. On
-one that does not, give the chart a credential that can and a setup Job creates it on install and
-every upgrade:
-
-- Managed Intelligence: a CopilotKit CLI login. Sign in into an empty folder and store the file it
-  writes, then set `config.learning.setup.cliLoginSecret.name: xiongbao-copilotkit-cli`:
-
-  ```sh
-  COPILOTKIT_CONFIG_DIR="$(mktemp -d)"; export COPILOTKIT_CONFIG_DIR
-  npx --yes copilotkit@latest login
-  kubectl create secret generic xiongbao-copilotkit-cli \
-    --from-file=config.json="$COPILOTKIT_CONFIG_DIR/auth/config.json"
-  ```
-
-  It is a person's 30-day session; only the Job reads it, never the server.
-- A CopilotKit local evaluation install: a service token Secret in
-  `config.learning.setup.serviceTokenSecret` with the project's numeric ID in
-  `config.learning.setup.projectId`. The server gets it too, so Admin can create the container again.
-
-Without either, create it once with `bun scripts/setup-learning.ts` from a computer that can sign in
-to Intelligence, or in Intelligence itself; the server log and Admin → Automatic Learning say exactly
-that. `config.learning.autoAssign: false` turns the automatic assignment off.
-`config.learning.containerId` sets the initial default container
-(`CPK_INTELLIGENCE_LEARNING_CONTAINER_ID`) and `config.learning.revision` the skills revision
-(`CPK_INTELLIGENCE_SKILLS_REVISION`). Both are only starting values: settings saved in Admin →
-Automatic Learning take precedence, including switching it off. See
-[docs/automatic-learning.md](../../docs/automatic-learning.md).
 
 ## Memory and background research
 
@@ -968,39 +797,6 @@ It reaches every computer as `EGRESS_PROXY_DEFAULT`, behind the egress filter, s
 policy still decides what a Bot may reach. Turning it on with `networkPolicy.enabled` and no
 `computerExtraEgress`, or with no URL where this chart holds the Secret, is refused at install.
 
-## AWS usage attribution
-
-The load balancers this chart has AWS create carry a tag that credits CopilotKit, through AWS Partner
-Revenue Measurement, for the AWS usage XiongBao Work drives. It is on for every install and has no
-setting. It is the same tag the bundled Intelligence puts on its own Ingress:
-
-```text
-aws-apn-id-058264219587 = pc:avjdxr516uh0mgsqob730tzgy
-```
-
-The key is CopilotKit's Partner Central account and the value is its product code, both constants in
-the chart rather than values. The tag adds no permission, request or resource, and asks nothing of
-you at install or upgrade.
-
-- **The Ingress**, in `alb.ingress.kubernetes.io/tags`. The AWS Load Balancer Controller applies it
-  to the load balancer it creates, with the role it already has. It is rendered for every
-  `ingress.className`, because other controllers ignore it, and a load balancer shared through
-  `alb.ingress.kubernetes.io/group.name` is tagged too.
-- **The server's Service, when `server.service.type` is `LoadBalancer`**, in
-  `service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags`, which both the AWS Load
-  Balancer Controller and the in-tree AWS provider read. Any other type creates nothing in AWS, so it
-  carries no tag.
-
-Your own tags in that annotation are kept, in order, with ours appended. Another partner's
-`aws-apn-id-<account>` tag is kept, and so is a legacy `aws-apn-id` carrying another partner's value:
-up to ten partners can each tag one resource. A legacy `aws-apn-id=pc:avjdxr516uh0mgsqob730tzgy` is
-ours from before the suffixed key, and is replaced by it so the load balancer is not counted twice.
-The install is refused only when your annotation gives `aws-apn-id-058264219587` a different value.
-Remove that entry.
-
-Not tagged: with `httpRoute`, the load balancer belongs to your Gateway rather than to this chart, so
-tag it there; and the EBS volumes behind the chart's PersistentVolumeClaims.
-
 ## Upgrades
 
 ### Coworkers now act on the tenant's own machine by default (`config.tenantRuntime`)
@@ -1058,25 +854,6 @@ upgrade run that way keeps running as root and says nothing. Pass the value, or 
 `fsGroupChangePolicy: OnRootMismatch` is deliberate. Unset means `Always`, which walks every file on
 every mount, and a real Chromium profile is tens of thousands of small ones; in `sandbox` mode that
 pass would run again on every resume from idle.
-
-### Moving the bundled Intelligence restarts its database
-
-Each Intelligence release moves the image of Intelligence's own PostgreSQL, so an upgrade that moves
-the bundled Intelligence replaces that database's pod. The Job that installs Learning's queue
-(`<release>-intelligence-learning-queue-migration-<revision>`) starts beside that restart and waits
-for the database inside its own deadline, `intelligence.learning.queue.migration.activeDeadlineSeconds`,
-which this chart sets to 15 minutes. **`--reuse-values` will not pick this up:** it drops this
-chart's defaults, so a release upgraded with it keeps Intelligence's own 5 minutes. Pass the value
-(`--set intelligence.learning.queue.migration.activeDeadlineSeconds=900`), or drop the flag.
-
-If the Job runs out of time first, the upgrade stops with `UPGRADE FAILED`, the Job's status is
-`DeadlineExceeded` and its log ends `waiting for PostgreSQL to accept connections`. Nothing is wrong
-with the database or the migration. Run `helm upgrade` again once that pod is Ready: the next
-revision's Job finds the database up and completes.
-
-**After a failed revision, give your values again rather than `--reuse-values`.** Helm reuses the
-values of the last revision that succeeded, not those of the failed one, so a value you changed in
-the failed upgrade is silently undone. Pass the same `-f` files and `--set` flags you upgraded with.
 
 ### How a rollout is sequenced
 

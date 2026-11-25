@@ -1,7 +1,7 @@
 /**
  * Whether a Bot may take one particular action on one particular page.
  *
- * Mirrors the policy engine in CopilotKit's enterprise agent gateway rather than being re-derived, so
+ * Mirrors the policy engine in an upstream enterprise agent gateway rather than being re-derived, so
  * a rule written here means the same thing there. Kept from it: CEL expressions, `dry-run` vs
  * `enforce`, default-deny, and fail-closed evaluation. Added here: a `deny` list, because an
  * allow-only policy can only forbid one thing by withdrawing permission from everything.

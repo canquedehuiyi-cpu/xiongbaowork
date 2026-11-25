@@ -1,14 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  chmod,
-  mkdir,
-  readFile,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 async function writeExecutable(path: string, contents: string) {
   await writeFile(path, contents);
@@ -33,10 +26,6 @@ type Run = {
   settings?: Record<string, string>;
   processEnvironment?: Record<string, string>;
   unavailableHealthPorts?: readonly number[];
-  composioSetup?: "configured" | "failed" | "real-helper" | "real-cli";
-  /** What `npx` does when the real helper runs the CopilotKit CLI. */
-  cli?: "missing-provision" | "provisions";
-  probeBrokerEnvironment?: { composioKey?: string };
 };
 
 async function runStartWithStaleServerProbe(
@@ -48,9 +37,6 @@ async function runStartWithStaleServerProbe(
     settings = {},
     processEnvironment = {},
     unavailableHealthPorts = [],
-    composioSetup,
-    cli,
-    probeBrokerEnvironment,
   }: Run = {},
 ) {
   const root =
@@ -61,7 +47,6 @@ async function runStartWithStaleServerProbe(
   const logPath = join(directory, "pkill.log");
   const dockerLogPath = join(directory, "docker.log");
   const curlLogPath = join(directory, "curl.log");
-  const brokerEnvironmentPath = join(directory, "broker-environment.log");
   // Every docker and bun this run starts, with the owner URL each one was handed.
   const ownerUrlLogPath = join(directory, "owner-url.log");
   await mkdir(fakeBin, { recursive: true });
@@ -106,56 +91,6 @@ async function runStartWithStaleServerProbe(
     join(scripts, "processes.sh"),
     await readFile("scripts/processes.sh"),
   );
-  if (composioSetup === "real-cli") {
-    // The real helper, unchanged. Bun resolves its imports from the checkout it links to.
-    await symlink(
-      resolve("scripts/setup-composio.ts"),
-      join(scripts, "setup-composio.ts"),
-    );
-  } else
-    await writeFile(
-      join(scripts, "setup-composio.ts"),
-      `
-import { writeFile, readFile } from "node:fs/promises";
-import { setupComposio } from ${JSON.stringify(resolve("scripts/setup-composio.ts"))};
-const result = await setupComposio({ runCli: async (args) => {
-  await writeFile(".env", (await readFile(".env", "utf8")) + "\\nCOMPOSIO_API_KEY=synthetic-project-key\\n");
-  return { exitCode: 0, stdout: JSON.stringify({type: "completed", installation_id: args[4], project_id: "project-synthetic", environment_file_written: true, reused: false}) };
-} });
-console.log(result === "configured" ? "COMPOSIO-CONFIGURED" : "COMPOSIO-PRESERVED");
-`,
-    );
-  await writeFile(
-    join(scripts, "probe-broker-environment.ts"),
-    `
-await Bun.write(process.env.BROKER_ENVIRONMENT_PROBE, [
-  "composio=" + (process.env.COMPOSIO_API_KEY === process.env.EXPECTED_COMPOSIO_KEY),
-].join("\\n"));
-`,
-  );
-
-  // The CopilotKit CLI the real helper starts. One that predates `integrations composio provision`
-  // fails the way an old CLI, a signed-out CLI or an Ops without provisioning does.
-  await writeExecutable(
-    join(fakeBin, "npx"),
-    `#!/usr/bin/env bash
-# Fixed when written: the helper hands the CLI only an allowlisted environment.
-if [ "${cli ?? "missing-provision"}" = provisions ]; then
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --installation-id) id="$2"; shift ;;
-      --env-path) env_path="$2"; shift ;;
-    esac
-    shift
-  done
-  printf 'COMPOSIO_API_KEY=synthetic-cli-key\\n' >> "$env_path"
-  printf '{"type":"completed","installation_id":"%s","project_id":"pr_synthetic","environment_file_written":true,"reused":false}' "$id"
-  exit 0
-fi
-echo "error: unknown command 'integrations'" >&2
-exit 1
-`,
-  );
   await writeExecutable(
     join(fakeBin, "lsof"),
     `#!/usr/bin/env bash\nif [[ "$*" == *"-d cwd"* ]]; then\n  printf 'p888\\nn/another/xiongbao\\n'\nelse\n  echo "p123"; echo "cbun"; echo "n*:3001"\nfi\n`,
@@ -172,7 +107,7 @@ if [[ "$args" == *"/internal/routines/run"* ]]; then
   printf '${status}'
   exit 0
 fi
-if [[ "$args" == *"/api/copilotkit/info"* ]]; then
+if [[ "$args" == *"/api/runtime/info"* ]]; then
   printf '{"licenseStatus":"valid","mode":"test","agents":{"analyst":{}}}'
   exit 0
 fi
@@ -208,11 +143,10 @@ exit 0
   );
   // The runtime health check is a script piped into `bun run -`, so that one invocation is the real
   // Bun: it is what decides whether the run carries on. Everything else Bun would start is faked.
-  // The Learning container check answers with one line, which start.sh relays.
   await writeExecutable(
     join(fakeBin, "bun"),
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a bash parameter expansion, written to the fake as is.
-    '#!/usr/bin/env bash\nprintf "bun %s|%s\\n" "$*" "${MIGRATION_DATABASE_URL-<unset>}" >> "$OWNER_URL_LOG"\nif [ "$1" = run ] && [ "$2" = - ]; then\n  if [ -n "$BROKER_ENVIRONMENT_PROBE" ]; then "$REAL_BUN" --env-file=.env scripts/probe-broker-environment.ts; fi\n  exec "$REAL_BUN" "$@"\nfi\nif [ "$1" = scripts/setup-learning.ts ]; then echo "noise"; echo "LEARNING-CHECK $*"; fi\nif [ "$1" = scripts/setup-composio.ts ]; then\n  if [ "$TEST_COMPOSIO_SETUP" = real-helper ] || [ "$TEST_COMPOSIO_SETUP" = real-cli ]; then exec "$REAL_BUN" "$@"; fi\n  if [ "$TEST_COMPOSIO_SETUP" = failed ]; then echo "Composio setup failed. Sign in and retry." >&2; exit 1; fi\n  if [ "$TEST_COMPOSIO_SETUP" = configured ]; then printf "COMPOSIO_API_KEY=synthetic-project-key\\n" >> .env; echo "COMPOSIO-CONFIGURED"; fi\nfi\nexit 0\n',
+    '#!/usr/bin/env bash\nprintf "bun %s|%s\\n" "$*" "${MIGRATION_DATABASE_URL-<unset>}" >> "$OWNER_URL_LOG"\nif [ "$1" = run ] && [ "$2" = - ]; then\n  exec "$REAL_BUN" "$@"\nfi\nexit 0\n',
   );
   // What `python3` is on a stock Windows machine: the Microsoft Store alias, which runs nothing. A
   // script that still needed it would stop at the health check in every test in this file.
@@ -232,13 +166,6 @@ exit 0
         DOCKER_LOG: dockerLogPath,
         CURL_LOG: curlLogPath,
         OWNER_URL_LOG: ownerUrlLogPath,
-        TEST_COMPOSIO_SETUP: composioSetup ?? "preserved",
-        ...(probeBrokerEnvironment
-          ? {
-              BROKER_ENVIRONMENT_PROBE: brokerEnvironmentPath,
-              EXPECTED_COMPOSIO_KEY: probeBrokerEnvironment.composioKey,
-            }
-          : {}),
         ...processEnvironment,
       },
       stdout: "pipe",
@@ -258,9 +185,6 @@ exit 0
     const curlLog = await Bun.file(curlLogPath)
       .text()
       .catch(() => "");
-    const brokerEnvironment = await Bun.file(brokerEnvironmentPath)
-      .text()
-      .catch(() => "");
     const ownerUrlLog = await Bun.file(ownerUrlLogPath)
       .text()
       .catch(() => "");
@@ -272,7 +196,6 @@ exit 0
       pkillLog,
       dockerLog,
       curlLog,
-      brokerEnvironment,
       ownerUrlLog,
       envFile,
     };
@@ -299,119 +222,6 @@ describe("start.sh server restart guard", () => {
       expect(result.pkillLog).toContain("bun --env-file=../.env src/index.ts");
     },
   );
-});
-
-describe("start.sh automatic Composio setup", () => {
-  test.each(["", " \t "])(
-    "a blank exported Composio key (%j) lets a later real Bun child load the provisioned key",
-    async (value) => {
-      const result = await runStartWithStaleServerProbe(401, {
-        composioSetup: "real-helper",
-        processEnvironment: { COMPOSIO_API_KEY: value },
-        probeBrokerEnvironment: { composioKey: "synthetic-project-key" },
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("COMPOSIO-CONFIGURED");
-      expect(result.brokerEnvironment).toBe("composio=true");
-      expect(result.stdout + result.stderr).not.toContain(
-        "synthetic-project-key",
-      );
-    },
-  );
-
-  test.each([
-    [
-      "supplied Composio",
-      { COMPOSIO_API_KEY: "existing-composio" },
-      {},
-      { composioKey: "existing-composio" },
-    ],
-    [
-      "saved Composio behind a blank export",
-      { COMPOSIO_API_KEY: "   " },
-      { COMPOSIO_API_KEY: "saved-composio" },
-      { composioKey: "saved-composio" },
-    ],
-  ] as const)(
-    "real child startup preserves %s",
-    async (_, processEnvironment, settings, probeBrokerEnvironment) => {
-      const result = await runStartWithStaleServerProbe(401, {
-        composioSetup: "real-helper",
-        processEnvironment,
-        settings,
-        probeBrokerEnvironment,
-      });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("COMPOSIO-PRESERVED");
-      expect(result.brokerEnvironment).toBe("composio=true");
-    },
-  );
-
-  test("provisions without Learning configuration and restarts a server to reload its environment", async () => {
-    const result = await runStartWithStaleServerProbe(401, {
-      composioSetup: "configured",
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("COMPOSIO-CONFIGURED");
-    expect(result.stdout).toContain(
-      "a secret was generated this run, so the server is restarted",
-    );
-    expect(result.stdout).not.toContain("LEARNING-CHECK");
-  });
-
-  /**
-   * PROVISIONING IS BEST-EFFORT, LIKE LEARNING. It ran under `set -e`, so a checkout with no
-   * Composio key could not start at all while offline, signed out of the CLI, on a CLI without
-   * `integrations composio provision`, or against an Ops without the provisioning service.
-   */
-  test("starts with apps unavailable and the helper's reason when provisioning cannot complete", async () => {
-    const result = await runStartWithStaleServerProbe(401, {
-      composioSetup: "failed",
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(
-      "Composio: apps are unavailable this run. Composio setup failed. Sign in and retry.",
-    );
-    expect(result.dockerLog).toContain("up -d");
-    expect(result.stdout).toContain("server ready");
-    expect(result.stdout).not.toContain(
-      "a secret was generated this run, so the server is restarted",
-    );
-  });
-
-  test("the real helper with a CLI that cannot provision leaves startup running", async () => {
-    const result = await runStartWithStaleServerProbe(401, {
-      composioSetup: "real-cli",
-      cli: "missing-provision",
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(
-      "Composio: apps are unavailable this run. Composio project setup did not complete.",
-    );
-    expect(result.stdout + result.stderr).not.toContain("unknown command");
-    expect(result.dockerLog).toContain("up -d");
-    expect(result.stdout).toContain("server ready");
-    expect(result.envFile).not.toContain("COMPOSIO_API_KEY");
-    expect(result.stdout).not.toContain(
-      "a secret was generated this run, so the server is restarted",
-    );
-  });
-
-  test("the real helper with a CLI that provisions restarts a running server for the new key", async () => {
-    const result = await runStartWithStaleServerProbe(401, {
-      composioSetup: "real-cli",
-      cli: "provisions",
-    });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(
-      "Composio: project key configured in .env.",
-    );
-    expect(result.envFile).toContain("COMPOSIO_API_KEY=synthetic-cli-key");
-    expect(result.stdout).toContain(
-      "a secret was generated this run, so the server is restarted",
-    );
-    expect(result.stdout + result.stderr).not.toContain("synthetic-cli-key");
-  });
 });
 
 describe("start.sh runtime health", () => {
@@ -551,50 +361,6 @@ describe("start.sh one computer each", () => {
         "compose up -d --build postgres supervisor agent-computer agent-bot agent-langgraph",
       );
     }
-  });
-});
-
-describe("start.sh Learning container check", () => {
-  /**
-   * The server assigns `openbot` once it exists, but its runtime key cannot create it. start.sh asks
-   * the setup helper, without a browser or a prompt, to make sure it exists, and relays its last line.
-   */
-  test.each(["INTELLIGENCE_API_KEY", "CPK_INTELLIGENCE_API_KEY"])(
-    "runs the non-interactive check when %s is set",
-    async (keyName) => {
-      const result = await runStartWithStaleServerProbe(401, {
-        settings: { [keyName]: "cpk-synthetic" },
-      });
-
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain(
-        "LEARNING-CHECK scripts/setup-learning.ts --non-interactive",
-      );
-      expect(result.stdout).not.toContain("noise");
-    },
-  );
-
-  test.each([
-    [
-      "a container is named",
-      { CPK_INTELLIGENCE_LEARNING_CONTAINER_ID: "mine" },
-    ],
-    ["it is switched off", { OPENBOT_LEARNING_AUTO_ASSIGN: "false" }],
-    ["it is switched off with 0", { OPENBOT_LEARNING_AUTO_ASSIGN: "0" }],
-  ])("is skipped when %s", async (_, settings) => {
-    const result = await runStartWithStaleServerProbe(401, {
-      settings: { INTELLIGENCE_API_KEY: "cpk-synthetic", ...settings },
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).not.toContain("LEARNING-CHECK");
-  });
-
-  test("is skipped without a runtime key", async () => {
-    const result = await runStartWithStaleServerProbe(401);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).not.toContain("LEARNING-CHECK");
   });
 });
 

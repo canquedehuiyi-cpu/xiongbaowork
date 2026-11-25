@@ -5,7 +5,7 @@
   /*
    * Three surfaces, darkest to lightest, the way Linear draws them: the frame (the sidebar's tint,
    * which the window edge shares), the panel the page sits in, and the white cards on it. The frame
-   * is CopilotKit's pale lavender, the grays lean towards its lilac, the ring is its periwinkle, and
+   * is the agent SDK's pale lavender, the grays lean towards its lilac, the ring is its periwinkle, and
    * the selected sidebar row is a lilac tint. Only shadcn's own tokens, so a stock shadcn theme drops in.
    */
   --background: oklch(0.983 0.003 286.4);

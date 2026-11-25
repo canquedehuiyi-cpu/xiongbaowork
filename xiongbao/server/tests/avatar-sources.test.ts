@@ -498,7 +498,6 @@ describe("what the 分身 is told", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
         avatarSourcesForActor(store)(personA),
       );
       for (const id of [avatar.id, colleague.id]) {
@@ -531,7 +530,6 @@ describe("what the 分身 is told", () => {
         [avatar],
         model,
         "synthetic-model-key",
-        undefined,
         undefined,
         undefined,
         undefined,

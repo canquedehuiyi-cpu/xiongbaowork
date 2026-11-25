@@ -11,7 +11,7 @@ import {
  *
  * Neither `AttachmentUploadResult` nor `AttachmentUploadError` is exported by anything installed
  * here: `@copilotkit/shared` declares both, but it is not a dependency of `app/` — the only
- * installed CopilotKit package in this workspace is `react-core`, and its `v2` entry point does
+ * installed agent SDK package in this workspace is `react-core`, and its `v2` entry point does
  * not re-export these two. They are derived instead from `AttachmentsConfig["onUpload"]` /
  * `["onUploadFailed"]`, the one signature that IS public, so they can never drift from what the
  * SDK actually calls.

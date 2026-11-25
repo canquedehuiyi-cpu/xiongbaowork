@@ -24,7 +24,7 @@ describe("the reason a turn ended", () => {
   });
 
   test("says XiongBao couldn't reach its back end, not the raw request failure", () => {
-    // The exact text a teammate saw on XiongBao 1.0.0, built by CopilotKit's Intelligence agent when
+    // The exact text a teammate saw on XiongBao 1.0.0, built by the hosted back end's agent when
     // the run request to the runtime fails.
     const run = stoppedReason(
       new Error(

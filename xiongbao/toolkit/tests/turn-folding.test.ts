@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
-import { foldingEarlyResults, type Prompt } from "../src/copilotkit/last-step";
+import { parametersFor } from "../src/granted-tool";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
+import { foldingEarlyResults, type Prompt } from "../src/runtime/last-step";
 import {
   DEFAULT_CONTEXT_WINDOW,
   estimateTokens,
@@ -13,8 +14,7 @@ import {
   foldEarlyResults,
   foldedSummary,
   NEVER_FOLDED_TOOLS,
-} from "../src/copilotkit/turn-folding";
-import { parametersFor } from "../src/granted-tool";
+} from "../src/runtime/turn-folding";
 
 /*
  * 期七：一轮里越过窗口的 70% 才折叠较早的工具结果；最近几步不动；折叠之后下一步和上一步共享前缀；

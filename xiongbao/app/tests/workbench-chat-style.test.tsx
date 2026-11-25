@@ -82,7 +82,7 @@ beforeEach(() => {
     ["GET /api/channels", { channels: [], nextCursor: null }],
     ["GET /api/channels/c1", { channel: CHANNEL }],
     ["GET /api/bots/attention", { bots: [], lastPingId: null }],
-    ["GET /api/copilotkit/info", { version: "test", agents: {} }],
+    ["GET /api/runtime/info", { version: "test", agents: {} }],
     ["GET /api/plugins/for/a1", { tools: [], skills: [] }],
     ["GET /api/agents/presence", { items: presence }],
   ]);

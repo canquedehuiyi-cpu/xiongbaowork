@@ -1000,8 +1000,8 @@ describe("device_acp in the runtime", () => {
         model,
         async () => null,
       ] as unknown as Parameters<typeof resolveRuntimeAgents>;
-      // `holdsTools`, the twentieth: what the runtime's own map passes (`createRequestAgents`).
-      args[19] = isAskedRun;
+      // `holdsTools`, the nineteenth: what the runtime's own map passes (`createRequestAgents`).
+      args[18] = isAskedRun;
       const runtime = await runAsTenant("tenant-a", () =>
         resolveRuntimeAgents(...args),
       );

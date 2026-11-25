@@ -173,15 +173,15 @@ describe("runtime telemetry", () => {
     expect(copilot).toContain("disableRuntimeTelemetryByDefault();");
   });
 
-  test("the vendor's opt-out variable defaults on and respects an explicit choice", () => {
+  test("DO_NOT_TRACK defaults on and respects an explicit choice", () => {
     const unset: Record<string, string | undefined> = {};
     disableRuntimeTelemetryByDefault(unset);
-    expect(unset.COPILOTKIT_TELEMETRY_DISABLED).toBe("1");
+    expect(unset.DO_NOT_TRACK).toBe("1");
     const chosen: Record<string, string | undefined> = {
-      COPILOTKIT_TELEMETRY_DISABLED: "0",
+      DO_NOT_TRACK: "0",
     };
     disableRuntimeTelemetryByDefault(chosen);
-    expect(chosen.COPILOTKIT_TELEMETRY_DISABLED).toBe("0");
+    expect(chosen.DO_NOT_TRACK).toBe("0");
   });
 
   test("the image also sets the variable", () => {
@@ -189,6 +189,6 @@ describe("runtime telemetry", () => {
       new URL("../../docker/defaults.env", import.meta.url),
       "utf8",
     );
-    expect(defaults).toMatch(/^COPILOTKIT_TELEMETRY_DISABLED=1$/m);
+    expect(defaults).toMatch(/^#third-party\nDO_NOT_TRACK=1$/m);
   });
 });

@@ -47,8 +47,8 @@ function appFor(
     undefined as never,
     ...(Array.from({ length: 20 }) as never[]),
     options.coworker as never,
-    // threadReader, quota, learning, selfHostBanner: this fork's parameters ahead of identity.
-    ...(Array.from({ length: 4 }) as never[]),
+    // threadReader, quota, selfHostBanner: this fork's parameters ahead of identity.
+    ...(Array.from({ length: 3 }) as never[]),
     identity as never,
     options.githubCallback as never,
   );

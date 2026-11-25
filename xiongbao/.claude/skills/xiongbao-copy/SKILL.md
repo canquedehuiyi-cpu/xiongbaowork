@@ -33,7 +33,7 @@ One word for one thing, everywhere a person can see it.
 | **turn on / turn off** | An admin switching an app or a feature. | enable / disable (in sentences; a switch may still read "Enabled") |
 | **conversation** | A thread with one or more Bots. | channel, chat (in sentences) |
 | **front end** | The part of XiongBao Work a person opens in the browser. | the web app, the UI |
-| **back end** | The part of XiongBao Work that runs the Bots and keeps conversations, memory, learning and Skills. | Intelligence, CopilotKit Intelligence, the platform, the stack, cpki |
+| **back end** | The part of XiongBao Work that runs the Bots and keeps conversations, memory, learning and Skills. | Intelligence, the platform, the stack, cpki |
 | **back end dashboard** | The back end's own pages, where Learning and projects are managed. | the Intelligence dashboard |
 | **database** | Where XiongBao Work keeps its data. | Postgres (outside Admin) |
 | **the computers Bots work on**, **Bot computer** | Where a Bot browses and works with files. | sandbox, container |
@@ -90,5 +90,5 @@ because the admin is the one who sets them. A page anybody can open may not.
 | "rather than", an em dash, "which is" in UI text | Rewrite as two short sentences |
 | A description beginning "The apps…", "What…", "Who…", or "Where…" without a main verb | State the action or behavior in a complete sentence; remove redundant explanation |
 | An env var, OAuth, Composio or "grant" outside Admin | Say what the person sees |
-| "Intelligence", "CopilotKit Intelligence" or "the Intelligence stack" anywhere | Name the part: the back end, the front end, the database |
+| "Intelligence" or "the Intelligence stack" anywhere | Name the part: the back end, the front end, the database |
 | A test asserting long explanatory copy | Assert the short sentence, or the role and the key words |

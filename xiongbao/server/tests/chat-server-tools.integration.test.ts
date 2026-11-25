@@ -199,7 +199,7 @@ function runRequest(declare: boolean) {
   return {
     threadId,
     runId,
-    request: new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/run`, {
+    request: new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -314,11 +314,11 @@ beforeAll(async () => {
   environmentBefore = {
     OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    COPILOTKIT_TELEMETRY_DISABLED: process.env.COPILOTKIT_TELEMETRY_DISABLED,
+    DO_NOT_TRACK: process.env.DO_NOT_TRACK,
   };
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${relay.port}/v1`;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
+  process.env.DO_NOT_TRACK = "true";
 
   roster.push({
     id: BOT,
@@ -559,7 +559,7 @@ describe("a chat that hands its computer tools to the server", () => {
     expect(ran[0]?.signal?.aborted).toBe(false);
     const stop = await serving.handler.fetch(
       new Request(
-        `http://127.0.0.1/api/copilotkit/agent/${BOT}/stop/${threadId}`,
+        `http://127.0.0.1/api/runtime/agent/${BOT}/stop/${threadId}`,
         { method: "POST" },
       ),
     );
@@ -691,11 +691,11 @@ describe("a run that goes quiet keeps its stream open", () => {
     );
     expect(stored.length).toBeGreaterThan(0);
     const log = await beating.handler.fetch(
-      new Request(`http://127.0.0.1/api/copilotkit/threads/${threadId}/events`),
+      new Request(`http://127.0.0.1/api/runtime/threads/${threadId}/events`),
     );
     expect(await log.text()).not.toContain("keep-alive");
     const replay = await beating.handler.fetch(
-      new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/connect`, {
+      new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/connect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -722,7 +722,7 @@ describe("a run that goes quiet keeps its stream open", () => {
     await commandRunning();
 
     const connected = await beating.handler.fetch(
-      new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/connect`, {
+      new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/connect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -795,7 +795,7 @@ describe("a run that goes quiet keeps its stream open", () => {
     await readUntil(reader, (text) => beats(text) >= 1);
     const stop = await beating.handler.fetch(
       new Request(
-        `http://127.0.0.1/api/copilotkit/agent/${BOT}/stop/${threadId}`,
+        `http://127.0.0.1/api/runtime/agent/${BOT}/stop/${threadId}`,
         { method: "POST" },
       ),
     );
@@ -836,7 +836,7 @@ describe("a run that goes quiet keeps its stream open", () => {
         const { threadId, request } = runRequest(true);
         const base = `http://127.0.0.1:${server.port}`;
         const run = await fetch(
-          new Request(`${base}/api/copilotkit/agent/${BOT}/run`, {
+          new Request(`${base}/api/runtime/agent/${BOT}/run`, {
             method: "POST",
             headers: request.headers,
             body: await request.text(),
@@ -845,7 +845,7 @@ describe("a run that goes quiet keeps its stream open", () => {
         expect(run.status).toBe(200);
         await commandRunning();
         const connect = await fetch(
-          `${base}/api/copilotkit/agent/${BOT}/connect`,
+          `${base}/api/runtime/agent/${BOT}/connect`,
           {
             method: "POST",
             headers: { "content-type": "application/json" },

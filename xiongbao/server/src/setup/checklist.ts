@@ -4,10 +4,8 @@ import { supportUrl } from "../brand";
 import type { DeploymentConfig } from "../config";
 import type { CredentialStatusReader } from "../credentials";
 import type { Edition } from "../edition";
-import { entitlementWarning } from "../intelligence-entitlement-check";
 import type { ModelCheckOutcome } from "../model-availability-check";
 import type { BrokerProvider } from "../plugins/access";
-import type { RuntimeEntitlementResponse } from "../self-host-banner";
 
 /**
  * The setup checklist: one row for each thing this deployment depends on, and what it says about it.
@@ -16,19 +14,18 @@ import type { RuntimeEntitlementResponse } from "../self-host-banner";
  * about to ask after a first run, "what is set up, and what still needs doing", from the server's
  * own configuration and state rather than from a list the app keeps.
  *
- * READY MEANS IT WORKS, NOT THAT SOMETHING IS SET. Intelligence is read from its own entitlement
- * answer (the server cannot boot without its address, so "set" would always be true), and the model
- * from the provider's answer for the key in use now (a key that is present can still be refused). A
- * key nobody has asked the provider about says so ("not checked yet") rather than Ready.
+ * READY MEANS IT WORKS, NOT THAT SOMETHING IS SET. The model is read from the provider's answer for
+ * the key in use now (a key that is present can still be refused). A key nobody has asked the
+ * provider about says so ("not checked yet") rather than Ready.
  *
  * PRESENCE AND VERDICTS, NEVER A VALUE. Every fact below is a yes, a no or a state word. A key is
  * "set" because the environment or the vault has one, and nothing here reads, masks, measures or
- * echoes what it is. The two outbound reads, Intelligence's entitlement and one `GET /v1/models/<id>`
- * at the provider, are the ones the server already makes at boot; "Check again" repeats them, at
+ * echoes what it is. The outbound read, one `GET /v1/models/<id>` at the provider, is the one the
+ * server already makes at boot; "Check again" repeats it (and the computer check), at
  * most once every {@link RECHECK_INTERVAL_MS}. A plain read repeats them too, under the same limit,
  * once an answer could not be had or is older than {@link ANSWER_KEPT_MS}, for the read after it. A
  * definite refusal is not asked again by a read: asking would hear the same refusal, and every
- * signed-in person's read would start a round at Intelligence, the provider and the computers.
+ * signed-in person's read would start a round at the provider and the computers.
  *
  * WHO READS IT DECIDES WHAT IT SAYS. An admin, and somebody trying XiongBao alone on their own
  * machine, is told how to fix each gap: the page to open, or the variable to set. Everybody else is
@@ -46,15 +43,7 @@ export const RECHECK_INTERVAL_MS = 10_000;
 /** How long a working answer from another service is served before a read asks again. */
 export const ANSWER_KEPT_MS = 5 * 60_000;
 
-/** How long Intelligence has to answer before the row says it could not be reached. */
-const INTELLIGENCE_TIMEOUT_MS = 5_000;
-
-export type SetupRowId =
-  | "intelligence"
-  | "model"
-  | "computer"
-  | "apps"
-  | "chat";
+export type SetupRowId = "model" | "computer" | "apps" | "chat";
 
 /**
  * How a gap is closed, or null when there is nothing for the reader to do.
@@ -103,14 +92,6 @@ export type SetupChecklist = {
   rows: SetupRow[];
 };
 
-/** What Intelligence said about this deployment. See {@link intelligenceFact}. */
-export type IntelligenceFact =
-  | { state: "ready" }
-  /** It answered, and did not confirm the entitlement. `advice` is the admin's next step. */
-  | { state: "refused"; advice: string }
-  /** It did not answer in time, or the read failed. */
-  | { state: "unreachable" };
-
 /**
  * What the model provider said about the key in use now.
  *
@@ -130,7 +111,6 @@ export type ModelVerdict =
  * module comment.
  */
 export type SetupFacts = {
-  intelligence: IntelligenceFact;
   model: {
     provider: "openai" | "anthropic";
     /** Where the key the Bots answer with comes from, or null when there is none. */
@@ -216,12 +196,6 @@ export function setupRows(
 
   const rows = [
     deployment({
-      id: "intelligence",
-      title: "Back end",
-      required: true,
-      ...intelligenceRow(facts.intelligence, product, personal),
-    }),
-    deployment({
       id: "model",
       title: "AI model",
       required: true,
@@ -278,51 +252,6 @@ export function setupRows(
   return options.edition === "personal"
     ? rows.filter((row) => row.id !== "chat")
     : rows;
-}
-
-const INTELLIGENCE_VARIABLES = [
-  "INTELLIGENCE_API_URL",
-  "INTELLIGENCE_GATEWAY_WS_URL",
-  "INTELLIGENCE_API_KEY",
-];
-
-/**
- * Intelligence as its own entitlement answer says. Its advice is the screen's short version of the
- * sentence the boot log prints (see {@link entitlementAdvice}), which names the licence and where it
- * goes.
- */
-function intelligenceRow(
-  fact: IntelligenceFact,
-  product: string,
-  personal: boolean,
-) {
-  const readyDetail = personal
-    ? "Keeps your conversations and skills."
-    : `Keeps your conversations and what ${product} remembers.`;
-  if (fact.state === "ready")
-    return {
-      status: "ready" as const,
-      readyDetail,
-      gapDetail: "",
-      fix: null,
-    };
-  if (fact.state === "refused")
-    return {
-      status: "needs_setup" as const,
-      readyDetail,
-      gapDetail: fact.advice,
-      fix: null,
-    };
-  return {
-    status: "needs_setup" as const,
-    readyDetail,
-    gapDetail: `${product} couldn't reach its back end. Check its address and key.`,
-    fix: {
-      kind: "env" as const,
-      names: INTELLIGENCE_VARIABLES,
-      docsUrl: supportUrl(),
-    },
-  };
 }
 
 /**
@@ -423,49 +352,6 @@ function modelRow(
 }
 
 /**
- * What an entitlement answer, or a failed read, means for the Intelligence row. Ready only when
- * Intelligence answered ready and active, which is what `entitlementWarning` returns null for.
- */
-export function intelligenceFact(
-  answer: RuntimeEntitlementResponse | Error,
-  edition?: Edition,
-): IntelligenceFact {
-  if (answer instanceof Error) return { state: "unreachable" };
-  const warning = entitlementWarning(answer);
-  return warning
-    ? { state: "refused", advice: entitlementAdvice(warning, edition) }
-    : { state: "ready" };
-}
-
-/**
- * What an admin reads on screen about a refused entitlement: what failed and one next step. The
- * boot log keeps its longer sentence (`entitlementWarning`), which names the Helm keys; the screen
- * names only the variable, which is enough to search the docs with.
- */
-export function entitlementAdvice(
-  warning: {
-    status: string;
-    code?: string;
-  },
-  edition?: Edition,
-): string {
-  switch (warning.code) {
-    case "RUNTIME_ENTITLEMENTS_SELF_HOSTED_MISCONFIGURED":
-      return "The back end has no valid licence. Set COPILOTKIT_LICENSE_TOKEN on the back end's own deployment.";
-    case "RUNTIME_ENTITLEMENTS_SELF_HOSTED_EXPIRED":
-      return "The back end's licence has expired. Renew it and replace COPILOTKIT_LICENSE_TOKEN on the back end's deployment.";
-    case "RUNTIME_ENTITLEMENTS_MANAGED_UNAVAILABLE":
-      return "The back end couldn't confirm this project's licence. Check again in a few minutes.";
-  }
-  if (warning.status === "inactive")
-    // The personal edition has no memory to keep off, so it is told only what the back end said.
-    return edition === "personal"
-      ? "The back end says this deployment's licence isn't active."
-      : "The back end says this deployment's licence isn't active. Memory stays off until it is.";
-  return "The back end didn't confirm this deployment's licence. Check again in a few minutes.";
-}
-
-/**
  * The provider's answer about the key in use now.
  *
  * A check about another key says nothing about this one: the stamp names the key the check was
@@ -534,32 +420,16 @@ export type SetupSources = {
    * background, when one of those answers failed or is older than {@link ANSWER_KEPT_MS}.
    */
   facts: () => Promise<SetupFacts>;
-  /** Ask Intelligence, the model provider and the computers again. Resolves when all have answered. */
+  /** Ask the model provider and the computers again. Resolves when both have answered. */
   recheck: () => Promise<void>;
 };
-
-/** A promise that gives up after `ms`, as an Error, so a slow service reads as unreachable. */
-function withinTime<T>(promise: Promise<T>, ms: number): Promise<T | Error> {
-  return Promise.race([
-    promise.catch((error: unknown) =>
-      error instanceof Error ? error : new Error(String(error)),
-    ),
-    new Promise<Error>((resolve) => {
-      const timer = setTimeout(
-        () => resolve(new Error("No answer in time.")),
-        ms,
-      );
-      timer.unref?.();
-    }),
-  ]);
-}
 
 /**
  * The facts read from this server's configuration and stores.
  *
  * Built once at boot and asked on every request, so a credential added a moment ago shows up on the
- * next read. The verdicts that need another service, Intelligence's entitlement, the model
- * provider's answer and the computers', are kept from the last time they were asked, and asked
+ * next read. The verdicts that need another service, the model provider's answer and the
+ * computers', are kept from the last time they were asked, and asked
  * again on `recheck` or by a read that finds one failed or old.
  *
  * A read is answered from the last round of answers that is all in, never from one still being
@@ -583,8 +453,6 @@ export function createSetupSources(input: {
   modelCheckAtBoot?: Promise<
     { outcome: ModelCheckOutcome; stamp: string | null } | undefined
   >;
-  /** Intelligence's entitlement answer for this deployment. Asked at creation and on recheck. */
-  entitlements: () => Promise<RuntimeEntitlementResponse>;
   computer: boolean;
   /** Authenticated reachability and policy delivery, with per-operation deadlines and no wake. */
   computerCheck?: () => Promise<SetupStatus>;
@@ -598,10 +466,6 @@ export function createSetupSources(input: {
     credentials: input.credentials,
     environment: input.environment,
   };
-  const askIntelligence = () =>
-    withinTime(input.entitlements(), INTELLIGENCE_TIMEOUT_MS).then((answer) =>
-      intelligenceFact(answer, input.config.edition),
-    );
 
   const askComputer = async (): Promise<SetupStatus> => {
     if (!input.computer) return "needs_setup";
@@ -616,7 +480,6 @@ export function createSetupSources(input: {
   /** One round of asking, and when it started. */
   type Round = {
     at: number;
-    intelligence: Promise<IntelligenceFact>;
     modelCheck: Promise<
       { outcome: ModelCheckOutcome; stamp: string | null } | undefined
     >;
@@ -625,7 +488,6 @@ export function createSetupSources(input: {
   // The round a read is answered from: boot's, until a later one is all in.
   let kept: Round = {
     at: Date.now(),
-    intelligence: askIntelligence(),
     modelCheck: (input.modelCheckAtBoot ?? Promise.resolve(undefined)).catch(
       () => undefined,
     ),
@@ -640,7 +502,6 @@ export function createSetupSources(input: {
     const check = input.model.check;
     const round: Round = {
       at: now,
-      intelligence: askIntelligence(),
       computerStatus: askComputer(),
       modelCheck: check
         ? (async () => {
@@ -651,14 +512,12 @@ export function createSetupSources(input: {
           })().catch(() => undefined)
         : kept.modelCheck,
     };
-    const done = Promise.all([
-      round.intelligence,
-      round.modelCheck,
-      round.computerStatus,
-    ]).then(() => {
-      // A slow round can finish after a later one: the later answer stays.
-      if (round.at >= kept.at) kept = round;
-    });
+    const done = Promise.all([round.modelCheck, round.computerStatus]).then(
+      () => {
+        // A slow round can finish after a later one: the later answer stays.
+        if (round.at >= kept.at) kept = round;
+      },
+    );
     lastRecheck = { at: now, done };
     return done;
   };
@@ -669,14 +528,12 @@ export function createSetupSources(input: {
     localEvaluation: input.config.singleUser,
     facts: async () => {
       const round = kept;
-      const [key, check, intelligence, computerStatus] = await Promise.all([
+      const [key, check, computerStatus] = await Promise.all([
         modelKeyOf(keyFacts),
         round.modelCheck,
-        round.intelligence,
         round.computerStatus,
       ]);
       const facts: SetupFacts = {
-        intelligence,
         model: {
           provider: input.model.provider,
           source: key.source,
@@ -700,25 +557,21 @@ export function createSetupSources(input: {
 }
 
 /**
- * Whether an answer from another service could not be had, which a read asks again for: Intelligence
- * did not answer, or the provider has not answered about the key in use. A definite answer waits for
- * Check again or for the answer to grow old, refusals included: Intelligence refusing the licence,
- * the provider refusing the key or the model, and a computer refusing its policy are not changed by
+ * Whether an answer from another service could not be had, which a read asks again for: the provider
+ * has not answered about the key in use. A definite answer waits for Check again or for the answer to
+ * grow old, refusals included: the provider refusing the key or the model, and a computer refusing its policy are not changed by
  * asking again, and asking would start a round on every signed-in person's read.
  */
 function unanswered(facts: SetupFacts): boolean {
   const { model } = facts;
   const keyInHand =
     model.source === "credential" || model.source === "environment";
-  return (
-    facts.intelligence.state === "unreachable" ||
-    (keyInHand && model.verdict === "not_checked")
-  );
+  return keyInHand && model.verdict === "not_checked";
 }
 
 /**
- * `GET /` answers the checklist for whoever is signed in. `POST /check` asks Intelligence, the
- * model provider and the computers again first, then answers the same way.
+ * `GET /` answers the checklist for whoever is signed in. `POST /check` asks the model provider
+ * and the computers again first, then answers the same way.
  */
 export function createSetupRoutes(
   sources: SetupSources,

@@ -86,7 +86,7 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="/api/runtime">
         <ThemeProvider>
           <TooltipProvider>
             <div

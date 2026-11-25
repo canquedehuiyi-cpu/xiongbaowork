@@ -86,10 +86,8 @@ export const personalMemories = pgTable(
     sourceLink: text("source_link"),
     observedAt: timestamp("observed_at", { withTimezone: true }),
     /**
-     * The memory's id in CopilotKit Intelligence, when this deployment is entitled to Intelligence
-     * memory and the memory has been mirrored there. Intelligence holds the content and does the
-     * recall; this row keeps what Intelligence has no field for (provenance, review, who formed it,
-     * which source and Bot may see it). Null while it is local only.
+     * The memory's id in the hosted back end, from when a deployment could mirror memories there. This
+     * build no longer mirrors or reads it; the column stays until a later release drops it.
      */
     intelligenceMemoryId: text("intelligence_memory_id"),
     /** sha256 of the content last written to Intelligence, so an edit is mirrored exactly once. */

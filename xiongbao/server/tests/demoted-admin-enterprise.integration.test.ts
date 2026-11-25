@@ -59,7 +59,7 @@ const provider = {
 } as unknown as ComputerProvider;
 
 let controls: EnterpriseControls;
-let skillSharingBefore: boolean;
+let modelSelectionBefore: boolean;
 
 /** `createApp` 的第 1 到 13 个位置：配置、会话、角色仓库、轨迹读取，第 13 个是审计 store。 */
 const args = Array.from({ length: 13 }) as never[];
@@ -103,11 +103,11 @@ const answer = async (response: Response) => ({
   body: await response.json(),
 });
 
-/** 部署的技能共享设置。部署的设置不属于任何人，所以按 platform 读。 */
-const skillSharing = () =>
-  asPlatform(async () => (await controls.store.settings()).skillSharing);
+/** 部署的「每段对话可选模型」设置。部署的设置不属于任何人，所以按 platform 读。 */
+const modelSelection = () =>
+  asPlatform(async () => (await controls.store.settings()).modelSelection);
 
-/** 这个套件的组留下的开关和网络策略，加上部署的技能共享设置。 */
+/** 这个套件的组留下的开关和网络策略，加上部署的「每段对话可选模型」设置。 */
 const state = async () => ({
   capabilities: await asPlatform(() =>
     database
@@ -124,7 +124,7 @@ const state = async () => ({
       .from(networkPolicies)
       .where(eq(networkPolicies.scopeId, GROUP)),
   ),
-  skillSharing: await skillSharing(),
+  modelSelection: await modelSelection(),
 });
 
 beforeAll(async () => {
@@ -144,7 +144,7 @@ beforeAll(async () => {
     provider,
     env: {},
   });
-  skillSharingBefore = await skillSharing();
+  modelSelectionBefore = await modelSelection();
 });
 
 afterAll(async () => {
@@ -156,11 +156,11 @@ afterAll(async () => {
       .delete(networkPolicies)
       .where(eq(networkPolicies.scopeId, GROUP));
   });
-  if ((await skillSharing()) !== skillSharingBefore)
+  if ((await modelSelection()) !== modelSelectionBefore)
     await asPlatform(() =>
       controls.store.setSetting(
-        "skillSharing",
-        skillSharingBefore,
+        "modelSelection",
+        modelSelectionBefore,
         "dae-cleanup",
       ),
     );
@@ -204,7 +204,7 @@ const writes: Call[] = [
   {
     name: "a deployment setting",
     method: "PUT",
-    path: "/settings/skillSharing",
+    path: "/settings/modelSelection",
     // 值在发送时才定：取当前值的反面，见下面的 `send`。
   },
   {
@@ -241,8 +241,8 @@ const send = async (actor: string, call: Call) =>
     actor,
     call.method,
     call.path,
-    call.path === "/settings/skillSharing"
-      ? { value: !(await skillSharing()) }
+    call.path === "/settings/modelSelection"
+      ? { value: !(await modelSelection()) }
       : call.body,
   );
 
@@ -336,14 +336,14 @@ describe("an administrator holding the capability", () => {
   });
 
   test("still changes a deployment setting", async () => {
-    const before = await skillSharing();
+    const before = await modelSelection();
 
-    const response = await request(ADMIN, "PUT", "/settings/skillSharing", {
+    const response = await request(ADMIN, "PUT", "/settings/modelSelection", {
       value: !before,
     });
 
     expect(response.status).toBe(200);
-    expect(await skillSharing()).toBe(!before);
+    expect(await modelSelection()).toBe(!before);
   });
 
   test("still saves and removes a network policy", async () => {

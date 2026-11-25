@@ -114,7 +114,6 @@ import {
   UNOFFERED_TOOL_SENTENCE,
   unofferedTool,
 } from "@/lib/plugins/tool-result";
-import { useResultVisibility } from "@/lib/product-telemetry";
 import { elapsedSuffix } from "@/lib/spent-of";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
@@ -1063,18 +1062,14 @@ const TranscriptMessage = memo(function TranscriptMessage({
   commandLabels = "",
   role,
   streaming = false,
-  settled = true,
   text,
-  threadId,
   messageId,
 }: {
   commandLabels?: string;
   role: "user" | "assistant";
-  threadId?: string;
   messageId: string;
   /* This is the Bot's reply still being written: the last row of a turn in flight. */
   streaming?: boolean;
-  settled?: boolean;
   text: string;
 }) {
   const isUser = role === "user";
@@ -1090,10 +1085,6 @@ const TranscriptMessage = memo(function TranscriptMessage({
    * chip split, the end alignment and the bubble are all wrong for it, and each one of them would
    * have to learn about firings separately if this branched any later.
    */
-  const resultRef = useResultVisibility(
-    threadId ? { threadId, messageId } : undefined,
-    !isUser && settled && revealed.trim().length > 0,
-  );
   const firing = isUser ? readFiring(text) : null;
   if (firing !== null) {
     return (
@@ -1191,7 +1182,7 @@ const TranscriptMessage = memo(function TranscriptMessage({
                  * closing token arrives, so the answer visibly rewrites itself as it lands. This
                  * closes them for the duration.
                  */
-                <div ref={resultRef}>
+                <div>
                   <Streamdown
                     components={markdownComponents}
                     mode={mode}
@@ -2019,7 +2010,7 @@ const ToolRow = memo(function ToolRow({
  * Named from the reader's side: what was done, against which server, with the server's own words
  * behind a disclosure. The identifier the model was offered never reaches the screen.
  *
- * Exported for its tests, which draw it without the CopilotKit provider `ToolCallBody` needs.
+ * Exported for its tests, which draw it without the agent SDK provider `ToolCallBody` needs.
  */
 export function ServerToolLine({
   name,
@@ -2392,11 +2383,11 @@ function TranscriptRenderersWatch({
 }: {
   onVersion: (version: number) => void;
 }) {
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   const { data: capabilities } = useQuery(deploymentCapabilitiesQueryOptions());
   return (
     <LateRenderersWatch
-      core={copilotkit}
+      core={copilotCore}
       onVersion={onVersion}
       settled={capabilities?.generativeUi}
     />
@@ -2867,9 +2858,7 @@ export function ChatTranscript({
         {...openingProps(item.id)}
       >
         <TranscriptMessage
-          threadId={threadId}
           messageId={item.id}
-          settled={!busy || index < turnStart}
           commandLabels={commandLabels}
           role={item.role}
           streaming={

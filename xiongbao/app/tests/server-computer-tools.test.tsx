@@ -86,7 +86,7 @@ function capabilities(on: boolean | undefined) {
 async function computerTools(serverRuns: boolean) {
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ActiveBotProvider>
           <ServerComputerToolsProvider value={serverRuns}>
             <ComputerTools />
@@ -180,7 +180,7 @@ test("a tool the server does not hold keeps its handler even with the switch on"
   }
   render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ServerComputerToolsProvider value>
           <Other />
         </ServerComputerToolsProvider>

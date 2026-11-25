@@ -380,7 +380,7 @@ async function runError(
     const runId = `run-${crypto.randomUUID()}`;
     started.push(`thread-${runId}-${suite}`);
     const response = await runtime.handler.fetch(
-      new Request(`http://127.0.0.1/api/copilotkit/agent/${bot.id}/run`, {
+      new Request(`http://127.0.0.1/api/runtime/agent/${bot.id}/run`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

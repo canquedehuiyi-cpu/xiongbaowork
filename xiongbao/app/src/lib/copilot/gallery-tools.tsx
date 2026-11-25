@@ -269,7 +269,7 @@ export function galleryCallFailure(
   if (call.status !== "complete") return undefined;
   /*
    * 假设：卡片类调用成功时的结果（`spec.confirmation` 或默认确认）和拒绝（`NOT_SHOWN` 开头）都不以
-   * `Error: ` 开头。`browserCallFailed` 把 `Error: ` 开头的结果算作 CopilotKit 跑不了的调用；哪天某个
+   * `Error: ` 开头。`browserCallFailed` 把 `Error: ` 开头的结果算作运行时库跑不了的调用；哪天某个
    * 组件的确认文案以它开头，这里就会把成功画成「没能显示」。
    */
   if (
@@ -328,9 +328,9 @@ export function useForgetRenderOnUnmount(
 
 /** `useFrontendTool`, and its renderer removed again on unmount, as `useHumanInTheLoop` does. */
 function useHumanInTheLoopTool(tool: FrontendTool) {
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   useFrontendTool(tool);
-  useForgetRenderOnUnmount(tool.name, copilotkit);
+  useForgetRenderOnUnmount(tool.name, copilotCore);
 }
 
 /**

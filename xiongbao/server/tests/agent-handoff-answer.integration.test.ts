@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
 import { answeredBy, answerMessageId } from "@xiongbao/shared/handoff-markers";
-import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
-import { createIntelligenceThreadLock } from "@xiongbao/toolkit/copilotkit/thread-lock";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/runtime/agents";
+import { createIntelligenceThreadLock } from "@xiongbao/toolkit/runtime/thread-lock";
 import { and, eq, gte, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
@@ -37,7 +37,6 @@ import {
   pluginGrants,
   workItems,
 } from "../src/db/schema";
-import { observeIntelligenceAuthentication } from "../src/intelligence-client";
 import { runAsTenant } from "../src/tenant/context";
 import { loadTenantPackage } from "../src/tenant-package";
 import { createWorkQueue } from "../src/work/queue";
@@ -320,16 +319,14 @@ function lockingIntelligence() {
   return {
     /** The lock a hop takes, on the client copilot.ts builds for the runtime and its hops. */
     lock: createIntelligenceThreadLock({
-      client: observeIntelligenceAuthentication(
-        new IntelligenceKnowingANewThread({
-          apiUrl: `http://127.0.0.1:${server.port}`,
-          wsUrl: `ws://127.0.0.1:${server.port}`,
-          apiKey: "cpk-test-key",
-          // The hop's own wait is what these tests drive; the client's few seconds of asking again
-          // (follow-up-run-lock.test.ts) would only stretch each busy try.
-          lockConflictWaitMs: 0,
-        }),
-      ),
+      client: new IntelligenceKnowingANewThread({
+        apiUrl: `http://127.0.0.1:${server.port}`,
+        wsUrl: `ws://127.0.0.1:${server.port}`,
+        apiKey: "cpk-test-key",
+        // The hop's own wait is what these tests drive; the client's few seconds of asking again
+        // (follow-up-run-lock.test.ts) would only stretch each busy try.
+        lockConflictWaitMs: 0,
+      }),
     }),
     /** A person's run, or the asking Bot's, holding a conversation. */
     hold(threadId: string, runId: string) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { unkeptPromise } from "../src/copilotkit/unkept-promise";
+import { unkeptPromise } from "../src/runtime/unkept-promise";
 
 /**
  * The rule that decides a run ended on a promise, held against what models actually write. The

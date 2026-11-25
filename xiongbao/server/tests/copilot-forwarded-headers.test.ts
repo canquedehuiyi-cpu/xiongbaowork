@@ -206,7 +206,7 @@ function mount(bots: Awaited<ReturnType<typeof remoteBot>>[]) {
 
 /** A request the way an Entra client app sends one, plus an application header of its own. */
 function inbound(path: string, runId: string) {
-  return new Request(`http://127.0.0.1/api/copilotkit${path}`, {
+  return new Request(`http://127.0.0.1/api/runtime${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

@@ -120,7 +120,6 @@ function serving() {
           inactiveComputerDays: 30,
           modelAllowlist: { enabled: false, models: [] },
           mcpAllowlist: { enabled: false, servers: [] },
-          skillSharing: false,
           proactiveDailyRuns: dailyRuns,
         },
         groups: [],

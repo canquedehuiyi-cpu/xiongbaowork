@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AbstractAgent, Message } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import {
   MOST_NUDGES,
   UNATTENDED_STEPS,
-} from "@xiongbao/toolkit/copilotkit/last-step";
-import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
+} from "@xiongbao/toolkit/runtime/last-step";
 import { Observable } from "rxjs";
 import { z } from "zod";
 import {

@@ -20,8 +20,6 @@ import {
   installEnterpriseControls,
   modelNamedIn,
   proactiveAdmin,
-  skillSharingAllowed,
-  skillSharingInSnapshot,
   summaryCallRefusal,
 } from "./admin/controls";
 import { fixSettings } from "./admin/settings-store";
@@ -140,7 +138,6 @@ import {
 import { createServerApprovalService } from "./approvals/wiring";
 import {
   type AuditInitiator,
-  addAuditTap,
   auditSink,
   createAgentTrailReader,
   createAuditReader,
@@ -376,36 +373,10 @@ import { githubCallbackRoutes } from "./identity/github-callback";
 import { retireIdentityLinks, retireOwnedAccounts } from "./identity/retire";
 import { slackCodeRedeemer } from "./identity/slack-redeem";
 import { createIdentityStore } from "./identity/store";
-import { createIntelligenceClient } from "./intelligence-client";
-import { reportIntelligenceEntitlement } from "./intelligence-entitlement-check";
 import { createKnowledgeRoutes } from "./knowledge/routes";
 import { createKnowledgeStore } from "./knowledge/store";
 import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
-import { createSkillApprovalStore } from "./learning/approvals";
-import { createAutoApprover } from "./learning/auto-approve";
 import {
-  createLearningAutoAssign,
-  probeLearningContainer,
-  withLearningAutoAssign,
-} from "./learning/auto-assign";
-import {
-  cliLoginPresent,
-  createLearningContainer,
-  ensureLearningContainer,
-  intelligenceApiOrigin,
-  keyIntelligence,
-  type LearningContainerCredentials,
-  learningSetupInstructions,
-} from "./learning/ensure-container";
-import { createInspectorLearningReader } from "./learning/inspector";
-import {
-  createLearningModelCalls,
-  learningModelEndpointFor,
-} from "./learning/model-endpoint";
-import { createLearningPeople } from "./learning/people";
-import {
-  createPersonalLearningSpaces,
-  createPersonSpaceStore,
   type PersonalLearningSpaces,
   personalLearningContainerId,
 } from "./learning/personal-space";
@@ -419,20 +390,6 @@ import {
   markInjectedSkillsUsed,
   markPickedSkillUsed,
 } from "./learning/retrospect";
-import { learningModelUnavailable } from "./learning/routes";
-import {
-  clearLearningRevisionFallback,
-  createLearningRuntime,
-} from "./learning/runtime";
-import { learningScopes } from "./learning/scopes";
-import {
-  configuredLearningContainer,
-  createLearningSettingsStore,
-} from "./learning/settings";
-import {
-  createLearningSharingStore,
-  createOpenSkillIndex,
-} from "./learning/sharing";
 import { createLocalLearningEngine } from "./local-learning/engine";
 import { readMediaConfig } from "./media/config";
 import { createMediaRoutes } from "./media/routes";
@@ -443,7 +400,6 @@ import { createMemoryDefaults } from "./memory/defaults";
 import { createEmbeddingStore } from "./memory/embeddings-store";
 import { createMemoryExtractor, memoryExtractEnabled } from "./memory/extract";
 import { createMemoryIngestion } from "./memory/ingestion";
-import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryRuntime } from "./memory/runtime";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
@@ -667,11 +623,6 @@ import { createTaskRunner } from "./tasks/runner";
 import { createTaskStore } from "./tasks/store";
 import { createTaskTurn } from "./tasks/turn";
 import { createTeamBots } from "./team-bots/team-bots";
-import { createProductTelemetry } from "./telemetry/product";
-import {
-  deliveryLineage,
-  productHeadlessBoundary,
-} from "./telemetry/product-boundaries";
 import { isAccessRevoked } from "./tenant/access";
 import {
   asPlatform,
@@ -761,8 +712,6 @@ setEdition(config.edition);
 // One person on their own machine is shown every model their credential lists; nothing narrows it.
 if (config.singleUser)
   fixSettings({ modelAllowlist: { enabled: false, models: [] } });
-// The revision default was read into `config.learning`; the variable must not be read again later.
-clearLearningRevisionFallback();
 // Read with the rest of the configuration, where an empty variable is an absent one. See
 // `serverPort` in config.ts for what `process.env.PORT ?? …` did with `PORT=` instead.
 const port = config.port;
@@ -846,20 +795,6 @@ await startupLifecycle.run(async (startup) => {
   await startup.step(() =>
     provisionDevActorTenant(database, config.singleUser),
   );
-  /*
-   * Product analytics (telemetry/product.ts): off unless the operator turned the export on, and never
-   * anything a person wrote. Every audit row passes it a copy of its event type.
-   */
-  const productTelemetry = await createProductTelemetry({
-    privacyKey: config.keyEncryptionKey,
-    deploymentId: config.deploymentId,
-  });
-  addAuditTap(productTelemetry.recordAudit);
-  startup.acquireSync(
-    () => productTelemetry,
-    (telemetry) => telemetry.flush(),
-  );
-  const prepareProductRunInput = productHeadlessBoundary(productTelemetry);
   // A person's name and their own details, for /api/me and for what their Bots call them.
   const profileStore = createProfileStore(database);
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
@@ -868,194 +803,13 @@ await startupLifecycle.run(async (startup) => {
   // People's linked Slack and GitHub accounts (upstream #763), each person's own rows (G01).
   const identityStore = createIdentityStore(database, credentialStore);
   /*
-   * CopilotKit Intelligence, only when this deployment is connected to one (R0, optional). It serves
-   * Automatic Learning's published skills to each Bot's run, and keeps people's memory when the
-   * deployment is entitled to it; threads stay in this database either way. Without
-   * `INTELLIGENCE_API_KEY` none of this exists and every Bot is built as before. Built here, ahead of
-   * the memory store that reads it; the constructor opens nothing.
+   * Each person's own Learning space, which the Recorder's capture pass names. Nothing here makes or
+   * reads one, so it is always off, and the Recorder tells the person so.
    */
-  const intelligenceClient = config.intelligence
-    ? createIntelligenceClient(config.intelligence)
-    : undefined;
-  /*
-   * Automatic Learning, only with a connected Intelligence (R0). Its settings are the deployment's,
-   * and the `openbot` container is assigned automatically when nobody has chosen one (upstream #774).
-   */
-  /*
-   * The environment's container, until the boot check finds this Intelligence has no such container
-   * (learning/auto-assign.ts). A name left over from a setup against another Intelligence then gives
-   * way to automatic assignment instead of failing every new thread (upstream #1363).
-   */
-  const configuredLearning = configuredLearningContainer(config.learning);
-  const learningSettingsStore = intelligenceClient
-    ? createLearningSettingsStore(database, configuredLearning)
-    : undefined;
-  /*
-   * Who can create a Learning container here. First the runtime key itself, on an Intelligence that
-   * lets a project key create one in its own project, at the address the server already uses. On one
-   * that does not, a service token the operator configured (local evaluation installs), or a
-   * CopilotKit CLI login on this machine, which is what a laptop running `bun run start` has: those
-   * two only over HTTPS, or HTTP on loopback. None of them, and the log and Admin say exactly what to
-   * run instead. Only with INTELLIGENCE_API_URL named: without it there is nowhere to create one.
-   */
-  const learningApiUrl = config.intelligence?.apiUrl?.replace(/\/+$/, "");
-  const learningApiOrigin = (() => {
-    if (!learningApiUrl) return undefined;
-    try {
-      return intelligenceApiOrigin(learningApiUrl);
-    } catch {
-      return undefined;
-    }
-  })();
-  /** The credentials that can create a Learning container, for the `openbot` default and for each person's own space. */
-  const learningCredentials = (): LearningContainerCredentials | undefined =>
-    config.intelligence && learningApiUrl
-      ? {
-          directory: process.cwd(),
-          apiUrl: learningApiOrigin ?? learningApiUrl,
-          nonInteractive: true,
-          key: keyIntelligence(
-            learningApiUrl,
-            config.intelligence.apiKey,
-            config.intelligence.gatewayWsUrl,
-          ),
-          cliLogin: learningApiOrigin !== undefined && cliLoginPresent(),
-          ...(config.learningSetup && learningApiOrigin
-            ? {
-                serviceToken: {
-                  token: config.learningSetup.serviceToken,
-                  projectId: config.learningSetup.projectId,
-                },
-              }
-            : {}),
-        }
-      : undefined;
-  const learningAutoAssign = (() => {
-    if (!intelligenceClient || !learningSettingsStore) return undefined;
-    const credentials = learningCredentials();
-    const assign = createLearningAutoAssign({
-      enabled: config.learningAutoAssign,
-      configured: configuredLearning,
-      store: learningSettingsStore,
-      probe: (containerId) =>
-        probeLearningContainer(intelligenceClient, containerId),
-      ...(learningApiUrl
-        ? {
-            instructions: learningSetupInstructions(
-              learningApiOrigin ?? learningApiUrl,
-            ),
-          }
-        : {}),
-      ...(credentials
-        ? { create: () => ensureLearningContainer(credentials) }
-        : {}),
-      audit: createAuditStore(database),
-    });
-    /*
-     * The assignment is the deployment's, whoever's read nudged it and whichever timer runs it, so it
-     * always runs as `platform` (G01): the audit row it writes is nobody's.
-     */
-    return {
-      ...assign,
-      start: () => asPlatform(() => assign.start()),
-      kick: () => asPlatform(() => assign.kick()),
-      check: () => asPlatform(() => assign.check()),
-    };
-  })();
-  const learningSettings =
-    learningSettingsStore && learningAutoAssign
-      ? withLearningAutoAssign(learningSettingsStore, learningAutoAssign)
-      : learningSettingsStore;
-  learningAutoAssign?.start();
-  /*
-   * Each person's own Learning space: every recording they make joins it, and every Bot they run uses
-   * its Skills. Made with the same credential as the default container, on first need: when their
-   * browser connects, and again on a capture pass if it is still missing. With no such credential a
-   * missing space cannot be made, and the Recorder says so. Without Intelligence there is no space,
-   * and the Recorder is told Learning is off.
-   *
-   * Each person's row is theirs (G01): read and written in their own frame. Their name is an identity
-   * row, read as `platform`.
-   */
-  const personSpaceStore = createPersonSpaceStore(database);
-  const personalLearningSpaces: PersonalLearningSpaces =
-    intelligenceClient && learningSettings
-      ? createPersonalLearningSpaces({
-          readSettings: () => learningSettings.read(),
-          snapshots: intelligenceClient,
-          store: {
-            confirmed: (userId) =>
-              runAsTenant(userId, () => personSpaceStore.confirmed(userId)),
-            confirm: (userId, containerId) =>
-              runAsTenant(userId, () =>
-                personSpaceStore.confirm(userId, containerId),
-              ),
-            forget: (userId) =>
-              runAsTenant(userId, () => personSpaceStore.forget(userId)),
-          },
-          ...(learningCredentials()
-            ? {
-                create: (container) =>
-                  createLearningContainer({
-                    ...(learningCredentials() as LearningContainerCredentials),
-                    container,
-                  }),
-              }
-            : {}),
-          nameFor: async (userId) =>
-            (
-              await asPlatform(() =>
-                database
-                  .select({ name: users.name })
-                  .from(users)
-                  .where(eq(users.id, userId))
-                  .limit(1),
-              )
-            ).map((row) => row.name?.trim() || null)[0] ?? null,
-        })
-      : {
-          containerFor: personalLearningContainerId,
-          state: async () => ({ state: "learning-off", containerId: null }),
-          kick: () => {},
-        };
-  const skillApprovalStore = createSkillApprovalStore(database);
-  const learningSharingStore = createLearningSharingStore(database);
-  /**
-   * What everyone opened to every Bot, in memory: runs read this, never each person's space or the
-   * table. Everyone's rows, so read as `platform`.
-   */
-  const openSkillIndex = createOpenSkillIndex({
-    read: () => asPlatform(() => learningSharingStore.openSources()),
-  });
-  const learning =
-    intelligenceClient && learningSettings
-      ? createLearningRuntime({
-          store: learningSettings,
-          client: intelligenceClient,
-          // The environment's container, or a saved default, that this Intelligence was found not to
-          // have (upstream #1363/#1366).
-          forgotten: (containerId) =>
-            configuredLearning.forgotten(containerId) ||
-            (learningSettingsStore?.isSetAside(containerId) ?? false),
-          people: {
-            containerFor: personalLearningSpaces.containerFor,
-            openSkills: () => openSkillIndex.sources(),
-            // Read on every run, never from the index: an approval made on another replica counts at
-            // once. Other people's approvals, so as `platform`.
-            withheld: (userIds) =>
-              asPlatform(() => skillApprovalStore.withheld(userIds)),
-            sharingAllowed: skillSharingInSnapshot,
-          },
-        })
-      : undefined;
-  const learningPeople = createLearningPeople(database);
-  /** Reads one named skill from a container; throws when Learning or the read is unavailable, null when absent. */
-  const skillIn = async (containerId: string, name: string) => {
-    const read = await learning?.containerSkills(containerId);
-    if (!read || "unavailable" in read) {
-      throw new Error("Skills are unavailable.");
-    }
-    return read.skills.find((skill) => skill.name === name) ?? null;
+  const personalLearningSpaces: PersonalLearningSpaces = {
+    containerFor: personalLearningContainerId,
+    state: async () => ({ state: "learning-off", containerId: null }),
+    kick: () => {},
   };
   const agentVault = {
     store: credentialStore,
@@ -1509,7 +1263,7 @@ await startupLifecycle.run(async (startup) => {
     organizationAuth ??
     (betterAuth && entra ? withEntraBearer(betterAuth, entra) : betterAuth);
   /*
-   * Who is asking, for a CopilotKit request: one resolver, because a run has two questions to answer
+   * Who is asking, for an agent runtime request: one resolver, because a run has two questions to answer
    * about the same person, whose threads and memory these are and which coworkers they may run.
    *
    * Asked of the identity tables, which are the deployment's, before there is anybody to act as:
@@ -2643,15 +2397,6 @@ await startupLifecycle.run(async (startup) => {
     }),
   );
   const runtimeModel = runtimeModelForEnvironment(tenantPackage.model);
-  /**
-   * Where local Intelligence's Learning thinks on the person's plan, with a record of what became of
-   * each call so Settings can say why a run failed. Absent off a plan or without Desktop's secret.
-   */
-  const learningModelEndpoint = learningModelEndpointFor(
-    runtimeModel.plan,
-    process.env.OPENBOT_LEARNING_MODEL_TOKEN,
-    createLearningModelCalls(),
-  );
   // And before any Bot's model is resolved: behind a gateway, the API that model takes tools on (chooseOpenAIApi).
   if (chooseOpenAIApi(runtimeModel) === "responses")
     console.info(
@@ -2659,7 +2404,7 @@ await startupLifecycle.run(async (startup) => {
         type: "openai-api",
         api: "responses",
         model: runtimeModel.defaultModel,
-        message: `${runtimeModel.defaultModel} takes tools only through the Responses API, so the built-in Bots call /responses at OPENAI_BASE_URL. Set COPILOTKIT_OPENAI_API=chat to call /chat/completions instead.`,
+        message: `${runtimeModel.defaultModel} takes tools only through the Responses API, so the built-in Bots call /responses at OPENAI_BASE_URL. Set XIONGBAO_OPENAI_API=chat to call /chat/completions instead.`,
       }),
     );
 
@@ -2844,18 +2589,8 @@ await startupLifecycle.run(async (startup) => {
   // grant, the policy and the audit row are exactly where they were. Host-folder tools are also
   // server-dispatched: the selected Bot and the signed-in owner are bound here, then the desktop worker
   // receives only opaque grant ids and relative paths.
-  // Memory lives in CopilotKit Intelligence when this deployment is connected and entitled to it, and in
-  // XiongBao's own tables when it is not; see memory/store.ts.
-  const personalMemoryStore = createMemoryStore(
-    database,
-    intelligenceClient
-      ? {
-          intelligence: createIntelligenceMemory({
-            client: intelligenceClient,
-          }),
-        }
-      : {},
-  );
+  // A person's memory, in XiongBao's own tables; see memory/store.ts.
+  const personalMemoryStore = createMemoryStore(database);
   // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
   const knowledgeStore = createKnowledgeStore(database);
   /*
@@ -2875,15 +2610,6 @@ await startupLifecycle.run(async (startup) => {
       : {}),
     // A connection is made or ended exactly when its row is written: both in one transaction.
     auditFor: (executor) => createAuditStore(executor),
-    // Recording summaries come from the optional Intelligence, at the address its client resolved.
-    ...(intelligenceClient && config.intelligence
-      ? {
-          intelligence: {
-            apiUrl: intelligenceClient.ɵgetApiUrl(),
-            apiKey: config.intelligence.apiKey,
-          },
-        }
-      : {}),
   });
   /*
    * Connections whose lifetime has run out already resolve to nobody; this ends them for good, with
@@ -2907,57 +2633,6 @@ await startupLifecycle.run(async (startup) => {
       }, 60_000),
     (resource) => resource.stop(),
   );
-  /*
-   * The personal edition has one reviewer, who is DEV_ACTOR (it requires single-user mode, which admits
-   * every request as DEV_ACTOR), so what its Bots learn is approved for them while automatic approval
-   * is on: once shortly after boot, so what waited while the app was closed doesn't wait another 15
-   * minutes, then every 15 minutes. Only with Intelligence, which is where Learning's proposals are.
-   * The approvals are DEV_ACTOR's own rows, so the sweep runs as them (G01).
-   */
-  const autoApprover =
-    intelligenceClient && learningSettings
-      ? createAutoApprover({
-          manage: intelligenceClient.experimental.learning,
-          enabled: async () =>
-            currentEdition() === "personal" &&
-            ((await learningSettings.read()).autoApprove ?? true),
-          sources: async () =>
-            learningScopes({
-              edition: "personal",
-              userId: DEV_ACTOR.id,
-              settings: await learningSettings.read(),
-            }),
-          approvals: skillApprovalStore,
-          userId: DEV_ACTOR.id,
-          audit: bootAuditStore,
-        })
-      : undefined;
-  if (autoApprover && currentEdition() === "personal") {
-    const sweepAutoApprovals = () =>
-      void runAsTenant(DEV_ACTOR.id, () => autoApprover.sweep()).catch(
-        (error) =>
-          console.error(
-            JSON.stringify({
-              type: "learning-auto-approve-sweep-error",
-              error: error instanceof Error ? error.name : "UnknownError",
-              timestamp: new Date().toISOString(),
-            }),
-          ),
-      );
-    startup.acquireSync(
-      () => {
-        const first = setTimeout(sweepAutoApprovals, 10_000);
-        first.unref?.();
-        const every = setInterval(sweepAutoApprovals, 15 * 60_000);
-        every.unref?.();
-        return { first, every };
-      },
-      ({ first, every }) => {
-        clearTimeout(first);
-        clearInterval(every);
-      },
-    );
-  }
   const memoryIngestion = createMemoryIngestion({
     store: personalMemoryStore,
     plugins: pluginStore,
@@ -3010,7 +2685,6 @@ await startupLifecycle.run(async (startup) => {
         ),
     },
     ingestion: memoryIngestion,
-    store: personalMemoryStore,
   });
   startup.acquireSync(
     () => repeatAfterEach(memoryRuntime.sweep, 60_000),
@@ -3907,8 +3581,6 @@ await startupLifecycle.run(async (startup) => {
     // A routine, a card's round, an automation: real work, given the working turn's clock (期五).
     turnTimeoutMs: turnTimeoutFor("unattended"),
     maxToolSegments: toolSegmentsFor("unattended"),
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -4024,8 +3696,6 @@ await startupLifecycle.run(async (startup) => {
       },
     },
     turn: {
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       admission: serverTurnAdmission,
       // The server's own ports, as every other headless turn has them (routines/run-turn.ts).
       modelNamedIn,
@@ -4371,7 +4041,6 @@ await startupLifecycle.run(async (startup) => {
   };
 
   const actorAgentResolver = createActorAgentResolver({
-    productTelemetry,
     loadAgents: runtimeAgentsForActor,
     model: runtimeModel,
     resolveModelApiKey: resolveRuntimeModelApiKey,
@@ -4467,8 +4136,6 @@ await startupLifecycle.run(async (startup) => {
           botId,
           threadId: input.threadId,
           runId: input.runId,
-          // The subagent carries on the asking run's task, on the asking run's surface.
-          ...productTelemetry.lineageOf(actorId, input.forwardedProps),
           initiator: initiator ?? PERSON_INITIATOR,
           ...(depth ? { depth } : {}),
         }),
@@ -4503,7 +4170,6 @@ await startupLifecycle.run(async (startup) => {
         auto: config.sidebarAutoCompaction,
       }),
     // Published Automatic Learning skills, only with a connected Intelligence.
-    acquireLearnedSkills: learning?.acquire,
   });
 
   /**
@@ -4516,7 +4182,6 @@ await startupLifecycle.run(async (startup) => {
     identifyUser,
     identifyActor,
     {
-      productTelemetry,
       // The cards a Bot asks with in the conversation, saved while they wait on the person.
       decisionWaits: createDecisionWaits(database),
       // A run started or ended on a thread; light the channel it belongs to. Fire-and-forget.
@@ -4555,7 +4220,6 @@ await startupLifecycle.run(async (startup) => {
    */
   const quietUntil = createQuietUntil(database);
   const responsibilityEngine = createServerResponsibilityEngine({
-    productTelemetry,
     database,
     responsibilityStore,
     routineIntelligence,
@@ -4607,8 +4271,6 @@ await startupLifecycle.run(async (startup) => {
       // A responsibility's patrol is a light turn and keeps the light clock (期五).
       turnTimeoutMs: turnTimeoutFor("patrol"),
       maxToolSegments: toolSegmentsFor("patrol"),
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -4721,8 +4383,6 @@ await startupLifecycle.run(async (startup) => {
     executors: automationTargets,
   });
   const approvalContinuationOptions: Parameters<typeof createTurnRunner>[0] = {
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -4910,7 +4570,6 @@ await startupLifecycle.run(async (startup) => {
             content: input.text,
           },
           initiator: PERSON_INITIATOR,
-          telemetry: deliveryLineage(input.source, input.runId),
           signal: input.signal,
         });
         if (result.replyText)
@@ -5018,8 +4677,6 @@ await startupLifecycle.run(async (startup) => {
     // Only a check-in that raises something files a card and counts against the month.
     quota,
     runTurn: createTurnRunner({
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       buildAgentFor,
@@ -5332,8 +4989,6 @@ await startupLifecycle.run(async (startup) => {
       // A follow-up a Bot scheduled for itself runs unattended, on the working turn's clock (期五).
       turnTimeoutMs: turnTimeoutFor("unattended"),
       maxToolSegments: toolSegmentsFor("unattended"),
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -5428,8 +5083,6 @@ await startupLifecycle.run(async (startup) => {
       store: heartbeatStore,
       owner: workOwner("heartbeat"),
       runTurn: createTurnRunner({
-        prepareRunInput: prepareProductRunInput,
-        onKnownStop: productTelemetry.stopKnown,
         intelligence: routineIntelligence,
         runner: routineAgentRunner,
         components: headlessComponents,
@@ -5512,8 +5165,6 @@ await startupLifecycle.run(async (startup) => {
   const canUseGroupBot = async (ownerUserId: string, agentId: string) =>
     Boolean(await agentProfileStore.get(await actorFor(ownerUserId), agentId));
   const groupTurnOptions: Parameters<typeof createTurnRunner>[0] = {
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -6041,7 +5692,6 @@ await startupLifecycle.run(async (startup) => {
     // The runner, its delivery, and the loop and queue wake-up that drive them (agents/handoff-wiring.ts),
     // owned by the startup scope so a stopped server gives their connection back.
     await startHandoffDelivery({
-      productTelemetry,
       config,
       database,
       bootAuditStore,
@@ -6243,13 +5893,6 @@ await startupLifecycle.run(async (startup) => {
   );
   auditRoutineStore(routineStore, bootAuditStore);
 
-  // Said once, at boot, whether Intelligence will let this deployment use what it is licensed for. A
-  // self-hosted Intelligence without a licence refuses memory quietly; this is the line that says why.
-  if (intelligenceClient)
-    void reportIntelligenceEntitlement({
-      entitlements: () => intelligenceClient.getRuntimeEntitlements(),
-    });
-
   const identityGithubCallback =
     config.githubApp && config.publicUrl
       ? githubCallbackRoutes({
@@ -6448,7 +6091,6 @@ await startupLifecycle.run(async (startup) => {
       channels: channelStore,
     },
     {
-      productTelemetry,
       approvals: approvalService,
       // M3: upstream also passes `shared: { modes, use }` (shared use and shared accounts); not adopted.
       ...(signInService ? { passwords: signInService } : {}),
@@ -6522,9 +6164,6 @@ await startupLifecycle.run(async (startup) => {
             },
           }
         : {}),
-      ...(learningModelEndpoint
-        ? { learningModel: learningModelEndpoint }
-        : {}),
       agentModel: agentModel.proxy,
       // Upstream #1372/#1381/#1396/#1397/#1398/#1399: drafts written from an admin's description.
       boundaryWriter: writeBoundaries,
@@ -6567,38 +6206,6 @@ await startupLifecycle.run(async (startup) => {
         },
         event: (id) => adminRead(() => readAuditEvent(database, id)),
       },
-      /*
-       * Settings, Learning: who else's Bots use a person's own learned Skills. Only with the optional
-       * Intelligence, which is where Learning is.
-       */
-      ...(learning && learningSettings && intelligenceClient
-        ? {
-            personalLearning: {
-              store: learningSharingStore,
-              ...(learningModelEndpoint?.calls
-                ? { modelCalls: learningModelEndpoint.calls }
-                : {}),
-              approvals: skillApprovalStore,
-              ...(autoApprover ? { autoApprover } : {}),
-              skillsOf: (userId: string) => learning.personalSkills(userId),
-              skillOf: (userId: string, name: string) =>
-                skillIn(personalLearningSpaces.containerFor(userId), name),
-              containerSkills: (id: string) => learning.containerSkills(id),
-              invalidate: () => openSkillIndex.invalidate(),
-              sharingAllowed: skillSharingAllowed,
-              manage: intelligenceClient.experimental.learning,
-              modelUnavailable: learningModelUnavailable(process.env),
-              recordingTitles: recorderExtension.recordingTitles,
-              settings: learningSettings,
-              scopesFor: async (actor: { id: string }) =>
-                learningScopes({
-                  edition: currentEdition(),
-                  userId: actor.id,
-                  settings: await learningSettings.read(),
-                }),
-            },
-          }
-        : {}),
       delivery: {
         authenticated: {
           store: deliveryStore,
@@ -6718,12 +6325,6 @@ await startupLifecycle.run(async (startup) => {
         },
         credentials: credentialStore,
         modelCheckAtBoot,
-        // M3: the checklist's "Back end" row is upstream's required Intelligence. Intelligence is
-        // optional in this fork (R0), so without it the row reads as unreachable.
-        entitlements: () =>
-          intelligenceClient
-            ? intelligenceClient.getRuntimeEntitlements()
-            : Promise.reject(new Error("Intelligence is not connected.")),
         computer: Boolean(config.computer),
         computerCheck: createComputerCheck({
           provider: computerProvider,
@@ -6743,40 +6344,8 @@ await startupLifecycle.run(async (startup) => {
     createLocalThreadReader(database),
     // The plan ceilings, so a coworker created over them is refused by the write path (ticket 022).
     quota,
-    // Automatic Learning's admin page, only with a connected Intelligence (R0).
-    learningSettings && intelligenceClient
-      ? {
-          store: learningSettings,
-          ...(learningAutoAssign ? { autoAssign: learningAutoAssign } : {}),
-          status: learning?.status,
-          // Read directly: the runtime client refuses a snapshot without dashboard links.
-          ...(config.intelligence
-            ? {
-                inspect: createInspectorLearningReader({
-                  apiUrl: intelligenceClient.ɵgetApiUrl(),
-                  apiKey: config.intelligence.apiKey,
-                }),
-              }
-            : {}),
-          manage: intelligenceClient.experimental.learning,
-          modelUnavailable: learningModelUnavailable(process.env),
-          skills: learning?.containerSkills,
-          approvals: skillApprovalStore,
-          // Everyone who has a space, for an administrator's review: across people, so as `platform`.
-          people: () => asPlatform(() => learningPeople()),
-          personSkill: (userId: string, name: string) =>
-            skillIn(personalLearningSpaces.containerFor(userId), name),
-          invalidate: () => openSkillIndex.invalidate(),
-          recordingTitles: recorderExtension.recordingTitles,
-        }
-      : undefined,
-    // The self-host bar: the operator's switch, and hidden for a deployment paying for Intelligence.
-    createSelfHostBanner({
-      enabled: config.selfHostBanner,
-      ...(intelligenceClient
-        ? { entitlements: () => intelligenceClient.getRuntimeEntitlements() }
-        : {}),
-    }),
+    // The self-host bar: the operator's switch.
+    createSelfHostBanner({ enabled: config.selfHostBanner }),
     identityStore,
     identityGithubCallback,
     profileStore,

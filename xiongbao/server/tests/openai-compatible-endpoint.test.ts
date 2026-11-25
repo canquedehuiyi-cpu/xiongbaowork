@@ -17,7 +17,7 @@ import {
  * A built-in Bot whose model is reached through an `OPENAI_BASE_URL` that is not OpenAI's: a gateway or a proxy in
  * front of OpenAI (LiteLLM, Portkey, a company's own proxy), or a server that only speaks Chat Completions.
  *
- * The CopilotKit runtime 1.79 sends every `openai/...` model at such an address to Chat Completions, and there
+ * The agent runtime 1.79 sends every `openai/...` model at such an address to Chat Completions, and there
  * `gpt-5.6-terra`, the model the built-in Bots run on by default, refuses function tools: every turn of every
  * built-in Bot behind a proxy failed with "Function tools with reasoning_effort are not supported for gpt-5.6-terra
  * in /v1/chat/completions". These run a Bot the way the server does (the boot steps `index.ts` takes, in its order,
@@ -250,6 +250,36 @@ describe("the API chosen at boot, before any Bot runs", () => {
       expect(environment.COPILOTKIT_OPENAI_API).toBe(value);
     },
   );
+
+  test.each(["chat", "responses"])(
+    "XIONGBAO_OPENAI_API=%p is copied onto the runtime library's switch and stands",
+    (value) => {
+      const environment: Record<string, string | undefined> = {
+        OPENAI_BASE_URL: GATEWAY,
+        XIONGBAO_OPENAI_API: value,
+      };
+      expect(
+        chooseOpenAIApi(
+          { provider: "openai", defaultModel: "gpt-6.1-terra" },
+          environment,
+        ),
+      ).toBeUndefined();
+      expect(environment.COPILOTKIT_OPENAI_API).toBe(value);
+    },
+  );
+
+  test("the runtime library's own switch, set directly, wins over XIONGBAO_OPENAI_API", () => {
+    const environment: Record<string, string | undefined> = {
+      OPENAI_BASE_URL: GATEWAY,
+      XIONGBAO_OPENAI_API: "chat",
+      COPILOTKIT_OPENAI_API: "responses",
+    };
+    chooseOpenAIApi(
+      { provider: "openai", defaultModel: "gpt-6.1-terra" },
+      environment,
+    );
+    expect(environment.COPILOTKIT_OPENAI_API).toBe("responses");
+  });
 
   test.each([
     ["a model Chat Completions takes tools on", "openai", "gpt-5.5"],

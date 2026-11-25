@@ -16,7 +16,6 @@ import type { ComputerGateway } from "../computer/gateway";
 import { createHeadlessComputerTools } from "../computer/headless-tools";
 import type { Database } from "../db/client";
 import type { DeliveryScope } from "../delivery/types";
-import type { LearningThread } from "../learning/runtime";
 import type { QuotaService } from "../quota/limits";
 import {
   createTurnRunner,
@@ -24,7 +23,6 @@ import {
   type RunnerLike,
 } from "../routines/run-turn";
 import type { TaskProjector } from "../tasks/projector";
-import { productHeadlessBoundary } from "../telemetry/product-boundaries";
 import { markUntrusted } from "../untrusted-content";
 import { createWorkQueue } from "../work/queue";
 import {
@@ -49,7 +47,6 @@ import { type ResponsibilityStore, whyItRepeats } from "./types";
  * its usage row and card ports are always filled in.
  */
 export function createServerResponsibilityEngine(deps: {
-  productTelemetry?: import("../telemetry/product").ProductTelemetry;
   database: Database;
   responsibilityStore: ResponsibilityStore;
   routineIntelligence: IntelligenceLike;
@@ -61,12 +58,6 @@ export function createServerResponsibilityEngine(deps: {
   agentProfileStore: AgentProfileStore;
   bootAuditStore: AuditStore;
   signInService: Parameters<typeof createHeadlessComputerTools>[0]["signIn"];
-  /** Automatic Learning, when this deployment has the optional Intelligence: which space a thread joins. */
-  copilotRuntime?: {
-    learning?: {
-      containerForThread(input: LearningThread): Promise<string | undefined>;
-    };
-  };
   channelStore: ChannelStore;
   notify: (
     scope: DeliveryScope,
@@ -102,7 +93,6 @@ export function createServerResponsibilityEngine(deps: {
     agentProfileStore,
     bootAuditStore,
     signInService,
-    copilotRuntime,
     channelStore,
   } = deps;
   const responsibilityQueue = createWorkQueue(database);
@@ -134,12 +124,6 @@ export function createServerResponsibilityEngine(deps: {
           // A responsibility's patrol is a light turn and keeps the light clock (期五).
           turnTimeoutMs: turnTimeoutFor("patrol"),
           maxToolSegments: toolSegmentsFor("patrol"),
-          ...(deps.productTelemetry
-            ? {
-                prepareRunInput: productHeadlessBoundary(deps.productTelemetry),
-                onKnownStop: deps.productTelemetry.stopKnown,
-              }
-            : {}),
           admission: serverTurnAdmission,
           intelligence: routineIntelligence,
           runner: routineAgentRunner,
@@ -191,9 +175,6 @@ export function createServerResponsibilityEngine(deps: {
               })),
             ];
           },
-          learningContainerForThread: (input) =>
-            copilotRuntime?.learning?.containerForThread(input) ??
-            Promise.resolve(undefined),
         });
         const saved = context.continuation;
         const snapshot = saved

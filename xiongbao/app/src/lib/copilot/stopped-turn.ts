@@ -52,7 +52,7 @@ export function runErrorReason(event: unknown): string {
 /**
  * The one reason that is NOT passed on in its own words: the browser couldn't reach the runtime.
  *
- * CopilotKit's Intelligence agent writes it as `REST <mode> request failed: <whatever came back>`,
+ * The hosted back end's agent writes it as `REST <mode> request failed: <whatever came back>`,
  * and what came back is the server's raw body, JSON included (`{"error":"Failed to resolve Learning
  * Container"}`). Nothing in it is the person's to act on, so they are told what happened in their
  * terms and the original goes to the console for whoever is debugging.

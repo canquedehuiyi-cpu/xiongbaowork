@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
-  type EmbedOptions,
   type EmbeddingConfig,
+  type EmbedOptions,
   embeddingConfigOf,
   embedTexts,
 } from "./embed";
@@ -15,8 +15,7 @@ import type { EmbeddingStore } from "./embeddings-store";
  * 不在一个尺度上，混着排比两种都不如。
  *
  * 记忆的向量第一次要用到时才算，存起来（`embeddings-store.ts`）：正文没变、模型没换就一直用，所以稳定
- * 状态下一次挑选只花一次请求（算消息的向量）。只存本人名下的记忆；后端里只有的记忆（`formedBy: "intelligence"`，
- * 没有对应的行）每次现算、不存。
+ * 状态下一次挑选只花一次请求（算消息的向量）。
  */
 
 export type VectorizableMemory = {
@@ -54,9 +53,7 @@ export function createMemoryVectors(deps: {
     ): Promise<MemoryVectors | null> {
       const config = configOf();
       if (!config || memories.length === 0 || !query.trim()) return null;
-      const stored = await deps.store.load(
-        memories.filter((m) => m.formedBy !== "intelligence").map((m) => m.id),
-      );
+      const stored = await deps.store.load(memories.map((m) => m.id));
       const byId = new Map<string, readonly number[]>();
       const missing: VectorizableMemory[] = [];
       for (const memory of memories) {
@@ -88,13 +85,12 @@ export function createMemoryVectors(deps: {
         const vector = fresh[index];
         if (!vector) return;
         byId.set(memory.id, vector);
-        if (memory.formedBy !== "intelligence")
-          toSave.push({
-            memoryId: memory.id,
-            model: config.model,
-            digest: digestOf(memory.content),
-            vector,
-          });
+        toSave.push({
+          memoryId: memory.id,
+          model: config.model,
+          digest: digestOf(memory.content),
+          vector,
+        });
       });
       // 存不进去不影响这一次：下一次再算。
       await deps.store.save(toSave).catch(() => undefined);

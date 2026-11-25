@@ -200,7 +200,6 @@ describe("server copy a customer can read takes its name from the brand", () => 
 
   test("setup checklist guide links go to the deployment's support page, or are left out", () => {
     const unset: SetupFacts = {
-      intelligence: { state: "unreachable" },
       model: {
         provider: "openai",
         source: null,
@@ -226,13 +225,11 @@ describe("server copy a customer can read takes its name from the brand", () => 
       "https://support.jia.example",
       "https://support.jia.example",
       "https://support.jia.example",
-      "https://support.jia.example",
     ]);
 
     resetBrand();
     const bare = envFixes();
     expect(bare.map((fix) => fix.names[0])).toEqual([
-      "INTELLIGENCE_API_URL",
       "OPENAI_API_KEY",
       "AGENT_COMPUTER_URL",
       "ARCADE_API_KEY",
@@ -241,7 +238,6 @@ describe("server copy a customer can read takes its name from the brand", () => 
     // What the browser receives: no link at all, rather than one to the upstream's repository.
     const sent: Record<string, unknown>[] = JSON.parse(JSON.stringify(bare));
     expect(sent.map((fix) => "docsUrl" in fix)).toEqual([
-      false,
       false,
       false,
       false,

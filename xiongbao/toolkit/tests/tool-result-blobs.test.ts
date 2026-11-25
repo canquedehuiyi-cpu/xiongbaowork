@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
-import type { Prompt } from "../src/copilotkit/last-step";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
+import type { Prompt } from "../src/runtime/last-step";
 import {
   BLOB_CHARS_PER_TOKEN,
   BLOB_MIN_CHARS,

@@ -282,7 +282,6 @@ const engine = createServerResponsibilityEngine({
   agentProfileStore: {} as never,
   bootAuditStore: {} as never,
   signInService: undefined,
-  copilotRuntime: { learning: undefined } as never,
   channelStore: { recordActivity: async () => undefined } as never,
   notify: async (_scope, input) => {
     replies.push(input.text);

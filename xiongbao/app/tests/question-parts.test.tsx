@@ -130,13 +130,13 @@ type Renderer = ComponentType<Record<string, unknown>>;
 
 /** The `ask_person` step as the transcript draws it, through the SDK's own registry. */
 async function askedStep(args: Record<string, unknown>, result: string) {
-  let copilotkit: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+  let copilotCore: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
   function Capture() {
-    copilotkit = useCopilotKit().copilotkit;
+    copilotCore = useCopilotKit().copilotkit;
     return null;
   }
   const renderer = () =>
-    copilotkit?.renderToolCalls.find(
+    copilotCore?.renderToolCalls.find(
       (candidate) => candidate.name === "ask_person",
     )?.render as Renderer | undefined;
   const tree = render(

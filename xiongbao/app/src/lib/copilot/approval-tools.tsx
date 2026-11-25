@@ -122,7 +122,7 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   const tool: ReactFrontendTool<T> = serverRuns
     ? { ...given, handler: undefined }
     : given;
-  const { copilotkit } = useCopilotKit();
+  const { copilotkit: copilotCore } = useCopilotKit();
   // Stable for the provider's life, so the SDK's once-registered handler may keep it.
   const queryClient = useQueryClient();
   const botOf = useBotOfCall();
@@ -205,7 +205,7 @@ export function useFrontendTool<T extends Record<string, unknown>>(
                 throw new Error("The interrupted conversation is unavailable.");
               // Stop signals the SDK to discard this handler's unfinished result. The server owns
               // resume: the decision executes the action once and continues this conversation.
-              copilotkit.stopAgent({ agent: context.agent });
+              copilotCore.stopAgent({ agent: context.agent });
               // Draw the card now rather than on the inbox's next poll.
               void queryClient.invalidateQueries({ queryKey: ["approvals"] });
               return WAITING_FOR_PERSON;

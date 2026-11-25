@@ -28,7 +28,7 @@ test("a delivery.* card is the server's, however it is cased or padded", () => {
 
 /*
  * 「已用完 N 步 · 继续」 is drawn from `step-limit`, which only a built-in coworker's own run sends,
- * after the server's filter (`toolkit/src/copilotkit/agents.ts`). One an endpoint or an external
+ * after the server's filter (`toolkit/src/runtime/agents.ts`). One an endpoint or an external
  * employee sends is a forgery, and is dropped like a forged card.
  */
 test("a step-limit is the server's, however it is cased or padded", () => {

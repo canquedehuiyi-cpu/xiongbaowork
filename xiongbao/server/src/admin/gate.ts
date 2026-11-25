@@ -39,15 +39,15 @@ async function body(context: Ctx): Promise<Record<string, unknown>> {
   }
 }
 
-const COPILOT_BASE = "/api/copilotkit";
+const COPILOT_BASE = "/api/runtime";
 
 /**
- * A run or connect of a Bot through the CopilotKit runtime, matched the way the runtime matches it.
+ * A run or connect of a Bot through the agent runtime, matched the way the runtime matches it.
  *
  * The runtime does not anchor its routes: its router (`fetch-router` `matchSegments`) takes any path
  * under its base whose LAST segments are `agent/<id>/run`, `agent/<id>/connect` or `agent/<id>/suggest`
  * (a suggestion runs the Bot's model on whatever messages the caller sends). So
- * `/api/copilotkit/x/agent/<id>/run` runs the Bot exactly as `/api/copilotkit/agent/<id>/run` does,
+ * `/api/runtime/x/agent/<id>/run` runs the Bot exactly as `/api/runtime/agent/<id>/run` does,
  * and an anchored pattern here would let the first one through ungoverned.
  */
 export function runtimeRun(
@@ -226,7 +226,7 @@ export function createEnterpriseGate(
     if (governedAgent) return governed;
     /*
      * Everything else passes on outside the frame, as before: each gated route sits behind its own
-     * `requireUser`, which opens the person's frame again. The CopilotKit runtime is not behind
+     * `requireUser`, which opens the person's frame again. The agent runtime is not behind
      * `requireUser`; `mountCopilotRuntime` opens the frame of the actor it resolves around each whole
      * runtime request (and refuses a signed-out one everything but `/info`), so an ungoverned
      * `/connect` or thread read is framed there, not here.

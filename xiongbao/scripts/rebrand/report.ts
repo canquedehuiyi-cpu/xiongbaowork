@@ -15,7 +15,9 @@ import {
  * 剩余旧词报告：数仓库里还有多少旧品牌词，哪些受保护清单保护、哪些还没改。
  *
  *   bun xiongbao/scripts/rebrand/report.ts --phase <R1..R4> [--scope <路径>]...
- *     [--families openbot|copilotkit|openbot,copilotkit] [--fail-on-unprotected] [--fail-on-any]
+ *     [--exclude <路径>]... [--families openbot|copilotkit|openbot,copilotkit] [--fail-on-unprotected] [--fail-on-any]
+ *
+ * `--scope` 与 `--exclude` 后都可跟多个路径；`--exclude` 去掉落在这些路径（文件或目录）下的文件。
  *
  * 路径一律相对仓库根（`git rev-parse --show-toplevel`），与当前目录无关。
  * 搜索词分两族：openbot 族（openbot|open-bot|open_bot|open.bot）与 copilotkit 族，不分大小写。
@@ -41,7 +43,7 @@ const WORDS: Readonly<Record<Family, RegExp>> = {
 const ANY_WORD = /openbot|open-bot|open_bot|open\.bot|copilotkit/i;
 
 const USAGE =
-  "用法: bun xiongbao/scripts/rebrand/report.ts --phase <R1|R2|R3|R4> [--scope <路径>]... [--families <openbot|copilotkit|openbot,copilotkit>] [--fail-on-unprotected] [--fail-on-any]";
+  "用法: bun xiongbao/scripts/rebrand/report.ts --phase <R1|R2|R3|R4> [--scope <路径>...]... [--exclude <路径>...]... [--families <openbot|copilotkit|openbot,copilotkit>] [--fail-on-unprotected] [--fail-on-any]";
 
 type Span = [number, number];
 
@@ -88,15 +90,165 @@ const NOTICE_FILE =
 /** MIT 原文的最后一行：放行段到此为止。 */
 const LICENSE_END = /^SOFTWARE\.\s*$/;
 
+/**
+ * 依赖的线上名：依赖库（或用它的对端）定义、本仓改不了的键名、属性名、样式类与标记，逐个列出。
+ * 只认整个名字（前后不是标识符字符或连字符），只在源码与样式文件里放行。叫 CopilotKit 的公司、云服务、
+ * 产品名不在这里。
+ */
+export const DEPENDENCY_WIRE_NAMES: readonly string[] = [
+  // 依赖的 HITL 中断值键，OpenTag 的 confirm_write 卡片也按它取值（server/src/delivery/opentag.ts）。
+  "__copilotkit_interrupt_value__",
+  // 依赖的建议引擎强制调用的工具名。
+  "copilotkitSuggest",
+  // 依赖样式表里聊天输入框的类名（app 用 Tailwind 任意选择器改它的外观）。
+  "copilotKitInput",
+  // @copilotkit/runtime 读的环境变量：选 OpenAI 的哪套 API（对外的名字是 XIONGBAO_OPENAI_API）。
+  "COPILOTKIT_OPENAI_API",
+  // 依赖的 A2UI 信封里 metadata.extensions 的键（@copilotkit/shared 的 a2ui-envelope）。
+  "copilotkit_transport",
+  "copilotkit_action",
+  "copilotkit_format",
+  "copilotkit_targets",
+  "copilotkit_surfaces",
+  "copilotkit_contextSent",
+];
+
+/**
+ * `useCopilotKit()` 与 `CopilotKitContext` 返回对象上的成员名 `copilotkit`，以及浏览器发来的
+ * `forwardedProps.copilotkit`：依赖的对象键。只在属性访问（`.copilotkit`、`["copilotkit"]`）、解构与对象键
+ * （`{ copilotkit`、`copilotkit }`、`copilotkit:`、`copilotkit,`，以及一行开头的对象键 `copilotkit:`）的位置放行，句子里的 copilotkit 不放行。
+ */
+const DEPENDENCY_MEMBER =
+  /(?<=\.)copilotkit\b|(?<=[{,]\s*)copilotkit\b(?=\s*[,}:=])|(?<=[{,]\s*\.\.\.)copilotkit\b|(?<=\[["'])copilotkit(?=["']\])|(?<=^\s*)copilotkit(?=\s*:)/g;
+
+/** 注释里指代依赖包的包名写法 `@copilotkit/<包>[/<子路径>]`。 */
+const PACKAGE_NAME = /@copilotkit\/[\w.-]+(?:\/[\w.-]+)*/g;
+/** 注释所在：行首是注释记号，或命中前有 `//`（源码）。Markdown 正文整行算说明文字。 */
+const COMMENT_START = /^\s*(?:\/\/|\/\*|\*|#|<!--|\{\/\*)/;
+const STYLE_FILE = /\.(?:css|scss)$/;
+const MARKDOWN_FILE = /\.mdx?$/;
+
+const IDENTIFIER_CHAR = "[\\w$]";
+
+/**
+ * 从 `@copilotkit/*` 导入（或再导出）的名字：按导入语句里写出的名字认，含 `as` 后的本地名、默认导入与
+ * `* as` 命名空间。不按前缀猜：没有出现在这样一条导入语句里的 `CopilotKit…` 不算。
+ */
+export function copilotkitImportedNames(text: string): Set<string> {
+  const names = new Set<string>();
+  const statement =
+    /\b(?:import|export)\s+(?:type\s+)?([^;'"`]*?)\s+from\s*(["'])(@copilotkit\/[^"']*)\2/g;
+  for (const match of text.matchAll(statement)) {
+    const clause = (match[1] ?? "").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
+    const braces = /\{([^}]*)\}/.exec(clause);
+    const outside = braces ? clause.replace(braces[0], "") : clause;
+    for (const part of outside.split(",")) {
+      const name = part.replace(/^\s*\*\s*as\s+/, "").trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
+    }
+    for (const part of (braces?.[1] ?? "").split(",")) {
+      for (const name of part
+        .replace(/^\s*type\s+/, "")
+        .split(/\s+as\s+/)
+        .map((piece) => piece.trim()))
+        if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
+    }
+  }
+  // 命名空间（`* as X`，或 `const X = await import("@copilotkit/…")`）上取的成员：`X.name`、`spyOn(X, "name")`。
+  const namespaces = new Set<string>();
+  for (const match of text.matchAll(
+    /\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["']@copilotkit\//g,
+  ))
+    namespaces.add(match[1] as string);
+  for (const match of text.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?import\s*\(\s*["']@copilotkit\//g,
+  ))
+    namespaces.add(match[1] as string);
+  for (const namespace of namespaces) {
+    const escaped = namespace.replace(/\$/g, "\\$");
+    const member = new RegExp(
+      `(?<![\\w$])${escaped}\\s*(?:\\.\\s*|,\\s*["'])([A-Za-z_$][\\w$]*)`,
+      "g",
+    );
+    for (const match of text.matchAll(member)) names.add(match[1] as string);
+  }
+  // 模块替身 `mock.module("@copilotkit/…", () => ({ … }))` 第一层的键：替的是依赖自己导出的名字。
+  for (const match of text.matchAll(
+    /\bmock\.module\s*\(\s*["']@copilotkit\/[^"']*["']\s*,\s*(?:async\s*)?\(\s*\)\s*=>\s*\(\s*\{/g,
+  ))
+    for (const key of topLevelKeys(text, (match.index ?? 0) + match[0].length))
+      names.add(key);
+  return names;
+}
+
+/** 从 `{` 之后的位置读到配对的 `}`，返回第一层 `键:` 的键名（展开 `...x` 与嵌套里的键不算）。 */
+function topLevelKeys(text: string, from: number): string[] {
+  const keys: string[] = [];
+  let depth = 1;
+  let start = from;
+  const take = (end: number) => {
+    for (const key of text
+      .slice(start, end)
+      .matchAll(/(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:/g))
+      keys.push(key[1] as string);
+  };
+  for (let at = from; at < text.length; at++) {
+    const char = text[at];
+    if (char === "{" || char === "(" || char === "[") {
+      if (depth === 1) take(at);
+      depth++;
+    } else if (char === "}" || char === ")" || char === "]") {
+      depth--;
+      if (depth === 0) {
+        take(at);
+        break;
+      }
+      if (depth === 1) start = at + 1;
+    }
+  }
+  return keys;
+}
+
+function wordSpans(word: string, line: string, extra = ""): Span[] {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return spansOf(
+    new RegExp(
+      `(?<!${IDENTIFIER_CHAR}${extra})${escaped}(?!${IDENTIFIER_CHAR}${extra})`,
+      "g",
+    ),
+    line,
+  );
+}
+
 /** copilotkit 族里放行的片段（只对 copilotkit 族生效）。 */
 function exemptSpans(
   file: string,
   line: string,
   inLicense: boolean,
   dependencyNames: Set<string>,
+  importedNames: Set<string> = new Set(),
 ): Span[] {
   if (inLicense) return [[0, line.length]];
   const spans: Span[] = [];
+  const source = SOURCE_FILE.test(file);
+  if (source || STYLE_FILE.test(file)) {
+    for (const name of DEPENDENCY_WIRE_NAMES)
+      spans.push(...wordSpans(name, line, "|-"));
+  }
+  if (source) {
+    for (const name of importedNames)
+      if (/copilotkit/i.test(name)) spans.push(...wordSpans(name, line));
+    spans.push(...spansOf(DEPENDENCY_MEMBER, line));
+  }
+  const commentAt =
+    COMMENT_START.test(line) || MARKDOWN_FILE.test(file)
+      ? 0
+      : source
+        ? line.search(/(?<!:)\/\//)
+        : -1;
+  if (commentAt >= 0)
+    for (const [start, end] of spansOf(PACKAGE_NAME, line))
+      if (start >= commentAt) spans.push([start, end]);
   if (file.endsWith("package.json")) {
     const key = /^\s*"(@copilotkit\/[^"]*)"\s*:/.exec(line);
     if (key && dependencyNames.has(key[1] as string))
@@ -170,6 +322,9 @@ export function findLeftovers(
     const dependencyNames = file.endsWith("package.json")
       ? copilotkitDependencyNames(text)
       : new Set<string>();
+    const importedNames = SOURCE_FILE.test(file)
+      ? copilotkitImportedNames(text)
+      : new Set<string>();
     const isNotice = NOTICE_FILE.test(file);
     let inLicense = false;
     text.split("\n").forEach((line, index) => {
@@ -179,7 +334,13 @@ export function findLeftovers(
       // 绝大多数行没有任何旧词：先一次判断，省掉逐行的正则构造。
       if (!ANY_WORD.test(line)) return;
       const kept = spansOf(protect, line);
-      const exempt = exemptSpans(file, line, licenseLine, dependencyNames);
+      const exempt = exemptSpans(
+        file,
+        line,
+        licenseLine,
+        dependencyNames,
+        importedNames,
+      );
       for (const family of FAMILIES) {
         for (const match of line.matchAll(WORDS[family])) {
           const at = match.index ?? 0;
@@ -248,6 +409,7 @@ function parseArgs(argv: string[]) {
   let phase: Phase | undefined;
   let families: Family[] = [...FAMILIES];
   const scopes: string[] = [];
+  const excludes: string[] = [];
   let failOnUnprotected = false;
   let failOnAny = false;
   for (let i = 0; i < argv.length; i++) {
@@ -262,10 +424,13 @@ function parseArgs(argv: string[]) {
       if (value.some((name) => !FAMILIES.includes(name as Family)))
         fail(`--families 要 openbot、copilotkit 或二者以逗号相连\n${USAGE}`);
       families = value as Family[];
-    } else if (arg === "--scope") {
-      const value = argv[++i];
-      if (!value) fail(`--scope 缺路径\n${USAGE}`);
-      scopes.push(value as string);
+    } else if (arg === "--scope" || arg === "--exclude") {
+      // 一个选项后可跟多个路径，直到下一个以 -- 开头的参数。
+      const values: string[] = [];
+      while (argv[i + 1] !== undefined && !argv[i + 1]?.startsWith("--"))
+        values.push(argv[++i] as string);
+      if (values.length === 0) fail(`${arg} 缺路径\n${USAGE}`);
+      (arg === "--scope" ? scopes : excludes).push(...values);
     } else if (arg === "--fail-on-unprotected") failOnUnprotected = true;
     else if (arg === "--fail-on-any") failOnAny = true;
     else fail(`不认识的参数 ${arg}\n${USAGE}`);
@@ -275,15 +440,23 @@ function parseArgs(argv: string[]) {
     phase: phase as Phase,
     families,
     scopes,
+    excludes,
     failOnUnprotected,
     failOnAny,
   };
 }
 
+/** `path` 是 `exclude` 本身或在它下面（目录写不写结尾的 / 都行）。 */
+export function isExcluded(path: string, excludes: string[]): boolean {
+  return excludes.some((exclude) => {
+    const base = exclude.replace(/\/+$/, "");
+    return path === base || path.startsWith(`${base}/`);
+  });
+}
+
 function main() {
-  const { phase, families, scopes, failOnUnprotected, failOnAny } = parseArgs(
-    process.argv.slice(2),
-  );
+  const { phase, families, scopes, excludes, failOnUnprotected, failOnAny } =
+    parseArgs(process.argv.slice(2));
   const root = gitRoot();
   if (!root) fail("不在 git 仓库里");
   for (const scope of scopes) {
@@ -300,12 +473,13 @@ function main() {
   })
     .stdout.toString()
     .split("\0")
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((file) => !isExcluded(file, excludes));
   const found = findLeftovers(listed, phase, root).filter((hit) =>
     families.includes(hit.family),
   );
   process.stdout.write(
-    `阶段 ${phase}，词族 ${families.join(",")}${scopes.length ? `，范围 ${scopes.join(" ")}` : ""}\n${formatTable(found)}\n`,
+    `阶段 ${phase}，词族 ${families.join(",")}${scopes.length ? `，范围 ${scopes.join(" ")}` : ""}${excludes.length ? `，排除 ${excludes.join(" ")}` : ""}\n${formatTable(found)}\n`,
   );
   const open = found.filter((hit) => !hit.protected);
   if (failOnUnprotected && open.length > 0) {

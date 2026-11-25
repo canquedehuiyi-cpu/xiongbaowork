@@ -8,8 +8,8 @@ import {
   quoteMemoryContext,
 } from "../src/memory/ingestion";
 import { createMemoryRoutes } from "../src/memory/routes";
-import type { MemoryStore } from "../src/memory/store";
 import { createMemoryRuntime } from "../src/memory/runtime";
+import type { MemoryStore } from "../src/memory/store";
 import { memoryTools, offeredMemoryTools } from "../src/memory/tools";
 import {
   parseMemoryInput,
@@ -210,11 +210,6 @@ function runtimeParts(calls: string[]) {
         calls.push("sync");
       },
     },
-    store: {
-      mirrorPending: async () => {
-        calls.push("mirror");
-      },
-    },
   } as unknown as Omit<Parameters<typeof createMemoryRuntime>[0], "edition">;
 }
 
@@ -230,7 +225,7 @@ test("the personal edition puts memory in a Bot's turn and runs its sweep, like 
         "Prefers mornings",
       );
       await runtime.sweep();
-      expect(calls).toEqual(["adopt u1 bot", "context", "sync", "mirror"]);
+      expect(calls).toEqual(["adopt u1 bot", "context", "sync"]);
     }
   });
 });

@@ -1,5 +1,9 @@
 import type { BaseEvent } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
+import {
+  RUN_ENDED_EARLY,
+  SEGMENT_LIMIT_MESSAGE,
+} from "@xiongbao/toolkit/headless-tools";
 import { generateText, type LanguageModel } from "ai";
 import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import {
@@ -43,7 +47,6 @@ import {
   dailyLimitOf,
   RETRO_PER_DAY_DEFAULT,
 } from "./daily-limit";
-import { RUN_ENDED_EARLY, SEGMENT_LIMIT_MESSAGE } from "./remote";
 import { answerFailed } from "./tool-outcome";
 
 /**

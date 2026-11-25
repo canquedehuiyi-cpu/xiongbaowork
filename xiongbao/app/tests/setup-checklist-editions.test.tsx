@@ -18,7 +18,6 @@ import { cleanup, render, within } from "@testing-library/react";
 import { queryClient } from "@/query-client";
 import { Route as SetupRoute } from "@/routes/_authed/settings/setup";
 import type { Edition } from "../../server/src/edition";
-import type { RuntimeEntitlementResponse } from "../../server/src/self-host-banner";
 import {
   createSetupRoutes,
   createSetupSources,
@@ -57,35 +56,12 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const ENTITLED: RuntimeEntitlementResponse = {
-  status: "ready",
-  entitlement: {
-    active: true,
-    source: "selfHostedDeploymentLicense",
-    features: {},
-    limits: {},
-  },
-};
-/** Intelligence answered, and said the licence is not active. */
-const INACTIVE: RuntimeEntitlementResponse = {
-  status: "ready",
-  entitlement: {
-    active: false,
-    source: "selfHostedDeploymentLicense",
-    features: {},
-    limits: {},
-  },
-};
-
 /**
  * Serves `/api/setup` from the server's routes for one edition. No model key, so the model row
  * names the page to add one; a computer that is set up and not yet asked, so its row names the
  * page computers show up on. The person is an admin, as the one person on the personal edition is.
  */
-function serve(
-  edition: Edition,
-  facts: { entitlement: RuntimeEntitlementResponse; moreApps: boolean },
-) {
+function serve(edition: Edition, facts: { moreApps: boolean }) {
   const sources = createSetupSources({
     productName: "XiongBao",
     config: { singleUser: edition === "personal", edition },
@@ -97,7 +73,6 @@ function serve(
       plan: false,
     },
     credentials: { list: async () => [] },
-    entitlements: async () => facts.entitlement,
     computer: true,
     apps: { configured: facts.moreApps },
     chat: false,
@@ -151,12 +126,9 @@ const linkTo = (row: ReturnType<typeof within>, name: string) =>
   row.getByRole("link", { name }).getAttribute("href");
 
 test("the personal edition's Setup speaks of no memory and no admin", async () => {
-  serve("personal", { entitlement: ENTITLED, moreApps: true });
+  serve("personal", { moreApps: true });
   const { view, row } = await draw();
 
-  expect(
-    row("intelligence").getByText("Keeps your conversations and skills."),
-  ).toBeTruthy();
   expect(
     row("apps").getByText(
       "You can connect more apps than the ones XiongBao comes with.",
@@ -170,14 +142,9 @@ test("the personal edition's Setup speaks of no memory and no admin", async () =
 });
 
 test("the personal edition's gaps speak of no memory and no admin either", async () => {
-  serve("personal", { entitlement: INACTIVE, moreApps: false });
+  serve("personal", { moreApps: false });
   const { view, row } = await draw();
 
-  expect(
-    row("intelligence").getByText(
-      "The back end says this deployment's licence isn't active.",
-    ),
-  ).toBeTruthy();
   expect(
     row("apps").getByText(
       "Without it, you can connect only the apps XiongBao comes with.",
@@ -187,14 +154,9 @@ test("the personal edition's gaps speak of no memory and no admin either", async
 });
 
 test("a team deployment's Setup keeps memory, its admin, and the Admin pages", async () => {
-  serve("team", { entitlement: ENTITLED, moreApps: true });
+  serve("team", { moreApps: true });
   const { row } = await draw();
 
-  expect(
-    row("intelligence").getByText(
-      "Keeps your conversations and what XiongBao remembers.",
-    ),
-  ).toBeTruthy();
   expect(
     row("apps").getByText(
       "People can connect more apps than the ones an admin adds.",
@@ -204,15 +166,10 @@ test("a team deployment's Setup keeps memory, its admin, and the Admin pages", a
   expect(linkTo(row("computer"), "Computers")).toBe("/admin/computers");
 });
 
-test("a team deployment's gaps still say what an inactive licence keeps off", async () => {
-  serve("team", { entitlement: INACTIVE, moreApps: false });
+test("a team deployment's gaps speak of the apps an admin adds", async () => {
+  serve("team", { moreApps: false });
   const { row } = await draw();
 
-  expect(
-    row("intelligence").getByText(
-      "The back end says this deployment's licence isn't active. Memory stays off until it is.",
-    ),
-  ).toBeTruthy();
   expect(
     row("apps").getByText(
       "Without it, people can connect only the apps an admin adds.",

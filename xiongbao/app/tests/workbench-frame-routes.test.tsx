@@ -82,7 +82,7 @@ beforeEach(() => {
     ["GET /api/channels", { channels: [], nextCursor: null }],
     ["GET /api/bots/attention", { bots: [], lastPingId: null }],
     // The authed layout's assistant asks what its runtime offers; an empty answer is enough.
-    ["GET /api/copilotkit/info", { version: "test", agents: {} }],
+    ["GET /api/runtime/info", { version: "test", agents: {} }],
   ]);
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {

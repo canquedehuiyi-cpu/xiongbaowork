@@ -4,8 +4,8 @@ import type {
   BuiltInAgent,
   BuiltInAgentConfiguration,
 } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
 import { parametersFor } from "../src/granted-tool";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
 import { plainToolResult, plainToolResults } from "../src/tool-result-text";
 
 /**

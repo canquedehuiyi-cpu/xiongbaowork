@@ -62,7 +62,6 @@ const build = (resolveAgentModel?: AgentModelResolver) =>
     undefined,
     undefined,
     undefined,
-    undefined,
     resolveAgentModel,
   );
 
@@ -158,7 +157,6 @@ describe("the deployment default model is metered", () => {
             [reviewer],
             model,
             key,
-            undefined,
             undefined,
             undefined,
             undefined,

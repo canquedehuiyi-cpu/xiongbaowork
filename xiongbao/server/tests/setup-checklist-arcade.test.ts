@@ -12,7 +12,6 @@ import {
  * 哪个提供商时仍是 Composio，与以前一样。
  */
 const facts = (apps: SetupFacts["apps"]): SetupFacts => ({
-  intelligence: { state: "ready" },
   model: {
     provider: "openai",
     source: "environment",

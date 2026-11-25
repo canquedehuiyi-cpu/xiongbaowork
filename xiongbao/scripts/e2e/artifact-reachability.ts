@@ -51,7 +51,13 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, openSync, closeSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { LLMock } from "@copilotkit/aimock";
 import { SQL, type Subprocess } from "bun";
@@ -174,7 +180,9 @@ async function until<T>(
 // ---------------------------------------------------------------------------------------------
 
 /** What the person asks for, in one sentence. */
-const SAY = { save: "把这季度的数据存成文件，另外把待确认的那份也存一下。" } as const;
+const SAY = {
+  save: "把这季度的数据存成文件，另外把待确认的那份也存一下。",
+} as const;
 /** What the mocked Bot says once its calls come back. */
 const ANSWER = {
   saved: "E2E-存好了：季度报告在 reports 目录里，另一份文件名带空格。",
@@ -246,7 +254,10 @@ type Message = {
   content?: unknown;
   tool_calls?: { function?: { name?: string } }[];
 };
-type ModelCall = { kind: "write_files" | "answered" | "plain"; offeredWrite: boolean };
+type ModelCall = {
+  kind: "write_files" | "answered" | "plain";
+  offeredWrite: boolean;
+};
 const calls: ModelCall[] = [];
 
 function textOf(content: unknown): string {
@@ -351,7 +362,6 @@ const serverEnv: Record<string, string> = {
   // is one more call to the same mock after the answer, whose prompt quotes the person's message and so can
   // read as a scripted call. It is not what this gate measures, so it pins `off`.
   XIONGBAO_MEMORY_EXTRACT: "off",
-  COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
 };
 
@@ -600,8 +610,11 @@ async function fixedComputer(route: Route): Promise<void> {
     };
     const folder = typeof body.path === "string" ? body.path : ".";
     listRequests.push(folder);
-    const answer =
-      FOLDERS[folder] ?? { path: folder, entries: [], truncated: false };
+    const answer = FOLDERS[folder] ?? {
+      path: folder,
+      entries: [],
+      truncated: false,
+    };
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -611,7 +624,9 @@ async function fixedComputer(route: Route): Promise<void> {
   if (COMPUTER_PATH.test(path) && path.endsWith("/files/download")) {
     downloadRequests.push(path + url.search);
     // The route answers under the last segment of the path it was handed, as the attachment says.
-    const name = (url.searchParams.get("path") ?? "").split("/").at(-1) as string;
+    const name = (url.searchParams.get("path") ?? "")
+      .split("/")
+      .at(-1) as string;
     return route.fulfill({
       status: 200,
       headers: attachmentHeaders(name),
@@ -683,30 +698,44 @@ try {
 
   let me = "";
   let bot = "";
-  await step("sign up; the account's 小管家 is the Bot under test", async () => {
-    me = await signUp(p, "G7 测试员", SIGN_UP_EMAIL);
-    check(me, "the person has an id");
-    bot = `avatar-${me}`;
-    const listed = await api<{ agents: { id: string }[] }>("GET", "/api/agents");
-    equal(listed.status, 200, "GET /api/agents answers the person's own list");
-    check(
-      listed.body.agents.some((agent) => agent.id === bot),
-      `the 小管家 (${bot}) is among their employees`,
-    );
-    /*
-     * Checked rather than assumed: this deployment has no computer of its own to ask.
-     *
-     * `devices/selection.ts` gives a cloud runtime without a container provider no provider at all, so
-     * `/api/computers/*` is not mounted and the read answers 404. The scope answer the page then builds
-     * on is the one `fixedComputer` hands it — which is only honest if the page really asked instead of
-     * assuming, so the reads are counted there and read back in the next step.
-     */
-    const scope = await api<Record<string, unknown>>(
-      "GET",
-      `/api/computers/${encodeURIComponent(bot)}/local-tools`,
-    );
-    equal(scope.status, 404, "this deployment has no computer to answer for the Bot");
-  });
+  await step(
+    "sign up; the account's 小管家 is the Bot under test",
+    async () => {
+      me = await signUp(p, "G7 测试员", SIGN_UP_EMAIL);
+      check(me, "the person has an id");
+      bot = `avatar-${me}`;
+      const listed = await api<{ agents: { id: string }[] }>(
+        "GET",
+        "/api/agents",
+      );
+      equal(
+        listed.status,
+        200,
+        "GET /api/agents answers the person's own list",
+      );
+      check(
+        listed.body.agents.some((agent) => agent.id === bot),
+        `the 小管家 (${bot}) is among their employees`,
+      );
+      /*
+       * Checked rather than assumed: this deployment has no computer of its own to ask.
+       *
+       * `devices/selection.ts` gives a cloud runtime without a container provider no provider at all, so
+       * `/api/computers/*` is not mounted and the read answers 404. The scope answer the page then builds
+       * on is the one `fixedComputer` hands it — which is only honest if the page really asked instead of
+       * assuming, so the reads are counted there and read back in the next step.
+       */
+      const scope = await api<Record<string, unknown>>(
+        "GET",
+        `/api/computers/${encodeURIComponent(bot)}/local-tools`,
+      );
+      equal(
+        scope.status,
+        404,
+        "this deployment has no computer to answer for the Bot",
+      );
+    },
+  );
 
   let channelPath = "";
   await step("「存成文件」 -> the saved file's line is a link", async () => {
@@ -735,7 +764,11 @@ try {
       `/api/computers/${encodeURIComponent(bot)}/files/download?path=reports%2F%E5%AD%A3%E5%BA%A6%E6%8A%A5%E5%91%8A.md`,
       "the line's address names the path the computer answered with, encoded as one query value",
     );
-    equal(await first.getAttribute("download"), "", "it saves rather than navigates");
+    equal(
+      await first.getAttribute("download"),
+      "",
+      "it saves rather than navigates",
+    );
     equal(await first.getAttribute("rel"), "noopener", "rel=noopener");
     check(
       (await first.innerText()).includes("./reports/季度报告.md"),
@@ -756,119 +789,128 @@ try {
     await screenshot("artifact-line");
   });
 
-  await step("本轮产物 -> one list of the turn's files, with its truncated caption", async () => {
-    const list = p.locator("[data-artifact-list]");
-    await list.waitFor();
-    const rows = p.locator("[data-artifact-path]");
-    await until(
-      "both saved files in the turn's list",
-      async () => (await rows.count()) === 2,
-    );
-    equal(
-      await rows.evaluateAll((nodes) =>
-        nodes.map((node) => node.getAttribute("data-artifact-path") ?? ""),
-      ),
-      ["reports/季度报告.md", "季度 报告(1).md"],
-      "the list is this turn's writes, in the order they were written, and the refused one is not in it",
-    );
-    check(
-      (await rows.first().innerText()).includes("4"),
-      "a row the folder confirmed also carries its size",
-    );
-    await p.locator("[data-artifact-truncated]").waitFor();
-    check(
-      (await p.locator("[data-artifact-truncated]").innerText()).includes(
-        "没列全",
-      ),
-      "a folder that stopped at its own limit says so instead of claiming a full list",
-    );
-    equal(
-      [...new Set(listRequests)].sort(),
-      [".", "reports"],
-      "only the folders this turn wrote into were listed: the list is not a directory scan",
-    );
-    await screenshot("artifact-list");
-  });
+  await step(
+    "本轮产物 -> one list of the turn's files, with its truncated caption",
+    async () => {
+      const list = p.locator("[data-artifact-list]");
+      await list.waitFor();
+      const rows = p.locator("[data-artifact-path]");
+      await until(
+        "both saved files in the turn's list",
+        async () => (await rows.count()) === 2,
+      );
+      equal(
+        await rows.evaluateAll((nodes) =>
+          nodes.map((node) => node.getAttribute("data-artifact-path") ?? ""),
+        ),
+        ["reports/季度报告.md", "季度 报告(1).md"],
+        "the list is this turn's writes, in the order they were written, and the refused one is not in it",
+      );
+      check(
+        (await rows.first().innerText()).includes("4"),
+        "a row the folder confirmed also carries its size",
+      );
+      await p.locator("[data-artifact-truncated]").waitFor();
+      check(
+        (await p.locator("[data-artifact-truncated]").innerText()).includes(
+          "没列全",
+        ),
+        "a folder that stopped at its own limit says so instead of claiming a full list",
+      );
+      equal(
+        [...new Set(listRequests)].sort(),
+        [".", "reports"],
+        "only the folders this turn wrote into were listed: the list is not a directory scan",
+      );
+      await screenshot("artifact-list");
+    },
+  );
 
-  await step("点它 -> the browser asks the download route for that file", async () => {
-    /*
-     * Two halves, because Chromium will only let us prove one of them through the click itself. A save
-     * started by `<a download>` runs in the browser process and never passes the interception a page's
-     * own requests go through (microsoft/playwright#38585; this gate's own counters say it too — the
-     * download event fires while `/files/download` is asked zero times). So the click is proved at the
-     * click: the browser starts a SAVE, of the address the line carries. And the answer that address
-     * gives is read back through the page's network stack, which IS intercepted: the same status, the
-     * same opaque content type, the same attachment headers `shared/file-download.ts` sends, the same
-     * promised file name. Both halves are what a person gets when they click.
-     */
-    const fromLine = p.locator("[data-tool-download]").first();
-    const lineHref = (await fromLine.getAttribute("href")) ?? "";
-    const [lineDownload] = await Promise.all([
-      p.waitForEvent("download", { timeout: 20_000 }),
-      fromLine.click(),
-    ]);
-    equal(
-      savedAddress(lineDownload.url()),
-      `/api/computers/${bot}/files/download?reports/季度报告.md`,
-      "the line's click makes the browser save the download route with the path the chat named, not navigate to it",
-    );
-    const lineAnswer = await askThePage(p, lineHref);
-    equal(
-      lineAnswer.status,
-      200,
-      "the address the line hands out answers instead of 404ing on the way to the computer",
-    );
-    equal(
-      lineAnswer.type,
-      "application/octet-stream",
-      "安全决策 A4: the answer is bytes, never a page rendered on this origin",
-    );
-    equal(
-      lineAnswer.text,
-      ANSWERED_BYTES,
-      "the bytes it answers are the ones the computer has for that file",
-    );
-    equal(
-      attachmentNameOf(lineAnswer.disposition),
-      "季度报告.md",
-      "the attachment promises the file under the name the computer saved it",
-    );
-    // Then the same file's row in the list, and the awkward name that only the link has to survive.
-    const row = p.locator('[data-artifact-path="季度 报告(1).md"]');
-    await row.focus();
-    const rowHref = (await row.getAttribute("href")) ?? "";
-    const [rowDownload] = await Promise.all([
-      p.waitForEvent("download", { timeout: 20_000 }),
-      row.click(),
-    ]);
-    equal(
-      savedAddress(rowDownload.url()),
-      `/api/computers/${bot}/files/download?季度 报告(1).md`,
-      "the list's row saves the same route with the awkward path written back",
-    );
-    equal(
-      attachmentNameOf((await askThePage(p, rowHref)).disposition),
-      "季度 报告(1).md",
-      "a name with a space, parentheses and Chinese characters arrives intact",
-    );
-    equal(
-      downloadRequests.map((request) => {
-        const url = new URL(`${ORIGIN}${request}`);
-        return `${url.pathname}?${url.searchParams.get("path") ?? ""}`;
-      }),
-      [
+  await step(
+    "点它 -> the browser asks the download route for that file",
+    async () => {
+      /*
+       * Two halves, because Chromium will only let us prove one of them through the click itself. A save
+       * started by `<a download>` runs in the browser process and never passes the interception a page's
+       * own requests go through (microsoft/playwright#38585; this gate's own counters say it too — the
+       * download event fires while `/files/download` is asked zero times). So the click is proved at the
+       * click: the browser starts a SAVE, of the address the line carries. And the answer that address
+       * gives is read back through the page's network stack, which IS intercepted: the same status, the
+       * same opaque content type, the same attachment headers `shared/file-download.ts` sends, the same
+       * promised file name. Both halves are what a person gets when they click.
+       */
+      const fromLine = p.locator("[data-tool-download]").first();
+      const lineHref = (await fromLine.getAttribute("href")) ?? "";
+      const [lineDownload] = await Promise.all([
+        p.waitForEvent("download", { timeout: 20_000 }),
+        fromLine.click(),
+      ]);
+      equal(
+        savedAddress(lineDownload.url()),
         `/api/computers/${bot}/files/download?reports/季度报告.md`,
+        "the line's click makes the browser save the download route with the path the chat named, not navigate to it",
+      );
+      const lineAnswer = await askThePage(p, lineHref);
+      equal(
+        lineAnswer.status,
+        200,
+        "the address the line hands out answers instead of 404ing on the way to the computer",
+      );
+      equal(
+        lineAnswer.type,
+        "application/octet-stream",
+        "安全决策 A4: the answer is bytes, never a page rendered on this origin",
+      );
+      equal(
+        lineAnswer.text,
+        ANSWERED_BYTES,
+        "the bytes it answers are the ones the computer has for that file",
+      );
+      equal(
+        attachmentNameOf(lineAnswer.disposition),
+        "季度报告.md",
+        "the attachment promises the file under the name the computer saved it",
+      );
+      // Then the same file's row in the list, and the awkward name that only the link has to survive.
+      const row = p.locator('[data-artifact-path="季度 报告(1).md"]');
+      await row.focus();
+      const rowHref = (await row.getAttribute("href")) ?? "";
+      const [rowDownload] = await Promise.all([
+        p.waitForEvent("download", { timeout: 20_000 }),
+        row.click(),
+      ]);
+      equal(
+        savedAddress(rowDownload.url()),
         `/api/computers/${bot}/files/download?季度 报告(1).md`,
-      ],
-      "both addresses were asked of /files/download with the bot id and the path, exactly once each",
-    );
-    await screenshot("download-clicked");
-  });
+        "the list's row saves the same route with the awkward path written back",
+      );
+      equal(
+        attachmentNameOf((await askThePage(p, rowHref)).disposition),
+        "季度 报告(1).md",
+        "a name with a space, parentheses and Chinese characters arrives intact",
+      );
+      equal(
+        downloadRequests.map((request) => {
+          const url = new URL(`${ORIGIN}${request}`);
+          return `${url.pathname}?${url.searchParams.get("path") ?? ""}`;
+        }),
+        [
+          `/api/computers/${bot}/files/download?reports/季度报告.md`,
+          `/api/computers/${bot}/files/download?季度 报告(1).md`,
+        ],
+        "both addresses were asked of /files/download with the bot id and the path, exactly once each",
+      );
+      await screenshot("download-clicked");
+    },
+  );
 
   await step("作用域答成 device -> 没有链接，也没有这一页清单", async () => {
     scopeOverride = "device";
     await p.reload({ waitUntil: "load" });
-    await p.getByText("./reports/季度报告.md", { exact: false }).first().waitFor();
+    await p
+      .getByText("./reports/季度报告.md", { exact: false })
+      .first()
+      .waitFor();
     check(
       true,
       "the line for the file is still there after the scope changed: the words did not move",
@@ -886,23 +928,29 @@ try {
     await screenshot("paired-computer");
   });
 
-  await step("同一个问题答回 workspace -> 同一份历史又把链接画回来了", async () => {
-    // The control for the step above: the same messages, reloaded with the workspace answer back in
-    // place, must draw the links again. Without it, "no link" would prove nothing about the scope — it
-    // could just be a conversation read back from history drawing no links at all.
-    scopeOverride = undefined;
-    await p.reload({ waitUntil: "load" });
-    await until(
-      "the saved files' links to come back for the same history",
-      async () => (await p.locator("[data-tool-download]").count()) === 2,
-    );
-    await until(
-      "the turn's artifact list to come back",
-      async () => (await p.locator("[data-artifact-path]").count()) === 2,
-    );
-    check(true, "the links and the list are decided by the scope answer, not by the hour");
-    await screenshot("workspace-again");
-  });
+  await step(
+    "同一个问题答回 workspace -> 同一份历史又把链接画回来了",
+    async () => {
+      // The control for the step above: the same messages, reloaded with the workspace answer back in
+      // place, must draw the links again. Without it, "no link" would prove nothing about the scope — it
+      // could just be a conversation read back from history drawing no links at all.
+      scopeOverride = undefined;
+      await p.reload({ waitUntil: "load" });
+      await until(
+        "the saved files' links to come back for the same history",
+        async () => (await p.locator("[data-tool-download]").count()) === 2,
+      );
+      await until(
+        "the turn's artifact list to come back",
+        async () => (await p.locator("[data-artifact-path]").count()) === 2,
+      );
+      check(
+        true,
+        "the links and the list are decided by the scope answer, not by the hour",
+      );
+      await screenshot("workspace-again");
+    },
+  );
 
   /*
    * What a browser that cached the skin under the earlier name is handed, now that the window in which
@@ -918,176 +966,181 @@ try {
    * `app/src/skins/store.ts` is where the second and third halves live, so this is the only place the
    * pair is seen together: the unit test has no pre-paint script, and the script has no registry.
    */
-  await step("the skin cached under the earlier name: first frame and settled", async () => {
-    type Frame = { at: string; skin: string | null; background: string };
-    const ctx = context as BrowserContext;
-    const visit = await ctx.newPage();
-    try {
-      await visit.addInitScript(() => {
-        // The cache a browser left behind before the rename: this key, that value.
-        window.localStorage.setItem("xiongbao-skin", "openbot");
-        const frames: Frame[] = [];
-        const read = (at: string) => {
-          const root = document.documentElement;
-          if (!root) return;
-          frames.push({
-            at,
-            skin: root.getAttribute("data-skin"),
-            background: getComputedStyle(root)
-              .getPropertyValue("--background")
-              .trim(),
-          });
-        };
-        /*
-         * Every change of the attribute, in the order it happened, with the value it went out of as
-         * well: a MutationObserver callback can be flushed once for two changes, and reading the page
-         * inside the callback would then miss the first of them. `oldValue` is what keeps the earlier
-         * frame in the record even when the app has already moved on.
-         */
-        new MutationObserver((records) => {
-          for (const record of records) {
-            const root = record.target as HTMLElement;
+  await step(
+    "the skin cached under the earlier name: first frame and settled",
+    async () => {
+      type Frame = { at: string; skin: string | null; background: string };
+      const ctx = context as BrowserContext;
+      const visit = await ctx.newPage();
+      try {
+        await visit.addInitScript(() => {
+          // The cache a browser left behind before the rename: this key, that value.
+          window.localStorage.setItem("xiongbao-skin", "openbot");
+          const frames: Frame[] = [];
+          const read = (at: string) => {
+            const root = document.documentElement;
+            if (!root) return;
             frames.push({
-              at: `${record.oldValue ?? "none"} -> ${root.getAttribute("data-skin") ?? "none"}`,
+              at,
               skin: root.getAttribute("data-skin"),
               background: getComputedStyle(root)
                 .getPropertyValue("--background")
                 .trim(),
             });
-          }
-        }).observe(document, {
-          attributeFilter: ["data-skin"],
-          attributeOldValue: true,
-          subtree: true,
-        });
-        read("start");
-        document.addEventListener("DOMContentLoaded", () => read("parsed"));
-        (
-          window as unknown as { __xbSkinFrames?: Frame[] }
-        ).__xbSkinFrames = frames;
-      });
-      // The same page the conversation is on, opened again: signed in, and no new
-      // turn, so the model-call accounting in the step after this one is untouched.
-      await visit.goto(p.url(), { waitUntil: "load" });
-
-      // The registry settles the attribute on load, before the account is read.
-      await until(
-        "the application to take the cached name off <html>",
-        async () =>
-          await visit.evaluate(() =>
-            document.documentElement.getAttribute("data-skin") === null
-              ? "settled"
-              : undefined,
-          ),
-      );
-      equal(
-        await visit.evaluate(
-          () => document.documentElement.getAttribute("data-skin"),
-        ),
-        null,
-        "the application settles <html> back to no skin attribute of its own",
-      );
-      // ...and the account, which always wins, leaves the cache holding what this
-      // build ships.
-      const cached = await until(
-        "the account's skin to be written back over the pre-paint cache",
-        async () => {
-          const value = await visit.evaluate(() =>
-            window.localStorage.getItem("xiongbao-skin"),
-          );
-          // Whatever this build writes back is an answer; the cached name is not,
-          // because that is what was in the key before the page ran.
-          return value === "openbot" ? undefined : { value };
-        },
-      );
-      equal(
-        cached.value,
-        "xiongbao",
-        "the cache ends up holding the id this build ships",
-      );
-
-      const frames = await visit.evaluate(
-        () =>
-          (
-            window as unknown as {
-              __xbSkinFrames?: {
-                at: string;
-                skin: string | null;
-                background: string;
-              }[];
+          };
+          /*
+           * Every change of the attribute, in the order it happened, with the value it went out of as
+           * well: a MutationObserver callback can be flushed once for two changes, and reading the page
+           * inside the callback would then miss the first of them. `oldValue` is what keeps the earlier
+           * frame in the record even when the app has already moved on.
+           */
+          new MutationObserver((records) => {
+            for (const record of records) {
+              const root = record.target as HTMLElement;
+              frames.push({
+                at: `${record.oldValue ?? "none"} -> ${root.getAttribute("data-skin") ?? "none"}`,
+                skin: root.getAttribute("data-skin"),
+                background: getComputedStyle(root)
+                  .getPropertyValue("--background")
+                  .trim(),
+              });
             }
-          ).__xbSkinFrames ?? [],
-      );
-      check(
-        frames.length > 0,
-        `the page recorded its own frames (${frames.length} of them)`,
-      );
-      check(
-        frames.some((frame) => frame.skin === "openbot"),
-        "the pre-paint script does put the cached old name on <html>: the half-sentence that used to hold it back is gone, and nothing else stands between the two",
-      );
-      check(
-        frames.some((frame) => frame.skin === null),
-        "and the application takes it back off again: the registry reads the old name as the default skin",
-      );
+          }).observe(document, {
+            attributeFilter: ["data-skin"],
+            attributeOldValue: true,
+            subtree: true,
+          });
+          read("start");
+          document.addEventListener("DOMContentLoaded", () => read("parsed"));
+          (window as unknown as { __xbSkinFrames?: Frame[] }).__xbSkinFrames =
+            frames;
+        });
+        // The same page the conversation is on, opened again: signed in, and no new
+        // turn, so the model-call accounting in the step after this one is untouched.
+        await visit.goto(p.url(), { waitUntil: "load" });
 
-      /*
-       * The appearance question, answered in the only way this can be answered after the fact: the
-       * attribute is put back by hand, the page is measured with it on, and it is compared with the
-       * same page measured with it off. Same tokens means no rule of any shipped skin matched it,
-       * which is what "an unknown name draws the default" has to mean on a real page.
-       */
-      const forced = await visit.evaluate(() => {
-        const root = document.documentElement;
-        const background = () =>
-          getComputedStyle(root).getPropertyValue("--background").trim();
-        const withoutName = background();
-        root.dataset.skin = "openbot";
-        const withOldName = background();
-        delete root.dataset.skin;
-        let named = 0;
-        let oldName = 0;
-        for (const sheet of Array.from(document.styleSheets)) {
-          // A sheet this page may not read is not a sheet this build wrote.
-          let rules: string[] = [];
-          try {
-            rules = Array.from(sheet.cssRules).map((rule) => rule.cssText);
-          } catch {
-            continue;
-          }
-          for (const text of rules) {
-            if (!text.includes("data-skin")) continue;
-            named += 1;
-            if (text.includes('data-skin="openbot"')) oldName += 1;
-          }
-        }
-        return { withoutName, withOldName, named, oldName };
-      });
-      check(
-        forced.named > 0,
-        `the sheets do carry skin rules (${forced.named} name the attribute at all), so the count below is a reading, not an empty hand`,
-      );
-      equal(
-        forced.oldName,
-        0,
-        "not one of them matches the old name, so nothing could paint for it",
-      );
-      equal(
-        forced.withOldName,
-        forced.withoutName,
-        "and the page with the old name on <html> takes the same --background as the page without it",
-      );
+        // The registry settles the attribute on load, before the account is read.
+        await until(
+          "the application to take the cached name off <html>",
+          async () =>
+            await visit.evaluate(() =>
+              document.documentElement.getAttribute("data-skin") === null
+                ? "settled"
+                : undefined,
+            ),
+        );
+        equal(
+          await visit.evaluate(() =>
+            document.documentElement.getAttribute("data-skin"),
+          ),
+          null,
+          "the application settles <html> back to no skin attribute of its own",
+        );
+        // ...and the account, which always wins, leaves the cache holding what this
+        // build ships.
+        const cached = await until(
+          "the account's skin to be written back over the pre-paint cache",
+          async () => {
+            const value = await visit.evaluate(() =>
+              window.localStorage.getItem("xiongbao-skin"),
+            );
+            // Whatever this build writes back is an answer; the cached name is not,
+            // because that is what was in the key before the page ran.
+            return value === "openbot" ? undefined : { value };
+          },
+        );
+        equal(
+          cached.value,
+          "xiongbao",
+          "the cache ends up holding the id this build ships",
+        );
 
-      writeFileSync(
-        resolve(ARTIFACTS, "skin-first-frame.json"),
-        `${JSON.stringify({ frames, cached, forced }, null, 2)}\n`,
-      );
-      await screenshot("skin-cached-before-the-rename", visit);
-      check(true, "the settled page is screenshotted and its frames written out");
-    } finally {
-      await visit.close().catch(() => undefined);
-    }
-  });
+        const frames = await visit.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __xbSkinFrames?: {
+                  at: string;
+                  skin: string | null;
+                  background: string;
+                }[];
+              }
+            ).__xbSkinFrames ?? [],
+        );
+        check(
+          frames.length > 0,
+          `the page recorded its own frames (${frames.length} of them)`,
+        );
+        check(
+          frames.some((frame) => frame.skin === "openbot"),
+          "the pre-paint script does put the cached old name on <html>: the half-sentence that used to hold it back is gone, and nothing else stands between the two",
+        );
+        check(
+          frames.some((frame) => frame.skin === null),
+          "and the application takes it back off again: the registry reads the old name as the default skin",
+        );
+
+        /*
+         * The appearance question, answered in the only way this can be answered after the fact: the
+         * attribute is put back by hand, the page is measured with it on, and it is compared with the
+         * same page measured with it off. Same tokens means no rule of any shipped skin matched it,
+         * which is what "an unknown name draws the default" has to mean on a real page.
+         */
+        const forced = await visit.evaluate(() => {
+          const root = document.documentElement;
+          const background = () =>
+            getComputedStyle(root).getPropertyValue("--background").trim();
+          const withoutName = background();
+          root.dataset.skin = "openbot";
+          const withOldName = background();
+          delete root.dataset.skin;
+          let named = 0;
+          let oldName = 0;
+          for (const sheet of Array.from(document.styleSheets)) {
+            // A sheet this page may not read is not a sheet this build wrote.
+            let rules: string[] = [];
+            try {
+              rules = Array.from(sheet.cssRules).map((rule) => rule.cssText);
+            } catch {
+              continue;
+            }
+            for (const text of rules) {
+              if (!text.includes("data-skin")) continue;
+              named += 1;
+              if (text.includes('data-skin="openbot"')) oldName += 1;
+            }
+          }
+          return { withoutName, withOldName, named, oldName };
+        });
+        check(
+          forced.named > 0,
+          `the sheets do carry skin rules (${forced.named} name the attribute at all), so the count below is a reading, not an empty hand`,
+        );
+        equal(
+          forced.oldName,
+          0,
+          "not one of them matches the old name, so nothing could paint for it",
+        );
+        equal(
+          forced.withOldName,
+          forced.withoutName,
+          "and the page with the old name on <html> takes the same --background as the page without it",
+        );
+
+        writeFileSync(
+          resolve(ARTIFACTS, "skin-first-frame.json"),
+          `${JSON.stringify({ frames, cached, forced }, null, 2)}\n`,
+        );
+        await screenshot("skin-cached-before-the-rename", visit);
+        check(
+          true,
+          "the settled page is screenshotted and its frames written out",
+        );
+      } finally {
+        await visit.close().catch(() => undefined);
+      }
+    },
+  );
 
   await step("the mocked model, and nothing else", async () => {
     /*
@@ -1130,7 +1183,10 @@ try {
       if (!node.classList.contains("dark"))
         throw new Error("the screenshots would not be in the dark theme");
     });
-    check(true, "the page is in the dark theme, which is what the screenshots show");
+    check(
+      true,
+      "the page is in the dark theme, which is what the screenshots show",
+    );
   });
 } catch (error) {
   failed = true;

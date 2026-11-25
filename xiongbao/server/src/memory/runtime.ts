@@ -1,12 +1,11 @@
 import { type Edition, editionHasMemory } from "../edition";
 import type { MemoryDefaults } from "./defaults";
 import type { MemoryIngestion } from "./ingestion";
-import type { MemoryStore } from "./store";
 import type { LoadPersonalMemory } from "./tools";
 
 /**
  * What of memory runs while XiongBao runs: what a Bot's turn is told it remembers, and the sweep that
- * reads memory sources and mirrors memories to Intelligence.
+ * reads memory sources.
  *
  * NOTHING WHERE MEMORY IS OFF (`editionHasMemory`: the personal edition with `XIONGBAO_PERSONAL_MEMORY=off`).
  * No loader, so no turn picks up memory sources or carries memory in its context, and a sweep that
@@ -16,7 +15,6 @@ export function createMemoryRuntime(options: {
   edition: Edition;
   defaults: Pick<MemoryDefaults, "botTurn">;
   ingestion: Pick<MemoryIngestion, "contextFor" | "syncDue">;
-  store: Pick<MemoryStore, "mirrorPending">;
   log?: (line: string) => void;
 }): {
   /** For the agent resolver. Absent without memory, and then no turn gets the memory middleware. */
@@ -48,10 +46,6 @@ export function createMemoryRuntime(options: {
     },
     async sweep() {
       await attempt("syncDue", () => options.ingestion.syncDue());
-      // Mirror to Intelligence what is out of step: the backfill on the first passes after a
-      // deployment becomes entitled, and afterwards whatever an outage left behind. A no-op without
-      // Intelligence.
-      await attempt("mirrorPending", () => options.store.mirrorPending());
     },
   };
 }

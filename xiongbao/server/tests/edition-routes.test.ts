@@ -20,7 +20,6 @@ const closed = [
   "/api/admin/identity-providers/abc",
   "/api/admin/enterprise/settings/ssoRequired",
   "/api/admin/proactive",
-  "/api/admin/learning",
   "/api/auth/scim/v2/Users",
   "/api/auth/sso/register",
   // Percent-encoded, as the router decodes it before matching a handler.

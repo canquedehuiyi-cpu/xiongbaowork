@@ -63,7 +63,7 @@ docker volume create "$volume" >/dev/null
 key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')
 docker run -d --name "$name" -p "127.0.0.1:$port:3001" \
   -v "$volume:/var/lib/postgresql" \
-  -e EMBEDDED_POSTGRES=on -e COPILOTKIT_TELEMETRY_DISABLED=true \
+  -e EMBEDDED_POSTGRES=on -e DO_NOT_TRACK=1 \
   -e TENANT_PACKAGE_DIR=../examples/xiongbao \
   -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL="http://localhost:$port" \
   -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null

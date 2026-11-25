@@ -150,7 +150,7 @@ test("XiongBao's RUN_STARTED, its 39 tools and 5 context entries far over 16 KiB
       tabId: 1,
       streamId: "run",
       at: CLOCK,
-      url: `http://127.0.0.1:7410/api/copilotkit/agent/${agentId}/run`,
+      url: `http://127.0.0.1:7410/api/runtime/agent/${agentId}/run`,
       agentId,
       method: "agent/run",
       input,

@@ -13,8 +13,8 @@
 //! is made from it and dpkg refuses one that is not; its desktop entry keeps the Chinese name.
 //!
 //! TODO(D8): the product name and the identifier `com.xiongbao.device` in tauri.conf.json are
-//! placeholders until the brand owner decides. Whatever they become, the identifier must not be
-//! the upstream `ai.copilotkit.*` (a test below holds that line).
+//! placeholders until the brand owner decides. Whatever they become, the identifier stays under
+//! our own `com.xiongbao.` (a test below holds that line).
 
 mod apps;
 mod autostart;
@@ -1014,8 +1014,8 @@ mod tests {
         let config: serde_json::Value =
             serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
         let identifier = config["identifier"].as_str().unwrap();
-        // TODO(D8): the brand owner picks the final identifier; it is never the upstream one.
-        assert!(!identifier.starts_with("ai.copilotkit"), "{identifier}");
+        // TODO(D8): the brand owner picks the final identifier; it stays under our own prefix.
+        assert!(identifier.starts_with("com.xiongbao."), "{identifier}");
         assert_ne!(
             identifier, "com.xiongbao.desktop",
             "would collide with xiongbao/desktop"

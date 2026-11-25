@@ -16,7 +16,7 @@ const BASE = Date.parse("2026-11-01T09:00:00.000Z");
 const at = (hours: number) => new Date(BASE + hours * 3_600_000).toISOString();
 
 /*
- * The CopilotKit connect stream in fixtures.ts replays `message-01`/`message-02` for every thread, and
+ * The agent SDK connect stream in fixtures.ts replays `message-01`/`message-02` for every thread, and
  * the channel merges what the history store holds after the turns it shares with that replay. So the
  * analyst's stored thread starts with the same two turns and carries the conversation on from there.
  */
@@ -286,7 +286,7 @@ export const EXTRA: FixtureRoute[] = [
   ],
   [
     "GET",
-    /^\/api\/copilotkit\/threads\/([^/]+)\/messages$/,
+    /^\/api\/runtime\/threads\/([^/]+)\/messages$/,
     (c) =>
       ok({
         messages: list(c, THREADS[decodeURIComponent(c.match[1]!)] ?? []),

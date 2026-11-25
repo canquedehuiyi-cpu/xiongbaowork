@@ -14,7 +14,7 @@ Regenerate it with `bun run diagram` after changing anything it shows.
 | Component                | Port                       | Responsibility                                                                                                                              |
 | ------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app`                    | 3010                       | React/Vite interface for channels, Bot chat, live screen, settings, and admin pages.                                                        |
-| `server`                 | 3001                       | API, CopilotKit runtime, auth, roles, tenant package, coworkers, channels, policy, audit, credentials, plugins, components, and connectors. |
+| `server`                 | 3001                       | API, agent runtime, auth, roles, tenant package, coworkers, channels, policy, audit, credentials, plugins, components, and connectors. |
 | `agent-computer`         | 4100                       | Chromium, `/workspace`, browser profile, screenshots, snapshots, and file tools.                                                            |
 | `agent-bot`              | 4200                       | Proof-of-concept AG-UI Bot.                                                                                                                     |
 | `agent-langgraph`        | 4201                       | LangGraph AG-UI Bot.                                                                                                                        |
@@ -30,7 +30,7 @@ The compose file also defines optional SPIRE services. `start.sh` does not start
 
 1. The app opens a channel or direct Bot session.
 2. The server resolves the signed-in actor and selected coworker.
-3. CopilotKit runtime sends the turn to the configured AG-UI endpoint.
+3. The agent runtime sends the turn to the configured AG-UI endpoint.
 4. The surface registers available frontend tools: browser tools, MCP tools, and components granted to that Bot.
 5. Acting browser/file/MCP calls return to the server for authorization and audit.
 6. The server streams results back to the app and stores the thread.
@@ -355,28 +355,10 @@ Before the model call, a run is counted (`toolNamesSent`, without what waits). A
 
 ## Personal memory
 
-A person's memory is kept in CopilotKit Intelligence when the deployment is entitled to Intelligence
-memory (`features.memory` in its runtime entitlement), and in XiongBao Work's own tables when it is not.
-
-- **Intelligence holds the content and does the recall.** Every memory the person has accepted is
-  mirrored there: one they wrote, a Bot-formed or imported one once they confirm it. Editing a memory
-  supersedes its Intelligence copy; pausing or forgetting it retires it, because Intelligence has no
-  field for "paused". Recall for a search is ranked by Intelligence.
-- **XiongBao Work keeps what Intelligence has no field for.** Intelligence stores only content, kind and
-  scope, so the XiongBao Work row stays the record of where a memory came from, its review state, which Bot
-  formed it and which source imported it. Those decide which Bot may see a memory, and they are applied
-  to everything Intelligence returns before a Bot sees it: a Bot-formed memory still reaches only the
-  Bot that formed it, while it holds the source app.
-- **Only the person's own memories.** Every call names the person and asks for `user` scope with no
-  project access, and project-scoped results are dropped, so one person's Bot never sees another
-  person's memory.
-- **Memories formed elsewhere.** A memory Intelligence holds for the person that no XiongBao Work row
-  describes (another app on the same project, or Intelligence itself) appears in their Memory page as
-  "Kept in Intelligence" and is recalled as their own. It can be edited or forgotten there, not paused.
-- **Without Intelligence memory** (not entitled, a lapsed licence, an outage), XiongBao Work reads and writes
-  its tables exactly as before and nothing fails. Writes made meanwhile are mirrored by the memory sweep
-  once Intelligence memory is available again; the first passes after a deployment becomes entitled are
-  the backfill of everything it already holds.
+A person's memory is kept in XiongBao Work's own tables. Each row is the record of where a memory came
+from, its review state, which Bot formed it and which source imported it. Those decide which Bot may
+see a memory: a Bot-formed memory reaches only the Bot that formed it, while it holds the source app,
+and one person's Bot never sees another person's memory.
 
 ## Tenant package and knowledge
 

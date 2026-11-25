@@ -36,7 +36,7 @@ export function SelfHostBanner() {
       className="flex shrink-0 flex-wrap items-center gap-x-2 border-b border-border bg-muted/60 px-4 py-1.5 text-sm"
     >
       {/*
-       * Packed from the left rather than pushing Dismiss to the far right: on localhost CopilotKit's
+       * Packed from the left rather than pushing Dismiss to the far right: on localhost the agent SDK's
        * dev inspector floats over the top-right corner, which is where somebody trying XiongBao first
        * sees this, and a Dismiss under it cannot be clicked.
        *
