@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 async function fixture(content: string) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-composio-arcade-"));
+  const directory = await mkdtemp(join(tmpdir(), "xiongbao-composio-arcade-"));
   directories.push(directory);
   const envPath = join(directory, ".env");
   const identityPath = join(directory, ".env.openbot-installation-id");

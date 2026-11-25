@@ -935,7 +935,7 @@ describe("a --package directory that is not a package yet", () => {
  *
  * The pipeline's answer comes from the rule table, which reads a body and cannot know anything that is
  * not in the text. `workbuddy-market-export` is the case that made this concrete: a person graded it
- * `blocked` (`host-specific-skill` — it explains how to drive three marketplaces OpenBot does not
+ * `blocked` (`host-specific-skill` — it explains how to drive three marketplaces XiongBao does not
  * have), the rule table sees no call it recognises, and a rebuild wrote `full` back over it. A badge
  * that promises a skill runs is exactly what the grade exists to prevent, and it came back by being
  * regenerated rather than by anyone deciding.
@@ -950,7 +950,7 @@ describe("a rebuild cannot loosen a verdict the package already recorded", () =>
     "  - slug: market-export",
     "    title: Market export",
     "    summary: s",
-    "    instructions: It explains how to drive a marketplace OpenBot does not have.",
+    "    instructions: It explains how to drive a marketplace XiongBao does not have.",
     "    tools: []",
     "    _porting:",
     "      source: workbuddy skill-marketplace:market-export@1",
@@ -966,7 +966,7 @@ describe("a rebuild cannot loosen a verdict the package already recorded", () =>
       slug: "market-export",
       title: "Market export",
       summary: "s",
-      instructions: "It explains how to drive a marketplace OpenBot does not have.",
+      instructions: "It explains how to drive a marketplace XiongBao does not have.",
       tools: [],
       _porting: {
         source: "workbuddy skill-marketplace:market-export@1",

@@ -19,19 +19,19 @@
 
 # `type -P` rather than `command -v`: only a program on PATH counts, not a shell function or alias of
 # the same name that happens to be defined.
-openbot_windows_without() {
+xiongbao_windows_without() {
   [ "${OS:-}" = "Windows_NT" ] && ! type -P "$1" >/dev/null 2>&1
 }
 
 # PowerShell writes CRLF. A trailing `\r` would make an empty answer non-empty and a pid unusable.
-openbot_powershell() {
+xiongbao_powershell() {
   powershell.exe -NoProfile -NonInteractive -Command "$1" 2>/dev/null | tr -d '\r' || true
 }
 
 # What is listening on a TCP port, as "name (address)", or nothing when the port is free.
 holder() {
-  if openbot_windows_without lsof; then
-    OPENBOT_PORT="$1" openbot_powershell '
+  if xiongbao_windows_without lsof; then
+    OPENBOT_PORT="$1" xiongbao_powershell '
       Get-NetTCPConnection -State Listen -LocalPort $env:OPENBOT_PORT -ErrorAction SilentlyContinue |
         Select-Object -First 1 |
         ForEach-Object { "{0} ({1}:{2})" -f (Get-Process -Id $_.OwningProcess).ProcessName, $_.LocalAddress, $_.LocalPort }'
@@ -42,8 +42,8 @@ holder() {
 
 # The ids of whatever is listening on a TCP port, one per line.
 port_pids() {
-  if openbot_windows_without lsof; then
-    OPENBOT_PORT="$1" openbot_powershell '
+  if xiongbao_windows_without lsof; then
+    OPENBOT_PORT="$1" xiongbao_powershell '
       Get-NetTCPConnection -State Listen -LocalPort $env:OPENBOT_PORT -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique'
     return 0
@@ -55,8 +55,8 @@ port_pids() {
 # there both forms stop it outright. A stopped process takes a moment to go, so this waits for it,
 # up to five seconds, rather than let the next check see it still there.
 kill_pids() {
-  if openbot_windows_without lsof; then
-    OPENBOT_PIDS="$*" openbot_powershell '
+  if xiongbao_windows_without lsof; then
+    OPENBOT_PIDS="$*" xiongbao_powershell '
       $ids = @($env:OPENBOT_PIDS -split " " | Where-Object { $_ -match "^[0-9]+$" })
       if ($ids) {
         Stop-Process -Force -Id $ids -ErrorAction SilentlyContinue
@@ -71,8 +71,8 @@ kill_pids() {
 # asked, stopped and waited for as `kill_pids` does. Windows records the executable as a path,
 # `C:\...\bun.exe` and sometimes quoted, so the first word is matched against the process name and
 # the rest against its command line.
-openbot_windows_matching() {
-  OPENBOT_PATTERN="$1" OPENBOT_STOP="${2:-}" openbot_powershell '
+xiongbao_windows_matching() {
+  OPENBOT_PATTERN="$1" OPENBOT_STOP="${2:-}" xiongbao_powershell '
     $name, $rest = $env:OPENBOT_PATTERN -split " ", 2
     $ids = @(Get-CimInstance Win32_Process |
       Where-Object { $_.Name -eq "$name.exe" -and $_.CommandLine -and $_.CommandLine.Contains(" $rest") } |
@@ -86,8 +86,8 @@ openbot_windows_matching() {
 
 # `pgrep -f <pattern>`: true when such a process is running.
 running() {
-  if openbot_windows_without pgrep; then
-    [ -n "$(openbot_windows_matching "$1")" ]
+  if xiongbao_windows_without pgrep; then
+    [ -n "$(xiongbao_windows_matching "$1")" ]
     return
   fi
   pgrep -f "$1" >/dev/null 2>&1
@@ -95,8 +95,8 @@ running() {
 
 # `pkill -f <pattern>`.
 stop_matching() {
-  if openbot_windows_without pkill; then
-    openbot_windows_matching "$1" stop >/dev/null
+  if xiongbao_windows_without pkill; then
+    xiongbao_windows_matching "$1" stop >/dev/null
     return 0
   fi
   pkill -f "$1" >/dev/null 2>&1 || true
@@ -107,7 +107,7 @@ stop_matching() {
 # Windows keeps its existing process discovery; host updates there remain unsupported.
 running_here() {
   local pattern="$1" root="$2" pids pid cwd path status found=false
-  if openbot_windows_without pgrep || openbot_windows_without lsof; then
+  if xiongbao_windows_without pgrep || xiongbao_windows_without lsof; then
     running "$pattern"
     return
   fi

@@ -32,7 +32,7 @@ const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !/^postgres(?:ql)?:$/.test(url.protocol) ||
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
-  !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
+  !/^xiongbao_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
   disposable.databaseName !== databaseName
 )
   throw new Error(

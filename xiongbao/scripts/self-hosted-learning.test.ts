@@ -9,7 +9,7 @@ import {
 const apiUrl = "https://intelligence.example";
 const path = "/api/learning/projects/12/containers";
 const container = {
-  container: { id: "openbot", projectId: 12, name: "OpenBot" },
+  container: { id: "openbot", projectId: 12, name: "XiongBao" },
 };
 type Response = { status: number; body: unknown };
 
@@ -91,12 +91,12 @@ test("fresh browser setup creates a verified container before minting its projec
     {
       url: `${apiUrl}${path}`,
       method: "POST",
-      data: { id: "openbot", name: "OpenBot" },
+      data: { id: "openbot", name: "XiongBao" },
     },
     {
       url: `${apiUrl}/api/projects/12/api-keys`,
       method: "POST",
-      data: { name: "OpenBot" },
+      data: { name: "XiongBao" },
     },
   ]);
   expect(f.closed()).toBe(1);
@@ -118,7 +118,7 @@ test("a deployment with a key gains only the container: nothing is minted and th
     {
       url: `${apiUrl}${path}`,
       method: "POST",
-      data: { id: "openbot", name: "OpenBot" },
+      data: { id: "openbot", name: "XiongBao" },
     },
   ]);
   expect(JSON.stringify(f.calls)).not.toContain("cpk-existing-key");

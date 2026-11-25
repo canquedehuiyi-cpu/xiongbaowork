@@ -20,21 +20,21 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true });
 });
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "openbot-promotion-"));
+  const root = mkdtempSync(join(tmpdir(), "xiongbao-promotion-"));
   roots.push(root);
-  const chart = join(root, "openbot-0.1.4.tgz");
+  const chart = join(root, "xiongbao-0.1.4.tgz");
   writeFileSync(chart, "pinned chart fixture");
   const current = parseReleaseManifest(structuredClone(currentFixture));
   const candidate = parseReleaseManifest(structuredClone(targetFixture));
   current.artifacts.images.openbot = {
-    reference: `ghcr.io/acme/openbot@sha256:${"b".repeat(64)}`,
+    reference: `ghcr.io/acme/xiongbao@sha256:${"b".repeat(64)}`,
   };
   candidate.artifacts.images.openbot = {
-    reference: `ghcr.io/acme/openbot@sha256:${"b".repeat(64)}`,
+    reference: `ghcr.io/acme/xiongbao@sha256:${"b".repeat(64)}`,
   };
   candidate.artifacts.chart = {
     version: "0.1.4",
-    url: "https://github.com/acme/openbot/releases/download/v0.3.0/openbot-0.1.4.tgz",
+    url: "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao-0.1.4.tgz",
     sha256: createHash("sha256").update(readFileSync(chart)).digest("hex"),
   };
   const values = join(root, "customer-values.yaml");
@@ -71,16 +71,16 @@ function fixture() {
               template: {
                 metadata: {
                   annotations: {
-                    "openbot.ai/distribution": "acme.openbot",
-                    "openbot.ai/release": "v0.3.0",
-                    "openbot.ai/source-commit": candidate.source.commit,
+                    "xiongbao.ai/distribution": "acme.xiongbao",
+                    "xiongbao.ai/release": "v0.3.0",
+                    "xiongbao.ai/source-commit": candidate.source.commit,
                   },
                 },
                 spec: {
                   containers: [
                     {
                       name: "server",
-                      image: `ghcr.io/acme/openbot:v0.3.0@sha256:${"b".repeat(64)}`,
+                      image: `ghcr.io/acme/xiongbao:v0.3.0@sha256:${"b".repeat(64)}`,
                     },
                   ],
                 },
@@ -95,12 +95,12 @@ function fixture() {
     current,
     candidate,
     policy: {
-      distributionId: "acme.openbot",
-      repository: "acme/openbot",
+      distributionId: "acme.xiongbao",
+      repository: "acme/xiongbao",
       channel: "stable",
     },
     namespace: "customer",
-    release: "openbot",
+    release: "xiongbao",
     chart,
     customerValues: [values],
     outputDirectory: join(root, "promotion"),
@@ -204,7 +204,7 @@ test("Helm workload metadata alone cannot accept a server reporting another rele
 
 test("a schema transition with customer-disabled migrations refuses before cluster mutation", async () => {
   const f = fixture();
-  f.options.candidate.compatibility.database.to = "openbot-db-2";
+  f.options.candidate.compatibility.database.to = "xiongbao-db-2";
   writeFileSync(
     f.options.customerValues[0] ?? "",
     "migrations:\n  enabled: false\n",
@@ -229,11 +229,11 @@ test("a schema transition with customer-disabled migrations refuses before clust
 
 test("schema-transition preflight uses the pinned chart and customer files and accepts the guarded target Job", async () => {
   const f = fixture();
-  f.options.candidate.compatibility.database.to = "openbot-db-2";
+  f.options.candidate.compatibility.database.to = "xiongbao-db-2";
   const run: CommandRunner = async (command, options) => {
     const output = (await f.options.run?.(command, options)) ?? "";
     if (command[0] !== "helm" || command[1] !== "template") return output;
-    return `apiVersion: batch/v1\nkind: Job\nmetadata:\n  labels:\n    app.kubernetes.io/component: migrations\n  annotations:\n    helm.sh/hook: pre-install,pre-upgrade\nspec:\n  template:\n    spec:\n      containers:\n        - name: migrate\n          image: ghcr.io/acme/openbot:v0.3.0@sha256:${"b".repeat(64)}\n          workingDir: /app/server\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              exec /usr/local/bin/bun scripts/migrate.ts\n`;
+    return `apiVersion: batch/v1\nkind: Job\nmetadata:\n  labels:\n    app.kubernetes.io/component: migrations\n  annotations:\n    helm.sh/hook: pre-install,pre-upgrade\nspec:\n  template:\n    spec:\n      containers:\n        - name: migrate\n          image: ghcr.io/acme/xiongbao:v0.3.0@sha256:${"b".repeat(64)}\n          workingDir: /app/server\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              exec /usr/local/bin/bun scripts/migrate.ts\n`;
   };
   expect((await planKubernetesPromotion({ ...f.options, run })).allowed).toBe(
     true,
@@ -260,9 +260,9 @@ test("kubectl waits and rollout status are never killed before the operator's --
       return JSON.stringify({
         items: [
           {
-            metadata: { name: "openbot-routines" },
+            metadata: { name: "xiongbao-routines" },
             spec: { suspend: false },
-            status: { active: [{ name: "openbot-routines-1" }] },
+            status: { active: [{ name: "xiongbao-routines-1" }] },
           },
         ],
       });

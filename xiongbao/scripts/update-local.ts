@@ -428,7 +428,7 @@ function requireUniqueOptions(query: URLSearchParams) {
 }
 /** Query options that pick where, as whom or which database a URL connects. libpq (the backup)
  * reads them, but postgres.js, which `server/scripts/migrate.ts` and the server connect with, reads
- * only the URL's authority and path: `postgres://owner@db-a/openbot?host=db-b` is backed up from
+ * only the URL's authority and path: `postgres://owner@db-a/xiongbao?host=db-b` is backed up from
  * db-b and migrated on db-a. Refused, so every reader takes the target from the same place. */
 const ROUTING_OPTIONS = [
   "host",
@@ -514,7 +514,7 @@ function hostOwnerDatabaseUrl(env: NodeJS.ProcessEnv) {
   const owner = env.MIGRATION_DATABASE_URL;
   if (!owner)
     throw new Error(
-      "本机（host）更新要用数据库 owner 账号来备份和迁移，但没有找到它：请设置 MIGRATION_DATABASE_URL，填 owner 账号的连接串（例如 postgres://openbot:openbot@localhost:5432/openbot），写进 .env 或在执行更新时作为环境变量传入，然后重新更新。现在还没有停止任何服务。",
+      "本机（host）更新要用数据库 owner 账号来备份和迁移，但没有找到它：请设置 MIGRATION_DATABASE_URL，填 owner 账号的连接串（例如 postgres://openbot:openbot@localhost:5432/xiongbao），写进 .env 或在执行更新时作为环境变量传入，然后重新更新。现在还没有停止任何服务。",
     );
   const ownerIdentity = databaseIdentity(owner);
   if (env.DATABASE_URL && databaseIdentity(env.DATABASE_URL) !== ownerIdentity)
@@ -565,7 +565,7 @@ async function withCandidateCompose<T>(
     throw new Error(
       "Custom COMPOSE_FILE/COMPOSE_ENV_FILES needs a reviewed integration; this updater preserves the standard Compose file and overrides",
     );
-  const directory = mkdtempSync(join(tmpdir(), "openbot-compose-preflight-"));
+  const directory = mkdtempSync(join(tmpdir(), "xiongbao-compose-preflight-"));
   try {
     const source = await run(["git", "show", `${commit}:docker-compose.yml`], {
       cwd: root,

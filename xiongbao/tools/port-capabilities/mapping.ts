@@ -1,13 +1,13 @@
 /**
- * Static tables that describe how a WorkBuddy capability lands in openbot.
+ * Static tables that describe how a WorkBuddy capability lands in xiongbao.
  *
  * Everything here is data, not behaviour, so the diff of a porting run can be explained by reading
  * one file. Three tables live here because each one is the single source of truth for a decision the
  * rest of the pipeline must not re-derive:
  *
- *   1. `TOOL_NAME_MAP`      — what a WorkBuddy tool ref becomes on an openbot employee (§5.1 of the plan).
+ *   1. `TOOL_NAME_MAP`      — what a WorkBuddy tool ref becomes on an xiongbao employee (§5.1 of the plan).
  *   2. `AUDIT_RULE_TABLE`   — the rules that decide whether a ported instruction body can still run (§5.3).
- *   3. `CONNECTOR_PRESETS`  — the human-facing metadata openbot needs but `mcp.json` does not carry.
+ *   3. `CONNECTOR_PRESETS`  — the human-facing metadata xiongbao needs but `mcp.json` does not carry.
  *
  * P0 is a porting pipeline only: nothing here rewrites instruction text yet. The map exists so P3 can
  * rewrite against a table that has already been reviewed, and so the auditor can say *why* a hit
@@ -15,7 +15,7 @@
  */
 
 /**
- * How usable a ported capability is on an openbot employee.
+ * How usable a ported capability is on an xiongbao employee.
  *
  * Ordered from best to worst; `SEVERITY_ORDER` turns the ordering into something `Math.max` can use,
  * which is how the auditor reduces many hits to one verdict.
@@ -31,15 +31,15 @@ export const SEVERITY_ORDER: Readonly<Record<RunnableLevel, number>> = {
   blocked: 2,
 };
 
-/** How closely an openbot tool reproduces the WorkBuddy one. */
+/** How closely an xiongbao tool reproduces the WorkBuddy one. */
 export type Equivalence = "exact" | "partial" | "none";
 
-/** One row of the WorkBuddy → openbot tool name table. */
+/** One row of the WorkBuddy → xiongbao tool name table. */
 export interface ToolMapping {
   /** The spelling that appears in WorkBuddy instruction bodies. */
   readonly workbuddy: string;
-  /** The openbot tool this becomes, or `null` when openbot has no counterpart. */
-  readonly openbot: string | null;
+  /** The xiongbao tool this becomes, or `null` when xiongbao has no counterpart. */
+  readonly xiongbao: string | null;
   /** How close the counterpart is. `none` means the instruction cannot be honoured. */
   readonly equivalence: Equivalence;
   /** One sentence a reviewer can paste into the audit report. */
@@ -47,77 +47,77 @@ export interface ToolMapping {
 }
 
 /**
- * §5.1 of the plan, verbatim, with the tool names openbot's own employee toolkit exposes.
+ * §5.1 of the plan, verbatim, with the tool names xiongbao's own employee toolkit exposes.
  *
- * Nothing in P0 consumes `openbot` yet — `skills.yaml` emits `tools: []` because a WorkBuddy
- * `allowed-tools` entry such as `Bash(git:*)` cannot be converted mechanically into openbot's
+ * Nothing in P0 consumes `xiongbao` yet — `skills.yaml` emits `tools: []` because a WorkBuddy
+ * `allowed-tools` entry such as `Bash(git:*)` cannot be converted mechanically into xiongbao's
  * `<serverId>/<toolName>` reference. The column is here so P3 rewrites from a reviewed table rather
  * than from a regex invented at rewrite time.
  */
 export const TOOL_NAME_MAP: readonly ToolMapping[] = [
   {
     workbuddy: "Read",
-    openbot: "computer_read_file",
+    xiongbao: "computer_read_file",
     equivalence: "partial",
     note: "读取路径可用，但没有工作区根与行号语义。",
   },
   {
     workbuddy: "Write",
-    openbot: "computer_write_file",
+    xiongbao: "computer_write_file",
     equivalence: "partial",
     note: "整文件覆盖可用，没有 diff/patch 语义。",
   },
   {
     workbuddy: "Edit",
-    openbot: "computer_write_file",
+    xiongbao: "computer_write_file",
     equivalence: "partial",
     note: "需要先读后写整文件；没有 old/new 片段替换。",
   },
   {
     workbuddy: "MultiEdit",
-    openbot: "computer_write_file",
+    xiongbao: "computer_write_file",
     equivalence: "partial",
     note: "多个编辑要合并成一次整文件写入。",
   },
   {
     workbuddy: "Glob",
-    openbot: "computer_list_files",
+    xiongbao: "computer_list_files",
     equivalence: "partial",
     note: "可以列目录，通配语义靠模型自己筛。",
   },
   {
     workbuddy: "Grep",
-    openbot: null,
+    xiongbao: null,
     equivalence: "none",
-    note: "openbot 无 grep 工具，且不做 shim：落到哪台机器上说不清，正路是「在我电脑上跑」。",
+    note: "xiongbao 无 grep 工具，且不做 shim：落到哪台机器上说不清，正路是「在我电脑上跑」。",
   },
   {
     workbuddy: "WebFetch",
-    openbot: "computer_navigate",
+    xiongbao: "computer_navigate",
     equivalence: "partial",
     note: "需要先 navigate 再 read，返回的是可见文本而非原文。",
   },
   {
     workbuddy: "Bash",
-    openbot: null,
+    xiongbao: null,
     equivalence: "none",
     note: "员工没有本地 shell、Python 与 Node，不可等价。",
   },
   {
     workbuddy: "Task",
-    openbot: null,
+    xiongbao: null,
     equivalence: "none",
     note: "没有子代理；对应物是 handoff（@同事），异步、需授权、有深度与扇出上限。",
   },
   {
     workbuddy: "Skill",
-    openbot: "skill_invoke",
+    xiongbao: "skill_invoke",
     equivalence: "exact",
-    note: "技能调用等价，openbot 侧就是 /<slug>。",
+    note: "技能调用等价，xiongbao 侧就是 /<slug>。",
   },
   {
     workbuddy: "mcp__<server>__<tool>",
-    openbot: "<serverId>/<toolName>",
+    xiongbao: "<serverId>/<toolName>",
     equivalence: "exact",
     note: "写法不同，语义一致；serverId 必须出现在 connectors.yaml 里。",
   },
@@ -273,14 +273,14 @@ export const AUDIT_RULE_TABLE: readonly AuditRule[] = [
     level: "degraded",
     kind: "pattern",
     pattern: /\b(?:Read|Write|Edit|MultiEdit|Glob|Grep|WebFetch)\s*\(/,
-    reason: "正文调用文件类工具；openbot 只有 computer_* 的近似物，无 grep。",
+    reason: "正文调用文件类工具；xiongbao 只有 computer_* 的近似物，无 grep。",
   },
   {
     id: "subagent-task",
     level: "degraded",
     kind: "pattern",
     pattern: /\bTask\s*\(/,
-    reason: "正文调用 Task(...) 起子代理；openbot 侧只能改成 @同事 交接。",
+    reason: "正文调用 Task(...) 起子代理；xiongbao 侧只能改成 @同事 交接。",
   },
   {
     id: "references-without-assets",
@@ -367,12 +367,12 @@ export function isTenantSlug(value: string): boolean {
   return TENANT_SLUG_PATTERN.test(value);
 }
 
-/** Metadata a connector needs in openbot but that `mcp.json` does not carry. */
+/** Metadata a connector needs in xiongbao but that `mcp.json` does not carry. */
 export interface ConnectorPreset {
   /** Who publishes the remote server. */
   readonly vendor: string;
   /**
-   * How openbot authenticates against it.
+   * How xiongbao authenticates against it.
    *
    * One concept, one name: `deployment-bearer` is the deployment holding one token and spending it on
    * everyone's behalf, which is exactly what WorkBuddy's `auth_mode: token` describes. This used to be
@@ -380,12 +380,12 @@ export interface ConnectorPreset {
    * existing value — a translation to maintain for no gain.
    */
   readonly auth: "user-oauth" | "deployment-bearer";
-  /** Environment variable openbot reads the credential id from. */
+  /** Environment variable xiongbao reads the credential id from. */
   readonly credentialEnv: string;
 }
 
 /**
- * The three connectors authorised on this machine, with the metadata openbot needs.
+ * The three connectors authorised on this machine, with the metadata xiongbao needs.
  *
  * P0 ports only what the user has actually authorised — the marketplace ships 298 connector
  * definitions, and shipping all of them would create 295 entries nobody can authenticate against.
@@ -412,11 +412,11 @@ export const CONNECTOR_PRESETS: Readonly<Record<string, ConnectorPreset>> = {
 };
 
 /**
- * WorkBuddy's `auth_mode` → openbot's carrier, as measured on the 298-entry marketplace index.
+ * WorkBuddy's `auth_mode` → xiongbao's carrier, as measured on the 298-entry marketplace index.
  *
- * `null` means openbot has no equivalent, and the value has to be recorded as a drop rather than
+ * `null` means xiongbao has no equivalent, and the value has to be recorded as a drop rather than
  * mapped: WorkBuddy's `server-side` is a platform-held credential (a connector gateway holds it and
- * nobody on our side does), and openbot's three carriers are `deployment-bearer`, `user-oauth` and
+ * nobody on our side does), and xiongbao's three carriers are `deployment-bearer`, `user-oauth` and
  * `builtin` — there is no "somebody else holds it but it still works" mode.
  *
  * Measured distribution over the 298 marketplace entries: `none` 166, `token` 69, `oauth` 5,
@@ -434,8 +434,8 @@ export const AUTH_MODE_MAP: Readonly<
   cli: null,
 };
 
-/** Map a WorkBuddy `auth_mode` onto an openbot carrier; `null` when there is no equivalent. */
-export function openbotAuthFor(
+/** Map a WorkBuddy `auth_mode` onto an xiongbao carrier; `null` when there is no equivalent. */
+export function xiongbaoAuthFor(
   authMode: string | undefined,
 ): "none" | "deployment-bearer" | "user-oauth" | null {
   if (authMode === undefined) {
@@ -456,7 +456,7 @@ export function deriveCredentialEnv(connectorId: string): string {
 /**
  * Connectors P0 is allowed to port.
  *
- * A connector without a user grant is not "ported but off" in openbot: it is an MCP server the
+ * A connector without a user grant is not "ported but off" in xiongbao: it is an MCP server the
  * employee cannot reach, and every `mcp__<id>__<tool>` reference in a skill body would point at
  * nothing. Restricting the set keeps the auditor honest.
  */

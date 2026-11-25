@@ -1,5 +1,5 @@
 /**
- * `--census`: what the connector marketplace actually contains, and how much of it openbot could carry.
+ * `--census`: what the connector marketplace actually contains, and how much of it xiongbao could carry.
  *
  * This is the first acceptance artifact of P1 and it exists to stop a specific kind of dishonesty. The
  * port ships the three connectors authorised on this machine; the marketplace defines 298. "We ported
@@ -21,7 +21,7 @@ import { stripBom } from "./read-workbuddy";
 /** How a catalogue entry is actually shipped, decided from the files on disk rather than from `type`. */
 export type CensusTransport = "mcp-url" | "mcp-command" | "cli" | "missing";
 
-/** openbot's three credential models, plus `unknown` for a row whose source value maps to none of them. */
+/** xiongbao's three credential models, plus `unknown` for a row whose source value maps to none of them. */
 export type CensusAuth =
   | "none"
   | "user-oauth"
@@ -112,17 +112,17 @@ export class CensusError extends Error {
 }
 
 /**
- * WorkBuddy's `auth_mode` → openbot's credential model.
+ * WorkBuddy's `auth_mode` → xiongbao's credential model.
  *
  * `server-side` maps to `deployment-bearer`, and its verdict is **degraded**, not full. The earlier
  * reading — "the server holds the credential, so the client injects nothing" — was wrong and cost a
  * reproducible measurement: three such connectors called bare with MCP `initialize` and no credentials
  * all answered 401 (`tdx-connector` "Missing Bearer authorization", `ezr-crm` "missing Bearer access
  * token", `fazhi-law` "Illegal authorization"). The real semantics is that the *platform* holds the
- * credential and injects a Bearer into every request on the caller's behalf. openbot can carry that, but
+ * credential and injects a Bearer into every request on the caller's behalf. xiongbao can carry that, but
  * only by hosting a credential of its own, which is a deployment decision — hence `deployment-bearer`
  * with a degraded verdict (`platform-held-credential`). `token` and `oneid-token` are the deployment
- * holding one token for everyone, the same openbot name. Anything else, including a row whose
+ * holding one token for everyone, the same xiongbao name. Anything else, including a row whose
  * `auth_mode` holds a transport name (`mcp`), is `unknown` and must not be guessed. Absent means no
  * credential injection is declared, which is `none`.
  */
@@ -197,8 +197,8 @@ function readShippedSpec(marketplaceRoot: string, id: string): ShippedSpec {
 /**
  * Whether an `mcp.json` describes a remote server or a local process.
  *
- * A `url` is a server openbot can call; a `command` is a process that has to start somewhere, and an
- * openbot employee has nowhere to start it. Unreadable JSON is reported as `mcp-command`, i.e. blocked,
+ * A `url` is a server xiongbao can call; a `command` is a process that has to start somewhere, and an
+ * xiongbao employee has nowhere to start it. Unreadable JSON is reported as `mcp-command`, i.e. blocked,
  * because guessing "remote" would overstate what the port can carry.
  */
 function serverShape(mcpPath: string): CensusTransport {
@@ -267,18 +267,18 @@ export function judgeReasonCode(
 }
 
 /**
- * Decide whether openbot could carry this connector, and say why.
+ * Decide whether xiongbao could carry this connector, and say why.
  *
  * The rule is the same one the auditor applies to instruction bodies: what runs on the employee, not what
  * exists on the author's machine. A remote MCP server with a known credential model is `full`; a remote
  * `server-side` connector is `degraded` — the transport works, but the credential is held by the platform
  * and injected per request (measured: bare `initialize` answers 401 on all three such connectors), so
- * openbot has to host its own Bearer before the connector is actually callable; a remote server whose
+ * xiongbao has to host its own Bearer before the connector is actually callable; a remote server whose
  * credential model is not mapped is `degraded` for the same "needs a human decision" reason; a stdio
- * server or a CLI wrapper is `blocked`, because openbot has no local runtime to start it in.
+ * server or a CLI wrapper is `blocked`, because xiongbao has no local runtime to start it in.
  *
  * `rawAuthMode` is the value before {@link AUTH_MODE_MAP}, needed because `server-side` and `token` map
- * to the same openbot model but only the former degrades the verdict.
+ * to the same xiongbao model but only the former degrades the verdict.
  */
 export function judgeConnector(
   transport: CensusTransport,
@@ -295,32 +295,32 @@ export function judgeConnector(
       return {
         verdict: "blocked",
         reason:
-          "cli.json：需要本机安装并运行 CLI 二进制，openbot 员工无本地运行时",
+          "cli.json：需要本机安装并运行 CLI 二进制，xiongbao 员工无本地运行时",
       };
     case "mcp-command":
       return {
         verdict: "blocked",
         reason:
-          "mcp.json 用 command 启动本地进程（stdio），openbot 员工无本地运行时",
+          "mcp.json 用 command 启动本地进程（stdio），xiongbao 员工无本地运行时",
       };
     case "mcp-url":
       if (auth === "unknown") {
         return {
           verdict: "degraded",
           reason:
-            "远端 server 可直连，但 auth_mode 无法映射到 openbot 的三种凭据模型，需人工定夺",
+            "远端 server 可直连，但 auth_mode 无法映射到 xiongbao 的三种凭据模型，需人工定夺",
         };
       }
       if (rawAuthMode === "server-side") {
         return {
           verdict: "degraded",
           reason:
-            "远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），openbot 侧需自行托管凭据后才能调用",
+            "远端 server 可直连，但凭据由平台代持（platform-held-credential）：请求需注入平台 Bearer（实测无凭据调用 initialize 返回 401），xiongbao 侧需自行托管凭据后才能调用",
         };
       }
       return {
         verdict: "full",
-        reason: `远端 server + 凭据模型 ${auth}，openbot 可直接托管`,
+        reason: `远端 server + 凭据模型 ${auth}，xiongbao 可直接托管`,
       };
     default:
       return { verdict: "blocked", reason: "未知 transport" };

@@ -41,7 +41,7 @@ export function testDatabaseUrlFrom(
     url = new URL(raw);
   } catch {
     throw new Error(
-      "TEST_DATABASE_URL must be a PostgreSQL URL such as postgres://openbot:openbot@localhost:5432/openbot_test.",
+      "TEST_DATABASE_URL must be a PostgreSQL URL such as postgres://openbot:openbot@localhost:5432/xiongbao_test.",
     );
   }
   if (!/^postgres(?:ql)?:$/.test(url.protocol)) {
@@ -55,7 +55,7 @@ export function testDatabaseUrlFrom(
   }
   if (LIVE_DATABASE_NAMES.has(database)) {
     throw new Error(
-      `TEST_DATABASE_URL must not point at the live development database (${database}). Use a dedicated database such as openbot_test.`,
+      `TEST_DATABASE_URL must not point at the live development database (${database}). Use a dedicated database such as xiongbao_test.`,
     );
   }
   return raw;
@@ -75,8 +75,8 @@ export function testDatabaseUrlFrom(
 export const TEST_POOL = { max: 2 } as const;
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-const DISPOSABLE_NAME = /^openbot_continuation_test_[0-9a-f]{16}$/;
-const TEMPLATE_NAME = /^openbot_continuation_template$/;
+const DISPOSABLE_NAME = /^xiongbao_continuation_test_[0-9a-f]{16}$/;
+const TEMPLATE_NAME = /^xiongbao_continuation_template$/;
 
 /**
  * The timeout for an `afterAll` that calls `drop()`, instead of Bun's 5 s hook default.
@@ -122,7 +122,7 @@ function loopbackPostgresUrl(raw: string | undefined, name: string): URL {
 /**
  * A one-time, empty, fully migrated database for suites that must own every row they see (the D06
  * continuation suites check `users` is empty and that the database name is
- * `openbot_continuation_test_<16hex>`).
+ * `xiongbao_continuation_test_<16hex>`).
  *
  * It is cloned from `TEST_DATABASE_TEMPLATE` (migrated by the owner and never connected to) through
  * `TEST_DATABASE_ADMIN_URL`, so the test itself applies no migration and no grant. The suite connects
@@ -161,10 +161,10 @@ export async function createDisposableTestDatabase(
   const template = environment.TEST_DATABASE_TEMPLATE?.trim() ?? "";
   if (!TEMPLATE_NAME.test(template)) {
     throw new Error(
-      "BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_TEMPLATE must be openbot_continuation_template",
+      "BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_TEMPLATE must be xiongbao_continuation_template",
     );
   }
-  const databaseName = `openbot_continuation_test_${randomBytes(8).toString("hex")}`;
+  const databaseName = `xiongbao_continuation_test_${randomBytes(8).toString("hex")}`;
   if (!DISPOSABLE_NAME.test(databaseName))
     throw new Error("BLOCKED_NOT_DISPOSABLE");
 

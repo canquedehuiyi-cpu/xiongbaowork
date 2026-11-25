@@ -16,13 +16,20 @@ const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
   // D06 suite moved onto the shared disposable-database helper (load-order rule); same guards.
   // G01-E P14: the fixture-identity probe runs as `platform`, so it needs no unframed fallback.
   // Its afterAll, which drops the disposable database, has DISPOSABLE_DROP_TIMEOUT_MS (a CI checkpoint).
+  // Rebrand R1 (Task 12): the disposable test database prefix was renamed with the CI test databases
+  // (tests/support/database.ts creates `xiongbao_continuation_test_<16hex>`).
   {
     "path": "tests/approval-continuation-preparation-transaction.integration.test.ts",
-    "currentBytes": 22162,
-    "currentSha256": "7e2e40805e703a3f25aec839d5b17da8bd23f7c3458b96b885e4792e995316a2",
+    "currentBytes": 22163,
+    "currentSha256": "2193aa2e241d6edc976ab31d7f514aa7dc52f635227101228baad2ba1afb4a66",
     "beforeBytes": 21306,
     "beforeSha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
     "edits": [
+      {
+        "after": "xiongbao_continuation_test_",
+        "before": "openbot_continuation_test_",
+        "count": 1
+      },
       {
         "after": "import { createDisposableTestDatabase, DISPOSABLE_DROP_TIMEOUT_MS } from \"./support/database\";\n",
         "before": "import { createDisposableTestDatabase } from \"./support/database\";\n",

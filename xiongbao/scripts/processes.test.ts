@@ -33,7 +33,7 @@ async function writeExecutable(path: string, contents: string) {
 }
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "openbot-processes-"));
+  directory = await mkdtemp(join(tmpdir(), "xiongbao-processes-"));
   bin = join(directory, "bin");
   log = join(directory, "calls.log");
   await Bun.$`mkdir -p ${bin}`;

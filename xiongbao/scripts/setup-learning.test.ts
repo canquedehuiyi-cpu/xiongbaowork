@@ -62,7 +62,7 @@ async function fixture(
     ? signedInTo("Team")
     : signedOut,
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-learning-setup-"));
+  const directory = await mkdtemp(join(tmpdir(), "xiongbao-learning-setup-"));
   directories.push(directory);
   await mkdir(join(directory, ".copilotkit"));
   await writeFile(
@@ -111,7 +111,7 @@ async function fixture(
   };
 }
 
-test("fresh managed setup creates and verifies the selected project's container before configuring OpenBot", async () => {
+test("fresh managed setup creates and verifies the selected project's container before configuring XiongBao", async () => {
   const f = await fixture();
   expect(await setupLearning({ ...f.options, runCli: f.runCli })).toBe(
     "configured",
@@ -656,7 +656,7 @@ test("a partial key provision does not create a container", async () => {
   expect(await readFile(f.envPath, "utf8")).toBe(before);
 });
 
-test("wrong-project or failed container results leave OpenBot unassigned", async () => {
+test("wrong-project or failed container results leave XiongBao unassigned", async () => {
   for (const response of [
     container("create", "99"),
     { status: "error", error: { code: "FORBIDDEN" } },

@@ -115,24 +115,24 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_b_head
+          POSTGRES_DB: xiongbao_b_head
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_b_head"
+          --health-cmd "pg_isready -U openbot -d xiongbao_b_head"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       NODE_ENV: test
       KEY_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       INTELLIGENCE_MODE: local
-      DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head
-      TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head
+      DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_head
+      TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_head
       # Migration 0109 creates the restricted role writer; tests bind it the way the server does.
-      TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_b_head
+      TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_b_head
       # D06 suites clone this migrated, never-connected template into one-time databases.
       TEST_DATABASE_ADMIN_URL: postgres://openbot:ci-owner@127.0.0.1:5432/postgres
-      TEST_DATABASE_TEMPLATE: openbot_continuation_template
-      TEST_DATABASE_BYPASS_URL: postgres://openbot_fixture:ci-fixture@127.0.0.1:5432/postgres
+      TEST_DATABASE_TEMPLATE: xiongbao_continuation_template
+      TEST_DATABASE_BYPASS_URL: postgres://xiongbao_fixture:ci-fixture@127.0.0.1:5432/postgres
       PGPASSWORD: ci-owner
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -163,28 +163,28 @@ jobs:
         run: |
           bash scripts/ci/prepare-baseline.sh --with-bots
           baseline="$(bash scripts/ci/baseline-dir.sh)"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_b_base OWNER openbot'
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_head bun run --cwd server scripts/migrate.ts
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_base bun run --cwd "$baseline/server" scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_continuation_template OWNER openbot'
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_continuation_template bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE xiongbao_b_base OWNER openbot'
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_b_head bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_b_base bun run --cwd "$baseline/server" scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE xiongbao_continuation_template OWNER openbot'
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_continuation_template bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE openbot_fixture LOGIN PASSWORD 'ci-fixture' NOSUPERUSER BYPASSRLS IN ROLE openbot_app"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE xiongbao_fixture LOGIN PASSWORD 'ci-fixture' NOSUPERUSER BYPASSRLS IN ROLE openbot_app"
           printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env
-          printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$baseline/.env"
+          printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_base\n' > "$baseline/.env"
       - name: Baseline tests (same head shard file list, own database)
         continue-on-error: true
         # Every database the baseline tree touches is its own, the writer too. `initializeRoleWriter`
         # refuses an application and a writer that are not on the same database (it compares database,
         # oid, server address and port), so leaving TEST_ROLE_WRITER_DATABASE_URL at the job default
-        # pointed the writer at openbot_b_head while the application was on openbot_b_base: every suite
+        # pointed the writer at xiongbao_b_head while the application was on xiongbao_b_base: every suite
         # that binds the writer died in its hook — 38 unnamed failures on shard 1 alone — and
         # test-report.mjs refuses to compare a log with unnamed failures at all.
         env:
-          DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
-          TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
-          TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_b_base
+          DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_base
+          TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_base
+          TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_b_base
         run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         # No continue-on-error: a failing head test fails this step and the job. The report step
@@ -338,18 +338,18 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_e2e
+          POSTGRES_DB: xiongbao_e2e
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-cmd "pg_isready -U openbot -d xiongbao_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: ci-owner
-      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
-      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_e2e
       # The fresh-database check and the recovery-horizon time shift only (see the harness header).
-      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -360,7 +360,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
         run: |
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
       - name: Build the app the server serves (APP_DIST_DIR)
@@ -405,18 +405,18 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_e2e
+          POSTGRES_DB: xiongbao_e2e
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-cmd "pg_isready -U openbot -d xiongbao_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: ci-owner
-      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
-      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_e2e
       # The fresh-database check only (see the harness header).
-      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -427,7 +427,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
         run: |
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
       - name: Build the app the server serves (APP_DIST_DIR)
@@ -472,18 +472,18 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_e2e
+          POSTGRES_DB: xiongbao_e2e
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-cmd "pg_isready -U openbot -d xiongbao_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: ci-owner
-      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
-      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_e2e
       # The fresh-database check only (see the harness header).
-      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -494,7 +494,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
         run: |
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
       - name: Build the app the server serves (APP_DIST_DIR)
@@ -542,18 +542,18 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_e2e
+          POSTGRES_DB: xiongbao_e2e
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-cmd "pg_isready -U openbot -d xiongbao_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: ci-owner
-      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
-      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_e2e
       # The fresh-database check and reading the turn's rows back only (see the harness header).
-      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -564,7 +564,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
         run: |
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
       - name: G8 background chat
@@ -598,16 +598,16 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_e2e
+          POSTGRES_DB: xiongbao_e2e
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-cmd "pg_isready -U openbot -d xiongbao_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: ci-owner
-      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
-      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_e2e
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -618,7 +618,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Migrate the job's own database and set the runtime role password (server-test recipe)
         run: |
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_e2e bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
       - name: Proactive smoke
         run: bun scripts/e2e/employee-eval/smoke-proactive.ts
@@ -634,14 +634,14 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
-      - run: docker build -f Dockerfile -t openbot:trackb .
+      - run: docker build -f Dockerfile -t xiongbao:trackb .
       # Each scan runs to the end and the verdict comes after, so one CI round shows every word list.
       - name: Brand scan - image files, env, labels
         id: scan_image
         continue-on-error: true
         run: |
-          docker run --rm --entrypoint sh openbot:trackb -c 'find / -xdev \( -path /proc -o -path /sys \) -prune -o -print' > "$RUNNER_TEMP/image-files.txt"
-          docker inspect openbot:trackb > "$RUNNER_TEMP/image-config.json"
+          docker run --rm --entrypoint sh xiongbao:trackb -c 'find / -xdev \( -path /proc -o -path /sys \) -prune -o -print' > "$RUNNER_TEMP/image-files.txt"
+          docker inspect xiongbao:trackb > "$RUNNER_TEMP/image-config.json"
           rc=0
           bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
           bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
@@ -651,19 +651,19 @@ jobs:
         run: sh docker/tests/env-aliases.test.sh
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
-        run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
+        run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" xiongbao:trackb /t/xb-bot.test.sh
       # The documents toolchain, as the default employee: docx, xlsx, pptx and PDF with Chinese, read back.
       - name: documents toolchain self-check (as pwuser)
-        run: docker run --rm --user pwuser --entrypoint python3 openbot:trackb /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice
+        run: docker run --rm --user pwuser --entrypoint python3 xiongbao:trackb /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice
       # Two employees cannot read each other's files, and a stopped command ends within 10 seconds.
       - name: per-employee users smoke
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
-        run: bash scripts/ci/per-bot-users-smoke.sh openbot:trackb
+        run: bash scripts/ci/per-bot-users-smoke.sh xiongbao:trackb
       - name: DoD-2 and DoD-3 (no provider credentials)
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
-        run: bash scripts/ci/image-smoke.sh openbot:trackb
+        run: bash scripts/ci/image-smoke.sh xiongbao:trackb
       - name: Brand scan - startup log (words only)
         id: scan_logs
         continue-on-error: true
@@ -1518,11 +1518,11 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_device_clean
+          POSTGRES_DB: xiongbao_device_clean
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_device_clean"
+          --health-cmd "pg_isready -U openbot -d xiongbao_device_clean"
           --health-interval 5s --health-timeout 5s --health-retries 12
     defaults:
       run:
@@ -1533,9 +1533,9 @@ jobs:
       EVIDENCE: ${{ github.workspace }}/device-clean-linux/device-clean-linux-evidence.txt
       LOG_DIR: ${{ github.workspace }}/device-clean-logs
       PGPASSWORD: ci-owner
-      OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_device_clean
-      APP_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_device_clean
-      ROLE_WRITER_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_device_clean
+      OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_device_clean
+      APP_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_device_clean
+      ROLE_WRITER_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_device_clean
       ORIGIN: http://127.0.0.1:3901
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

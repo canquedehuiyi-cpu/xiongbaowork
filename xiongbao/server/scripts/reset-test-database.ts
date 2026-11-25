@@ -20,7 +20,7 @@
  */
 export {};
 
-const TARGET_DATABASE = "openbot_test";
+const TARGET_DATABASE = "xiongbao_test";
 
 /**
  * Every table the suite writes, in dependency order where it matters.
@@ -67,7 +67,7 @@ if (target !== TARGET_DATABASE) {
 }
 
 /*
- * A name is not proof. A staging server with a database called `openbot_test` would sail through the
+ * A name is not proof. A staging server with a database called `xiongbao_test` would sail through the
  * check above, and this script cannot tell it apart from a laptop — so wiping it is a deliberate act
  * with a deliberately awkward flag, not something that happens because a variable was left exported.
  */

@@ -4,8 +4,8 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 
 /**
- * Guard: no text a person reads names Intelligence. To a person it is all OpenBot, and the part of
- * OpenBot they mean is the back end (see .claude/skills/openbot-copy).
+ * Guard: no text a person reads names Intelligence. To a person it is all XiongBao, and the part of
+ * XiongBao they mean is the back end (see .claude/skills/xiongbao-copy).
  *
  * Read are the string literals, template text and JSX text of the app, the server, the Recorder
  * extension and the shared Recorder disclosure.
@@ -71,7 +71,7 @@ const NOT_SHOWN: { file: string; text: string; why: string }[] = [
 
 /**
  * Text that names Intelligence and is shown only to an administrator. Upstream counts every screen
- * in; this tree's copy rule lets an admin read exact names (.claude/skills/openbot-copy, "Admin is
+ * in; this tree's copy rule lets an admin read exact names (.claude/skills/xiongbao-copy, "Admin is
  * allowed exact names"), and its brand allowlist keeps the third-party service an admin has to sign
  * up for (app/tests/brand-leak-allowlist.json, category third-party-name). Each entry must still
  * match, so one that goes stale is removed rather than kept as a hole.

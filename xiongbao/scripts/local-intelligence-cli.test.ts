@@ -13,7 +13,7 @@ async function fixture(
     install: (path: string, version?: string, code?: string) => Promise<string>,
   ) => Promise<void>,
 ) {
-  const root = await mkdtemp(join(tmpdir(), "openbot-cli-discovery-"));
+  const root = await mkdtemp(join(tmpdir(), "xiongbao-cli-discovery-"));
   try {
     await run(
       root,

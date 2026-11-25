@@ -728,14 +728,19 @@ function keyEncryptionKey(environment: Environment): string {
 }
 
 /**
- * SHA-256 of the worker secret `scripts/start.sh` falls back to on a developer's machine.
+ * SHA-256 of the worker secrets `scripts/start.sh` falls back to on a developer's machine: today's,
+ * and the one it fell back to before the rename, which is just as public and may still sit in an
+ * environment somebody copied from a laptop.
  *
- * That value is printed in this repository, so a server that accepts it has a door to
- * `/internal/routines/run` anybody can open. Compared by digest, as the `PLACEHOLDER_KEY` above is
- * compared by value, only because the literal spells the upstream name this source no longer does.
+ * Those values are printed in this repository and its history, so a server that accepts one has a
+ * door to `/internal/routines/run` anybody can open. Compared by digest, as the `PLACEHOLDER_KEY`
+ * above is compared by value, only because the earlier literal spells the upstream name this source
+ * no longer does.
  */
-const PUBLIC_WORKER_SECRET_SHA256 =
-  "ca6b3d72aae76178e9bfe1b82c3df887e856fc793eb4807064159a5ffe9f4472";
+const PUBLIC_WORKER_SECRET_SHA256 = new Set([
+  "d208c76f99786658feed651c30f03e682966343029029c3aefe293061e3f1995",
+  "ca6b3d72aae76178e9bfe1b82c3df887e856fc793eb4807064159a5ffe9f4472",
+]);
 
 /**
  * The worker's secret: refused in production when it is the public development default, warned
@@ -746,7 +751,7 @@ function workerSharedSecret(environment: Environment): string | undefined {
   const value = optional(environment, "WORKER_SHARED_SECRET");
   if (value === undefined) return undefined;
   const digest = createHash("sha256").update(value).digest("hex");
-  if (digest === PUBLIC_WORKER_SECRET_SHA256) {
+  if (PUBLIC_WORKER_SECRET_SHA256.has(digest)) {
     if (isProduction(environment)) {
       throw new Error(
         "WORKER_SHARED_SECRET is the public development default from scripts/start.sh; refusing to start in production. Generate one with: openssl rand -hex 32",

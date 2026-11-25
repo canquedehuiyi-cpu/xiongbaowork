@@ -755,11 +755,11 @@ jobs:
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
-          POSTGRES_DB: openbot_device_clean
+          POSTGRES_DB: xiongbao_device_clean
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_device_clean"
+          --health-cmd "pg_isready -U openbot -d xiongbao_device_clean"
           --health-interval 5s --health-timeout 5s --health-retries 12
     # The scripts come from the tagged tree, checked out under source/; the deb from the artifact.
     defaults:
@@ -773,9 +773,9 @@ jobs:
       LOG_DIR: ${{ github.workspace }}/device-clean-logs
       # The job's own throwaway database (the e2e-wakerflow recipe in ci.yml), not a secret.
       PGPASSWORD: ci-owner
-      OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_device_clean
-      APP_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_device_clean
-      ROLE_WRITER_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_device_clean
+      OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/xiongbao_device_clean
+      APP_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_device_clean
+      ROLE_WRITER_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/xiongbao_device_clean
       ORIGIN: http://127.0.0.1:3901
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

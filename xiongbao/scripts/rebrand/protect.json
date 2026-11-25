@@ -938,112 +938,10 @@
     "reason": "落库键：审批续跑快照里的 forwardedProps.openbotRun（approvals/wiring.ts、execute.ts），Task 22 迁移"
   },
   {
-    "file": "xiongbao/shared/fixtures/releases/candidate.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/fixtures/releases/conformance.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/fixtures/releases/installed.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/fixtures/releases/invalid-incompatible-recovery.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/fixtures/releases/invalid-mutable-image.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/fixtures/releases/invalid-unsupported-schema.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/fixtures/releases/provenance.sigstore.json",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
-    "file": "xiongbao/shared/tests/release-manifest.test.ts",
-    "pattern": "(?i:openbot)",
-    "until": "R3",
-    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
-  },
-  {
     "file": "xiongbao/shared/bot-prompt.test.ts",
     "text": "/openbot|xiongbao/i",
     "until": "R4",
     "reason": "断言继续拦截上游名：模型可见文字里既不许出现旧名也不许出现新名"
-  },
-  {
-    "file": "xiongbao/server/scripts/reset-test-database.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/approval-continuation-preparation-transaction.integration.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/approval-continuation-store.integration.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/approval-open-transaction.integration.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/approval-recovery-port.integration.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/continuation-target-store.integration.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/plugin-store.integration.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/support/database.test.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/support/database.ts",
-    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
-    "until": "R2",
-    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
   },
   {
     "file": "xiongbao/server/src/host-access/tools.ts",
@@ -1381,12 +1279,6 @@
     "reason": "断言旧域名下的其它地址不算演示账号（与 dev@openbot.local 成对）"
   },
   {
-    "file": "xiongbao/server/tests/config.test.ts",
-    "pattern": "openbot-dev-worker-secret",
-    "until": "R2",
-    "reason": "Task 12：scripts/start.sh 的公开默认 WORKER_SHARED_SECRET，config.ts 存的是它的 SHA-256，须与 start.sh 同一 PR 改"
-  },
-  {
     "file": "xiongbao/server/tests/brand-server-copy.test.ts",
     "pattern": "\\\"OpenBot\\\"",
     "until": "R4",
@@ -1589,12 +1481,6 @@
     "text": "\"openbot-session-cookies.json\"",
     "until": "R4",
     "reason": "旧版本留在电脑卷上的 session-cookie 文件旧名：测试证明它被清理（agent-computer/src/session-cookies.ts 按后缀识别，不拼旧名），旧名就是被测对象，随兼容代码删除"
-  },
-  {
-    "file": "xiongbao/agent-computer/tests/local-chrome-startup.test.ts",
-    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
-    "until": "R3",
-    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），测试断言与之同值；该脚本归 Task 12，改名需带迁移"
   },
   {
     "file": "xiongbao/agent-computer/tests/neutral-page-marks.test.ts",
@@ -1849,15 +1735,240 @@
     "reason": "持久卷上的已有库，R4 基线化时改"
   },
   {
+    "file": "xiongbao/scripts/start-local-chrome-computer.ts",
+    "pattern": "\"(?:OpenBot|openbot)\"(?=[,)])",
+    "until": "R3",
+    "reason": "本机数据根目录名（macOS/Windows 的 OpenBot、Linux 的 openbot，其下 local-computer 存着个人电脑上已有的浏览器档案与工作区），改名会让已有档案找不到，需带迁移"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/local-chrome-startup.test.ts",
+    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
+    "until": "R3",
+    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），测试断言与之同值；脚本里的同名目录有同样的作用域条目，改名需带迁移"
+  },
+  {
     "file": "xiongbao/tests/chart-vanilla-secrets.test.ts",
     "pattern": ":5432/openbot\\?",
     "until": "R4",
     "reason": "持久卷上的已有库，R4 基线化时改"
   },
   {
-    "file": "xiongbao/tests/promote-kubernetes-helm.test.ts",
-    "pattern": "(?i:acme[./]openbot|openbot\\.tgz|images\\.openbot|openbot\\.ai/|mirror/openbot)",
+    "text": ".openbot-upstream.json",
+    "until": "R4",
+    "reason": "上游同步基线记录文件名：integrate-upstream.ts 写、upstream-upgrade.yml 与 scripts/release-manifest.ts 读，三处须同时改；上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "text": "openbot-upstream-candidate",
+    "until": "R4",
+    "reason": "upstream-upgrade.yml 里的候选目录名，tests/upstream-integration.test.ts 断言它；上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "file": "xiongbao/scripts/integrate-upstream.ts",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "file": "xiongbao/.github/workflows/upstream-upgrade.yml",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "file": "xiongbao/tests/upstream-upgrade-checks.test.ts",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "file": "xiongbao/tests/upstream-upgrade-publish.test.ts",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "file": "xiongbao/.github/workflows/ci.yml",
+    "pattern": "\\bopenbot_test\\b",
+    "until": "R4",
+    "reason": "tests/upstream-upgrade-checks.test.ts 要求这份 ci.yml 的 test 作业数据库与 upstream-upgrade.yml 的完全相同；上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
+  },
+  {
+    "file": "xiongbao/scripts/release-manifest.ts",
+    "pattern": "(?<=(?:^|\\n)\\s*)openbot(?=: \\{)",
     "until": "R3",
-    "reason": "发布/分发夹具，随 release-policy 与 promote 脚本改名，归 Task 12"
+    "reason": "发行记录里的镜像键 images.openbot（对象字面量写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
+  },
+  {
+    "text": ".openbot-release.json",
+    "until": "R3",
+    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
+  },
+  {
+    "text": ".openbot-update-journal.json",
+    "until": "R3",
+    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
+  },
+  {
+    "text": ".openbot-update.lock",
+    "until": "R3",
+    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
+  },
+  {
+    "text": ".openbot-update-policy.json",
+    "until": "R3",
+    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
+  },
+  {
+    "text": ".openbot-deployment",
+    "until": "R3",
+    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
+  },
+  {
+    "text": ".env.openbot-installation-id",
+    "until": "R3",
+    "reason": "已安装检出目录里 scripts/update-local.ts、update.ts、start.sh、setup-composio.ts 读写的本机状态文件（发行记录、更新日志、更新锁、更新策略、部署记录、安装标识），已有安装的磁盘上就是这个名字，改名需迁移或新旧双认"
+  },
+  {
+    "pattern": "(?<![\\w.-])\\.openbot(?![\\w.-])",
+    "until": "R3",
+    "reason": "检出目录下的 .openbot 目录（开发 compose 挂进容器、存模型登录 model-oauth.json；update-local.ts 视为本机文件），已有机器上就是这个名字，改名需迁移"
+  },
+  {
+    "file": "xiongbao/scripts/ci/baseline-dir.sh",
+    "pattern": "(?<![\\w.-])openbot(?=/|;)",
+    "until": "R4",
+    "reason": "目录改名前的提交与标签里产品目录真实叫 openbot/：按旧基线或旧标签取文件时必须用这个路径"
+  },
+  {
+    "file": "xiongbao/scripts/ci/prepare-baseline.sh",
+    "pattern": "(?<![\\w.-])openbot/",
+    "until": "R4",
+    "reason": "目录改名前的提交与标签里产品目录真实叫 openbot/：按旧基线或旧标签取文件时必须用这个路径"
+  },
+  {
+    "file": ".github/workflows/clean-deploy.yml",
+    "pattern": "(?<![\\w.-])openbot/|source/openbot\\b|PRODUCT_DIR=openbot\\b",
+    "until": "R4",
+    "reason": "目录改名前的提交与标签里产品目录真实叫 openbot/：按旧基线或旧标签取文件时必须用这个路径"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "pattern": "(?<![\\w.-])openbot/",
+    "until": "R4",
+    "reason": "目录改名前的提交与标签里产品目录真实叫 openbot/：按旧基线或旧标签取文件时必须用这个路径"
+  },
+  {
+    "file": "xiongbao/scripts/ci/device-release-workflow.test.mjs",
+    "pattern": "(?<![\\w.-])openbot/|PRODUCT_DIR(?:: \"|=)openbot\\b|(?<=tagged\\(\")openbot(?=\"\\))|(?<=\"source\", \")openbot(?=\")",
+    "until": "R4",
+    "reason": "目录改名前的提交与标签里产品目录真实叫 openbot/：按旧基线或旧标签取文件时必须用这个路径（测试 clean-deploy 的旧标签分支）"
+  },
+  {
+    "file": "xiongbao/scripts/ci/device-release-workflow.test.mjs",
+    "pattern": "(?<=(?:^|[\\n{,])\\s*)openbot(?=:\\s)|files\\.openbot",
+    "until": "R3",
+    "reason": "发行记录 container-images.json 里的镜像键 images.openbot（对象字面量与 jq 写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
+  },
+  {
+    "file": "xiongbao/scripts/ci/mirror-release-workflow.test.mjs",
+    "pattern": "(?<=\\()openbot(?=\\))|(?<=, )openbot(?= \\})",
+    "until": "R3",
+    "reason": "发行记录 container-images.json 里的镜像键 images.openbot（对象字面量与 jq 写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
+  },
+  {
+    "file": ".github/workflows/release.yml",
+    "pattern": "(?<=(?:^|\\n)\\s+)openbot(?=: image\\()|(?<=# `)openbot(?=` is read by the promote step)",
+    "until": "R3",
+    "reason": "发行记录 container-images.json 里的镜像键 images.openbot（对象字面量与 jq 写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
+  },
+  {
+    "file": "xiongbao/scripts/stop.sh",
+    "text": "openbot.supervisor",
+    "until": "R3",
+    "reason": "supervisor 给电脑容器打的 docker 标签（supervisor/src/names.ts OWNER_LABEL，已保护），停止脚本按它找容器，须同名"
+  },
+  {
+    "file": "xiongbao/docker-compose.yml",
+    "text": "COMPUTER_NAMESPACE:-openbot",
+    "until": "R3",
+    "reason": "电脑容器命名空间默认值，与 supervisor/src/names.ts 已保护的 DEFAULT_NAMESPACE 同值"
+  },
+  {
+    "file": "xiongbao/tests/compose.test.ts",
+    "text": "ROLE_WRITER_PASSWORD).toBe(\"openbot\")",
+    "until": "R4",
+    "reason": "公开默认口令 openbot（compose 的 ROLE_WRITER_PASSWORD 默认值，已保护），断言与之同值"
+  },
+  {
+    "file": "xiongbao/scripts/ci/manual-blocks.test.mjs",
+    "pattern": "\\$Openbot(?:Tag|Image)",
+    "until": "R2",
+    "reason": "断言根 README.md 的 Windows 手动块原文，README 归 Task 13；Task 13 改 README 时同改本测试并删除本条目"
+  },
+  {
+    "file": "xiongbao/tests/learning_harness_contract.py",
+    "text": "openbot:learned-skills",
+    "until": "R3",
+    "reason": "服务器写的系统行 id（server/src/learning/remote.ts 已保护），契约测试与之同值"
+  },
+  {
+    "file": "xiongbao/scripts/e2e/artifact-reachability.ts",
+    "pattern": "(?<=\")openbot(?=\")",
+    "until": "R4",
+    "reason": "默认皮肤旧 id openbot：测试浏览器缓存里的旧值在预绘制与样式里仍被正确处理（与 app/tests/skin-compat.test.ts 同），R4 随兼容代码删除"
+  },
+  {
+    "file": "xiongbao/scripts/ci/assert-image.mjs",
+    "text": "Self-host OpenBot",
+    "until": "R4",
+    "reason": "断言镜像里的网页不含上游横幅文案：旧文案就是被测对象"
+  },
+  {
+    "file": "xiongbao/scripts/self-hosted-learning.ts",
+    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
+    "until": "R3",
+    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
+  },
+  {
+    "file": "xiongbao/scripts/self-hosted-learning.test.ts",
+    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
+    "until": "R3",
+    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
+  },
+  {
+    "file": "xiongbao/scripts/setup-learning.ts",
+    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
+    "until": "R3",
+    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
+  },
+  {
+    "file": "xiongbao/scripts/setup-learning.test.ts",
+    "pattern": "(?<![\\w.-])openbot(?![\\w.-])",
+    "until": "R3",
+    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
+  },
+  {
+    "file": "xiongbao/scripts/start.sh",
+    "text": "project's `openbot` container",
+    "until": "R3",
+    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
+  },
+  {
+    "file": "xiongbao/scripts/start-restart-guard.test.ts",
+    "text": "The server assigns `openbot` once it exists",
+    "until": "R3",
+    "reason": "Learning 容器 id openbot 存在 Intelligence 里（server/src/learning/ensure-container.ts 已保护到 R3），脚本按 id 查找与创建，须同值"
+  },
+  {
+    "file": "xiongbao/server/tests/config.test.ts",
+    "text": "\"openbot-dev-worker-secret\"",
+    "until": "R4",
+    "reason": "改名前 scripts/start.sh 的公开默认 WORKER_SHARED_SECRET：server/src/config.ts 仍按 SHA-256 在生产拒绝它，测试证明这一点，旧值就是被测对象"
+  },
+  {
+    "file": "xiongbao/server/tests/helpers/recovery-lint-source.ts",
+    "text": "\"openbot_continuation_test_\"",
+    "until": "R4",
+    "reason": "按字节冻结的恢复测试：逆变换把改名后的一次性测试库前缀还原成冻结时的原文，原文就是旧前缀；R4 基线化时随冻结清单一起处理"
   }
 ]

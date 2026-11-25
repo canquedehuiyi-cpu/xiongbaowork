@@ -806,7 +806,7 @@ function gradeOf(porting: Record<string, unknown>): RunnableLevel {
  *
  * THE REBUILD IS A RE-DERIVATION, NOT A RE-DECISION. The rule table reads a body; a person reads the
  * thing the body is about. `workbuddy-market-export` is graded `blocked` because it explains how to
- * drive three marketplaces OpenBot does not have — no sentence in it matches a call the rule table
+ * drive three marketplaces XiongBao does not have — no sentence in it matches a call the rule table
  * recognises, so a rebuild wrote `full` back over a judgement nobody retracted. A badge promising a
  * skill runs is the one lie the grade exists to prevent, and it came back by regeneration.
  *

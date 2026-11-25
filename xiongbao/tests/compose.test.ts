@@ -76,7 +76,7 @@ function runLangGraphAguiModelProbe(
     openaiApiKey?: string;
   } = {},
 ) {
-  const dir = mkdtempSync(join(tmpdir(), "openbot-langgraph-agui-"));
+  const dir = mkdtempSync(join(tmpdir(), "xiongbao-langgraph-agui-"));
   try {
     writeFileSync(
       join(dir, "ag_ui_langgraph.py"),
@@ -236,7 +236,7 @@ function runComposeConfig(env: Record<string, string>) {
       "--profile",
       "harness",
       "--profile",
-      "openbot",
+      "xiongbao",
       "config",
       "--format",
       "json",
@@ -245,7 +245,7 @@ function runComposeConfig(env: Record<string, string>) {
       cwd: join(import.meta.dir, ".."),
       env: {
         PATH: process.env.PATH ?? "",
-        PICKED_HARNESS_IMAGE: "openbot-agent-langgraph-agui:test",
+        PICKED_HARNESS_IMAGE: "xiongbao-agent-langgraph-agui:test",
         ...env,
       },
       encoding: "utf8",
@@ -669,8 +669,8 @@ test("starts the shared computer as one person's only when told whose it is", ()
  * (agent-computer's person-access.ts): the edition in `.env` has to reach it, as it reaches the server.
  */
 /**
- * A Recorder in the shared computer is handed the laptop's loopback addresses for OpenBot and a local gateway, which in
- * that container are the container: OpenBot Desktop names where each is reached instead, and the computer relays them
+ * A Recorder in the shared computer is handed the laptop's loopback addresses for XiongBao and a local gateway, which in
+ * that container are the container: the desktop app names where each is reached instead, and the computer relays them
  * (agent-computer's loopback-relay.ts). The setting, and the host the gateway's relay names, have to reach it.
  */
 test("hands the shared computer the loopback addresses it relays, and this machine by name", () => {
@@ -717,7 +717,7 @@ test("gives the selected harness the same governed callback as the framework Bot
 
 /**
  * Rootless Podman on Linux gives `host-gateway` an address that is not this machine's loopback, where
- * the person's browser and a local Intelligence listen. OpenBot Desktop sets `OPENBOT_HOST_GATEWAY`
+ * the person's browser and a local Intelligence listen. The desktop app sets `OPENBOT_HOST_GATEWAY`
  * there, to the address its Podman configuration maps to loopback, and every service that calls the
  * host by name takes it.
  */
@@ -735,17 +735,17 @@ test("sends host.docker.internal where OPENBOT_HOST_GATEWAY says", () => {
 });
 
 /**
- * OpenBot's own server and worker, for an installed OpenBot, and out of a developer's way.
+ * XiongBao's own server and worker, for an installed XiongBao, and out of a developer's way.
  *
  * `scripts/start.sh` runs both on the host, so a plain `docker compose up -d` that also started them
  * would put a second server on port 3001 and a second worker on the routines. The profile is what
  * keeps that from happening; naming the service is still enough to start it.
  */
-test("keeps OpenBot's own server and worker behind a profile", () => {
+test("keeps XiongBao's own server and worker behind a profile", () => {
   const services = composeServices();
 
   for (const name of ["server", "worker"]) {
-    expect(services[name].profiles).toEqual(["openbot"]);
+    expect(services[name].profiles).toEqual(["xiongbao"]);
   }
 });
 
@@ -789,20 +789,20 @@ test("gives the server container addresses, not the host's loopback", () => {
   expect(environment).toMatchObject({
     PORT: "3001",
     SERVER_PORT: "3001",
-    DATABASE_URL: "postgres://openbot_app:openbot@postgres:5432/openbot",
+    DATABASE_URL: "postgres://openbot_app:openbot@postgres:5432/xiongbao",
     AGENT_COMPUTER_URL: "http://agent-computer:4100",
   });
   for (const [name, value] of Object.entries(environment)) {
     expect(`${name}=${value}`).not.toMatch(/localhost|127\.0\.0\.1|\[::1\]/);
   }
-  // Production refuses `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`, which a local OpenBot needs.
+  // Production refuses `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`, which a local XiongBao needs.
   expect(environment.NODE_ENV).toBe("");
 });
 
 /**
  * The supervisor by name unless the deployment says there is none.
  *
- * Unset is every deployment that predates the setting. Set empty is OpenBot Desktop, which runs the
+ * Unset is every deployment that predates the setting. Set empty is the desktop app, which runs the
  * personal edition on one computer, and that edition refuses to start with a supervisor.
  */
 test("gives the server the supervisor unless the deployment empties it", () => {
@@ -841,8 +841,8 @@ test("puts the server beside the database and the Bots, and the worker beside th
  */
 test("connects the server and the worker as the application role, and only migrate as the owner", () => {
   const services = runComposeConfig({}).services;
-  const owner = "postgres://openbot:openbot@postgres:5432/openbot";
-  const application = "postgres://openbot_app:openbot@postgres:5432/openbot";
+  const owner = "postgres://openbot:openbot@postgres:5432/xiongbao";
+  const application = "postgres://openbot_app:openbot@postgres:5432/xiongbao";
 
   expect(services.migrate.environment.DATABASE_URL).toBe(owner);
   expect(services.server.environment.DATABASE_URL).toBe(application);
@@ -861,14 +861,14 @@ test("gives the server the role writer, with the password migrate installs", () 
   const unset = runComposeConfig({}).services;
   expect(unset.migrate.environment.ROLE_WRITER_PASSWORD).toBe("openbot");
   expect(unset.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
-    "postgres://openbot_role_writer:openbot@postgres:5432/openbot",
+    "postgres://openbot_role_writer:openbot@postgres:5432/xiongbao",
   );
   const chosen = runComposeConfig({
     ROLE_WRITER_PASSWORD: "f00dCafe1234",
   }).services;
   expect(chosen.migrate.environment.ROLE_WRITER_PASSWORD).toBe("f00dCafe1234");
   expect(chosen.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
-    "postgres://openbot_role_writer:f00dCafe1234@postgres:5432/openbot",
+    "postgres://openbot_role_writer:f00dCafe1234@postgres:5432/xiongbao",
   );
   // The worker writes no identity role and is not given the writer.
   expect(Object.keys(chosen.worker.environment).sort()).toEqual([
@@ -972,12 +972,12 @@ test("mounts the model sign-in folder into the server, and only there", () => {
   expect(server.volumes).toContainEqual({
     type: "bind",
     source: "./.openbot",
-    target: "/openbot",
+    target: "/xiongbao",
     bind: { create_host_path: false },
   });
   expect(server.environment?.OPENBOT_MODEL_OAUTH_FILE).toBe(
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
-    "${OPENBOT_MODEL_OAUTH_FILE:+/openbot/model-oauth.json}",
+    "${OPENBOT_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}",
   );
   // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
   expect(server.user).toBe("${OPENBOT_SERVER_USER:-1001:1001}");

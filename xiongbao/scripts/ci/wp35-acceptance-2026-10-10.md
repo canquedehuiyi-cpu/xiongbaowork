@@ -32,7 +32,7 @@
 
 ## 最终验收
 
-新库 `openbot_wp35_acceptance` 上六片顺序执行两轮，中间未重置数据库。
+新库 `xiongbao_wp35_acceptance` 上六片顺序执行两轮，中间未重置数据库。
 两轮各为 **4245 pass / 0 fail / 16 skip / 4261 tests / 309 files**；每片 N/M、pass/skip/fail 和
 实际文件清单均逐项相同，装载错误与连接槽错误为 0。`acceptance/summary.json` 保存各日志 SHA-256
 及机器断言结果 `identicalShardCounts=true`。
@@ -49,7 +49,7 @@
 app 全量为 **1142 pass / 0 fail / 153 文件**；全项目 lint 检查 1339 文件通过，四个 workspace
 的 typecheck 均通过。最终改动文件的 Biome 检查及 shell 语法检查通过。
 
-镜像 `openbot:codex-wp35-022d` 的摘要为
+镜像 `xiongbao:codex-wp35-022d` 的摘要为
 `sha256:e9891fc9aa6ca0674cfe3396e1e2a3bb2e0138473233b24b8dfe06a87a56941c`。
 17 秒内健康，品牌 HTML / 主 JS、普通运行角色、600 口令文件、崩溃重建后的数据与口令保留、
 旧卷新增应用角色口令及 owner 角色启动拒绝均通过；**IMAGE failed command checks=0**。
@@ -60,7 +60,7 @@ Windows 主机没有 Bun，镜像 smoke 脚本中纯 JavaScript 断言由 Node 2
 
 ## 复跑方法
 
-在 `openbot/`，显式设置指向独立库的 `TEST_DATABASE_URL`，使用 owner 连接完成迁移后切回
+在 `xiongbao/`，显式设置指向独立库的 `TEST_DATABASE_URL`，使用 owner 连接完成迁移后切回
 `openbot_app` 测试连接。测试进程不要挂载或读取真实应用 `.env`。
 本地与 CI 都以 `scripts/ci/run-tests.sh` 为验收入口；旧 `.scratch/` 中动态 `split` 的脚本不用于签署。
 

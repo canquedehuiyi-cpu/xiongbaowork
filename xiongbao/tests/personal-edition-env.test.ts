@@ -37,7 +37,7 @@ async function run(envFile: string) {
 }
 
 async function fresh(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-personal-env-"));
+  const directory = await mkdtemp(join(tmpdir(), "xiongbao-personal-env-"));
   directories.push(directory);
   return join(directory, ".env");
 }
@@ -82,7 +82,7 @@ test("the result starts as a personal edition once the secrets are filled in", a
     environment[name] = found.at(-1) ?? "";
   // What a person fills in by hand; the shipped example leaves them empty.
   Object.assign(environment, {
-    DATABASE_URL: environment.DATABASE_URL || "postgres://localhost/openbot",
+    DATABASE_URL: environment.DATABASE_URL || "postgres://localhost/xiongbao",
     INTELLIGENCE_API_URL:
       environment.INTELLIGENCE_API_URL || "http://localhost:7100",
     INTELLIGENCE_GATEWAY_WS_URL:

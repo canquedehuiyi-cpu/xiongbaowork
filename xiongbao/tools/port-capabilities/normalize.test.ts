@@ -667,8 +667,8 @@ describe("connectors", () => {
     expect(result.connectors[0].title).toBe("tapd");
   });
 
-  test("a platform-managed auth mode is recorded, because openbot has no carrier for it", () => {
-    // `server-side` means a WorkBuddy gateway holds the credential. openbot has no such gateway, so the
+  test("a platform-managed auth mode is recorded, because xiongbao has no carrier for it", () => {
+    // `server-side` means a WorkBuddy gateway holds the credential. xiongbao has no such gateway, so the
     // emitted `auth` has to be something a deployment can actually supply — and the difference has to be
     // visible in the manifest rather than inferred later.
     const result = normalizeCapabilities(
@@ -822,7 +822,7 @@ describe("references size", () => {
 });
 
 describe("id uniqueness", () => {
-  test("a duplicate agent id stops the run, because openbot keys agents by id", () => {
+  test("a duplicate agent id stops the run, because xiongbao keys agents by id", () => {
     const plugin: PluginJson = { name: "dup", expertType: "agent", agentName: "same" };
     const one = expertPackage({
       dirName: "first",

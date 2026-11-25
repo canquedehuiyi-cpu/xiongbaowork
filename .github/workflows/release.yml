@@ -227,7 +227,7 @@ jobs:
           context: xiongbao
           platforms: linux/amd64
           load: true
-          tags: openbot-release:dry-run
+          tags: xiongbao-release:dry-run
           labels: |
             org.opencontainers.image.title=${{ steps.brand.outputs.title }}
             org.opencontainers.image.vendor=${{ steps.brand.outputs.vendor }}
@@ -241,8 +241,8 @@ jobs:
         working-directory: xiongbao
         run: |
           set -euo pipefail
-          docker image inspect openbot-release:dry-run --format '{{.Id}}'
-          EVIDENCE_DIR="$RUNNER_TEMP/release-evidence" bash scripts/ci/image-smoke.sh openbot-release:dry-run
+          docker image inspect xiongbao-release:dry-run --format '{{.Id}}'
+          EVIDENCE_DIR="$RUNNER_TEMP/release-evidence" bash scripts/ci/image-smoke.sh xiongbao-release:dry-run
       - name: Print container logs (credentials masked)
         if: ${{ failure() && inputs.dry_run }}
         working-directory: xiongbao

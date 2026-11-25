@@ -23,11 +23,11 @@ import {
   DEFAULT_ATTRIBUTION,
   deriveCredentialEnv,
   isTenantSlug,
-  openbotAuthFor,
   PERMISSIVE_LICENSES,
   TEAM_NAME_OVERRIDES,
   TENANT_SLUG_MAX,
   UNSPECIFIED_LICENSE,
+  xiongbaoAuthFor,
 } from "./mapping";
 import type {
   PluginJson,
@@ -57,13 +57,13 @@ export interface Provenance {
   checksum: string;
   /** SPDX id, or `unspecified`. */
   license: string;
-  /** Whether this pipeline believes the content may be redistributed inside openbot. */
+  /** Whether this pipeline believes the content may be redistributed inside xiongbao. */
   redistributable: boolean;
   /** Required attribution line. */
   attribution: string;
 }
 
-/** A ported agent: one openbot employee. */
+/** A ported agent: one xiongbao employee. */
 export interface NormalizedAgent {
   id: string;
   name: string;
@@ -121,7 +121,7 @@ export interface NormalizedSkill {
   instructions: string;
   /** Always `[]` in P0; see the note on `declaredTools`. */
   tools: string[];
-  /** Raw `allowed-tools` entries, for P3's mapping layer. Not consumed by openbot. */
+  /** Raw `allowed-tools` entries, for P3's mapping layer. Not consumed by xiongbao. */
   declaredTools: string[];
   /** Whether the source skill ships a `references/` directory. One audit rule depends on it. */
   hasBundledReferences: boolean;
@@ -218,7 +218,7 @@ export const SANITIZED_WORKBUDDY_REFS = "workbuddy-brand-refs";
 
 /**
  * A line that points at the authoring platform's own install tree: `~/.workbuddy/...` or
- * `~/.codebuddy/...`. In an openbot deployment the condition the line hedges on ("if WorkBuddy is
+ * `~/.codebuddy/...`. In an xiongbao deployment the condition the line hedges on ("if WorkBuddy is
  * installed") is never true, so the line is dead prose that still leaks the brand into a prompt.
  */
 const AUTHOR_PLATFORM_PATH_LINE = /(^|\s)~\/\.(workbuddy|codebuddy)\//;
@@ -1366,7 +1366,7 @@ function normalizeConnector(
     raw.id;
   const auth =
     preset?.auth ??
-    openbotAuthFor(raw.marketplace?.authMode ?? "") ??
+    xiongbaoAuthFor(raw.marketplace?.authMode ?? "") ??
     "unknown";
   const credentialEnv = preset?.credentialEnv || deriveCredentialEnv(raw.id);
   const url = raw.server.url;
@@ -1406,11 +1406,14 @@ function normalizeConnector(
       reason: "连接器附带的 SKILL.md 只是教模型如何安装该连接器",
     });
   }
-  // WorkBuddy's `server-side` and `oneid-token` modes have no openbot carrier: a platform gateway holds
+  // WorkBuddy's `server-side` and `oneid-token` modes have no xiongbao carrier: a platform gateway holds
   // the credential and nobody on our side does. The port keeps the contract's `auth` value, so the fact
   // that the platform used to hold it has to be written down where a reviewer will see it.
   const marketAuthMode = raw.marketplace?.authMode;
-  if (marketAuthMode !== undefined && openbotAuthFor(marketAuthMode) === null) {
+  if (
+    marketAuthMode !== undefined &&
+    xiongbaoAuthFor(marketAuthMode) === null
+  ) {
     const note = `WorkBuddy auth_mode=${marketAuthMode} 本产品无等价物（平台代持凭证），本包按 ${auth} 声明，凭证需自行提供`;
     connectorDropped.push(note);
     dropped.push({
@@ -1425,7 +1428,7 @@ function normalizeConnector(
       kind: "connector",
       slug: raw.id,
       origin: raw.mcpJson.relativePath,
-      reason: "本地 stdio MCP（command 形态），openbot 只接远程 URL",
+      reason: "本地 stdio MCP（command 形态），xiongbao 只接远程 URL",
     });
   }
   return {
@@ -1510,7 +1513,7 @@ export function normalizeCapabilities(
   //
   // Two downloads of the same package whose `plugin.json` and agent documents match but whose
   // `SKILL.md` contents differ are one expert carrying two versions of its skills. Emitting both
-  // would clash on the agent id (a primary key in openbot); dropping one wholesale would lose the
+  // would clash on the agent id (a primary key in xiongbao); dropping one wholesale would lose the
   // differing instructions. So one copy produces the agent, and every copy's skills — twin copies
   // included — go into the skill-level content comparison, which is the layer that can actually
   // tell same-content from different-content.
@@ -1567,7 +1570,7 @@ export function normalizeCapabilities(
   dropped.push(...skillResult.dropped);
 
   // Step 3: agents and teams, which need the resolved skill slugs. Twin downloads emit nothing here:
-  // their agent identity is identical to the surviving copy's, and openbot's agent id is a primary key.
+  // their agent identity is identical to the surviving copy's, and xiongbao's agent id is a primary key.
   const agents: NormalizedAgent[] = [];
   const teams: NormalizedTeam[] = [];
   for (const pkg of agentPackages) {
@@ -1609,7 +1612,7 @@ export function normalizeCapabilities(
         kind: "connector",
         slug: raw.id,
         origin: raw.mcpJson.relativePath,
-        reason: `transport=${raw.transport}，openbot 只接远程 URL 的 MCP server`,
+        reason: `transport=${raw.transport}，xiongbao 只接远程 URL 的 MCP server`,
       });
       continue;
     }
@@ -1623,7 +1626,7 @@ export function normalizeCapabilities(
     }
   }
 
-  // Step 5: uniqueness. An agent id is a primary key in openbot, so a clash must stop the run.
+  // Step 5: uniqueness. An agent id is a primary key in xiongbao, so a clash must stop the run.
   const seenAgentIds = new Set<string>();
   for (const agent of agents) {
     if (seenAgentIds.has(agent.id)) {

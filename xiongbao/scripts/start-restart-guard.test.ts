@@ -54,7 +54,7 @@ async function runStartWithStaleServerProbe(
   }: Run = {},
 ) {
   const root =
-    await Bun.$`mktemp -d ${tmpdir()}/openbot-start-guard-XXXXXX`.text();
+    await Bun.$`mktemp -d ${tmpdir()}/xiongbao-start-guard-XXXXXX`.text();
   const directory = root.trim();
   const fakeBin = join(directory, "bin");
   const scripts = join(directory, "scripts");
@@ -80,7 +80,7 @@ async function runStartWithStaleServerProbe(
     "AGENT_TOOL_TOKEN=agent-tool-token",
     "MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui",
     "OPENBOT_ONE_COMPUTER_EACH=true",
-    "DATABASE_URL=postgres://openbot:openbot@localhost:5432/openbot",
+    "DATABASE_URL=postgres://openbot:openbot@localhost:5432/xiongbao",
   ].filter(
     (line) =>
       ![...omitFromEnv, ...Object.keys(settings)].some((key) =>
@@ -158,7 +158,7 @@ exit 1
   );
   await writeExecutable(
     join(fakeBin, "lsof"),
-    `#!/usr/bin/env bash\nif [[ "$*" == *"-d cwd"* ]]; then\n  printf 'p888\\nn/another/openbot\\n'\nelse\n  echo "p123"; echo "cbun"; echo "n*:3001"\nfi\n`,
+    `#!/usr/bin/env bash\nif [[ "$*" == *"-d cwd"* ]]; then\n  printf 'p888\\nn/another/xiongbao\\n'\nelse\n  echo "p123"; echo "cbun"; echo "n*:3001"\nfi\n`,
   );
   await writeExecutable(
     join(fakeBin, "curl"),
@@ -177,7 +177,7 @@ if [[ "$args" == *"/api/copilotkit/info"* ]]; then
   exit 0
 fi
 if [[ "$args" == *"http://localhost:3010/"* ]]; then
-  printf '<title>OpenBot</title>'
+  printf '<title>XiongBao</title>'
   exit 0
 fi
 exit 0
@@ -668,7 +668,7 @@ describe("start.sh owner URL", () => {
    * script starts run as the app role and must not inherit the owner.
    */
   test("only the Compose migration is handed the owner URL", async () => {
-    const owner = "postgres://openbot:owner-secret@localhost:5432/openbot";
+    const owner = "postgres://openbot:owner-secret@localhost:5432/xiongbao";
     const result = await runStartWithStaleServerProbe(401, {
       processEnvironment: { MIGRATION_DATABASE_URL: owner },
     });

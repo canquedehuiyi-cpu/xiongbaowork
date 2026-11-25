@@ -48,9 +48,9 @@ export async function withoutChartDefault<T>(
   path: string,
   use: (copy: string) => T | Promise<T>,
 ): Promise<T> {
-  const scratch = await mkdtemp(join(tmpdir(), "openbot-chart-"));
+  const scratch = await mkdtemp(join(tmpdir(), "xiongbao-chart-"));
   try {
-    const copy = join(scratch, "openbot");
+    const copy = join(scratch, "xiongbao");
     await cp(chart, copy, { recursive: true });
     const file = join(copy, "values.yaml");
     const values = parseDocument(await Bun.file(file).text());

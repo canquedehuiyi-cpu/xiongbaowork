@@ -133,7 +133,7 @@ export async function setupLearning(
   const envPath = resolve(directory, ".env");
   const original = await readFile(envPath, "utf8").catch(() => {
     throw new Error(
-      "Run this helper from the OpenBot root after copying .env.example to .env.",
+      "Run this helper from the XiongBao root after copying .env.example to .env.",
     );
   });
   const values = parseEnv(original);
@@ -221,7 +221,7 @@ export async function setupLearning(
   const selected = json(
     await readFile(projectPath, "utf8").catch(() => {
       throw new Error(
-        "Run npx --yes copilotkit@latest login and project select from the OpenBot root first.",
+        "Run npx --yes copilotkit@latest login and project select from the XiongBao root first.",
       );
     }),
   );
@@ -305,12 +305,12 @@ const RESULT_MESSAGES: Record<
   string
 > = {
   configured:
-    "Configured the selected project's openbot Learning container and OpenBot runtime key in .env. Saved Admin settings still take precedence.",
+    "Configured the selected project's openbot Learning container and XiongBao runtime key in .env. Saved Admin settings still take precedence.",
   preserved: "Preserved the existing Learning container assignment.",
   present:
-    "This runtime key's project has the openbot Learning container. OpenBot assigns it as the default on start unless Admin → Automatic Learning has a saved setting.",
+    "This runtime key's project has the openbot Learning container. XiongBao assigns it as the default on start unless Admin → Automatic Learning has a saved setting.",
   created:
-    "Created the openbot Learning container in this runtime key's project. OpenBot assigns it as the default on start unless Admin → Automatic Learning has a saved setting.",
+    "Created the openbot Learning container in this runtime key's project. XiongBao assigns it as the default on start unless Admin → Automatic Learning has a saved setting.",
 };
 
 /** What to run instead, for the Intelligence this checkout points at. */
@@ -349,7 +349,7 @@ if (import.meta.main) {
       error instanceof Error
         ? error.message
         : "Learning setup failed; no assignment was saved.";
-    // Run by scripts/start.sh, a failure here must not stop OpenBot starting: say it and move on.
+    // Run by scripts/start.sh, a failure here must not stop XiongBao starting: say it and move on.
     if (nonInteractive) console.log(`Automatic Learning: ${message}`);
     else {
       console.error(message);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * `bun run port:capabilities` — converts the WorkBuddy capabilities installed on this machine into the
- * fragments an openbot tenant package needs, plus the two reports a reviewer signs off on.
+ * fragments an xiongbao tenant package needs, plus the two reports a reviewer signs off on.
  *
  *   bun run port:capabilities -- --source ~/.workbuddy --only=l0 --out ./tmp/p1 [--verify]
  *

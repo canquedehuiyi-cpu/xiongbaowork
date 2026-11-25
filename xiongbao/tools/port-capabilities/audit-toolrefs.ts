@@ -1,5 +1,5 @@
 /**
- * Decides, per instruction body, whether the ported capability can still run on an openbot employee.
+ * Decides, per instruction body, whether the ported capability can still run on an xiongbao employee.
  *
  * This is a deliverable, not a by-product: "how much of the port actually works" is answered by this
  * table and by nothing else. Counting files would report 100% for a corpus where half the skills tell
@@ -260,7 +260,7 @@ function evaluateRule(
  * Judge one capability.
  *
  * `connectorIds` is the set of `connectors.yaml` ids. A `mcp__<server>__<tool>` reference is only a
- * problem when the server does not ship, because that reference is how openbot names a remote tool.
+ * problem when the server does not ship, because that reference is how xiongbao names a remote tool.
  */
 export function auditCapability(
   capability: AuditableCapability,

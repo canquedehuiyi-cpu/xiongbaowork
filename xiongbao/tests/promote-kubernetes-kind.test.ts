@@ -4,8 +4,8 @@
  * models, end to end.
  *
  * Opt-in, because it needs a cluster it may write to. Point it at a disposable one, for example:
- *   kind create cluster --name openbot-promotion --kubeconfig /tmp/openbot-kind.kubeconfig
- *   OPENBOT_KIND_KUBECONFIG=/tmp/openbot-kind.kubeconfig bun test tests/promote-kubernetes-kind.test.ts
+ *   kind create cluster --name xiongbao-promotion --kubeconfig /tmp/xiongbao-kind.kubeconfig
+ *   OPENBOT_KIND_KUBECONFIG=/tmp/xiongbao-kind.kubeconfig bun test tests/promote-kubernetes-kind.test.ts
  * It installs into its own namespace and deletes that namespace afterwards. The server image is
  * pulled by digest from Docker Hub.
  */
@@ -36,7 +36,7 @@ import { parseReleaseManifest } from "../shared/release-manifest";
 
 setDefaultTimeout(600_000);
 const kubeconfig = process.env.OPENBOT_KIND_KUBECONFIG;
-const namespace = `openbot-promotion-${randomBytes(3).toString("hex")}`;
+const namespace = `xiongbao-promotion-${randomBytes(3).toString("hex")}`;
 // oven/bun:1.4.3-slim, pinned. Any image with bun on its PATH would do.
 const image =
   "oven/bun@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288";
@@ -45,7 +45,7 @@ const [repository = "", digest = ""] = image.split("@");
 const SERVER = `Bun.serve({ port: 3001, fetch(request) {
   if (new URL(request.url).pathname !== "/release") return new Response("ok");
   return Response.json({ version: process.env.RELEASE, commit: process.env.COMMIT,
-    distributionId: "acme.openbot", repository: "acme/openbot", channel: "stable" });
+    distributionId: "acme.xiongbao", repository: "acme/xiongbao", channel: "stable" });
 } });`;
 const TEMPLATES = `apiVersion: apps/v1
 kind: Deployment
@@ -67,9 +67,9 @@ spec:
           command: ["bun", "-e", {{ .Files.Get "server.js" | quote }}]
           env:
             - name: RELEASE
-              valueFrom: { fieldRef: { fieldPath: "metadata.annotations['openbot.ai/release']" } }
+              valueFrom: { fieldRef: { fieldPath: "metadata.annotations['xiongbao.ai/release']" } }
             - name: COMMIT
-              valueFrom: { fieldRef: { fieldPath: "metadata.annotations['openbot.ai/source-commit']" } }
+              valueFrom: { fieldRef: { fieldPath: "metadata.annotations['xiongbao.ai/source-commit']" } }
           readinessProbe: { httpGet: { path: /health, port: 3001 }, periodSeconds: 1 }
 ---
 apiVersion: batch/v1
@@ -92,7 +92,7 @@ spec:
   jobTemplate: { spec: { template: { spec: { restartPolicy: Never, containers: [ { name: c, image: "${image}", command: ["true"] } ] } } } }
 `;
 
-const work = mkdtempSync(join(tmpdir(), "openbot-promotion-kind-"));
+const work = mkdtempSync(join(tmpdir(), "xiongbao-promotion-kind-"));
 let chart = "";
 const inherited = process.env.KUBECONFIG;
 const run = (command: string[]) => runCommand(command, { cwd: work });
@@ -102,11 +102,11 @@ const kubectl = (...args: string[]) =>
 describe.skipIf(!kubeconfig)("Kubernetes promotion on a real cluster", () => {
   beforeAll(async () => {
     process.env.KUBECONFIG = kubeconfig;
-    const source = join(work, "openbot-fixture");
+    const source = join(work, "xiongbao-fixture");
     mkdirSync(join(source, "templates"), { recursive: true });
     writeFileSync(
       join(source, "Chart.yaml"),
-      "apiVersion: v2\nname: openbot-fixture\nversion: 0.1.4\n",
+      "apiVersion: v2\nname: xiongbao-fixture\nversion: 0.1.4\n",
     );
     writeFileSync(
       join(source, "values.yaml"),
@@ -141,14 +141,14 @@ describe.skipIf(!kubeconfig)("Kubernetes promotion on a real cluster", () => {
   test.each(["true", "false"])(
     "a maintenance promotion (installed with --server-side=%s) resumes every CronJob and keeps --set values and the mirror",
     async (serverSide) => {
-      const release = `openbot-${serverSide === "true" ? "ssa" : "csa"}`;
+      const release = `xiongbao-${serverSide === "true" ? "ssa" : "csa"}`;
       const current = parseReleaseManifest(structuredClone(currentFixture));
       const candidate = parseReleaseManifest(structuredClone(targetFixture));
       current.artifacts.images.openbot = { reference: image };
       candidate.artifacts.images.openbot = { reference: image };
       candidate.artifacts.chart = {
         version: "0.1.4",
-        url: "https://github.com/acme/openbot/releases/download/v0.3.0/openbot-fixture.tgz",
+        url: "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao-fixture.tgz",
         sha256: createHash("sha256").update(readFileSync(chart)).digest("hex"),
       };
       // Installed through a registry mirror the manifest does not name, with --set values no
@@ -169,9 +169,9 @@ describe.skipIf(!kubeconfig)("Kubernetes promotion on a real cluster", () => {
         "--set",
         "server.replicaCount=3",
         "--set-string",
-        "server.podAnnotations.openbot\\.ai/release=v0.2.0",
+        "server.podAnnotations.xiongbao\\.ai/release=v0.2.0",
         "--set-string",
-        `server.podAnnotations.openbot\\.ai/source-commit=${current.source.commit}`,
+        `server.podAnnotations.xiongbao\\.ai/source-commit=${current.source.commit}`,
         "--wait",
         "--timeout",
         "300s",
@@ -183,8 +183,8 @@ describe.skipIf(!kubeconfig)("Kubernetes promotion on a real cluster", () => {
         current,
         candidate,
         policy: {
-          distributionId: "acme.openbot",
-          repository: "acme/openbot",
+          distributionId: "acme.xiongbao",
+          repository: "acme/xiongbao",
           channel: "stable",
         },
         namespace,

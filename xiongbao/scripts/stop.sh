@@ -65,13 +65,13 @@ green() { printf '\033[32m%s\033[0m\n' "$1"; }
 red()   { printf '\033[31m%s\033[0m\n' "$1"; }
 info()  { printf '\033[2m%s\033[0m\n' "$1"; }
 
-# Does whatever holds this port answer as OpenBot, rather than merely answer?
+# Does whatever holds this port answer as XiongBao, rather than merely answer?
 #
 # The same question start.sh asks before starting, asked here for the opposite reason. Starting on
 # an occupied port is a failed run; killing the occupant of a port is somebody else's editor server
 # gone. So a port holder is only killed once it has identified itself, and is otherwise named and
 # left alone.
-identifies_as_openbot() {
+identifies_as_xiongbao() {
   local port="$1" name="$2"
   case "$name" in
     server)
@@ -80,7 +80,7 @@ identifies_as_openbot() {
       ;;
     app)
       curl -fsS --max-time 3 "http://localhost:$port/" 2>/dev/null \
-        | grep -qi '<title>[^<]*OpenBot'
+        | grep -qi '<title>[^<]*XiongBao'
       ;;
   esac
 }
@@ -97,8 +97,8 @@ stop_port() {
     info "  $name: not running on $port"
     return 0
   fi
-  if ! identifies_as_openbot "$port" "$name"; then
-    red "  $name: port $port is held by something that is not OpenBot: $who"
+  if ! identifies_as_xiongbao "$port" "$name"; then
+    red "  $name: port $port is held by something that is not XiongBao: $who"
     red "  Left it alone. Stop it yourself if it is in the way."
     return 0
   fi
@@ -116,7 +116,7 @@ stop_port() {
 }
 
 echo
-echo "OpenBot"
+echo "XiongBao"
 echo "======="
 
 info "1/4  App"

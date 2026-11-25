@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 function fixture(manifest) {
-  const root = mkdtempSync(join(tmpdir(), "openbot-shards-"));
+  const root = mkdtempSync(join(tmpdir(), "xiongbao-shards-"));
   temporaryRoots.push(root);
   mkdirSync(join(root, "server/tests/support"), { recursive: true });
   mkdirSync(join(root, "scripts/ci"), { recursive: true });
