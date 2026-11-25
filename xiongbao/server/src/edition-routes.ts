@@ -20,7 +20,6 @@ export const PERSONAL_CLOSED_ROUTES: readonly RegExp[] = [
   "/api/admin/identity-providers",
   "/api/admin/enterprise",
   "/api/admin/proactive",
-  "/api/admin/learning",
   "/api/auth/scim",
   "/api/auth/sso",
 ].map((prefix) => new RegExp(`^${prefix}(?:/|$)`));

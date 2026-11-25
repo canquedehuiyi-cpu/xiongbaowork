@@ -107,7 +107,7 @@ const runtime = intelligence
   : new CopilotRuntime({ agents, runner: new InMemoryAgentRunner() });
 const app = createCopilotEndpointSingleRoute({
   runtime,
-  basePath: "/api/runtime",
+  basePath: "/api/copilotkit",
 });
 const server = Bun.serve({
   hostname: "127.0.0.1",

@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"86b12d27-49a5-4dc9-b023-2bd5c6412186\",\"runId\":\"d901b771-0984-4a2a-b054-7e41eee47e3d\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"bf38ccd3-73a8-41e9-b606-816c79a260a2\",\"role\":\"user\",\"content\":\"Reply with exactly five words about the sea. Call no tools.\"}]}}",
       "status": 200,

@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"019de807-9be7-4b41-8bc8-dcb36043f40e\",\"runId\":\"3c959610-7f32-4537-9058-71a110747ce2\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"0c9ea7bb-ec1c-4f06-a523-1eebfc10f773\",\"role\":\"user\",\"content\":\"What is the weather in Lisbon? Call lookupWeather once, then answer in one sentence.\"}]}}",
       "status": 200,
@@ -94,7 +94,7 @@
     },
     {
       "at": 2220,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"shopper\"},\"body\":{\"threadId\":\"1a20471b-d582-4433-b703-f05c3d0cb289\",\"runId\":\"9b53d353-a7c5-4d74-8bed-7293ed0b5980\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"07551a0e-2307-41d1-98bf-9cb959400eeb\",\"role\":\"user\",\"content\":\"Name one planet. One word only. Call no tools.\"}]}}",
       "status": 200,

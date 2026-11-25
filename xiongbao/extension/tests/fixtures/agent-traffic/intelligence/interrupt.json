@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"shopper\"},\"body\":{\"threadId\":\"5a638d2c-f692-4405-b230-b1f80f841a6e\",\"runId\":\"1bfcd48d-b221-4c95-8f66-b60dfc1ad0e7\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"c3271c9a-7846-46ea-be0e-564c3dff1f31\",\"role\":\"user\",\"content\":\"Buy one coffee for 4 dollars. Ask for approval with approvePurchase first.\"}]}}",
       "status": 200,
@@ -26,7 +26,7 @@
     },
     {
       "at": 1212,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"shopper\"},\"body\":{\"threadId\":\"5a638d2c-f692-4405-b230-b1f80f841a6e\",\"runId\":\"16606e8c-ce40-4276-820a-816d1b2ce382\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"c3271c9a-7846-46ea-be0e-564c3dff1f31\",\"role\":\"user\",\"content\":\"Buy one coffee for 4 dollars. Ask for approval with approvePurchase first.\"},{\"id\":\"32179a65-c990-450a-9005-2274ddcebb85\",\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call_tWsSMjCS0ltNdVhztaeiHqLZ\",\"type\":\"function\",\"function\":{\"name\":\"approvePurchase\",\"arguments\":\"{\\\"item\\\":\\\"coffee\\\",\\\"amount\\\":4}\"},\"metadata\":{\"cpki_event_id\":\"643ca3cb-84c2-4a8b-91ef-8cb143f69b4d\",\"cpki_event_seq\":12,\"cpki_ingested\":\"01a15b9e-0d9e-775a-a1f1-f6c5f06156f3\"}}]}],\"resume\":[{\"interruptId\":\"call_tWsSMjCS0ltNdVhztaeiHqLZ\",\"status\":\"resolved\",\"payload\":{\"approved\":true}}]}}",
       "status": 200,

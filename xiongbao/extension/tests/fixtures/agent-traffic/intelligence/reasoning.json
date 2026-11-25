@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 61,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"reasoner\"},\"body\":{\"threadId\":\"ae6c9cb8-d3d7-4f53-a2ef-9b1e8e477d70\",\"runId\":\"7f6d7aa1-1b96-4a38-b72b-6c8ffe8cd3a6\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"644cb2c1-e6a5-4f88-91bd-26698b014e58\",\"role\":\"user\",\"content\":\"Think it through first: what is 17 multiplied by 23? Call no tools, answer with the number.\"}]}}",
       "status": 200,

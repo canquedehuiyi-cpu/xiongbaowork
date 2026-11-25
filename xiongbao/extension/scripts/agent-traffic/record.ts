@@ -74,7 +74,7 @@ const port = await (async () => {
     if (ready) return Number(ready[1]);
   }
 })();
-const runtimeUrl = `http://127.0.0.1:${port}/api/runtime`;
+const runtimeUrl = `http://127.0.0.1:${port}/api/copilotkit`;
 
 // CopilotKitCore connects to its runtime only where a window exists, as in a page. Bun's own network and stream classes
 // stay, so the traffic is real HTTP and a real WebSocket.

@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 107,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"c7a614d3-30b8-421a-bf04-dabe8aa50112\",\"runId\":\"6bf37379-8515-4028-ad00-b7134924bd19\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"e3455955-980a-48f0-be63-1ea002b7dc66\",\"role\":\"user\",\"content\":\"Name three oceans, separated by commas. Call no tools.\"}]}}",
       "status": 200,
@@ -26,7 +26,7 @@
     },
     {
       "at": 3039,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/connect\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"c7a614d3-30b8-421a-bf04-dabe8aa50112\",\"runId\":\"2e9818b1-a3bb-4cf3-89cf-61cb54eb155b\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[],\"lastSeenEventId\":null}}",
       "status": 200,

@@ -799,7 +799,7 @@ async function recordRunFour(options: {
     kind: "runtime",
     tabId: 7,
     at: runFour.pageAt,
-    url: "http://127.0.0.1:7620/api/runtime",
+    url: "http://127.0.0.1:7620/api/copilotkit",
   };
   const timeline: Due[] = [
     { at: runFour.pageAt, observation: loaded },

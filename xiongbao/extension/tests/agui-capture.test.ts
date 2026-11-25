@@ -709,9 +709,9 @@ test("CopilotKit's runtime info call, answered by CopilotKit's runtime, is known
       ),
   );
   expect(found).toEqual([
-    'single-route-sse: POST /api/runtime-learning {"method":"info"}',
-    "rest-sse: GET /api/runtime/info ",
-    'intelligence-websocket: POST /api/runtime-learning {"method":"info"}',
+    'single-route-sse: POST /api/copilotkit-learning {"method":"info"}',
+    "rest-sse: GET /api/copilotkit/info ",
+    'intelligence-websocket: POST /api/copilotkit-learning {"method":"info"}',
   ]);
 });
 

@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"6231e72d-6539-481a-9a91-9e25e3672111\",\"runId\":\"3d3db537-abcf-4287-9904-2326e2f0be78\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"4f0d40e5-0046-41da-b714-581857d09139\",\"role\":\"user\",\"content\":\"Name one planet. One word only. Call no tools.\"}]}}",
       "status": 200,
@@ -26,7 +26,7 @@
     },
     {
       "at": 950,
-      "url": "http://127.0.0.1:4000/api/runtime",
+      "url": "http://127.0.0.1:4000/api/copilotkit",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"6231e72d-6539-481a-9a91-9e25e3672111\",\"runId\":\"c418130f-5e4c-467b-9f06-834545018abb\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"4f0d40e5-0046-41da-b714-581857d09139\",\"role\":\"user\",\"content\":\"Name one planet. One word only. Call no tools.\"},{\"id\":\"msg_07bfedc5a9f7d6e9006ad7f738714887d08dc4798185fb6926\",\"role\":\"assistant\",\"content\":\"Mars\",\"metadata\":{\"cpki_event_id\":\"6700e4f4-5642-43bc-ba40-89ab2e2a3e6a\",\"cpki_event_seq\":4,\"cpki_ingested\":\"01a15b9d-b56a-7ab1-89bd-f74854326321\"}},{\"id\":\"13cd312f-4078-4140-b316-b9904423f2f3\",\"role\":\"user\",\"content\":\"Name another one. One word only. Call no tools.\"}]}}",
       "status": 200,
