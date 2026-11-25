@@ -121,6 +121,7 @@ tests/bot-access-your-apps.test.tsx
 tests/bot-activity-actions.test.tsx
 tests/bot-app-grants-screen.test.tsx
 tests/bot-approval-rules.test.tsx
+tests/bot-browser.test.tsx
 tests/bot-creator-slug.test.ts
 tests/bot-id-never-shown.test.tsx
 tests/bot-manage.test.tsx
