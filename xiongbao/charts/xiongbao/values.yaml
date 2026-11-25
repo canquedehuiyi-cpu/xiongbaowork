@@ -619,7 +619,7 @@ database:
   # migration fails with `no pg_hba.conf entry for host ... no encryption`, which names the host and
   # the user and not the actual problem.
   #
-  #   postgres://user:password@host:5432/xiongbao?sslmode=require
+  #   postgres://user:password@host:5432/openbot?sslmode=require
   #
   # Keep it in a Secret rather than here: `url` is readable by anybody who can read the release.
   #
@@ -637,8 +637,8 @@ database:
   # only login allowed to write identity roles, and the API role above may only read them. Two URLs,
   # two roles, two passwords, as in the delivery manual's external-database section:
   #
-  #   url:           postgres://openbot_app:<password>@host:5432/xiongbao?sslmode=require
-  #   roleWriterUrl: postgres://openbot_role_writer:<other password>@host:5432/xiongbao?sslmode=require
+  #   url:           postgres://openbot_app:<password>@host:5432/openbot?sslmode=require
+  #   roleWriterUrl: postgres://openbot_role_writer:<other password>@host:5432/openbot?sslmode=require
   #
   # Set both roles' passwords yourself after the first migration (the migration's are public).
   # Only the API server reads it; the migrations Job and the sweeps do not get it. With the bundled
@@ -698,7 +698,7 @@ postgresql:
     # so create the extension once as the administrative role and grant the migrating role ownership
     # of it. `CREATE EXTENSION IF NOT EXISTS` then passes for an ordinary user.
     username: postgres
-    database: xiongbao
+    database: openbot
     # OPTIONAL. Left empty, this chart generates one into the Secret below, once, reads it back on
     # every upgrade and keeps it on uninstall, because PostgreSQL takes its password at first boot
     # only and the volume outlives the release. Set it to choose the password yourself.

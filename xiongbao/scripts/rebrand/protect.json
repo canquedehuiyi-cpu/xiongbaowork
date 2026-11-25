@@ -1757,5 +1757,17 @@
     "pattern": "startsWith\\(\"OpenBot \"\\)|`OpenBot …`",
     "until": "R3",
     "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）；agent-mastra 按这个前缀把服务器的条目与调用方的分开"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/values.yaml",
+    "pattern": "database: openbot\\b|5432/openbot\\?",
+    "until": "R4",
+    "reason": "持久卷上的已有库，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/README.md",
+    "pattern": "5432/openbot\\?",
+    "until": "R4",
+    "reason": "持久卷上的已有库，R4 基线化时改"
   }
 ]
