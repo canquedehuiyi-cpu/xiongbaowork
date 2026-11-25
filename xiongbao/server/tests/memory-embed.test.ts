@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
   cosine,
-  embedText,
   embeddingConfigOf,
+  embedText,
   embedTexts,
 } from "../src/memory/embed";
-import { rankMemories } from "../src/memory/rank";
-import { createMemoryVectors, MAX_NEW_PER_CALL } from "../src/memory/vectors";
 import type {
   EmbeddingStore,
   StoredEmbedding,
 } from "../src/memory/embeddings-store";
+import { rankMemories } from "../src/memory/rank";
+import { createMemoryVectors, MAX_NEW_PER_CALL } from "../src/memory/vectors";
 
 const config = {
   baseUrl: "https://embed.example.test/v1",
@@ -227,22 +227,6 @@ describe("the vectors of one pick", () => {
     calls.inputs.length = 0;
     await make("m2").vectorsFor(memories, "q");
     expect(calls.inputs).toEqual([["q", "alpha", "beta"]]);
-  });
-
-  test("a memory only the back end holds is embedded for this pick and not stored", async () => {
-    const { rows, store } = memoryStore();
-    const { fetchImpl } = service(vectorOf);
-    const vectors = createMemoryVectors({
-      store,
-      config: () => config,
-      embed: { fetchImpl },
-    });
-    const picked = await vectors.vectorsFor(
-      [{ id: "remote-1", content: "only remote", formedBy: "intelligence" }],
-      "q",
-    );
-    expect(picked?.byId.get("remote-1")).toEqual([11, 1]);
-    expect(rows.size).toBe(0);
   });
 
   test("no service, a failing service, or no message: null, so the caller ranks by words", async () => {

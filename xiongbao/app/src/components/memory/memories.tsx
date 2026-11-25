@@ -189,18 +189,13 @@ function MemoryRow({
     enabled?: boolean;
     reviewState?: "confirmed";
   }) => save.mutate({ id: memory.id, input });
-  // Intelligence keeps only the words of a memory it holds for this person, so it can be edited or
-  // forgotten here but not paused or reviewed.
-  const heldByIntelligence = memory.formedBy === "intelligence";
-  const status = heldByIntelligence
-    ? "保存在后端"
-    : !memory.enabled
-      ? "已停用"
-      : memory.formedBy === "bot"
-        ? `由 ${botName} 记下${memory.reviewState === "unreviewed" ? " · 待复核" : ""}`
-        : memory.reviewState === "unreviewed"
-          ? "导入的 · 待复核"
-          : "已复核";
+  const status = !memory.enabled
+    ? "已停用"
+    : memory.formedBy === "bot"
+      ? `由 ${botName} 记下${memory.reviewState === "unreviewed" ? " · 待复核" : ""}`
+      : memory.reviewState === "unreviewed"
+        ? "导入的 · 待复核"
+        : "已复核";
   return (
     <Item size="sm">
       <ItemMedia variant="icon">
@@ -267,17 +262,15 @@ function MemoryRow({
           </p>
         )}
       </ItemContent>
-      {heldByIntelligence ? null : (
-        <ItemActions>
-          {/* Binary and immediate: Bots stop or start using it when switched. */}
-          <Switch
-            aria-label={`使用这条记忆：${clip(memory.content)}`}
-            checked={memory.enabled}
-            disabled={save.isPending}
-            onCheckedChange={(enabled) => update({ enabled })}
-          />
-        </ItemActions>
-      )}
+      <ItemActions>
+        {/* Binary and immediate: Bots stop or start using it when switched. */}
+        <Switch
+          aria-label={`使用这条记忆：${clip(memory.content)}`}
+          checked={memory.enabled}
+          disabled={save.isPending}
+          onCheckedChange={(enabled) => update({ enabled })}
+        />
+      </ItemActions>
       {editing ? (
         <EditMemoryDialog
           memory={memory}

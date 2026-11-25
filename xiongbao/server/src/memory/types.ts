@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { englishName } from "../brand";
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 export const memoryInputSchema = z
@@ -42,15 +41,6 @@ export class MemoryRefusedError extends Error {
     this.name = "MemoryRefusedError";
   }
 }
-/** Intelligence holds this memory and cannot be reached right now. The local store cannot stand in. */
-export class MemoryUnavailableError extends Error {
-  constructor() {
-    super(
-      `This memory is kept in ${englishName()}'s back end, which cannot be reached right now. Try again.`,
-    );
-    this.name = "MemoryUnavailableError";
-  }
-}
 export class MemoryNotFoundError extends Error {
   constructor() {
     super("This memory could not be found.");
@@ -84,20 +74,14 @@ export type MemoryRecord = MemoryInput & {
   externalId: string | null;
   importDigest: string | null;
   reviewState: "unreviewed" | "confirmed" | "edited";
-  /**
-   * Who formed it. `intelligence` is a memory CopilotKit Intelligence holds for this person that no
-   * XiongBao row describes, formed by another app on the same project or by Intelligence itself. It
-   * is never stored in XiongBao's table, only read back from Intelligence.
-   */
-  formedBy: "person" | "import" | "bot" | "intelligence";
+  /** Who formed it. */
+  formedBy: "person" | "import" | "bot";
   formedByAgentId: string | null;
   sourceApp: string | null;
   sourceRef: string | null;
   sourceLink: string | null;
   observedAt: Date | null;
   deletedAt: Date | null;
-  intelligenceMemoryId: string | null;
-  intelligenceDigest: string | null;
   createdAt: Date;
   updatedAt: Date;
 };

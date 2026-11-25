@@ -10,10 +10,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
-  fireEvent,
   render,
-  waitFor,
-  within,
 } from "@testing-library/react";
 import { MemoryCard, memoryStatus } from "@/components/memory/memory-screen";
 import type { MemoryRecord } from "@/lib/memory";
@@ -103,9 +100,6 @@ test("状态行说出记忆是谁记下的、复核到哪一步", () => {
   expect(memoryStatus({ ...bot, reviewState: "confirmed" }, "分析师")).toBe(
     "由 分析师 记下",
   );
-  expect(memoryStatus(memory({ formedBy: "intelligence" }), "")).toBe(
-    "保存在后端",
-  );
   expect(memoryStatus(memory({ enabled: false }), "")).toBe("已停用");
   expect(
     memoryStatus(memory({ formedBy: "import", reviewState: "unreviewed" }), ""),
@@ -124,35 +118,4 @@ test("员工记下的记忆写出那位员工的名字", async () => {
   // Its own review and switch are there.
   expect(view.getByRole("button", { name: "确认" })).toBeTruthy();
   expect(view.getByRole("button", { name: "停用" })).toBeTruthy();
-});
-
-test("Intelligence 持有的记忆只有「保存」和「忘掉」，没有停用和确认", async () => {
-  const view = draw(
-    memory({ id: "held", formedBy: "intelligence", reviewState: "unreviewed" }),
-  );
-  const card = view.container.querySelector("article") as HTMLElement;
-  expect(within(card).getByText("保存在后端")).toBeTruthy();
-  const buttons = within(card)
-    .getAllByRole("button")
-    .map((button) => button.textContent);
-  expect(buttons).toEqual(["保存", "忘掉"]);
-
-  // What it does offer still works: an edit is a PATCH of its words, forgetting is a DELETE.
-  fireEvent.change(within(card).getByRole("textbox"), {
-    target: { value: "我偏好下午开会。" },
-  });
-  fireEvent.click(within(card).getByRole("button", { name: "保存" }));
-  fireEvent.click(within(card).getByRole("button", { name: "忘掉" }));
-  await waitFor(() =>
-    expect(sent).toEqual(
-      expect.arrayContaining([
-        {
-          method: "PATCH",
-          path: "/api/memory/held",
-          body: { content: "我偏好下午开会。" },
-        },
-        { method: "DELETE", path: "/api/memory/held" },
-      ]),
-    ),
-  );
 });

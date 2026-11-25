@@ -443,7 +443,6 @@ import { createEmbeddingStore } from "./memory/embeddings-store";
 import { createMemoryExtractor, memoryExtractEnabled } from "./memory/extract";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryRuntime } from "./memory/runtime";
-import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
 import { createMemoryVectors } from "./memory/vectors";
@@ -2824,18 +2823,8 @@ await startupLifecycle.run(async (startup) => {
   // grant, the policy and the audit row are exactly where they were. Host-folder tools are also
   // server-dispatched: the selected Bot and the signed-in owner are bound here, then the desktop worker
   // receives only opaque grant ids and relative paths.
-  // Memory lives in CopilotKit Intelligence when this deployment is connected and entitled to it, and in
-  // XiongBao's own tables when it is not; see memory/store.ts.
-  const personalMemoryStore = createMemoryStore(
-    database,
-    intelligenceClient
-      ? {
-          intelligence: createIntelligenceMemory({
-            client: intelligenceClient,
-          }),
-        }
-      : {},
-  );
+  // A person's memory, in XiongBao's own tables; see memory/store.ts.
+  const personalMemoryStore = createMemoryStore(database);
   // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
   const knowledgeStore = createKnowledgeStore(database);
   /*
@@ -2990,7 +2979,6 @@ await startupLifecycle.run(async (startup) => {
         ),
     },
     ingestion: memoryIngestion,
-    store: personalMemoryStore,
   });
   startup.acquireSync(
     () => repeatAfterEach(memoryRuntime.sweep, 60_000),

@@ -42,14 +42,12 @@ beforeAll(async () => {
       .values({ id: owner, email: `${owner}@example.test` }),
   );
   await asOwner(async () => {
-    await database
-      .insert(agents)
-      .values({
-        id: bot,
-        name: "Memory Bot",
-        type: "built_in",
-        configuration: {},
-      });
+    await database.insert(agents).values({
+      id: bot,
+      name: "Memory Bot",
+      type: "built_in",
+      configuration: {},
+    });
     await database.insert(agentProfiles).values({
       agentId: bot,
       ownerUserId: owner,
