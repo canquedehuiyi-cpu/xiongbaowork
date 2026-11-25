@@ -21,7 +21,7 @@ describe("hasHostPermission", () => {
   });
 
   test("is false when only a single origin is granted", async () => {
-    fake.permissions.granted.add("https://openbot.example.test/*");
+    fake.permissions.granted.add("https://xiongbao.example.test/*");
     expect(await hasHostPermission()).toBe(false);
   });
 

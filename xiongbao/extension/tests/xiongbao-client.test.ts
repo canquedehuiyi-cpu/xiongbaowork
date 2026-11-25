@@ -1,18 +1,18 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
-  OpenBotError,
-  openbotJson,
-  openbotRaw,
-} from "../src/shared/openbot-client";
+  XiongBaoError,
+  xiongbaoJson,
+  xiongbaoRaw,
+} from "../src/shared/xiongbao-client";
 
 type Seen = { auth: string | null; cookie: string | null; method: string };
 let seen: Seen | null = null;
 
-async function failure(path: string): Promise<OpenBotError> {
+async function failure(path: string): Promise<XiongBaoError> {
   try {
-    await openbotJson({ openbotUrl, token: "t" }, path);
+    await xiongbaoJson({ openbotUrl, token: "t" }, path);
   } catch (error) {
-    if (error instanceof OpenBotError) return error;
+    if (error instanceof XiongBaoError) return error;
     throw error;
   }
   throw new Error(`${path} did not fail`);
@@ -74,7 +74,7 @@ afterAll(() => {
 });
 
 test("sends the bearer, no cookie, and parses JSON", async () => {
-  const result = await openbotJson<{ echoed: unknown }>(
+  const result = await xiongbaoJson<{ echoed: unknown }>(
     { openbotUrl, token: "obr_t" },
     "/ok",
   );
@@ -84,18 +84,22 @@ test("sends the bearer, no cookie, and parses JSON", async () => {
 });
 
 test("sends no Authorization header without a token and posts a JSON body", async () => {
-  const result = await openbotJson<{ echoed: unknown }>({ openbotUrl }, "/ok", {
-    method: "POST",
-    body: { a: 1 },
-  });
+  const result = await xiongbaoJson<{ echoed: unknown }>(
+    { openbotUrl },
+    "/ok",
+    {
+      method: "POST",
+      body: { a: 1 },
+    },
+  );
   expect(result).toEqual({ echoed: { a: 1 } });
   expect(seen?.auth).toBeNull();
   expect(seen?.method).toBe("POST");
 });
 
-test("throws OpenBotError with the status and the server's message on a 4xx", async () => {
+test("throws XiongBaoError with the status and the server's message on a 4xx", async () => {
   const error = await failure("/bad");
-  expect(error).toBeInstanceOf(OpenBotError);
+  expect(error).toBeInstanceOf(XiongBaoError);
   expect(error.status).toBe(400);
   expect(error.message).toBe("Bad batch.");
   expect(error.body).toEqual({ error: "Bad batch." });
@@ -110,22 +114,22 @@ test("signedOut is true only for a 401 carrying RECORDER_SIGNED_OUT", async () =
   expect(identity.status).toBe(401);
   expect(identity.signedOut).toBe(false);
   const plain = await failure("/plain-401");
-  expect(plain).toBeInstanceOf(OpenBotError);
+  expect(plain).toBeInstanceOf(XiongBaoError);
   expect(plain.body).toBeNull();
   expect(plain.signedOut).toBe(false);
 });
 
 test("refuses a redirect", async () => {
   await expect(
-    openbotJson({ openbotUrl, token: "t" }, "/redirect"),
+    xiongbaoJson({ openbotUrl, token: "t" }, "/redirect"),
   ).rejects.toThrow();
   await expect(
-    openbotRaw({ openbotUrl, token: "t" }, "/redirect", {}),
+    xiongbaoRaw({ openbotUrl, token: "t" }, "/redirect", {}),
   ).rejects.toThrow();
 });
 
-test("openbotRaw returns the response unparsed and adds the bearer", async () => {
-  const response = await openbotRaw({ openbotUrl, token: "obr_t" }, "/bad", {
+test("xiongbaoRaw returns the response unparsed and adds the bearer", async () => {
+  const response = await xiongbaoRaw({ openbotUrl, token: "obr_t" }, "/bad", {
     method: "PUT",
   });
   expect(response.status).toBe(400);
@@ -134,7 +138,7 @@ test("openbotRaw returns the response unparsed and adds the bearer", async () =>
 });
 
 test("a 204 answer with no body resolves to undefined", async () => {
-  const result = await openbotJson<void>(
+  const result = await xiongbaoJson<void>(
     { openbotUrl, token: "obr_t" },
     "/no-content",
     { method: "DELETE" },
@@ -169,8 +173,8 @@ async function recordFetch(
 test("every request goes out with credentials omit and redirect error, whatever the caller passes", async () => {
   const target = { openbotUrl, token: "obr_t" };
   const { inits } = await recordFetch(async () => {
-    await openbotJson(target, "/ok");
-    await openbotRaw(target, "/ok", {
+    await xiongbaoJson(target, "/ok");
+    await xiongbaoRaw(target, "/ok", {
       credentials: "include",
       redirect: "follow",
     });
@@ -182,13 +186,13 @@ test("every request goes out with credentials omit and redirect error, whatever 
   }
 });
 
-test("refuses a path that leaves OpenBot's origin before any request is made", async () => {
+test("refuses a path that leaves XiongBao's origin before any request is made", async () => {
   const target = { openbotUrl, token: "obr_t" };
   for (const path of ["https://evil.test/x", "//evil.test/x"]) {
     let rejected = false;
     const { urls } = await recordFetch(async () => {
       try {
-        await openbotJson(target, path);
+        await xiongbaoJson(target, path);
       } catch {
         rejected = true;
       }
@@ -198,11 +202,11 @@ test("refuses a path that leaves OpenBot's origin before any request is made", a
   }
 });
 
-test("openbotRaw rejects rather than throws when it refuses a path", async () => {
+test("xiongbaoRaw rejects rather than throws when it refuses a path", async () => {
   for (const path of ["https://evil.test/x", "//evil.test/x"]) {
     let rejected = false;
     const { urls } = await recordFetch(async () => {
-      const pending = openbotRaw({ openbotUrl, token: "obr_t" }, path, {});
+      const pending = xiongbaoRaw({ openbotUrl, token: "obr_t" }, path, {});
       await expect(pending).rejects.toThrow();
       rejected = true;
     });
@@ -211,10 +215,10 @@ test("openbotRaw rejects rather than throws when it refuses a path", async () =>
   }
 });
 
-test("openbotRaw rejects rather than throws on an unparseable OpenBot URL", async () => {
+test("xiongbaoRaw rejects rather than throws on an unparseable XiongBao URL", async () => {
   let rejected = false;
   await recordFetch(async () => {
-    const pending = openbotRaw({ openbotUrl: "not a url" }, "/x", {});
+    const pending = xiongbaoRaw({ openbotUrl: "not a url" }, "/x", {});
     await expect(pending).rejects.toThrow();
     rejected = true;
   });

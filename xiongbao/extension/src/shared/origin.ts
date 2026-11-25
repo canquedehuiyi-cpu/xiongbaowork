@@ -1,5 +1,5 @@
-// The OpenBot address rule and the gateway rule live beside the Recorder's API in shared/, so OpenBot itself checks an
-// address with the same rule before it hands one to the Recorder (the OpenBot browser's connection, the capture pass's
+// The XiongBao address rule and the gateway rule live beside the Recorder's API in shared/, so XiongBao itself checks an
+// address with the same rule before it hands one to the Recorder (the XiongBao browser's connection, the capture pass's
 // gateway).
 export {
   isAllowedGatewayUrl,

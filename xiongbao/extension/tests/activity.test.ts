@@ -1,7 +1,7 @@
-// What the Recorder tells OpenBot it is recording (the Browser button's red dot), end to end through the Recorder's own
+// What the Recorder tells XiongBao it is recording (the Browser button's red dot), end to end through the Recorder's own
 // code: the real service worker (connection, recording, router, setup, launcher) and the real offscreen document side
-// by side over a fake OpenBot and Intelligence, on the test's clock, for a connection the popup records with and one
-// an OpenBot browser's launcher made. Every report is read as OpenBot's route reads it (`recorderActivitySchema`).
+// by side over a fake XiongBao and Intelligence, on the test's clock, for a connection the popup records with and one
+// a XiongBao browser's launcher made. Every report is read as XiongBao's route reads it (`recorderActivitySchema`).
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import {
   RECORDER_SIGNED_OUT,
@@ -46,7 +46,7 @@ const POPUP = { url: `chrome-extension://${EXTENSION_ID}/popup.html` };
 const ada = { id: "p1", name: "Ada", email: "ada@example.test" };
 const ORDER = "http://127.0.0.1:7420/orders/1043";
 const DESKTOP_TOKEN = "obr_desktop-connection";
-const LAUNCHER_TOKEN = "obr_openbot-browser";
+const LAUNCHER_TOKEN = "obr_xiongbao-browser";
 const SIGNED_OUT =
   "This browser was disconnected from XiongBao Work. Your recording stopped, and everything in it is kept in this browser for 7 days, until you connect again.";
 
@@ -64,13 +64,13 @@ async function until(check: () => boolean | Promise<boolean>, label: string) {
   }
 }
 
-// ---- The fake OpenBot -------------------------------------------------------------------------
+// ---- The fake XiongBao -------------------------------------------------------------------------
 
 let gateway: FakeGateway;
 let liveTokens = new Set<string>();
-/** Every report OpenBot's activity route received, with the bearer it came with. */
+/** Every report XiongBao's activity route received, with the bearer it came with. */
 let reports: { token: string; body: RecorderActivity }[] = [];
-/** How OpenBot's activity route answers: as it should (204), signed out (401), refusing the report (400, or 415 for a
+/** How XiongBao's activity route answers: as it should (204), signed out (401), refusing the report (400, or 415 for a
  * body that is not JSON), broken, or never. */
 let activityAnswer:
   | "ok"
@@ -91,7 +91,7 @@ const signedOut = () =>
   );
 
 async function activity(request: Request, token: string): Promise<Response> {
-  // OpenBot's route takes only what the contract types: anything else would be a 400 there.
+  // XiongBao's route takes only what the contract types: anything else would be a 400 there.
   reports.push({
     token,
     body: recorderActivitySchema.parse(await request.json()),
@@ -233,7 +233,7 @@ const launcher = () =>
     LAUNCHER_GLOBAL
   ] as LauncherApi;
 
-/** A connection OpenBot Desktop made for the person's own browser, as the popup records with it. */
+/** A connection XiongBao Desktop made for the person's own browser, as the popup records with it. */
 function connectedThroughDesktop(): void {
   liveTokens.add(DESKTOP_TOKEN);
   fake.storage.local.set("connection", {
@@ -324,7 +324,7 @@ afterEach(async () => {
   }
 }, 15_000);
 
-test("a recording made from the popup tells OpenBot what it records: each phase, every 30 s with the actions so far, then idle", async () => {
+test("a recording made from the popup tells XiongBao what it records: each phase, every 30 s with the actions so far, then idle", async () => {
   connectedThroughDesktop();
   // Connected and idle, nothing changes: nothing is reported.
   await advanceTo(clock + 3 * ACTIVITY_REPORT_MS);
@@ -341,7 +341,7 @@ test("a recording made from the popup tells OpenBot what it records: each phase,
     startedAt,
     actions: 0,
   });
-  // Starting comes first when OpenBot hears it before the recording is live; either way it is never heard after.
+  // Starting comes first when XiongBao hears it before the recording is live; either way it is never heard after.
   expect(phases().filter((phase) => phase !== "starting")[0]).toBe("recording");
 
   // The person archives the order; the next report, 30 s on, carries it.
@@ -392,7 +392,7 @@ test("once the test closes its document, a stream it had open never asks for a p
   const realFetch = globalThis.fetch;
   globalThis.fetch = ((input: Parameters<typeof fetch>[0], init) => {
     const url = input instanceof Request ? input.url : String(input);
-    // This test's own OpenBot only: another file's leftovers are not this file's to answer for.
+    // This test's own XiongBao only: another file's leftovers are not this file's to answer for.
     if (url.startsWith(gateway.httpUrl)) asked.push(url);
     return realFetch(input, init);
   }) as typeof fetch;
@@ -408,7 +408,7 @@ test("once the test closes its document, a stream it had open never asks for a p
   expect(asked.length).toBeLessThanOrEqual(1);
 }, 15_000);
 
-test("an OpenBot browser's connection reports too, with the bearer its launcher handed in, and Start over reports the new recording", async () => {
+test("a XiongBao browser's connection reports too, with the bearer its launcher handed in, and Start over reports the new recording", async () => {
   expect(
     await launcher().connect({
       connection: {
@@ -445,12 +445,12 @@ test("an OpenBot browser's connection reports too, with the bearer its launcher 
   );
 }, 20_000);
 
-test("OpenBot answering a report signed out ends the recording as any sign-out does, everything kept for its person", async () => {
+test("XiongBao answering a report signed out ends the recording as any sign-out does, everything kept for its person", async () => {
   connectedThroughDesktop();
   await recordFromPopup("Archive order 1043");
   await until(() => last()?.phase === "recording", "the recording reported");
 
-  // OpenBot revoked this browser: the next report hears it (the connection check, 30 s apart too, still says ok).
+  // XiongBao revoked this browser: the next report hears it (the connection check, 30 s apart too, still says ok).
   activityAnswer = "signed-out";
   await advanceTo(clock + ACTIVITY_REPORT_MS);
   await until(async () => (await state()).phase === "idle", "the stop");
@@ -465,7 +465,7 @@ test("OpenBot answering a report signed out ends the recording as any sign-out d
   ).toMatchObject({ waitingForReconnect: true });
 }, 20_000);
 
-test("a report OpenBot cannot take, or never answers, holds up and fails nothing: Record, the 30 s reports and Stop go on", async () => {
+test("a report XiongBao cannot take, or never answers, holds up and fails nothing: Record, the 30 s reports and Stop go on", async () => {
   connectedThroughDesktop();
   activityAnswer = "error";
   await recordFromPopup("Archive order 1043");
@@ -476,7 +476,7 @@ test("a report OpenBot cannot take, or never answers, holds up and fails nothing
   const before = reports.length;
   await advanceTo(clock + ACTIVITY_REPORT_MS);
   await until(() => reports.length > before, "the 30 s report sent");
-  // Stop answers at once though OpenBot is still holding the report.
+  // Stop answers at once though XiongBao is still holding the report.
   const stopping = page({ type: "page.stop" });
   expect(await stopping).toEqual({ ok: true });
   expect((await state()).phase).toBe("idle");
@@ -485,7 +485,7 @@ test("a report OpenBot cannot take, or never answers, holds up and fails nothing
   });
 }, 20_000);
 
-test("a report OpenBot refuses as malformed (400, 415) is said in the worker's console and stops nothing: the next one still goes", async () => {
+test("a report XiongBao refuses as malformed (400, 415) is said in the worker's console and stops nothing: the next one still goes", async () => {
   connectedThroughDesktop();
   const said: unknown[][] = [];
   const spy = spyOn(console, "error").mockImplementation((...args) => {

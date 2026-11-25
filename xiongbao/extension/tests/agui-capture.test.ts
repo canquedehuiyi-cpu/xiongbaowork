@@ -37,7 +37,7 @@ import {
 import { type ChromeFake, installChromeFake } from "./support/chrome-fake";
 
 const TAB = 7;
-const OPENBOT = "https://openbot.example.test";
+const XIONGBAO = "https://xiongbao.example.test";
 
 let fake: ChromeFake;
 let capture: NetworkCapture;
@@ -47,8 +47,8 @@ let runtimes: AgentRuntimeInfo[] = [];
 let calls: StepCall[] = [];
 let started: string[] = [];
 let steps: StepAssembler | null = null;
-/** The OpenBot the recording is connected to: a test recording OpenBot's own page names it. */
-let openbot = OPENBOT;
+/** The XiongBao the recording is connected to: a test recording XiongBao's own page names it. */
+let xiongbao = XIONGBAO;
 
 const fallback: PageFallback = {
   start: async () => false,
@@ -65,10 +65,10 @@ beforeEach(() => {
   calls = [];
   started = [];
   steps = null;
-  openbot = OPENBOT;
+  xiongbao = XIONGBAO;
   capture = createNetworkCapture(
     {
-      openbotUrl: () => openbot,
+      openbotUrl: () => xiongbao,
       call: (call) => {
         calls.push(call);
         steps?.call(call);
@@ -436,12 +436,12 @@ test("CopilotKit through Intelligence: each run answers with its channel, and th
   );
 });
 
-test("a recording made in OpenBot itself sees its chat's runs, as on any other site, and none of OpenBot's other calls", async () => {
-  // Run 3b of the end-to-end check, recorded again over CDP: OpenBot's chat posts connect, then run, to its own
+test("a recording made in XiongBao itself sees its chat's runs, as on any other site, and none of XiongBao's other calls", async () => {
+  // Run 3b of the end-to-end check, recorded again over CDP: XiongBao's chat posts connect, then run, to its own
   // CopilotKit runtime, and joins the Thread's channel on Intelligence's socket with the credentials connect answered.
-  const fixture = loadFixture("openbot-chat");
+  const fixture = loadFixture("xiongbao-chat");
   const navigate = String(marks(fixture, "navigate")[0]?.data?.url);
-  openbot = new URL(navigate).origin;
+  xiongbao = new URL(navigate).origin;
   await capture.start(TAB, navigate);
   await replay(fake, TAB, fixture).run();
 
@@ -474,8 +474,8 @@ test("a recording made in OpenBot itself sees its chat's runs, as on any other s
     expect.objectContaining({ kind: "end", outcome: "failed" }),
   ]);
   expect((run.body as { threadId: string }).threadId).toBe(thread);
-  // OpenBot's other calls (its router, the channel, its busy flag and activity, its polling) and its own channel socket
-  // are nothing to the agent events, and none of OpenBot's calls is ever a step's.
+  // XiongBao's other calls (its router, the channel, its busy flag and activity, its polling) and its own channel socket
+  // are nothing to the agent events, and none of XiongBao's calls is ever a step's.
   expect(new Set(observations.map(({ streamId }) => streamId))).toEqual(
     new Set([streamOf(connect.id), streamOf(run.id)]),
   );
@@ -483,13 +483,13 @@ test("a recording made in OpenBot itself sees its chat's runs, as on any other s
   expect(started).toEqual([]);
 });
 
-test("a recording made in OpenBot itself knows its page runs CopilotKit: its runtime answered the info call, and nothing else OpenBot answered says so", async () => {
-  // End-to-end run 3's clicks named no Thread at all: OpenBot's page asked its runtime's `info` (GET
+test("a recording made in XiongBao itself knows its page runs CopilotKit: its runtime answered the info call, and nothing else XiongBao answered says so", async () => {
+  // End-to-end run 3's clicks named no Thread at all: XiongBao's page asked its runtime's `info` (GET
   // /api/copilotkit/info, answered with CopilotKit's RuntimeInfo) when it loaded and again after the run, but the capture
-  // ignored it with the rest of OpenBot's own calls.
-  const fixture = loadFixture("openbot-chat");
+  // ignored it with the rest of XiongBao's own calls.
+  const fixture = loadFixture("xiongbao-chat");
   const navigate = String(marks(fixture, "navigate")[0]?.data?.url);
-  openbot = new URL(navigate).origin;
+  xiongbao = new URL(navigate).origin;
   await capture.start(TAB, navigate);
   await replay(fake, TAB, fixture).run();
 
@@ -515,9 +515,9 @@ test("a recording made in OpenBot itself knows its page runs CopilotKit: its run
   expect(started).toEqual([]);
 });
 
-test("an Intelligence gateway served on OpenBot's own origin: the channel's socket is followed, its events the run's", async () => {
-  // The traffic of the Intelligence test above, with the gateway's origin as the connected OpenBot's, as a deployment
-  // that serves Intelligence's socket on OpenBot's host has it: the sockets opened with join credentials are followed,
+test("an Intelligence gateway served on XiongBao's own origin: the channel's socket is followed, its events the run's", async () => {
+  // The traffic of the Intelligence test above, with the gateway's origin as the connected XiongBao's, as a deployment
+  // that serves Intelligence's socket on XiongBao's host has it: the sockets opened with join credentials are followed,
   // and each channel's ag_ui_event payloads are still that run's events.
   const fixture = loadFixture("intelligence-websocket");
   const sockets = events(fixture, "Network.webSocketCreated").filter(
@@ -526,7 +526,7 @@ test("an Intelligence gateway served on OpenBot's own origin: the channel's sock
   );
   const [socket] = sockets;
   if (!socket) throw new Error("no Intelligence socket");
-  openbot = new URL(String(socket.params.url).replace(/^ws/, "http")).origin;
+  xiongbao = new URL(String(socket.params.url).replace(/^ws/, "http")).origin;
   await capture.start(TAB, String(marks(fixture, "navigate")[0]?.data?.url));
   await replay(fake, TAB, fixture).run();
   const ids = new Set(sockets.map(({ params }) => params.requestId));

@@ -142,7 +142,7 @@ test("the notice sits above the page, fixed bottom-right, and removes itself", (
   expect(document.querySelector(NOTICE_TAG)).toBeNull();
 });
 
-test("the notice's colours are OpenBot's", () => {
+test("the notice's colours are XiongBao's", () => {
   const css = readFileSync(
     join(import.meta.dir, "../../app/src/theme.css"),
     "utf8",

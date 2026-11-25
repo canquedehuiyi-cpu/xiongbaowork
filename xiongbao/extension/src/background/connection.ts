@@ -14,10 +14,9 @@ import type {
   PageToBackground,
 } from "../protocol/messages";
 import { defaultBrowserName } from "../shared/browser-name";
-import { OpenBotError, openbotJson } from "../shared/openbot-client";
 import { normaliseXiongBaoOrigin } from "../shared/origin";
 import {
-  allowsOpenBot,
+  allowsXiongBao,
   onPolicyChanged,
   type RecorderPolicy,
   readPolicy,
@@ -34,6 +33,7 @@ import {
   writeLocal,
   writeSession,
 } from "../shared/storage";
+import { XiongBaoError, xiongbaoJson } from "../shared/xiongbao-client";
 import type { DesktopHandoff, DesktopRefusal } from "./native-host";
 import {
   askDesktopForHandoff,
@@ -41,9 +41,9 @@ import {
   desktopAvailable,
 } from "./native-host";
 
-/** A connection that ended without the person's Disconnect, for the recording controller (index.ts wires it in): OpenBot
+/** A connection that ended without the person's Disconnect, for the recording controller (index.ts wires it in): XiongBao
  * answered the keep-alive signed out (nothing is forgotten yet), the organization's policy moved the Recorder away from
- * the connection's OpenBot (it is forgotten already), or a connection to another OpenBot, or for another person,
+ * the connection's XiongBao (it is forgotten already), or a connection to another XiongBao, or for another person,
  * replaced it (`endReplaced`: it is replaced already, and its token is revoked once the controller has stopped using
  * it). */
 export type ConnectionLoss =
@@ -58,14 +58,14 @@ export type ConnectionLoss =
 type ConnectionDeps = {
   askDesktop: () => Promise<DesktopHandoff | DesktopRefusal | null>;
   desktopAvailable: () => Promise<boolean>;
-  /** OpenBot Desktop's own OpenBot address, as its native host confirms it (native-host.ts `desktopAddress`). */
+  /** XiongBao Desktop's own XiongBao address, as its native host confirms it (native-host.ts `desktopAddress`). */
   desktopAddress: () => Promise<string | null>;
   readPolicy: () => Promise<RecorderPolicy>;
   openTab: (url: string) => Promise<number | undefined>; // the new tab's id, kept in pendingConnect.tabId
   /** Stops what the lost connection still has running: the live recording and whatever the document sends with its
    * token. Without the recording controller (a test of this module alone), a sign-out only forgets the connection. */
   connectionLost: (loss: ConnectionLoss) => Promise<void>;
-  /** What an approved Connect does next, for the connection OpenBot Desktop made at install (index.ts wires in the
+  /** What an approved Connect does next, for the connection XiongBao Desktop made at install (index.ts wires in the
    * recording controller's): a recording of this person goes on under the new token, and their kept recordings are
    * sent. The popup's own Desktop connect reaches it through the router, as an approved Connect does. */
   connected: () => Promise<void>;
@@ -77,8 +77,8 @@ const OUT_OF_DATE =
 const POLICY_REFUSED =
   "Your organization's Recorder policy does not allow this XiongBao Work. Ask your IT team.";
 /**
- * What the Connect page says when OpenBot did not take the code, by what OpenBot answered. Always the Recorder's own
- * sentence and never the text in OpenBot's answer: the site that asked to connect is any site at all until the person
+ * What the Connect page says when XiongBao did not take the code, by what XiongBao answered. Always the Recorder's own
+ * sentence and never the text in XiongBao's answer: the site that asked to connect is any site at all until the person
  * approves it, and the Connect page is the Recorder's own, so a sentence from that site's server would speak in the
  * Recorder's voice (telling the person to install something, say).
  */
@@ -96,15 +96,15 @@ const AWAITING_CONFIRMATION: ExternalResponse = {
   ok: true,
   awaitingConfirmation: true,
 };
-/** Web connects one OpenBot origin may ask for in any ten minutes: enough that an ordinary run (connect, connect again,
+/** Web connects one XiongBao origin may ask for in any ten minutes: enough that an ordinary run (connect, connect again,
  * again after a Disconnect or a revoke, a retry or two) never meets it, while a page asking over and over is held off. */
 const CONNECT_WINDOW_MS = 10 * 60 * 1000;
 const CONNECT_LIMIT = 10;
 const KEEP_ALIVE_ALARM = "recorder-session-keepalive";
 const KEEP_ALIVE_PERIOD_MINUTES = 720;
 const KEEP_ALIVE_PERIOD_MS = KEEP_ALIVE_PERIOD_MINUTES * 60 * 1000;
-/** How long OpenBot Desktop's code waits on its exchange. It runs in the connect queue (see `serially`), so a local OpenBot
- * that never answers must not hold every connect behind it. A trusted OpenBot's page waits as long for its own. */
+/** How long XiongBao Desktop's code waits on its exchange. It runs in the connect queue (see `serially`), so a local XiongBao
+ * that never answers must not hold every connect behind it. A trusted XiongBao's page waits as long for its own. */
 const DESKTOP_EXCHANGE_WAIT_MS = 10_000;
 
 const defaultDeps: ConnectionDeps = {
@@ -146,7 +146,7 @@ export function installConnection(deps?: Partial<ConnectionDeps>): void {
   chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason !== "install") return;
     await installSecret();
-    // A Recorder OpenBot Desktop put in this browser connects as it installs, with nothing to click.
+    // A Recorder XiongBao Desktop put in this browser connects as it installs, with nothing to click.
     const answer = await connectThroughDesktop(resolved, { install: true });
     if (answer.connected)
       await resolved
@@ -174,16 +174,16 @@ async function scheduleKeepAlive(deps: ConnectionDeps): Promise<void> {
     await keepAlive(deps);
 }
 
-/** Keeps the organization session in use (Decision 2). Only a signed-out answer changes anything: OpenBot being
+/** Keeps the organization session in use (Decision 2). Only a signed-out answer changes anything: XiongBao being
  * unreachable, or an organization's sign-in server that cannot answer, waits for the next alarm. A signed-out answer
  * goes to the recording controller, which forgets the connection and stops what it still has running. */
 async function keepAlive(deps: ConnectionDeps): Promise<void> {
   const connection = await currentConnection();
   if (!connection) return;
   try {
-    await openbotJson<RecorderMe>(connection, recorderPaths.me);
+    await xiongbaoJson<RecorderMe>(connection, recorderPaths.me);
   } catch (error) {
-    if (error instanceof OpenBotError && error.signedOut)
+    if (error instanceof XiongBaoError && error.signedOut)
       await deps.connectionLost({
         kind: "signed-out",
         reason: error.body?.reason ?? "revoked",
@@ -270,9 +270,9 @@ export async function handleConnectionMessage(
     case "page.disconnect": {
       const connection = await currentConnection();
       if (connection) {
-        // Best effort: the token is forgotten here either way, and the person can revoke it in OpenBot.
+        // Best effort: the token is forgotten here either way, and the person can revoke it in XiongBao.
         await revoke(connection);
-        // A reconnect approved while OpenBot was being told is a newer connection, and stays.
+        // A reconnect approved while XiongBao was being told is a newer connection, and stays.
         await forgetConnection("disconnected", connection.token);
       }
       return { ok: true };
@@ -293,13 +293,13 @@ async function approve(
 ): Promise<PageResponse> {
   if (!pending) return { ok: false, error: "There is nothing to connect." };
   // The policy may have changed since this connect page opened: a pin elsewhere, or a policy gone invalid, refuses it.
-  if (!allowsOpenBot(await deps.readPolicy(), pending.origin)) {
+  if (!allowsXiongBao(await deps.readPolicy(), pending.origin)) {
     await clearPendingConnect(pending);
     return { ok: false, error: POLICY_REFUSED };
   }
   let exchanged: ExchangeResponse;
   try {
-    exchanged = await openbotJson<ExchangeResponse>(
+    exchanged = await xiongbaoJson<ExchangeResponse>(
       { openbotUrl: pending.origin },
       recorderPaths.connections,
       {
@@ -311,12 +311,12 @@ async function approve(
       },
     );
   } catch (error) {
-    // The Recorder's own sentence for what OpenBot answered (EXCHANGE_REFUSED), or a plain one: a network failure's
+    // The Recorder's own sentence for what XiongBao answered (EXCHANGE_REFUSED), or a plain one: a network failure's
     // message ("Failed to fetch") means nothing here.
     return {
       ok: false,
       error:
-        error instanceof OpenBotError
+        error instanceof XiongBaoError
           ? (EXCHANGE_REFUSED[error.status] ?? EXCHANGE_FAILED)
           : UNREACHABLE,
     };
@@ -329,10 +329,10 @@ async function approve(
     via: pending.via,
     connectedAt: Date.now(),
   };
-  // Checked again in the job that stores it: a pin that landed during the exchange keeps it out, and the token OpenBot
+  // Checked again in the job that stores it: a pin that landed during the exchange keeps it out, and the token XiongBao
   // just made is revoked there. The connection it replaces is read in the same job.
   const stored = await serially(async () => {
-    if (!allowsOpenBot(await deps.readPolicy(), pending.origin)) return null;
+    if (!allowsXiongBao(await deps.readPolicy(), pending.origin)) return null;
     const replaced = await currentConnection();
     await writeLocal("connection", connection);
     return { replaced };
@@ -351,11 +351,11 @@ async function approve(
 
 /**
  * What a connection that replaced another does about the one it replaced (`previous`, read in the queued job that stored
- * `next`). The same person on the same OpenBot is this copy connecting again: OpenBot revoked the old token itself at the
+ * `next`). The same person on the same XiongBao is this copy connecting again: XiongBao revoked the old token itself at the
  * exchange (one live connection per person and install id), and a recording of theirs goes on under the new token
- * (`connected`, then the recording controller's adoptConnection). Another person, or another OpenBot, lost their
+ * (`connected`, then the recording controller's adoptConnection). Another person, or another XiongBao, lost their
  * connection: the recording controller stops what still runs with its token and keeps everything for them, as a
- * sign-out keeps it (`connectionLost`), then the old token is revoked at its own OpenBot, so no live token is left that
+ * sign-out keeps it (`connectionLost`), then the old token is revoked at its own XiongBao, so no live token is left that
  * this browser no longer holds. In that order, so nothing still sending with the old token meets its revocation first.
  */
 async function endReplaced(
@@ -381,11 +381,11 @@ async function endReplaced(
  * The connection the Recorder's launcher hands it (launcher.ts), stored as an approved Connect stores one: checked
  * against the policy in the same queued job that writes it, the signed-out notice gone with it. Nothing pending is
  * asked about, so nothing is shown: the Recorder's own setup tab and a Connect page its install opened on its own are
- * closed, since a browser OpenBot opened needs neither. Resolves false when the policy keeps it out.
+ * closed, since a browser XiongBao opened needs neither. Resolves false when the policy keeps it out.
  *
- * OpenBot Desktop's native host answers in an OpenBot browser's profile too, so on its first launch the install's own
+ * XiongBao Desktop's native host answers in a XiongBao browser's profile too, so on its first launch the install's own
  * Desktop connect can land just before the launcher's connection. The one it replaces is revoked: this browser needs
- * none, and OpenBot would otherwise go on counting it as a browser of the person's own that OpenBot Desktop connected.
+ * none, and XiongBao would otherwise go on counting it as a browser of the person's own that XiongBao Desktop connected.
  */
 export async function connectFromLauncher(
   connection: ConnectionRecord,
@@ -396,7 +396,7 @@ export async function connectFromLauncher(
   let stored: { replaced: ConnectionRecord | null } | null;
   try {
     stored = await serially(async () => {
-      if (!allowsOpenBot(await resolved.readPolicy(), connection.openbotUrl))
+      if (!allowsXiongBao(await resolved.readPolicy(), connection.openbotUrl))
         return null;
       const replaced = await currentConnection();
       await writeLocal("connection", connection);
@@ -425,7 +425,7 @@ export async function connectFromLauncher(
 }
 
 /** A decision clears only the pending connect it read when it arrived. Approve's exchange runs outside the queue, so
- * a connect never waits on OpenBot's answer, and a decision can wait in the queue behind a connect or Desktop's
+ * a connect never waits on XiongBao's answer, and a decision can wait in the queue behind a connect or Desktop's
  * connect: either way another origin may have replaced the pending connect by now, and that newer one, with its open
  * tab, is left alone. The check and the clear are one queued job, so no connect lands between them. A Cancel is kept
  * for the origin that asked, so its page hears it (`connectStatus`). */
@@ -468,7 +468,7 @@ async function closeConnectTab(tabId: number | undefined): Promise<void> {
   }
 }
 
-/** openbot.ping and openbot.connect from OpenBot's web page. The origin is only ever the one Chrome reports. */
+/** xiongbao.ping and xiongbao.connect from XiongBao's web page. The origin is only ever the one Chrome reports. */
 export async function handleExternalConnect(
   message: ExternalToBackground,
   sender: chrome.runtime.MessageSender,
@@ -476,31 +476,31 @@ export async function handleExternalConnect(
 ): Promise<ExternalResponse> {
   const resolved = withDefaults(deps);
   const origin = sender.origin;
-  if (message.type === "openbot.ping") return ping(origin);
+  if (message.type === "xiongbao.ping") return ping(origin);
   if (message.type === RECORDER_CONNECT_STATUS) return connectStatus(origin);
-  if (message.type !== "openbot.connect")
+  if (message.type !== "xiongbao.connect")
     return { ok: false, error: "invalid" };
   if (!origin) return { ok: false, error: "invalid" };
   const checked = normaliseXiongBaoOrigin(origin);
   if (!checked.ok) return { ok: false, error: "not-https" };
 
   const policy = await resolved.readPolicy();
-  if (policy.openbotUrlInvalid) return { ok: false, error: "policy-invalid" };
+  if (policy.xiongbaoUrlInvalid) return { ok: false, error: "policy-invalid" };
   if (policy.openbotUrl && !sameOrigin(policy.openbotUrl, checked.origin))
     return { ok: false, error: "pinned-elsewhere" };
 
-  // Counted before anything else is done for it. Asking OpenBot Desktop for its address starts its native host, which
-  // looks for OpenBot's own port with lsof or netstat, and any page on a loopback port can ask to connect: counted
+  // Counted before anything else is done for it. Asking XiongBao Desktop for its address starts its native host, which
+  // looks for XiongBao's own port with lsof or netstat, and any page on a loopback port can ask to connect: counted
   // after, a page asking over and over had the Recorder start that host as often as it liked.
   const throttled = await serially(() =>
     countConnect(checked.origin, Date.now()),
   );
   if (throttled) return throttled;
 
-  // A trusted OpenBot connects with no Connect page, and only while this browser is connected to nothing: replacing a
-  // connection (to another OpenBot, or for another person) always asks the person on the Connect page, which names the
-  // connection it replaces. Every other site keeps the one Connect click. Only an http origin can be OpenBot Desktop's
-  // (its local stack serves plain http on a loopback address), so only then is OpenBot Desktop asked for its address.
+  // A trusted XiongBao connects with no Connect page, and only while this browser is connected to nothing: replacing a
+  // connection (to another XiongBao, or for another person) always asks the person on the Connect page, which names the
+  // connection it replaces. Every other site keeps the one Connect click. Only an http origin can be XiongBao Desktop's
+  // (its local stack serves plain http on a loopback address), so only then is XiongBao Desktop asked for its address.
   if ((await currentConnection()) === null) {
     const desktop =
       policy.openbotUrl !== checked.origin &&
@@ -514,13 +514,13 @@ export async function handleExternalConnect(
 }
 
 /**
- * Which `openbot.connect` the Recorder takes with no Connect page (shared/recorder-page.ts, David 2026-10-22: "only for
- * trusted OpenBots"): one from the OpenBot the organization's policy pins (`policy-pinned`), or from OpenBot Desktop's
- * own address on this computer (`loopback-desktop`). OpenBot Desktop's address is `desktop`, the one its native host
+ * Which `xiongbao.connect` the Recorder takes with no Connect page (shared/recorder-page.ts, David 2026-10-22: "only for
+ * trusted XiongBaos"): one from the XiongBao the organization's policy pins (`policy-pinned`), or from XiongBao Desktop's
+ * own address on this computer (`loopback-desktop`). XiongBao Desktop's address is `desktop`, the one its native host
  * confirmed (native-host.ts `desktopAddress`), and only that exact origin is trusted: any program on this computer, a
  * dev server or a notebook among them, can serve a page on a loopback port, so a loopback origin alone proves nothing.
- * https on a loopback IP is never OpenBot Desktop's local stack, which serves plain http. Null for every other origin,
- * for one the policy does not allow, and for every loopback origin when OpenBot Desktop confirmed none.
+ * https on a loopback IP is never XiongBao Desktop's local stack, which serves plain http. Null for every other origin,
+ * for one the policy does not allow, and for every loopback origin when XiongBao Desktop confirmed none.
  */
 export function trustedConnectRule(
   policy: RecorderPolicy,
@@ -528,7 +528,7 @@ export function trustedConnectRule(
   desktop: string | null,
 ): TrustedConnectRule | null {
   const checked = normaliseXiongBaoOrigin(origin);
-  if (!checked.ok || !allowsOpenBot(policy, checked.origin)) return null;
+  if (!checked.ok || !allowsXiongBao(policy, checked.origin)) return null;
   if (policy.openbotUrl === checked.origin) return "policy-pinned";
   if (new URL(checked.origin).protocol !== "http:" || desktop === null)
     return null;
@@ -563,8 +563,8 @@ async function countConnect(
 }
 
 /**
- * A trusted OpenBot's connect (`trustedConnectRule`), with no Connect page: the person is already in that OpenBot,
- * signed in, asking, and this browser is connected to nothing. Otherwise it is what an approved Connect is, as OpenBot
+ * A trusted XiongBao's connect (`trustedConnectRule`), with no Connect page: the person is already in that XiongBao,
+ * signed in, asking, and this browser is connected to nothing. Otherwise it is what an approved Connect is, as XiongBao
  * Desktop's connect is: counted against the same limit (by `handleExternalConnect`, first); its code exchanged at the origin Chrome reported, under this
  * copy's install id for it and the browser's own name; the connection stored in a queued job that checks the policy
  * again and that nothing was connected meanwhile (a token either keeps out is revoked: a connection that landed during
@@ -579,7 +579,7 @@ async function trustedConnect(
 ): Promise<ExternalResponse> {
   let exchanged: ExchangeResponse;
   try {
-    exchanged = await openbotJson<ExchangeResponse>(
+    exchanged = await xiongbaoJson<ExchangeResponse>(
       { openbotUrl: origin },
       recorderPaths.connections,
       {
@@ -595,9 +595,9 @@ async function trustedConnect(
     return {
       ok: false,
       error:
-        error instanceof OpenBotError
+        error instanceof XiongBaoError
           ? "exchange-refused"
-          : "openbot-unreachable",
+          : "xiongbao-unreachable",
     };
   }
   const connection: ConnectionRecord = {
@@ -609,7 +609,7 @@ async function trustedConnect(
     connectedAt: Date.now(),
   };
   const kept = await serially(async (): Promise<ExternalResponse | null> => {
-    if (!allowsOpenBot(await deps.readPolicy(), origin))
+    if (!allowsXiongBao(await deps.readPolicy(), origin))
       return { ok: false, error: "pinned-elsewhere" };
     if ((await currentConnection()) !== null)
       return { ok: false, error: "busy" };
@@ -686,7 +686,7 @@ async function webConnect(
  * hears "Could not establish connection. Receiving end does not exist." (Chromium's message_service.cc does that on
  * purpose, so a page it refuses cannot tell), while a page an installed extension lets in hears an answer, or "The
  * message port closed before a response was received." when it gives none (both seen in Chrome 151). The Recorder lets
- * in every page, since any OpenBot, at any address, may ask to connect: silence would hide nothing, and OpenBot's own
+ * in every page, since any XiongBao, at any address, may ask to connect: silence would hide nothing, and XiongBao's own
  * page, which a Recorder not yet connected to it must answer, would be left reading Chrome's error text.
  */
 async function ping(origin: string | undefined): Promise<ExternalResponse> {
@@ -718,7 +718,7 @@ async function connectStatus(
       connect: (await tabIsOpen(pending.tabId)) ? "waiting" : "closed",
     };
   // A Cancel is news only while a page could still be waiting on it: within the five minutes a request lasts, and before
-  // that origin connected by any other way (a trusted OpenBot's connect, OpenBot Desktop's). It was kept for the whole
+  // that origin connected by any other way (a trusted XiongBao's connect, XiongBao Desktop's). It was kept for the whole
   // browser session, and only a new web connect from the same origin took it away.
   const cancelled = await readSession("cancelledConnect");
   if (cancelled?.origin !== checked.origin)
@@ -741,10 +741,10 @@ function sameOrigin(raw: string, origin: string): boolean {
   return checked.ok && checked.origin === origin;
 }
 
-/** Best effort: OpenBot revokes the token (the person can also revoke it in OpenBot). */
+/** Best effort: XiongBao revokes the token (the person can also revoke it in XiongBao). */
 async function revoke(connection: ConnectionRecord): Promise<void> {
   try {
-    await openbotJson(connection, recorderPaths.currentConnection, {
+    await xiongbaoJson(connection, recorderPaths.currentConnection, {
       method: "DELETE",
     });
   } catch {
@@ -760,8 +760,8 @@ async function revoke(connection: ConnectionRecord): Promise<void> {
 async function reconcilePolicy(deps: ConnectionDeps): Promise<void> {
   const policy = await deps.readPolicy();
   const connection = await currentConnection();
-  if (!connection || allowsOpenBot(policy, connection.openbotUrl)) return;
-  const moved = policy.openbotUrlInvalid ? "" : (policy.openbotUrl ?? "");
+  if (!connection || allowsXiongBao(policy, connection.openbotUrl)) return;
+  const moved = policy.xiongbaoUrlInvalid ? "" : (policy.openbotUrl ?? "");
   if (!(await forgetConnection("disconnected", connection.token))) return;
   await writeLocal("notice", {
     kind: "policy-moved",
@@ -772,19 +772,19 @@ async function reconcilePolicy(deps: ConnectionDeps): Promise<void> {
   await revoke(connection);
 }
 
-/** Whether OpenBot Desktop connected this browser, or why not, as a code the popup turns into a sentence: OpenBot
+/** Whether XiongBao Desktop connected this browser, or why not, as a code the popup turns into a sentence: XiongBao
  * Desktop's own error code (see DesktopRefusal); `policy-invalid`, `pinned-elsewhere` or `invalid-address` from the
- * checks here; `exchange-refused` or `openbot-unreachable` when OpenBot did not take Desktop's code; or `launched` when
+ * checks here; `exchange-refused` or `xiongbao-unreachable` when XiongBao did not take Desktop's code; or `launched` when
  * the Recorder's launcher connects this browser instead (an install's own connect only). */
 export type DesktopConnect =
   | { connected: true }
   | { connected: false; reason: string };
 
 /**
- * Connects this browser through OpenBot Desktop's native host, with no Connect page: the code comes from OpenBot Desktop
+ * Connects this browser through XiongBao Desktop's native host, with no Connect page: the code comes from XiongBao Desktop
  * on this computer, which only the Recorder can ask (the host answers only the Recorder's own extension origin), so
- * there is no web page's request to confirm. The checks are a web connect's (OpenBot's address rule and the
- * organization's policy), and the rest is what an approved Connect does: the code is exchanged at that OpenBot under
+ * there is no web page's request to confirm. The checks are a web connect's (XiongBao's address rule and the
+ * organization's policy), and the rest is what an approved Connect does: the code is exchanged at that XiongBao under
  * this copy's install id, the connection is stored in a queued job that checks the policy again (a token it keeps out
  * is revoked), and the signed-out notice goes. The caller then does an approved Connect's follow-up (`connected`).
  *
@@ -807,7 +807,7 @@ async function desktopConnect(
     connected: false,
     reason,
   });
-  // An OpenBot browser's launcher connected it, or is connecting it (`connectFromLauncher`): the connect an install
+  // A XiongBao browser's launcher connected it, or is connecting it (`connectFromLauncher`): the connect an install
   // makes on its own would put a second connection in a browser that needs none. Asked before Desktop is asked, and
   // again before the connection is stored, since on a first launch the launcher's connection arrives while Desktop
   // answers. The person's own choice from the popup is left alone.
@@ -817,7 +817,7 @@ async function desktopConnect(
       (await currentConnection())?.via === "openbot-browser");
   if (await launched()) return refused("launched");
   const policy = await deps.readPolicy();
-  if (policy.openbotUrlInvalid) return refused("policy-invalid");
+  if (policy.xiongbaoUrlInvalid) return refused("policy-invalid");
   if (policy.openbotUrl && !policy.openbotUrl.startsWith("http:"))
     return refused("pinned-elsewhere");
   const handoff = await deps.askDesktop();
@@ -825,12 +825,12 @@ async function desktopConnect(
   if ("error" in handoff) return refused(handoff.error);
   const checked = normaliseXiongBaoOrigin(handoff.openbotUrl);
   if (!checked.ok) return refused("invalid-address");
-  if (!allowsOpenBot(policy, checked.origin))
+  if (!allowsXiongBao(policy, checked.origin))
     return refused("pinned-elsewhere");
   if (await launched()) return refused("launched");
   let exchanged: ExchangeResponse;
   try {
-    exchanged = await openbotJson<ExchangeResponse>(
+    exchanged = await xiongbaoJson<ExchangeResponse>(
       { openbotUrl: checked.origin },
       recorderPaths.connections,
       {
@@ -844,9 +844,9 @@ async function desktopConnect(
     );
   } catch (error) {
     return refused(
-      error instanceof OpenBotError
+      error instanceof XiongBaoError
         ? "exchange-refused"
-        : "openbot-unreachable",
+        : "xiongbao-unreachable",
     );
   }
   const connection: ConnectionRecord = {
@@ -857,11 +857,11 @@ async function desktopConnect(
     via: "desktop",
     connectedAt: Date.now(),
   };
-  // This job is the queued one that stores it: the launcher's connection, or a pin elsewhere, that came while OpenBot
-  // answered keeps it out, and the token OpenBot just made is revoked.
+  // This job is the queued one that stores it: the launcher's connection, or a pin elsewhere, that came while XiongBao
+  // answered keeps it out, and the token XiongBao just made is revoked.
   const keptOut = (await launched())
     ? "launched"
-    : !allowsOpenBot(await deps.readPolicy(), checked.origin)
+    : !allowsXiongBao(await deps.readPolicy(), checked.origin)
       ? "pinned-elsewhere"
       : null;
   if (keptOut) {

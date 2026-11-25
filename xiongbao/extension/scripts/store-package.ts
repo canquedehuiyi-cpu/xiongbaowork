@@ -30,6 +30,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { type Zippable, zipSync } from "fflate";
+import { RECORDER_NAME } from "../src/shared/brand";
 import { verifyDist } from "./verify-dist";
 
 export const CHROME_PACKAGE = "chrome-web-store.zip";
@@ -252,7 +253,7 @@ async function main() {
     writeFileSync(path.join(outDir, EDGE_PACKAGE), made.edge);
     console.log(
       [
-        `OpenBot Recorder ${made.version}, ${made.files} files, id ${made.id}${made.id === RECORDER_EXTENSION_ID ? " (the Recorder's fixed id)" : ""}`,
+        `${RECORDER_NAME} ${made.version}, ${made.files} files, id ${made.id}${made.id === RECORDER_EXTENSION_ID ? " (the Recorder's fixed id)" : ""}`,
         `${path.join(outDir, CHROME_PACKAGE)}: no manifest key, ${KEY_FILE} at its root (${made.chrome.length} bytes)`,
         `${path.join(outDir, EDGE_PACKAGE)}: no manifest key, no key file (${made.edge.length} bytes)`,
       ].join("\n"),

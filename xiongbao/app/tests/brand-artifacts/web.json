@@ -228,24 +228,6 @@
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
   },
   {
-    "word": "openbot-unreachable",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.connect",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.ping",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
     "word": "openbot/",
     "category": "peer-protocol",
     "plan": "keep",

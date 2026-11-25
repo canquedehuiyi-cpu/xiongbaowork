@@ -46,7 +46,7 @@ async function until(check: () => boolean | Promise<boolean>, label: string) {
   }
 }
 
-// ---- The fake OpenBot and Intelligence --------------------------------------------------------
+// ---- The fake XiongBao and Intelligence --------------------------------------------------------
 
 let gateway: FakeGateway;
 function route(request: Request): Response | null {
@@ -160,7 +160,7 @@ function startWorker() {
     acceptPageNetworkEvent: () => null,
     readPolicy: async () => ({
       openbotUrl: null,
-      openbotUrlInvalid: false,
+      xiongbaoUrlInvalid: false,
       allowedIntelligenceUrls: null,
     }),
     hasHostPermission: async () => true,

@@ -6,13 +6,13 @@ import {
 } from "../src/shared/origin";
 
 test("accepts an HTTPS origin, with or without the trailing slash", () => {
-  expect(normaliseXiongBaoOrigin("https://openbot.example.test")).toEqual({
+  expect(normaliseXiongBaoOrigin("https://xiongbao.example.test")).toEqual({
     ok: true,
-    origin: "https://openbot.example.test",
+    origin: "https://xiongbao.example.test",
   });
-  expect(normaliseXiongBaoOrigin("https://openbot.example.test/")).toEqual({
+  expect(normaliseXiongBaoOrigin("https://xiongbao.example.test/")).toEqual({
     ok: true,
-    origin: "https://openbot.example.test",
+    origin: "https://xiongbao.example.test",
   });
 });
 
@@ -29,7 +29,7 @@ test("accepts HTTP only on a loopback address with a port", () => {
 });
 
 test("refuses HTTP to any other host and says HTTPS is needed", () => {
-  const result = normaliseXiongBaoOrigin("http://openbot.example.test");
+  const result = normaliseXiongBaoOrigin("http://xiongbao.example.test");
   expect(result.ok).toBe(false);
   if (!result.ok) expect(result.reason).toContain("HTTPS");
   expect(normaliseXiongBaoOrigin("http://localhost:3000").ok).toBe(false);

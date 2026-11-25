@@ -45,7 +45,7 @@ function stateResponse(
     ok: true,
     state: { ...IDLE_STATE, ...state },
     connection: {
-      openbotUrl: "https://openbot.example.test",
+      openbotUrl: "https://xiongbao.example.test",
       user: { name: "Ada Lovelace", email: "ada@example.test" },
       via: "web",
     },
@@ -70,7 +70,7 @@ function setup(response: PageStateResponse) {
 
 test("shows the address, the person and how it connected", async () => {
   const { findByText, getByText } = setup(stateResponse());
-  await findByText("https://openbot.example.test");
+  await findByText("https://xiongbao.example.test");
   expect(getByText("Ada Lovelace")).toBeTruthy();
   expect(
     getByText(/Connected from XiongBao Work in your browser/),
@@ -80,11 +80,11 @@ test("shows the address, the person and how it connected", async () => {
 test("shows the pinned address as set by the organization", async () => {
   const { findByText, getAllByText } = setup(
     stateResponse({
-      policy: { openbotUrl: "https://openbot.example.test", invalid: false },
+      policy: { openbotUrl: "https://xiongbao.example.test", invalid: false },
     }),
   );
   await findByText("Set by your organization");
-  expect(getAllByText("https://openbot.example.test").length).toBeGreaterThan(
+  expect(getAllByText("https://xiongbao.example.test").length).toBeGreaterThan(
     0,
   );
 });

@@ -152,10 +152,10 @@ const pathOf = (url: string) => {
   return `${parsed.pathname}${parsed.search}`;
 };
 
-/** The OpenBot a recording of OpenBot's own page is connected to: the page's origin. The page hook knows nothing of
- * OpenBot, and the debugger capture follows only OpenBot's chat and its runtime's `info`, so the two still agree. */
-const openbotOf = (fixture: Fixture): string | null =>
-  fixture === loadFixture("openbot-chat")
+/** The XiongBao a recording of XiongBao's own page is connected to: the page's origin. The page hook knows nothing of
+ * XiongBao, and the debugger capture follows only XiongBao's chat and its runtime's `info`, so the two still agree. */
+const xiongbaoOf = (fixture: Fixture): string | null =>
+  fixture === loadFixture("xiongbao-chat")
     ? new URL(String(marks(fixture, "navigate")[0]?.data?.url)).origin
     : null;
 
@@ -168,7 +168,7 @@ async function debuggerObservations(
   const observations: CaptureObservation[] = [];
   const capture = createNetworkCapture(
     {
-      openbotUrl: () => openbotOf(fixture),
+      openbotUrl: () => xiongbaoOf(fixture),
       call: () => {},
       writeStarted: () => {},
       writeEnded: () => {},
@@ -426,8 +426,8 @@ const COPILOTKIT_PAGES = new Map([
   ["single-route-sse", 1],
   ["rest-sse", 1],
   ["intelligence-websocket", 1],
-  // OpenBot's own chat asks when it loads and again after the run.
-  ["openbot-chat", 2],
+  // XiongBao's own chat asks when it loads and again after the run.
+  ["xiongbao-chat", 2],
 ]);
 
 for (const name of [
@@ -436,7 +436,7 @@ for (const name of [
   "intelligence-websocket",
   "generic-proto-ws-ticker",
   "late-and-aborted",
-  "openbot-chat",
+  "xiongbao-chat",
 ])
   test(`the page hook gives the same observations as the debugger for the same traffic: ${name}`, async () => {
     const fixture = loadFixture(name);

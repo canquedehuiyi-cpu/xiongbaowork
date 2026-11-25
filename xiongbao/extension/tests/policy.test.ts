@@ -34,25 +34,25 @@ afterEach(() => {
 test("with no policy the Recorder is unpinned and unrestricted", async () => {
   expect(await readPolicy()).toEqual({
     openbotUrl: null,
-    openbotUrlInvalid: false,
+    xiongbaoUrlInvalid: false,
     allowedIntelligenceUrls: null,
   });
 });
 
-test("a valid OpenBot address is read as its origin", async () => {
-  fake.storage.setManaged({ OpenBotUrl: "https://openbot.example.test" });
-  expect((await readPolicy()).openbotUrl).toBe("https://openbot.example.test");
+test("a valid XiongBao address is read as its origin", async () => {
+  fake.storage.setManaged({ OpenBotUrl: "https://xiongbao.example.test" });
+  expect((await readPolicy()).openbotUrl).toBe("https://xiongbao.example.test");
 });
 
 test("an http address that is not loopback is invalid and the bad string is never returned", async () => {
-  fake.storage.setManaged({ OpenBotUrl: "http://openbot.example.test" });
+  fake.storage.setManaged({ OpenBotUrl: "http://xiongbao.example.test" });
   const policy = await readPolicy();
   expect(policy).toEqual({
     openbotUrl: null,
-    openbotUrlInvalid: true,
+    xiongbaoUrlInvalid: true,
     allowedIntelligenceUrls: null,
   });
-  expect(JSON.stringify(policy)).not.toContain("openbot.example.test");
+  expect(JSON.stringify(policy)).not.toContain("xiongbao.example.test");
 });
 
 test("the managed schema keeps to what Chrome loads: an object root, and exactly one type for each policy", async () => {
@@ -79,12 +79,12 @@ test("the managed schema keeps to what Chrome loads: an object root, and exactly
     expect(property.description).toContain("chrome://policy");
 });
 
-test("an empty or non-string OpenBot address is invalid", async () => {
+test("an empty or non-string XiongBao address is invalid", async () => {
   for (const value of ["", "   ", 7, "https://x.test/path"]) {
     fake.storage.setManaged({ OpenBotUrl: value });
     expect(await readPolicy()).toMatchObject({
       openbotUrl: null,
-      openbotUrlInvalid: true,
+      xiongbaoUrlInvalid: true,
     });
   }
 });
@@ -210,12 +210,12 @@ test("onPolicyChanged reports the new policy on a managed change, ignores other 
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(seen).toEqual([]);
 
-  fake.storage.setManaged({ OpenBotUrl: "https://openbot.example.test" });
+  fake.storage.setManaged({ OpenBotUrl: "https://xiongbao.example.test" });
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(seen).toEqual([
     {
-      openbotUrl: "https://openbot.example.test",
-      openbotUrlInvalid: false,
+      openbotUrl: "https://xiongbao.example.test",
+      xiongbaoUrlInvalid: false,
       allowedIntelligenceUrls: null,
     },
   ]);
@@ -230,7 +230,7 @@ test("a policy pinning another address refuses a connect from elsewhere through 
   fake.storage.setManaged({ OpenBotUrl: "https://pinned.example.test" });
   const opened: string[] = [];
   const answer = await handleExternalConnect(
-    { type: "openbot.connect", code: "obc_a" },
+    { type: "xiongbao.connect", code: "obc_a" },
     { origin: "https://elsewhere.example.test" },
     {
       readPolicy,
@@ -245,11 +245,11 @@ test("a policy pinning another address refuses a connect from elsewhere through 
 });
 
 test("an invalid policy refuses every connect with policy-invalid", async () => {
-  fake.storage.setManaged({ OpenBotUrl: "http://openbot.example.test" });
+  fake.storage.setManaged({ OpenBotUrl: "http://xiongbao.example.test" });
   expect(
     await handleExternalConnect(
-      { type: "openbot.connect", code: "obc_a" },
-      { origin: "https://openbot.example.test" },
+      { type: "xiongbao.connect", code: "obc_a" },
+      { origin: "https://xiongbao.example.test" },
       { readPolicy, openTab: async () => 1 },
     ),
   ).toEqual({ ok: false, error: "policy-invalid" });
@@ -269,7 +269,7 @@ async function storeConnection(openbotUrl: string) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 test("a policy change to another origin forgets the stored connection and says the Recorder moved", async () => {
-  await storeConnection("https://openbot.example.test");
+  await storeConnection("https://xiongbao.example.test");
   installConnection({ readPolicy });
   await settle();
   expect(await currentConnection()).not.toBeNull();
@@ -284,7 +284,7 @@ test("a policy change to another origin forgets the stored connection and says t
 });
 
 test("a policy that pinned another origin while the browser was closed is reconciled at start", async () => {
-  await storeConnection("https://openbot.example.test");
+  await storeConnection("https://xiongbao.example.test");
   fake.storage.setManaged({ OpenBotUrl: "https://moved.example.test" });
   installConnection({ readPolicy });
   await settle();
@@ -296,14 +296,14 @@ test("a policy that pinned another origin while the browser was closed is reconc
 });
 
 test("an invalid policy forgets the connection with an empty origin, and a matching policy keeps it", async () => {
-  await storeConnection("https://openbot.example.test");
+  await storeConnection("https://xiongbao.example.test");
   installConnection({ readPolicy });
-  fake.storage.setManaged({ OpenBotUrl: "https://openbot.example.test" });
+  fake.storage.setManaged({ OpenBotUrl: "https://xiongbao.example.test" });
   await settle();
   expect(await currentConnection()).not.toBeNull();
   expect(await readLocal("notice")).toBeUndefined();
 
-  fake.storage.setManaged({ OpenBotUrl: "http://openbot.example.test" });
+  fake.storage.setManaged({ OpenBotUrl: "http://xiongbao.example.test" });
   await settle();
   expect(await currentConnection()).toBeNull();
   expect(await readLocal("notice")).toMatchObject({

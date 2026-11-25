@@ -96,7 +96,7 @@ test("says what the Recorder collects and where it goes, first, whatever the bro
     const title = getByText("What the Recorder collects");
     const disclosure = getByText(DISCLOSURE);
     expect(disclosure.textContent).toContain("When you press Record");
-    // Where it goes: straight to the learning part of OpenBot's back end, with a pass from the part that runs the Bots,
+    // Where it goes: straight to the learning part of XiongBao's back end, with a pass from the part that runs the Bots,
     // never through that part.
     expect(disclosure.textContent).toContain(
       "What you record goes straight from your browser to the learning part of your organization's back end, with a pass from the part of the system that runs your Bots. That part is told that you are recording, the task's name, when it started and how many steps it has, and when you record in a browser shown inside the app, your narration passes through it to the Recorder without being stored. Your recordings are used only for your organization's Skills, evaluations and insights.",

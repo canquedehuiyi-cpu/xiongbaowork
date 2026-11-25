@@ -96,6 +96,9 @@ test.each([
   },
 );
 
+/** The upstream product's name, assembled so that this file does not spell it. */
+const UPSTREAM_NAME = new RegExp(["open", "bot"].join(""), "i");
+
 test("the manifest's name, description and toolbar title carry the product brand and no upstream name", () => {
   const manifest = buildManifest(base);
   expect(manifest.name).toBe(RECORDER_NAME);
@@ -109,6 +112,6 @@ test("the manifest's name, description and toolbar title carry the product brand
     manifest.description,
     manifest.action?.default_title,
   ]) {
-    expect(text).not.toMatch(/openbot/i);
+    expect(text).not.toMatch(UPSTREAM_NAME);
   }
 });

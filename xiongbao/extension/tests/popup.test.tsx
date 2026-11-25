@@ -72,7 +72,7 @@ function stateResponse(
     ok: true,
     state: { ...IDLE_STATE, ...state },
     connection: {
-      openbotUrl: "https://openbot.example.test",
+      openbotUrl: "https://xiongbao.example.test",
       user: { name: "Ada Lovelace", email: "ada@example.test" },
       via: "web",
     },
@@ -92,7 +92,7 @@ function stateResponse(
 function setup(
   response: PageStateResponse,
   options: {
-    /** The person's own Learning space as OpenBot answers it. */
+    /** The person's own Learning space as XiongBao answers it. */
     learning?: LearningSpaceState;
     desktop?: boolean;
     answers?: Partial<Record<PageToBackground["type"], PageResponse>>;
@@ -150,13 +150,13 @@ test("a policy address adds an Open <host> button that opens its Browsers settin
   const { findByText } = setup(
     stateResponse({
       ...NOT_CONNECTED,
-      policy: { openbotUrl: "https://openbot.example.test", invalid: false },
+      policy: { openbotUrl: "https://xiongbao.example.test", invalid: false },
     }),
   );
-  fireEvent.click(await findByText("Open openbot.example.test"));
+  fireEvent.click(await findByText("Open xiongbao.example.test"));
   await waitFor(() =>
     expect(fake.opened).toContain(
-      "https://openbot.example.test/settings/browsers",
+      "https://xiongbao.example.test/settings/browsers",
     ),
   );
 });
@@ -175,7 +175,7 @@ test("an invalid policy address shows the IT sentence and no button", async () =
   expect(queryByText(/Open invalid/)).toBeNull();
 });
 
-test("Connect with OpenBot Desktop is hidden unless Desktop answers available", async () => {
+test("Connect with XiongBao Desktop is hidden unless Desktop answers available", async () => {
   const hidden = setup(stateResponse(NOT_CONNECTED), { desktop: false });
   await hidden.findByText("Connect the Recorder to XiongBao Work");
   await waitFor(() =>
@@ -194,13 +194,13 @@ test("Connect with OpenBot Desktop is hidden unless Desktop answers available", 
   );
 });
 
-test("Connect with OpenBot Desktop connects this browser at once: no page opens, and the popup shows the Record form", async () => {
+test("Connect with XiongBao Desktop connects this browser at once: no page opens, and the popup shows the Record form", async () => {
   const response = stateResponse(NOT_CONNECTED);
   const view = setup(response, {
     desktop: true,
     answers: { "page.connect.desktop": { ok: true, connected: true } },
     onAsk: (message) => {
-      // The service worker stored the connection OpenBot Desktop made: page.state shows it from now on.
+      // The service worker stored the connection XiongBao Desktop made: page.state shows it from now on.
       if (message.type === "page.connect.desktop")
         Object.assign(response, {
           connection: {
@@ -235,7 +235,7 @@ test("a Desktop connect that fails after a good ping shows a plain sentence for 
   );
 });
 
-test("every code OpenBot Desktop or the Recorder can give has a sentence of its own", () => {
+test("every code XiongBao Desktop or the Recorder can give has a sentence of its own", () => {
   const general = desktopSentence("something-new");
   const codes = [
     "origin-not-allowed",
@@ -252,7 +252,7 @@ test("every code OpenBot Desktop or the Recorder can give has a sentence of its 
     "pinned-elsewhere",
     "invalid-address",
     "exchange-refused",
-    "openbot-unreachable",
+    "xiongbao-unreachable",
   ];
   const sentences = codes.map(desktopSentence);
   for (const sentence of sentences) expect(sentence).not.toBe(general);
@@ -277,7 +277,7 @@ test("a Desktop code the Recorder does not know gets the general sentence", asyn
   );
 });
 
-test("Connect with OpenBot Desktop is a secondary button even when it is the only action", async () => {
+test("Connect with XiongBao Desktop is a secondary button even when it is the only action", async () => {
   const { findByText } = setup(stateResponse(NOT_CONNECTED), { desktop: true });
   const button = await findByText("Connect with XiongBao Work Desktop");
   expect(button.className).toContain("bg-secondary");
@@ -287,7 +287,7 @@ test("Connect with OpenBot Desktop is a secondary button even when it is the onl
 test("connected and idle shows the person, the host, the form copy and Record disabled", async () => {
   const { findByText, getByText, getByRole } = setup(stateResponse());
   await findByText("Ada Lovelace");
-  expect(getByText("openbot.example.test")).toBeTruthy();
+  expect(getByText("xiongbao.example.test")).toBeTruthy();
   expect(getByText(DISCLOSURE_SHORT)).toBeTruthy();
   expect(
     (getByRole("button", { name: "Record" }) as HTMLButtonElement).disabled,
@@ -548,11 +548,11 @@ const SENTENCES: [LearningSpaceState, string | null][] = [
   [learning("assigned"), null],
   [learning("unassigned"), UNASSIGNED_SENTENCE],
   [learning("missing"), MISSING_SENTENCE],
-  // OpenBot could not check the space (Learning delivery off, or Intelligence not answering), but the capture pass still
+  // XiongBao could not check the space (Learning delivery off, or Intelligence not answering), but the capture pass still
   // joins the person's container, so the recording lands in it: no warning.
   [learning("learning-off"), null],
   [learning("unverified"), null],
-  // OpenBot could not reach the space at all (or was still making it), so the pass names none.
+  // XiongBao could not reach the space at all (or was still making it), so the pass names none.
   [{ state: "unverified", containerId: null }, UNREACHED_SENTENCE],
 ];
 for (const [space, sentence] of SENTENCES) {
@@ -1197,7 +1197,7 @@ test("every pass sentence loses its status phrase and starts with a capital", ()
   ).toBe("This browser was disconnected from XiongBao Work.");
 });
 
-test("while streaming, a space OpenBot could not check warns nothing, since the pass joined the person's container", async () => {
+test("while streaming, a space XiongBao could not check warns nothing, since the pass joined the person's container", async () => {
   for (const state of ["learning-off", "unverified"] as const) {
     const view = setup(recording({ learning: { state, containerId: "c1" } }));
     await view.findByText("Streaming to the server");
@@ -1228,7 +1228,7 @@ const STOPPED = { lastStopped: { recordingId: "r1" } };
 const SENDING =
   "The rest of the recording is on its way. You can keep browsing.";
 
-test("after stop with nothing still sending, the popup says the recording went to OpenBot's back end and into your Learning space", async () => {
+test("after stop with nothing still sending, the popup says the recording went to XiongBao's back end and into your Learning space", async () => {
   const { findByText, getByText, queryByText } = setup(
     stateResponse({
       state: { ...STOPPED, learning: learning("assigned"), draining: 0 },
@@ -1238,7 +1238,7 @@ test("after stop with nothing still sending, the popup says the recording went t
   expect(getByText(INTO_YOUR_SPACE)).toBeTruthy();
   expect(queryByText(/Recorded for/)).toBeNull();
   expect(queryByText(SENDING)).toBeNull();
-  // Nothing about OpenBot keeping it or drafting from it.
+  // Nothing about XiongBao keeping it or drafting from it.
   expect(queryByText(/Review it in XiongBao Work|Saved|draft/)).toBeNull();
 });
 
@@ -1258,18 +1258,18 @@ test("after sending, the popup links to Teach a Bot", async () => {
   );
   const link = await sent.findByRole("link", { name: "See it on Teach a Bot" });
   expect(link.getAttribute("href")).toBe(
-    "https://openbot.example.test/browser?recordings=1",
+    "https://xiongbao.example.test/browser?recordings=1",
   );
   expect(link.getAttribute("target")).toBe("_blank");
   expect(link.getAttribute("rel")).toBe("noreferrer");
 });
 
-test("the Teach a Bot link keeps a path prefix on the OpenBot address", async () => {
+test("the Teach a Bot link keeps a path prefix on the XiongBao address", async () => {
   const sent = setup(
     stateResponse({
       state: { ...STOPPED, learning: learning("assigned"), draining: 0 },
       connection: {
-        openbotUrl: "https://example.test/openbot",
+        openbotUrl: "https://example.test/xiongbao",
         user: { name: "Ada Lovelace", email: "ada@example.test" },
         via: "web",
       },
@@ -1277,11 +1277,11 @@ test("the Teach a Bot link keeps a path prefix on the OpenBot address", async ()
   );
   const link = await sent.findByRole("link", { name: "See it on Teach a Bot" });
   expect(link.getAttribute("href")).toBe(
-    "https://example.test/openbot/browser?recordings=1",
+    "https://example.test/xiongbao/browser?recordings=1",
   );
 });
 
-test("after stop with Automatic Learning off, the popup says Learning will not see the recording, and that it still went to OpenBot's back end", async () => {
+test("after stop with Automatic Learning off, the popup says Learning will not see the recording, and that it still went to XiongBao's back end", async () => {
   const { findByText, getByText } = setup(
     stateResponse({
       state: {
@@ -1299,7 +1299,7 @@ test("after stop with Automatic Learning off, the popup says Learning will not s
 // while idle, so only `draining` and `kept` (from the drains) say what is still sending.
 const AFTER_STOP_CAPTURE = IDLE_STATE.capture;
 
-test("after stop with nothing kept, what is still sending says it is sending to OpenBot's back end, never Off", async () => {
+test("after stop with nothing kept, what is still sending says it is sending to XiongBao's back end, never Off", async () => {
   const { findByText, getByText, queryByText } = setup(
     stateResponse({
       state: {

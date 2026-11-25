@@ -72,11 +72,11 @@ function builtRecorder(
 ): { dist: string; files: Record<string, string> } {
   const manifest = {
     manifest_version: 3,
-    name: "OpenBot Recorder",
+    name: "XiongBao Work Recorder",
     // As the build writes it: a prerelease such as 1.0.0-rc.1 is version 1.0.0 with that version_name.
     ...toChromeManifestVersion(ROOT_VERSION),
     description:
-      "Record a task in your browser so an OpenBot Bot can learn to do it.",
+      "Record a task in your browser so a XiongBao Work Bot can learn to do it.",
     icons: { "16": "icons/16.png", "128": "icons/128.png" },
     action: {
       default_popup: "popup.html",

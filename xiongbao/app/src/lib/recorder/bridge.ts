@@ -100,7 +100,7 @@ export function detectRecorder(
       }
     };
     for (const id of ids) {
-      void ask(id, { type: "openbot.ping" }).then((answer) => {
+      void ask(id, { type: "xiongbao.ping" }).then((answer) => {
         if (!isRecord(answer) || answer.ok !== true) return settle(null);
         const found: DetectedRecorder = { id };
         if (typeof answer.version === "string") found.version = answer.version;
@@ -116,7 +116,7 @@ export async function sendConnectCode(
   id: string,
   code: string,
 ): Promise<ConnectCodeAnswer> {
-  const answer = await ask(id, { type: "openbot.connect", code });
+  const answer = await ask(id, { type: "xiongbao.connect", code });
   if (!isRecord(answer)) return { ok: false, error: "unreachable" };
   if (answer.ok !== true) {
     const refusal: ConnectCodeAnswer = {
@@ -165,7 +165,7 @@ const CONNECT_REFUSALS: Record<string, string> = {
   busy: "录制器正在处理另一个连接请求。请稍后再试。",
   // A trusted XiongBao's connect, which the Recorder completes itself with XiongBao, with no Connect page.
   "exchange-refused": `${shortName()}没有接受录制器的连接请求。请再试一次。`,
-  "openbot-unreachable": `录制器连不上${shortName()}。请检查网络后再试。`,
+  "xiongbao-unreachable": `录制器连不上${shortName()}。请检查网络后再试。`,
 };
 /** The Recorder can also answer `unreachable` or `invalid`, which have no sentence of their own. */
 const CONNECT_REFUSAL_FALLBACK = "录制器没有接受这个请求。请再试一次。";
@@ -178,7 +178,7 @@ function throttledSentence(retryAfterMs: number | undefined): string {
   return `${lead}请 ${minutes} 分钟后再试。`;
 }
 
-/** What a refused `openbot.connect` says to the person, wherever they asked to connect this browser. */
+/** What a refused `xiongbao.connect` says to the person, wherever they asked to connect this browser. */
 export function connectRefusalSentence(
   error: string,
   retryAfterMs?: number,

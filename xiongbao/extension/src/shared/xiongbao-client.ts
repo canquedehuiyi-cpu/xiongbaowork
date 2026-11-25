@@ -3,14 +3,14 @@ import {
   type RecorderErrorBody,
 } from "@xiongbao/shared/recorder-api";
 
-export class OpenBotError extends Error {
+export class XiongBaoError extends Error {
   constructor(
     readonly status: number,
     message: string,
     readonly body: RecorderErrorBody | null,
   ) {
     super(message);
-    this.name = "OpenBotError";
+    this.name = "XiongBaoError";
   }
 
   /** True only for the recorder guard's own 401. */
@@ -19,11 +19,11 @@ export class OpenBotError extends Error {
   }
 }
 
-type OpenBotTarget = { openbotUrl: string; token?: string };
+type XiongBaoTarget = { openbotUrl: string; token?: string };
 
 /** Sends the request with the bearer when there is one, never with cookies, and never follows a redirect. */
-export async function openbotRaw(
-  target: OpenBotTarget,
+export async function xiongbaoRaw(
+  target: XiongBaoTarget,
   path: string,
   init: RequestInit,
 ): Promise<Response> {
@@ -62,8 +62,8 @@ async function readErrorBody(
 }
 
 /** JSON in, JSON out, bearer when given, `redirect: "error"`, no cookies (`credentials: "omit"`). */
-export async function openbotJson<T>(
-  target: OpenBotTarget,
+export async function xiongbaoJson<T>(
+  target: XiongBaoTarget,
   path: string,
   init: {
     method?: string;
@@ -74,7 +74,7 @@ export async function openbotJson<T>(
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await openbotRaw(target, path, {
+  const response = await xiongbaoRaw(target, path, {
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
     headers: { ...headers, ...init.headers },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -82,7 +82,7 @@ export async function openbotJson<T>(
   });
   if (!response.ok) {
     const body = await readErrorBody(response);
-    throw new OpenBotError(
+    throw new XiongBaoError(
       response.status,
       body?.error ?? `XiongBao Work answered ${response.status}.`,
       body,
