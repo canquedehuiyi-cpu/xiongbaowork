@@ -251,29 +251,6 @@ echo
 echo "XiongBao"
 echo "======="
 
-# Provision the installation's Composio project with the existing CLI sign-in, independently of
-# Learning. The helper preserves supplied keys and Arcade. The server reads the resulting .env on
-# launch. Bun preserves exported values over .env, including empty strings. A child cannot change
-# this shell's environment, so clear only blank overrides before setup and later server processes.
-#
-# Best-effort, like Learning below. It used to run bare under `set -e`, so a checkout with no key
-# could not start at all while offline, signed out of the CLI, on a CLI without
-# `integrations composio provision`, or against an Ops without the provisioning service. A failure
-# is now the helper's one-line reason, and XiongBao starts with apps unavailable.
-if [[ "${COMPOSIO_API_KEY:-}" != *[![:space:]]* ]]; then
-  unset COMPOSIO_API_KEY
-fi
-COMPOSIO_BEFORE="$(setting COMPOSIO_API_KEY "")"
-if COMPOSIO_LINE="$(bun scripts/setup-composio.ts 2>&1 | tail -1)"; then
-  info "  $COMPOSIO_LINE"
-else
-  red "  Composio: apps are unavailable this run. ${COMPOSIO_LINE:-The Composio setup did not run.}"
-fi
-# Whatever the helper reported, a key that is new in .env must reach a server that is already up.
-if [ -z "$COMPOSIO_BEFORE" ] && [ -n "$(setting COMPOSIO_API_KEY "")" ]; then
-  SECRETS_ROTATED=true
-fi
-
 info "1/4  Docker services"
 SERVICES=(postgres)
 if [ "$ONE_COMPUTER_EACH" = "true" ]; then
@@ -359,20 +336,6 @@ green "  coworker tables migrated"
 # quote, which swallowed the script up to the next one and ran the words in later comments.
 MANAGED_ENDPOINT_LINE="none (the personal edition's Bot runs in the server)"
 green "  managed coworker endpoint: ${MANAGED_AGENT_AG_UI_URL:-$MANAGED_ENDPOINT_LINE}"
-
-# Automatic Learning collects nothing until a container is assigned. The server assigns this
-# project's `openbot` container on its own once it exists (server/src/learning/auto-assign.ts), but
-# the runtime key it holds cannot create one. A CopilotKit CLI login can, whether or not a project is
-# selected here, and so can INTELLIGENCE_SERVICE_TOKEN on a local evaluation install, so make sure the
-# container exists before the server looks. Never fatal and never interactive: one line, whatever
-# happens, and with nothing that can create it the line says exactly what to run.
-LEARNING_CONTAINER="$(setting CPK_INTELLIGENCE_LEARNING_CONTAINER_ID "")"
-LEARNING_AUTO_ASSIGN="$(setting OPENBOT_LEARNING_AUTO_ASSIGN true)"
-if [ -z "$LEARNING_CONTAINER" ] && [ "$LEARNING_AUTO_ASSIGN" != "false" ] \
-   && [ "$LEARNING_AUTO_ASSIGN" != "0" ] && { [ -n "$(setting CPK_INTELLIGENCE_API_KEY "")" ] || [ -n "$(setting INTELLIGENCE_API_KEY "")" ]; }; then
-  LEARNING_LINE="$(bun scripts/setup-learning.ts --non-interactive 2>>"$LOGS/learning-setup.log" | tail -1 || true)"
-  info "  ${LEARNING_LINE:-Automatic Learning: the container check did not run. Log: $LOGS/learning-setup.log}"
-fi
 
 # The personal edition's own browser: the person's installed Chrome or Edge, as a window on their
 # desktop with the Recorder in it (docs/personal-edition.md). It runs on the host and runs nobody

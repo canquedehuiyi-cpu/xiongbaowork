@@ -8,8 +8,8 @@ import { builtInTools } from "./support/built-in-tools";
  *
  * A step line names a tool from `OWN_TOOLS` in `shared/tool-name.ts`, and a tool with no entry there
  * falls through to its identifier. That is how a live conversation came to read
- * `copilotkit_load_skill`, `list_bots` and `remember_personal_fact` between "Searched the web" and
- * "Asked Knowledge": each tool was added where it is registered and nobody added its words. The names
+ * `list_bots` and `remember_personal_fact` between "Searched the web" and "Asked Knowledge": each
+ * tool was added where it is registered and nobody added its words. The names
  * here are read from those registrations (see `support/built-in-tools.ts`), so the next tool added
  * without words fails this file the day it lands rather than the day somebody sees it.
  */
@@ -57,7 +57,6 @@ describe("the tools XiongBao offers a Bot", () => {
       "remember_personal_fact", // a helper's parameter, followed to its calls
       "pause_goal", // a template literal over a for...of
       "computer_screenshot", // a headless computer tool's definition
-      "copilotkit_load_skill", // an AG-UI tool the runtime hands the model
       "search_tools", // a constant in the same file
     ])
       expect(names).toContain(name);

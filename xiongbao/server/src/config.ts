@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
 import { applyEnvironmentAliases, envName } from "@xiongbao/shared/env-aliases";
 import { intelligenceApiKey } from "@xiongbao/shared/intelligence-key";
-import {
-  isLearningContainerId,
-  type LearningTarget,
-} from "@xiongbao/shared/learning";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import {
   addressesBeyondThisMachine,
@@ -223,19 +219,16 @@ export type HandoffCaps = {
 };
 
 /**
- * CopilotKit Intelligence, when this deployment is connected to one. OPTIONAL: threads stay in this
+ * The Recorder's back end, when this deployment is connected to one. OPTIONAL: threads stay in this
  * deployment's own PostgreSQL either way, and nothing here is read unless `INTELLIGENCE_API_KEY` is
- * set. With it, Intelligence serves what only it can — published learned skills (Automatic
- * Learning) and, from later phases, memory — while every conversation remains local.
+ * set. Only the Recorder's capture pass and recording summaries read it (Task 14b removes them).
  *
- * `apiUrl` and `gatewayWsUrl` are optional because managed Intelligence has defaults for both; a
- * self-hosted Intelligence needs `apiUrl`, and its licence in `COPILOTKIT_LICENSE_TOKEN`.
+ * `apiUrl` and `gatewayWsUrl` are optional because the managed back end has defaults for both.
  */
 export type IntelligenceSettings = {
   apiUrl?: string;
   gatewayWsUrl?: string;
   apiKey: string;
-  licenseToken?: string;
 };
 
 /**
@@ -264,26 +257,6 @@ export type DeploymentConfig = {
    * build signed with another key. From OPENBOT_RECORDER_EXTRA_EXTENSION_IDS, never from NODE_ENV.
    */
   recorder: { extraExtensionIds: string[] };
-  /**
-   * Whether XiongBao assigns the Intelligence project's shipped Learning container (AUTOMATIC_LEARNING_CONTAINER_ID) as the default
-   * when nobody has chosen one (learning/auto-assign.ts). Only with {@link DeploymentConfig.intelligence}:
-   * without the optional Intelligence there is no container to assign. On unless OPENBOT_LEARNING_AUTO_ASSIGN is
-   * "false" or "0". A container CPK_INTELLIGENCE_LEARNING_CONTAINER_ID names stands it aside once
-   * Intelligence confirms it has that container; one it does not have is ignored, and this assigns
-   * as though nothing was named. It never overrides a saved Admin setting. It creates the container
-   * only with a credential that can (see `learningSetup`), never with the runtime key.
-   */
-  learningAutoAssign: boolean;
-  /**
-   * A credential that can create Learning containers, for a deployment whose operator supplied one.
-   *
-   * The runtime key cannot: Intelligence creates containers for a person's session, a CopilotKit CLI
-   * login, or, on a CopilotKit local evaluation install only, a service token. The server holds
-   * neither of the first two, so this is the service token, sent as `x-copilotkit-ei-service-token`
-   * to `/api/learning/projects/:projectId/containers` with the project it belongs to. Both or
-   * neither: a token without its project is refused at startup.
-   */
-  learningSetup?: { serviceToken: string; projectId: string };
   /**
    * Memory sources and background research XiongBao switches on for each person (memory/defaults.ts).
    * Both on unless OPENBOT_MEMORY_SOURCE_DEFAULTS or OPENBOT_PROACTIVE_DEFAULTS is "false" or "0".
@@ -405,12 +378,6 @@ export type DeploymentConfig = {
   runtime: RuntimeCapabilities;
   /** Connected CopilotKit Intelligence, or undefined (the default): see {@link IntelligenceSettings}. */
   intelligence?: IntelligenceSettings;
-  /**
-   * The Automatic Learning container a fresh deployment starts with, from
-   * `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` (and `CPK_INTELLIGENCE_SKILLS_REVISION`). Saved admin
-   * settings take precedence. Ignored without {@link DeploymentConfig.intelligence}.
-   */
-  learning?: LearningTarget;
   /**
    * How long a Bot's stream may say nothing before this deployment ends the turn, in milliseconds.
    *
@@ -1410,34 +1377,26 @@ function runtimeCapabilities(environment: Environment): RuntimeCapabilities {
 }
 
 /**
- * Optional CopilotKit Intelligence (R0). No key, no Intelligence: the deployment runs exactly as it
- * did. A URL or licence given without the key is a half-configured Intelligence, which is refused at
- * boot with what is missing rather than quietly ignored.
+ * The Recorder's optional back end. No key, nothing: the deployment runs exactly as it did. A URL
+ * given without the key is half configured, which is refused at boot with what is missing rather
+ * than quietly ignored.
  */
 function intelligenceSettings(
   environment: Environment,
 ): IntelligenceSettings | undefined {
-  // The CLI writes CPK_INTELLIGENCE_API_KEY; either name is the key (upstream #810).
   const apiKey = intelligenceApiKey(environment);
   const apiUrl = url(environment, "INTELLIGENCE_API_URL");
   const gatewayWsUrl = url(environment, "INTELLIGENCE_GATEWAY_WS_URL");
-  const licenseToken = optional(environment, "COPILOTKIT_LICENSE_TOKEN");
   if (!apiKey) {
     const given = Object.entries({
       INTELLIGENCE_API_URL: apiUrl,
       INTELLIGENCE_GATEWAY_WS_URL: gatewayWsUrl,
-      COPILOTKIT_LICENSE_TOKEN: licenseToken,
-      INTELLIGENCE_SERVICE_TOKEN: optional(
-        environment,
-        "INTELLIGENCE_SERVICE_TOKEN",
-      ),
-      INTELLIGENCE_PROJECT_ID: optional(environment, "INTELLIGENCE_PROJECT_ID"),
     })
       .filter(([, value]) => value)
       .map(([name]) => name);
     if (given.length > 0)
       throw new Error(
-        `CopilotKit Intelligence is optional, and is half configured: ${given.join(", ")} set without INTELLIGENCE_API_KEY. Set the key, or remove these.`,
+        `The Recorder's back end is optional, and is half configured: ${given.join(", ")} set without INTELLIGENCE_API_KEY. Set the key, or remove these.`,
       );
     return undefined;
   }
@@ -1445,22 +1404,7 @@ function intelligenceSettings(
     apiKey,
     ...(apiUrl ? { apiUrl } : {}),
     ...(gatewayWsUrl ? { gatewayWsUrl } : {}),
-    ...(licenseToken ? { licenseToken } : {}),
   };
-}
-
-function learningDefault(environment: Environment): LearningTarget | undefined {
-  const containerId = optional(
-    environment,
-    "CPK_INTELLIGENCE_LEARNING_CONTAINER_ID",
-  );
-  if (!containerId) return undefined;
-  if (!isLearningContainerId(containerId))
-    throw new TypeError(
-      "CPK_INTELLIGENCE_LEARNING_CONTAINER_ID must use 1–64 lowercase letters, numbers, and single hyphens.",
-    );
-  const revision = optional(environment, "CPK_INTELLIGENCE_SKILLS_REVISION");
-  return { containerId, ...(revision ? { revision } : {}) };
 }
 
 /**
@@ -2067,12 +2011,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     ...(intelligenceSettings(environment)
       ? { intelligence: intelligenceSettings(environment) }
       : {}),
-    ...(learningDefault(environment)
-      ? { learning: learningDefault(environment) }
-      : {}),
     recorder: { extraExtensionIds: recorderExtraExtensionIds(environment) },
-    learningAutoAssign: learningAutoAssignEnabled(environment),
-    ...learningSetupCredential(environment),
     memoryDefaults: {
       sources: switchedOn(environment, "OPENBOT_MEMORY_SOURCE_DEFAULTS"),
       // Off unless asked for: a Bot offers a check-in in the conversation instead (`offer_check_in`).
@@ -2206,16 +2145,6 @@ function personalEditionRequirements(
   );
 }
 
-/**
- * Same rule as generated interfaces: on unless explicitly "false" or "0". A container named in the
- * environment is a choice only if the Intelligence this server talks to has it, which the server asks
- * at boot (learning/auto-assign.ts), not here.
- */
-function learningAutoAssignEnabled(environment: Environment): boolean {
-  const value = optional(environment, "OPENBOT_LEARNING_AUTO_ASSIGN");
-  return value !== "false" && value !== "0";
-}
-
 /** Comma separated, each trimmed, each a Chrome extension id (32 letters a to p). */
 function recorderExtraExtensionIds(environment: Environment): string[] {
   const value = optional(environment, "OPENBOT_RECORDER_EXTRA_EXTENSION_IDS");
@@ -2234,22 +2163,4 @@ function recorderExtraExtensionIds(environment: Environment): string[] {
 function switchedOn(environment: Environment, name: string): boolean {
   const value = optional(environment, name);
   return value !== "false" && value !== "0";
-}
-
-/** The service token and its project, both or neither. See `DeploymentConfig.learningSetup`. */
-function learningSetupCredential(environment: Environment): {
-  learningSetup?: { serviceToken: string; projectId: string };
-} {
-  const serviceToken = optional(environment, "INTELLIGENCE_SERVICE_TOKEN");
-  const projectId = optional(environment, "INTELLIGENCE_PROJECT_ID");
-  if (!serviceToken && !projectId) return {};
-  if (!serviceToken || !projectId)
-    throw new Error(
-      "INTELLIGENCE_SERVICE_TOKEN and INTELLIGENCE_PROJECT_ID go together: the token creates the openbot Learning container in that project. Set both, or neither.",
-    );
-  if (!/^[1-9][0-9]{0,15}$/.test(projectId))
-    throw new Error(
-      "INTELLIGENCE_PROJECT_ID must be the Intelligence project's numeric ID.",
-    );
-  return { learningSetup: { serviceToken, projectId } };
 }

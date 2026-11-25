@@ -33,13 +33,6 @@ export type EnterpriseSettings = {
   modelAllowlist: { enabled: boolean; models: string[] };
   mcpAllowlist: { enabled: boolean; servers: string[] };
   /**
-   * People may open the Skills learned from their own recordings to every Bot (Settings, Learning). Off by default:
-   * an opened Skill puts one person's recorded and narrated text in front of everybody's Bots, so an administrator
-   * decides whether this deployment's people trust each other's recordings that far. Off, nobody can open one and a
-   * Skill opened while it was on reaches no other person's Bot (learning/runtime.ts).
-   */
-  skillSharing: boolean;
-  /**
    * How many check-ins each Bot may run for one person in any 24 hours (Admin, Check-ins). Skipped
    * check-ins do not count; one past it is skipped as `capped` before any model call. 24 is hourly,
    * the most often a Bot checks on its own, so the default only stops Run now pressed all day.
@@ -60,7 +53,6 @@ export const DEFAULT_ENTERPRISE_SETTINGS: EnterpriseSettings = {
   inactiveComputerDays: 30,
   modelAllowlist: { enabled: false, models: [] },
   mcpAllowlist: { enabled: false, servers: [] },
-  skillSharing: false,
   proactiveDailyRuns: 24,
   modelSelection: false,
 };
@@ -71,7 +63,6 @@ const SETTING_KEYS = {
   inactiveComputerDays: "inactive_computer_days",
   modelAllowlist: "model_allowlist",
   mcpAllowlist: "mcp_allowlist",
-  skillSharing: "skill_sharing",
   proactiveDailyRuns: "proactive_daily_runs",
   modelSelection: "model_selection",
 } as const satisfies Record<keyof EnterpriseSettings, string>;

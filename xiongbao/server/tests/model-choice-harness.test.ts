@@ -124,7 +124,6 @@ async function planBot(saved: { model?: string; effort?: string } | null) {
     undefined,
     undefined,
     undefined,
-    undefined,
     () => catalogue.choose(saved),
   );
   const agent = agents.assistant?.clone();
@@ -223,7 +222,6 @@ async function remoteRuns(
       "key",
       undefined,
       async () => [],
-      undefined,
       undefined,
       undefined,
       undefined,

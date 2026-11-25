@@ -51,7 +51,6 @@ export const PERSONAL_ENTERPRISE_SETTINGS: EnterpriseSettings = {
   inactiveComputerDays: 0,
   modelAllowlist: { enabled: false, models: [] },
   mcpAllowlist: { enabled: false, servers: [] },
-  skillSharing: false,
   proactiveDailyRuns: 24,
   modelSelection: true,
 };

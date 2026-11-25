@@ -571,7 +571,6 @@ export const UNCOVERED: readonly Uncovered[] = [
       "_authed/_app/connections.browse.composio.tsx",
       "_authed/admin/audit.tsx",
       "_authed/admin/enterprise.tsx",
-      "_authed/admin/learning.tsx",
       "_authed/admin/people.tsx",
       "_authed/admin/proactive.tsx",
       "_authed/admin/what-if.tsx",

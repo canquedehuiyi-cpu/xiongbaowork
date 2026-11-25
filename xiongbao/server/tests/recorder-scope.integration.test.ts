@@ -22,9 +22,6 @@ import {
 } from "../src/db/schema/learning";
 import { skills } from "../src/db/schema/plugins";
 import { threadRuns, threads } from "../src/db/schema/threads";
-import { createSkillApprovalStore } from "../src/learning/approvals";
-import { createLearningSettingsStore } from "../src/learning/settings";
-import { createLearningSharingStore } from "../src/learning/sharing";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { createRequestActor } from "../src/request-actor";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
@@ -89,9 +86,6 @@ const { identifyUser, identifyActor } = createRequestActor({
   getSession: async (headers) => getSession({ headers }),
   rolesForUser: (id) => roleRepository.rolesForUser(id),
 });
-const learningSettings = createLearningSettingsStore(undefined, {
-  containerId: "general",
-});
 const runtime = mountCopilotRuntime(
   config,
   createActorAgentResolver({
@@ -132,18 +126,9 @@ args[2] = roleRepository;
 args[6] = runtime.handler;
 args[9] = agentProfileStore;
 args[12] = auditStore;
-const skillApprovals = createSkillApprovalStore(database);
 args[33] = {
   recorder,
-  personalLearning: {
-    store: createLearningSharingStore(database),
-    approvals: skillApprovals,
-    skillsOf: async () => ({ skills: [] }),
-    invalidate: () => {},
-    sharingAllowed: async () => true,
-    settings: learningSettings,
-    scopesFor: async () => [],
-  },
+
   approvals: {} as never,
 };
 const app = createApp(...args);
@@ -264,10 +249,6 @@ describe("a recorder bearer works only on the Recorder's own routes", () => {
       ["GET", "/api/agents"],
       ["POST", "/api/agents", { name: "Sneaky" }],
       ["GET", "/api/approvals"],
-      // Who else's Bots use the person's Skills is theirs to change in Settings, never the Recorder's.
-      ["GET", "/api/settings/learning"],
-      ["PUT", "/api/settings/learning/mode", { mode: "open" }],
-      ["PUT", "/api/settings/learning/skills/refund", { open: true }],
     ];
     for (const [method, path, json] of routes) {
       const answer = await call(path, {

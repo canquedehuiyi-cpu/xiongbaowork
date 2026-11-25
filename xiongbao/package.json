@@ -41,7 +41,6 @@
     "port:verdict-refresh": "bun tools/port-capabilities/verdict-refresh.ts",
     "port:audit-report": "bun tools/port-capabilities/package-audit-report.ts",
     "diagram": "bun scripts/architecture-diagram.ts",
-    "setup:composio": "bun scripts/setup-composio.ts",
     "composio:smoke": "bun scripts/composio-smoke.ts",
     "mock:knowledge": "bun scripts/mock-knowledge-mcp.ts"
   },

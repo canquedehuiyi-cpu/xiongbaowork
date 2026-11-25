@@ -391,7 +391,6 @@ describe("register a folder, add it as a source, and the 分身 reads it", () =>
         undefined,
         undefined,
         undefined,
-        undefined,
         avatarSourcesForActor(sources)(personA),
       );
       for (const agent of roster) {

@@ -157,7 +157,7 @@ async function assistant(
   if (extra.selection) args[8] = extra.selection;
   const recorded = extra.recorded;
   if (recorded)
-    args[17] = async (...call) => {
+    args[16] = async (...call) => {
       recorded.push(call);
     };
   return (await buildAgents(...args))["general-assistant"];

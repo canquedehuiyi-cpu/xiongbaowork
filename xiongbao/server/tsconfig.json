@@ -51,9 +51,6 @@
     "../scripts/e2e/background-chat.ts",
     "../scripts/e2e/employee-eval/run-xiongbao.ts",
     "../scripts/e2e/employee-eval/smoke-proactive.ts",
-    // Laptop setup and its regression tests are checked explicitly; root scripts are not a workspace.
-    "../scripts/setup-composio.ts",
-    "../scripts/setup-composio.test.ts",
     "tests/db-client-address.test.ts"
   ]
 }

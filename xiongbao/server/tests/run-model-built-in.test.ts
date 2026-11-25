@@ -108,7 +108,6 @@ async function bot(
     undefined,
     undefined,
     undefined,
-    undefined,
     // recordToolLimitRefusal
     undefined,
     holdsTools,

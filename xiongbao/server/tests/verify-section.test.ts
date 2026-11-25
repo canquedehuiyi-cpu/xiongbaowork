@@ -45,7 +45,6 @@ function promptFor(runToolNames: readonly string[]): string {
     [],
     undefined,
     undefined,
-    undefined,
     new Set(),
     new Date("2026-11-19T00:00:00Z"),
     undefined,

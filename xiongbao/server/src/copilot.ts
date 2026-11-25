@@ -160,15 +160,6 @@ import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { desktopTelemetryProperties } from "./desktop-telemetry";
 import { currentEdition } from "./edition";
 import {
-  LEARNED_SKILL_TOOL_COUNT,
-  RemoteLearnedSkillsMiddleware,
-} from "./learning/remote";
-import {
-  type AcquireLearnedSkills,
-  LEARNED_SKILL_TOOL_NAMES,
-  type LearnedSkillInvocation,
-} from "./learning/runtime";
-import {
   type LoadPersonalMemory,
   PersonalMemoryMiddleware,
 } from "./memory/tools";
@@ -1105,12 +1096,6 @@ export function builtInAgentConfiguration(
   standingInstructions?: string | null,
   planModel?: PlanModel,
   /**
-   * The published Automatic Learning skills this run was given (R0, optional Intelligence). Their
-   * tools are offered beside the granted ones and their catalog is the last prompt section, as
-   * upstream does. Absent — no Intelligence, or learning off for this Bot — changes nothing.
-   */
-  learnedSkills?: LearnedSkillInvocation,
-  /**
    * Which of `tools` wait behind `search_tools` instead of being sent on every step, decided by
    * `planToolSearch`. Empty sends everything, which is every Bot at or under the floor.
    */
@@ -1254,12 +1239,6 @@ export function builtInAgentConfiguration(
           ),
         ]
       : []),
-    ...(learnedSkills?.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: parametersFor(tool.parameters),
-      execute: (args: unknown) => learnedSkills.execute(tool.name, args),
-    })) ?? []),
   ];
   /*
    * 这次运行实际持有浏览器工具时，才告诉员工查公开网页怎么搜（百度为主、必应备选）。按工具名判断，
@@ -1478,9 +1457,8 @@ export function builtInAgentConfiguration(
           { computer: Boolean(computerGuidance) && run.usesComputer !== false },
         ),
       ),
-      ...promptSection("learned_skills", learnedSkills?.catalog),
       /*
-       * 它手上握着哪些技能，一行一条。跟着 grants 走，所以和 `learned_skills` 一样是稳定前缀；
+       * 它手上握着哪些技能，一行一条。跟着 grants 走，所以是稳定前缀；
        * 而选中那条的正文在最后一段（`picked_skill`），随消息变。见 `heldSkillsGuidance`。
        */
       ...promptSection("skills_held", heldSkills),
@@ -1737,8 +1715,6 @@ export async function buildAgents(
    * `loadAttachment` for the positional reason it gives. Absent means nothing is recorded.
    */
   markAttachmentsSent?: MarkAttachmentsSent,
-  /** Published Automatic Learning skills, per Bot per run (R0). Absent without Intelligence. */
-  acquireLearnedSkills?: AcquireLearnedSkills,
   loadPersonalMemory?: LoadPersonalMemory,
   /** How a run refused for holding too many tools is put on record. Absent writes no row. */
   recordToolLimitRefusal?: RecordToolLimitRefusal,
@@ -1878,7 +1854,6 @@ export async function buildAgents(
           initiator,
           loadAttachment,
           markAttachmentsSent,
-          acquireLearnedSkills,
           recordToolLimitRefusal,
           holdsTools,
           pickedModel,
@@ -2174,7 +2149,6 @@ async function buildAgent(
   loadAttachment?: LoadAttachment,
   /** How this run records that those files were sent. See {@link buildAgents}. */
   markAttachmentsSent?: MarkAttachmentsSent,
-  acquireLearnedSkills?: AcquireLearnedSkills,
   /** How a run refused by `admitTools` below is put on record. See {@link buildAgents}. */
   recordToolLimitRefusal?: RecordToolLimitRefusal,
   /** Which runs may hold the Bot's tools. See {@link buildAgents}. */
@@ -2236,7 +2210,6 @@ async function buildAgent(
               undefined,
               undefined,
               null,
-              undefined,
               undefined,
               undefined,
               undefined,
@@ -2435,7 +2408,6 @@ async function buildAgent(
         (await selectionFor(input, undefined, limit)).offered,
       loadAttachment,
       markAttachmentsSent,
-      acquireLearnedSkills,
       handoff,
       initiator,
       holdsTools,
@@ -2481,7 +2453,6 @@ async function buildAgent(
               undefined,
               undefined,
               null,
-              undefined,
               undefined,
               undefined,
               undefined,
@@ -2644,7 +2615,6 @@ async function buildAgent(
     tools: GrantedTool[],
     input?: RunAgentInput,
     signal?: AbortSignal,
-    learnedSkills?: LearnedSkillInvocation,
     pinned?: ReadonlySet<string>,
     /** The model this run asked for and was allowed, or the deployment's. */
     runModel: RuntimeModel = model,
@@ -2659,15 +2629,12 @@ async function buildAgent(
   ) => {
     /*
      * What waits behind a search, decided where the run's tools are final. The count includes what
-     * this configuration does not list but the provider is sent anyway: learned skills, the client's
-     * tools when the request is known, and the runtime's two.
+     * this configuration does not list but the provider is sent anyway: the client's tools when the
+     * request is known, and the runtime's two.
      */
     const searchWaiting = planToolSearch(tools, {
       ...(pinned ? { pinned } : {}),
-      alsoSent:
-        (learnedSkills?.tools.length ?? 0) +
-        (input?.tools.length ?? 0) +
-        RUNTIME_STATE_TOOLS.length,
+      alsoSent: (input?.tools.length ?? 0) + RUNTIME_STATE_TOOLS.length,
     });
     /*
      * 提示词瘦身：熊宝自己那批偶尔才用的工具（`DEFERRED_TOOLS`）也排到检索后面，不管总数超没超过 50。授予的和
@@ -2712,7 +2679,6 @@ async function buildAgent(
               planChoice(runModel),
             )
           : undefined,
-        learnedSkills,
         waiting,
         undefined,
         timeZone,
@@ -2927,7 +2893,6 @@ async function buildAgent(
     !narrowing &&
     !handoff &&
     !model.plan &&
-    !acquireLearnedSkills &&
     !holdsTools &&
     !holdsInstructions &&
     !granted.some((tool) => tool.searchable)
@@ -2962,7 +2927,6 @@ async function buildAgent(
           input,
           signal,
           undefined,
-          undefined,
           runModel,
           timeZone,
           runAgentModel,
@@ -2970,20 +2934,6 @@ async function buildAgent(
       const pickedSkill = pickedSkillForBuiltIn(input);
       // 重活分流（期 4）：先按规则看消息，有命中才查难任务模型和固定的 Codex、Claude Code 员工。
       const heavyFacts = await loadHeavyTaskFacts(agent.id, input.messages);
-      // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
-      const learnedSkills = await acquireLearnedSkills?.(agent.id, signal);
-      signal.throwIfAborted();
-      // Neither a grant nor a tool the caller brings may stand in for the learned-skill reader.
-      if (
-        learnedSkills &&
-        [...granted, ...input.tools].some((tool) =>
-          LEARNED_SKILL_TOOL_NAMES.has(tool.name),
-        )
-      ) {
-        throw new Error(
-          "Learned Skill tool names are reserved by Automatic Learning.",
-        );
-      }
       const { offered, pinned } = narrowing
         ? await selectionFor(input, signal)
         : { offered: granted, pinned: new Set<string>() };
@@ -3012,7 +2962,6 @@ async function buildAgent(
       return !model.plan &&
         runModel === model &&
         runAgentModel === agentModel &&
-        !learnedSkills &&
         tools.length === granted.length &&
         passing.length === 0 &&
         pinned.size === 0 &&
@@ -3027,7 +2976,6 @@ async function buildAgent(
             tools,
             input,
             signal,
-            learnedSkills,
             pinned,
             runModel,
             timeZone,
@@ -3432,8 +3380,6 @@ function remoteAgentWithStandingRole(
   loadAttachment?: LoadAttachment,
   /** How this run records that those files were sent. See {@link buildAgents}. */
   markAttachmentsSent?: MarkAttachmentsSent,
-  /** Published Automatic Learning skills, forwarded as a verified snapshot per run (R0). */
-  acquireLearnedSkills?: AcquireLearnedSkills,
   coordination?: HandoffForRun,
   initiator?: AuditInitiator,
   /** Which runs may hold the Bot's tools. See {@link buildAgents}. */
@@ -3767,16 +3713,15 @@ function remoteAgentWithStandingRole(
   };
 
   /*
-   * The tools a run gains after this middleware, so the Bot's grants leave room for them: a learned
-   * skill's two, and the generative UI tool the runtime makes from the browser's catalog.
+   * The tools a run gains after this middleware, so the Bot's grants leave room for them: the
+   * generative UI tool the runtime makes from the browser's catalog.
    */
   const toolsAddedAfter = (input: RunAgentInput) =>
-    (acquireLearnedSkills ? LEARNED_SKILL_TOOL_COUNT : 0) +
-    (isPlainObject(input.forwardedProps) &&
+    isPlainObject(input.forwardedProps) &&
     isPlainObject(input.forwardedProps.copilotkit) &&
     Object.hasOwn(input.forwardedProps.copilotkit, "ui")
       ? 1
-      : 0);
+      : 0;
 
   /*
    * Deferred, because choosing the tools is a model call and middleware has to answer with a stream
@@ -3840,18 +3785,6 @@ function remoteAgentWithStandingRole(
         owned ? ourProvider : undefined,
       );
     });
-    if (acquireLearnedSkills) {
-      const learned = new RemoteLearnedSkillsMiddleware(
-        agent.id,
-        acquireLearnedSkills,
-      );
-      target.use(
-        holdsTools
-          ? (input, next) =>
-              holdsTools(input) ? learned.run(input, next) : next.run(input)
-          : learned,
-      );
-    }
   });
 }
 
@@ -4030,8 +3963,6 @@ export async function resolveRuntimeAgents(
    * same positional reason. Absent means nothing is recorded.
    */
   markAttachmentsSent?: MarkAttachmentsSent,
-  /** Published Automatic Learning skills, per Bot per run (R0). Absent without Intelligence. */
-  acquireLearnedSkills?: AcquireLearnedSkills,
   loadPersonalMemory?: LoadPersonalMemory,
   /** Appended after `loadPersonalMemory`, for the positional reason `loadInstructions` gives. */
   recordToolLimitRefusal?: RecordToolLimitRefusal,
@@ -4090,7 +4021,6 @@ export async function resolveRuntimeAgents(
     initiator,
     loadAttachment,
     markAttachmentsSent,
-    acquireLearnedSkills,
     loadPersonalMemory,
     recordToolLimitRefusal,
     holdsTools,
@@ -4508,15 +4438,6 @@ export function mountCopilotRuntime(
       gate: NonNullable<CopilotRuntimeHooks["onBeforeHandler"]>;
       selectLearningContainers: GetTrajectoryLearningContainerIds;
     };
-    /*
-     * M3: upstream's `learningSettings` and `personalSkills` are not options here either. Both
-     * configure the learning runtime upstream builds on its runtime's Intelligence client. Automatic
-     * Learning, when the deployment has its optional Intelligence client, is built beside it in
-     * `index.ts` (which can pass `personalSkills` to `createLearningRuntime` as `people`) and reaches
-     * a run through the resolver's `acquireLearnedSkills`. So is upstream's
-     * `learningContainerForgotten` (#1363/#1366): `index.ts` passes it to `createLearningRuntime` as
-     * `forgotten`.
-     */
   } = {},
 ): MountedCopilotRuntime {
   const {

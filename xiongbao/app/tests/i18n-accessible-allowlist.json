@@ -210,11 +210,6 @@
     "reason": "example-value: 元数据片段示例"
   },
   {
-    "file": "app/src/routes/_authed/admin/learning.tsx",
-    "text": "support-learning",
-    "reason": "example-value: 技能标识示例"
-  },
-  {
     "file": "app/src/routes/_authed/admin/playground.tsx",
     "text": "refund_card",
     "reason": "example-value: 工具名示例"

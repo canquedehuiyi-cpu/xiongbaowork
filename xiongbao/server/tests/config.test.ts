@@ -181,7 +181,6 @@ describe("deployment configuration", () => {
       INTELLIGENCE_API_URL: "http://localhost:7100",
       INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:7103",
       INTELLIGENCE_API_KEY: "tenant-api-key",
-      COPILOTKIT_LICENSE_TOKEN: "license-token",
     });
     expect(config.runtime).toEqual({ mode: "local", durableHistory: true });
     expect(config).not.toHaveProperty("learning");
@@ -1259,61 +1258,6 @@ describe("the self-host banner", () => {
       ).toBe(false);
     },
   );
-});
-
-describe("automatic Learning container assignment", () => {
-  test("is on when nothing is set", () => {
-    expect(loadConfig(baseEnvironment).learningAutoAssign).toBe(true);
-  });
-
-  test.each(["false", "0"])(
-    "is off for OPENBOT_LEARNING_AUTO_ASSIGN=%p",
-    (value) => {
-      expect(
-        loadConfig({ ...baseEnvironment, OPENBOT_LEARNING_AUTO_ASSIGN: value })
-          .learningAutoAssign,
-      ).toBe(false);
-    },
-  );
-
-  test("stays on when the environment names a container, which the boot check confirms first", () => {
-    const config = loadConfig({
-      ...baseEnvironment,
-      CPK_INTELLIGENCE_LEARNING_CONTAINER_ID: "support",
-    });
-    expect(config.learning).toEqual({ containerId: "support" });
-    expect(config.learningAutoAssign).toBe(true);
-  });
-
-  test("a service token and its project create the container; one without the other is refused", () => {
-    // Only with the optional Intelligence connected (R0): without its key either is refused as
-    // half-configured, which learning-config.test.ts pins.
-    const withIntelligence = {
-      ...baseEnvironment,
-      INTELLIGENCE_API_KEY: "synthetic-key",
-    };
-    expect(loadConfig(baseEnvironment).learningSetup).toBeUndefined();
-    expect(
-      loadConfig({
-        ...withIntelligence,
-        INTELLIGENCE_SERVICE_TOKEN: "synthetic-token",
-        INTELLIGENCE_PROJECT_ID: "7",
-      }).learningSetup,
-    ).toEqual({ serviceToken: "synthetic-token", projectId: "7" });
-    expect(() =>
-      loadConfig({
-        ...withIntelligence,
-        INTELLIGENCE_SERVICE_TOKEN: "synthetic-token",
-      }),
-    ).toThrow("go together");
-    expect(() =>
-      loadConfig({
-        ...withIntelligence,
-        INTELLIGENCE_SERVICE_TOKEN: "synthetic-token",
-        INTELLIGENCE_PROJECT_ID: "my-project",
-      }),
-    ).toThrow("numeric ID");
-  });
 });
 
 describe("memory sources and background research", () => {

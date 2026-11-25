@@ -10,8 +10,6 @@ import {
   guardDeliveryStore,
   guardHostAccess,
   installEnterpriseControls,
-  skillSharingAllowed,
-  skillSharingInSnapshot,
   summaryCallRefusal,
 } from "../src/admin/controls";
 import { createEnterpriseGate } from "../src/admin/gate";
@@ -1040,64 +1038,6 @@ describe("offboarding", () => {
     stopped.length = 0;
     const result = await controls.terminateInactiveComputers();
     expect(result?.stopped).toEqual([`bot:${bot}`]);
-  });
-});
-
-describe("Skill sharing", () => {
-  test("is off until an administrator turns it on, everywhere a person's change and a run read it, and the change is on the trail", async () => {
-    // A person's change and a run read it in that person's frame.
-    const sharingAllowed = () => asMemberTenant(() => skillSharingAllowed());
-    // Off by default: nobody may open their Skills to every Bot, and runs offer nobody else's.
-    expect(await sharingAllowed()).toBe(false);
-    expect(skillSharingInSnapshot()).toBe(false);
-    expect(
-      (
-        await put(asMember, "/api/admin/enterprise/settings/skillSharing", {
-          value: true,
-        })
-      ).status,
-    ).toBe(403);
-    expect(await sharingAllowed()).toBe(false);
-
-    const saved = await put(
-      asAdmin,
-      "/api/admin/enterprise/settings/skillSharing",
-      { value: true },
-    );
-    expect(saved.status).toBe(200);
-    expect(await sharingAllowed()).toBe(true);
-    // The saving replica refreshes its snapshot before answering; the others on the NOTIFY.
-    expect(skillSharingInSnapshot()).toBe(true);
-    const [row] = await asPlatform(() =>
-      database
-        .select()
-        .from(auditEvents)
-        .where(
-          and(
-            eq(auditEvents.eventType, "enterprise.setting_changed"),
-            eq(auditEvents.targetId, "skillSharing"),
-            eq(auditEvents.actorUserId, admin.id),
-          ),
-        ),
-    );
-    expect(row?.payload).toMatchObject({
-      setting: "skillSharing",
-      before: false,
-      after: true,
-    });
-
-    expect(
-      (
-        await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
-          value: "yes",
-        })
-      ).status,
-    ).toBe(400);
-    await put(asAdmin, "/api/admin/enterprise/settings/skillSharing", {
-      value: false,
-    });
-    expect(await sharingAllowed()).toBe(false);
-    expect(skillSharingInSnapshot()).toBe(false);
   });
 });
 

@@ -16,7 +16,6 @@ import type { ComputerGateway } from "../computer/gateway";
 import { createHeadlessComputerTools } from "../computer/headless-tools";
 import type { Database } from "../db/client";
 import type { DeliveryScope } from "../delivery/types";
-import type { LearningThread } from "../learning/runtime";
 import type { QuotaService } from "../quota/limits";
 import {
   createTurnRunner,
@@ -59,12 +58,6 @@ export function createServerResponsibilityEngine(deps: {
   agentProfileStore: AgentProfileStore;
   bootAuditStore: AuditStore;
   signInService: Parameters<typeof createHeadlessComputerTools>[0]["signIn"];
-  /** Automatic Learning, when this deployment has the optional Intelligence: which space a thread joins. */
-  copilotRuntime?: {
-    learning?: {
-      containerForThread(input: LearningThread): Promise<string | undefined>;
-    };
-  };
   channelStore: ChannelStore;
   notify: (
     scope: DeliveryScope,
@@ -100,7 +93,6 @@ export function createServerResponsibilityEngine(deps: {
     agentProfileStore,
     bootAuditStore,
     signInService,
-    copilotRuntime,
     channelStore,
   } = deps;
   const responsibilityQueue = createWorkQueue(database);
@@ -183,9 +175,6 @@ export function createServerResponsibilityEngine(deps: {
               })),
             ];
           },
-          learningContainerForThread: (input) =>
-            copilotRuntime?.learning?.containerForThread(input) ??
-            Promise.resolve(undefined),
         });
         const saved = context.continuation;
         const snapshot = saved

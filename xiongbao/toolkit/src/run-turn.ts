@@ -205,7 +205,6 @@ export type IntelligenceLike = {
     threadId: string;
     userId: string;
     agentId: string;
-    learningContainerId?: string;
   }): Promise<unknown>;
   getThreadMessages(params: {
     threadId: string;
@@ -217,7 +216,6 @@ export type IntelligenceLike = {
     userId: string;
     agentId: string;
     ttlSeconds?: number;
-    learningContainerId?: string;
   }): Promise<unknown>;
   /** NOTE: no `userId` and no `agentId` — renew is identified by the thread and the run alone. */
   ɵrenewThreadLock(params: {
@@ -513,7 +511,6 @@ async function takeLease(input: {
   userId: string;
   agentId: string;
   ttlSeconds: number;
-  learningContainerId?: string;
   heartbeatMs: number;
   onLost: (error: unknown) => void;
 }): Promise<Lease> {
@@ -524,7 +521,6 @@ async function takeLease(input: {
     userId,
     agentId,
     ttlSeconds,
-    learningContainerId,
     heartbeatMs,
     onLost,
   } = input;
@@ -534,7 +530,6 @@ async function takeLease(input: {
     userId,
     agentId,
     ttlSeconds,
-    ...(learningContainerId ? { learningContainerId } : {}),
   });
 
   const heartbeat = keepLease({
@@ -698,11 +693,6 @@ export function createTurnRunner(options: {
   runner: RunnerLike;
   /** Checked before anything else; see `serverTurnAdmission` in agents/turn-admission.ts. */
   admission: TurnAdmission;
-  learningContainerForThread?: (input: {
-    threadId: string;
-    agentId: string;
-    userId: string;
-  }) => Promise<string | undefined>;
   /** The owner's coworkers, resolved as the owner. Built per turn, keyed by registry id. */
   buildAgentFor: (input: {
     ownerUserId: string;
@@ -766,7 +756,6 @@ export function createTurnRunner(options: {
     runner,
     admission,
     buildAgentFor,
-    learningContainerForThread,
     toolsForTurn,
     components,
     turnTimeoutMs: lightTurnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
@@ -842,16 +831,10 @@ export function createTurnRunner(options: {
      * of. `getOrCreateThread` is public API, idempotent, and already handles the 409 create-race
      * (`client.d.mts:603-621`), so it is safe on the thousandth firing as well as the first.
      */
-    const learningContainerId = await learningContainerForThread?.({
-      threadId,
-      agentId,
-      userId: ownerUserId,
-    });
     await intelligence.getOrCreateThread({
       threadId,
       userId: ownerUserId,
       agentId,
-      ...(learningContainerId ? { learningContainerId } : {}),
     });
 
     /*
@@ -1055,7 +1038,6 @@ export function createTurnRunner(options: {
       userId: ownerUserId,
       agentId,
       ttlSeconds: lockTtlSeconds,
-      ...(learningContainerId ? { learningContainerId } : {}),
       heartbeatMs,
       /*
        * A lock we no longer hold means somebody else is in this thread — the person, most likely,

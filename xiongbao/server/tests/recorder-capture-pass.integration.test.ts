@@ -24,10 +24,10 @@ import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema/core";
 import { learningPersonSpaces } from "../src/db/schema/learning";
 import { recorderTrajectoryBindings } from "../src/db/schema/recorder";
-import type { LearningContainerSpec } from "../src/learning/ensure-container";
 import {
   createPersonalLearningSpaces,
   createPersonSpaceStore,
+  type LearningContainerSpec,
   personalLearningContainerId,
 } from "../src/learning/personal-space";
 import { createRecorderExtension } from "../src/recorder/wiring";

@@ -72,16 +72,10 @@ const ROW = (row: Partial<SetupRow> & Pick<SetupRow, "id">): SetupRow => ({
   ...row,
 });
 
-/** What an admin is sent: Intelligence ready, the model key missing, no computer, Slack unset. */
+/** What an admin is sent: the model key missing, no computer, Slack unset. */
 const ADMIN: Checklist = {
   audience: "admin",
   rows: [
-    ROW({
-      id: "intelligence",
-      title: "Back end",
-      required: true,
-      detail: "Keeps your conversations and what XiongBao remembers.",
-    }),
     ROW({
       id: "model",
       title: "AI model",
@@ -162,8 +156,7 @@ test("Ready and Needs setup rows come from the server's answer", async () => {
     Array.from(view.container.querySelectorAll("[data-setup-row]")).map((row) =>
       row.getAttribute("data-setup-row"),
     ),
-  ).toEqual(["intelligence", "model", "computer", "apps", "chat"]);
-  expect(rowOf(view, "intelligence").getByText("就绪")).not.toBeNull();
+  ).toEqual(["model", "computer", "apps", "chat"]);
   expect(rowOf(view, "model").getByText("需要设置")).not.toBeNull();
   expect(rowOf(view, "model").getByText("必需")).not.toBeNull();
   expect(
@@ -275,7 +268,7 @@ test("a member's gaps are one neutral line: no amber or red pill, no Required, n
   expect(list.innerHTML).not.toContain("text-destructive");
   expect(list.innerHTML).not.toContain("text-amber-600");
   // What works still says so.
-  expect(rowOf(view, "intelligence").getByText("就绪")).not.toBeNull();
+  expect(rowOf(view, "apps").getByText("就绪")).not.toBeNull();
   expect(view.getByRole("status").textContent).toBe(
     "还没就绪的部分由管理员负责设置。",
   );
@@ -369,7 +362,7 @@ test("the summary counts in the singular and the plural", () => {
   expect(summaryOf([gap("chat")])).toBe(
     "熊宝数字员工已经可以使用。有 1 项可选功能还没设置，每项都写了怎么加。",
   );
-  expect(summaryOf([gap("model", true), gap("intelligence", true)])).toBe(
+  expect(summaryOf([gap("model", true), gap("computer", true)])).toBe(
     "有 2 项需要设置，其中 2 项是必需的。请先设置必需项。",
   );
   expect(summaryOf([gap("model", true)])).toBe(

@@ -7,7 +7,6 @@ import {
 import { createEnterpriseStore } from "../src/admin/settings-store";
 import type { Database } from "../src/db/client";
 import { setEdition } from "../src/edition";
-import { createLearningSettingsStore } from "../src/learning/settings";
 
 const member = { role: "admin" as const, groups: [] };
 
@@ -78,24 +77,12 @@ describe("what a team deployment left behind", () => {
     );
   });
 
-  test("a paused Automatic Learning is not paused here, where nothing can resume it", async () => {
-    const learning = createLearningSettingsStore();
-    await learning.write({ enabled: false, defaultTarget: null, agents: {} });
-    setEdition("personal");
-    expect((await learning.read()).enabled).toBe(true);
-    setEdition("team");
-    expect((await learning.read()).enabled).toBe(false);
-  });
-});
-
-describe("the personal edition's settings", () => {
   test("never stops a computer and keeps the check-in limit, whatever is stored", async () => {
     setEdition("personal");
     const settings = await createEnterpriseStore(untouchable).settings();
     expect(settings.inactiveComputerDays).toBe(0);
     expect(settings.proactiveDailyRuns).toBe(24);
     expect(settings.ssoRequired).toBe(false);
-    expect(settings.skillSharing).toBe(false);
   });
 });
 
@@ -119,5 +106,24 @@ describe("the team edition is unchanged", () => {
     expect(capabilityRefusal("teamBots")).toBe(
       'An admin has turned off "Team Bots" for you, so that wasn\'t done.',
     );
+  });
+});
+
+describe("the team edition's stored settings", () => {
+  test("a row left by a setting this build no longer has does not stop the others being read", async () => {
+    setEdition("team");
+    const rows = [
+      // Skill sharing was a setting until its feature was removed; deployments may still hold the row.
+      { key: "skill_sharing", value: { value: true } },
+      { key: "sso_required", value: { value: true } },
+      { key: "inactive_computer_days", value: { value: 7 } },
+    ];
+    const database = {
+      select: () => ({ from: async () => rows }),
+    } as unknown as Database;
+    const settings = await createEnterpriseStore(database).settings();
+    expect(settings.ssoRequired).toBe(true);
+    expect(settings.inactiveComputerDays).toBe(7);
+    expect(Object.keys(settings)).not.toContain("skillSharing");
   });
 });

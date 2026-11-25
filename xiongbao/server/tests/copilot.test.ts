@@ -386,7 +386,6 @@ describe("registered Copilot agents", () => {
       [],
       undefined,
       undefined,
-      undefined,
       new Set(),
       new Date("2026-11-05T15:44:00Z"),
     );
@@ -1998,7 +1997,6 @@ describe("what day it is", () => {
       [],
       undefined,
       undefined,
-      undefined,
       new Set(),
       now,
     );
@@ -2192,7 +2190,6 @@ describe("a person's standing instructions", () => {
         undefined,
         [],
         instructions,
-        undefined,
         undefined,
         new Set(),
         NOW,
@@ -3590,7 +3587,6 @@ describe("each coworker runs on the model it was bound to", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       // loadPersonalMemory, recordToolLimitRefusal, holdsTools, pickedModel and botNames come before it.
       undefined,
       undefined,
@@ -3738,8 +3734,7 @@ describe("each coworker runs on the model it was bound to", () => {
       [],
       null,
       plan,
-      // learnedSkills, waiting, now, timeZone and pickedSkill sit between the plan and the binding.
-      undefined,
+      // waiting, now, timeZone and pickedSkill sit between the plan and the binding.
       undefined,
       undefined,
       undefined,
@@ -3764,7 +3759,6 @@ describe("each coworker runs on the model it was bound to", () => {
       undefined,
       [],
       null,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -3798,7 +3792,6 @@ describe("each coworker runs on the model it was bound to", () => {
       undefined,
       [],
       null,
-      undefined,
       undefined,
       undefined,
       undefined,

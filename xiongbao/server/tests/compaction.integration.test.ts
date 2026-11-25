@@ -1113,7 +1113,6 @@ describe("auto compaction before a turn", () => {
           undefined,
           undefined,
           undefined,
-          undefined,
           contextBreakdownRecorder(database, input.tenantId),
           runCompaction({
             ...deps,

@@ -200,7 +200,6 @@ describe("server copy a customer can read takes its name from the brand", () => 
 
   test("setup checklist guide links go to the deployment's support page, or are left out", () => {
     const unset: SetupFacts = {
-      intelligence: { state: "unreachable" },
       model: {
         provider: "openai",
         source: null,
@@ -226,13 +225,11 @@ describe("server copy a customer can read takes its name from the brand", () => 
       "https://support.jia.example",
       "https://support.jia.example",
       "https://support.jia.example",
-      "https://support.jia.example",
     ]);
 
     resetBrand();
     const bare = envFixes();
     expect(bare.map((fix) => fix.names[0])).toEqual([
-      "INTELLIGENCE_API_URL",
       "OPENAI_API_KEY",
       "AGENT_COMPUTER_URL",
       "ARCADE_API_KEY",

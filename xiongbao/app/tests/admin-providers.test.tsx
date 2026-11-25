@@ -132,7 +132,6 @@ beforeEach(() => {
     inactiveComputerDays: 30,
     modelAllowlist: { enabled: true, models: ["openai/gpt-5.6-terra"] },
     mcpAllowlist: { enabled: false, servers: [] },
-    skillSharing: false,
     proactiveDailyRuns: 24,
     modelSelection: false,
   };

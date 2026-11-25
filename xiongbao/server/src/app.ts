@@ -127,18 +127,6 @@ import { createHostAccessRoutes } from "./host-access/routes";
 import { identityRoutes } from "./identity/routes";
 import type { IdentityStore } from "./identity/store";
 import { createCapturePassOrigin } from "./intelligence-gateway-proxy";
-import {
-  type LearningModelEndpoint,
-  mountLearningModelEndpoint,
-} from "./learning/model-endpoint";
-import {
-  createLearningRoutes,
-  type LearningAdminDependencies,
-} from "./learning/routes";
-import {
-  createPersonalLearningRoutes,
-  type PersonalLearningRouteDeps,
-} from "./learning/sharing-routes";
 import type { LocalLearningEngine } from "./local-learning/engine";
 import { createLocalLearningRoutes } from "./local-learning/routes";
 import type { MemoryIngestion } from "./memory/ingestion";
@@ -161,7 +149,6 @@ import {
   COMPUTER_ADMIN_PATHS,
   createStaleAdminGate,
   ENTERPRISE_ADMIN_PATHS,
-  LEARNING_ADMIN_PATHS,
   QUOTA_ADMIN_PATHS,
   STALE_ADMIN_REFUSAL,
 } from "./plugins/admin-session-gate";
@@ -513,8 +500,6 @@ export function createApp(
       BotBrowserRouteDeps,
       "gateway" | "auditStore" | "botName"
     >;
-    /** Settings, Learning: who else's Bots use a person's own learned Skills. Absent, the screen has nothing to read. */
-    personalLearning?: PersonalLearningRouteDeps;
     /** The private sign-in form and the Passwords vault. See passwords/service.ts. */
     passwords?: SignInService;
     delivery?: {
@@ -589,11 +574,6 @@ export function createApp(
     /** Each person's pick per conversation. Absent, `/api/channels/:id/model` is not mounted. */
     modelChoices?: ModelChoices;
     /**
-     * The model local Intelligence's Learning agent is pointed at on a Claude or ChatGPT plan. See
-     * learning/model-endpoint.ts. Absent, nothing is mounted.
-     */
-    learningModel?: LearningModelEndpoint;
-    /**
      * The model proxy external employees' agents send their model requests to (agents/model-proxy).
      * Absent, nothing is mounted.
      */
@@ -656,16 +636,7 @@ export function createApp(
    * work it cannot price, which is the same degraded direction every other optional here takes.
    */
   quota?: QuotaService,
-  /**
-   * Automatic Learning's admin seams (R0). Present only with a connected CopilotKit Intelligence:
-   * absent, `/api/admin/learning` answers that Intelligence is not connected, and voice treats no Bot
-   * as learning-enabled. Appended last, like everything above it.
-   */
-  learning?: LearningAdminDependencies,
-  /**
-   * Whether to offer help self-hosting, which also hides it from a deployment that pays for
-   * Intelligence. Absent falls back to the operator's switch alone (`OPENBOT_SELF_HOST_BANNER`).
-   */
+  /** Whether to offer help self-hosting. Absent falls back to the operator's switch (`OPENBOT_SELF_HOST_BANNER`). */
   selfHostBanner?: SelfHostBanner,
   /** A person's own linked accounts. Absent answers 503 on /api/identity. */
   identity?: IdentityStore,
@@ -678,7 +649,6 @@ export function createApp(
   // See request-trust.ts for what passes and why.
   app.use("/api/*", createOriginGuard(config));
   mountProviderOAuthProxy(app, modelProviderProxy);
-  mountLearningModelEndpoint(app, coworker?.learningModel);
   mountAgentModelProxy(app, coworker?.agentModel);
 
   app.get("/health", (context) => context.json({ status: "ok" }));
@@ -713,8 +683,8 @@ export function createApp(
        * the WakerFlow target, so the form never offers a target the store would refuse.
        */
       wakerflowAutomations: coworker?.wakerflowAutomations === true,
-      // Whether to offer help self-hosting XiongBao. A fork running it for its own people turns it off,
-      // and a deployment that pays for Intelligence never sees it. See self-host-banner.ts.
+      // Whether to offer help self-hosting XiongBao. A fork running it for its own people turns it off.
+      // See self-host-banner.ts.
       // Never in the personal edition: one person running it for themselves is not the audience.
       selfHostBanner:
         config.edition === "personal"
@@ -1080,10 +1050,6 @@ export function createApp(
       channelStore,
       agentProfileStore,
       voiceSessions,
-      learning?.status
-        ? async (agentId) =>
-            (await learning.status?.(agentId))?.configured ?? false
-        : undefined,
     ),
   );
 
@@ -1258,43 +1224,6 @@ export function createApp(
 
     return context.json({ instructions: saved });
   });
-  /*
-   * Automatic Learning's admin page (R0). With a connected Intelligence, the settings and the
-   * read-only inspection upstream serves; without one, a plain answer the page can say in words
-   * rather than a 404 that reads like a broken deployment.
-   */
-  if (learning) {
-    // `learning_settings` has no row-level security: see `LEARNING_ADMIN_PATHS`.
-    app.use(
-      "/api/admin/learning/*",
-      createStaleAdminGate(requireAdminUser, LEARNING_ADMIN_PATHS),
-    );
-    app.route(
-      "/api/admin/learning",
-      createLearningRoutes(
-        learning,
-        requireUser,
-        [
-          ...(config.auth?.trustedOrigins ?? []),
-          ...(config.appUrl ? [config.appUrl] : []),
-        ],
-        auditStore,
-      ),
-    );
-  } else {
-    app.all("/api/admin/learning/*", requireUser, (context) => {
-      const denied = requireAdmin(context);
-      if (denied) return denied;
-      return context.json(
-        {
-          error:
-            "这个部署没有接入 CopilotKit Intelligence，自动学习不可用。设置 INTELLIGENCE_API_KEY 后重启即可启用。",
-          intelligence: false,
-        },
-        503,
-      );
-    });
-  }
   app.get("/api/admin/status", requireAdminUser, (context) => {
     const denied = requireAdmin(context) ?? staleAdminRefusal(context);
     return denied ?? context.json({ status: "ok" });
@@ -2257,14 +2186,6 @@ export function createApp(
     app.route(
       "/api/browser",
       createBrowserRoutes({ ...coworker.browser, requireUser, auditStore }),
-    );
-  if (coworker?.personalLearning)
-    app.route(
-      "/api/settings/learning",
-      createPersonalLearningRoutes(
-        { ...coworker.personalLearning, auditStore },
-        requireUser,
-      ),
     );
   if (coworker?.lifecycle)
     app.route(

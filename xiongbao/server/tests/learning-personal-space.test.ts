@@ -8,7 +8,7 @@ import {
   type LearningSettings,
 } from "@xiongbao/shared/learning";
 import type { LearningSpaceState } from "@xiongbao/shared/recorder-api";
-import type { LearningContainerSpec } from "../src/learning/ensure-container";
+import type { LearningContainerSpec } from "../src/learning/personal-space";
 import {
   classifyLearningSpaceProbe,
   createPersonalLearningSpaces,

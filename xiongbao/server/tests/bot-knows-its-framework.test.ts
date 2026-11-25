@@ -97,7 +97,6 @@ async function run(
     undefined,
     undefined,
     undefined,
-    undefined,
     () => catalogue.choose(null),
   );
   const built = agents[agent.id]?.clone();

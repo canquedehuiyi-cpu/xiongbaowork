@@ -312,8 +312,8 @@ const KUBECTL = {
 const STATUS = {
   asked:
     "Give me a team status update for the routines fix. Done: Worker secret generated once and kept, routines on by default. Blocked: nothing. Next: live check on a fresh install. Owner: Claude.",
-  // A Skill published by Automatic Learning, loaded before answering in the format it teaches.
-  toolCall: "copilotkit_load_skill",
+  // A Skill the Bot keeps, read before answering in the format it teaches.
+  toolCall: "read_skill",
   answered:
     "STATUS: green\n- Done: Worker secret generated once and kept, routines on by default\n- Blocked: nothing\n- Next: live check on a fresh install\n- Owner: Claude",
   recording: "chat-title-status.json",

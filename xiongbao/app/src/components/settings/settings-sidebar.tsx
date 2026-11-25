@@ -82,7 +82,7 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     linkOptions: { to: "/settings/browsers" },
   },
   {
-    /* Who else's Bots use the Skills learned from your recordings: none, all, or the ones you open. */
+    /* What the Bots learned from your conversations. */
     title: "学习",
     icon: IconSchool,
     linkOptions: { to: "/settings/learning" },

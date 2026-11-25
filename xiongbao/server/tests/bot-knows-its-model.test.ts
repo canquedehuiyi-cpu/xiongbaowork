@@ -135,7 +135,6 @@ async function builtInBot(
     undefined,
     undefined,
     undefined,
-    undefined,
     () => catalogue.choose(saved),
   );
   const agent = agents[bot.id]?.clone();
@@ -431,7 +430,6 @@ describe("a Bot on a harness this deployment runs", () => {
           "synthetic-key",
           undefined,
           async () => [],
-          undefined,
           undefined,
           undefined,
           undefined,

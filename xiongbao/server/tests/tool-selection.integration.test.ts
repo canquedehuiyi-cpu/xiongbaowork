@@ -987,7 +987,6 @@ describe("a remote Mastra Bot", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       // Personal memory arrives as a system row the server adds, quoted as untrusted data.
       async () => "QUOTED_MEMORY_RECORD",
     );

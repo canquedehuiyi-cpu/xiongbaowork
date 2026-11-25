@@ -33,7 +33,6 @@ describe("server shims", () => {
       "server/scripts/cull-staged-attachments.ts",
       "server/scripts/fire-routines.ts",
       "server/scripts/migrate.ts",
-      "server/src/learning/ensure-container.ts",
     ]);
   });
 
