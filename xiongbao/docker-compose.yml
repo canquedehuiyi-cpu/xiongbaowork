@@ -498,7 +498,7 @@ services:
 
   spire-agent:
     image: ghcr.io/spiffe/spire-agent:1.15.1
-    command: ["-config", "/opt/spire/conf/agent.conf", "-joinToken", "${SPIRE_JOIN_TOKEN:-openbot-dev-token}"]
+    command: ["-config", "/opt/spire/conf/agent.conf", "-joinToken", "${SPIRE_JOIN_TOKEN:-xiongbao-dev-token}"]
     # The agent must see the caller's process to map the Workload API peer to a Docker container. The
     # host PID namespace is required because the attestor reads the peer cgroup from that pid.
     pid: host
@@ -558,8 +558,8 @@ services:
       # Identity, when SPIRE is part of this deployment. The supervisor registers an entry per Bot
       # and mounts the agent's socket into that Bot's computer so it can fetch its own SVID.
       SPIRE_SOCKET: /tmp/spire-server/private/api.sock
-      SPIRE_TRUST_DOMAIN: openbot.local
-      SPIRE_AGENT_ID: spiffe://openbot.local/spire/agent/join_token/${SPIRE_JOIN_TOKEN:-openbot-dev-token}
+      SPIRE_TRUST_DOMAIN: xiongbao.local
+      SPIRE_AGENT_ID: spiffe://xiongbao.local/spire/agent/join_token/${SPIRE_JOIN_TOKEN:-xiongbao-dev-token}
       SPIRE_AGENT_SOCKET_VOLUME: ${COMPOSE_PROJECT_NAME:-openbot}_spire-agent-socket
     ports:
       # For the server on the host to ask for a Bot's computer.

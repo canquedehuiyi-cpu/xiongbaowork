@@ -233,8 +233,8 @@ def isolated_environment(directory):
     )
     environment = {name: os.environ[name] for name in inherited if name in os.environ}
     environment.update(
-        MANAGED_AGENT_TOKEN="synthetic-openbot-token",
-        OPENAI_API_KEY="sk-synthetic-openbot-key",
+        MANAGED_AGENT_TOKEN="synthetic-xiongbao-token",
+        OPENAI_API_KEY="sk-synthetic-xiongbao-key",
         OTEL_SDK_DISABLED="true",
         CREWAI_DISABLE_TELEMETRY="true",
         CREWAI_DISABLE_TRACKING="true",
@@ -347,7 +347,7 @@ def loopback_openai_receiver(records, strict_messages=False):
             message.get("role") == "tool" for message in body.get("messages") or []
         ):
             return {
-                "id": "chatcmpl-openbot-loopback-tool-call",
+                "id": "chatcmpl-xiongbao-loopback-tool-call",
                 "object": "chat.completion",
                 "created": 1,
                 "model": body["model"],
@@ -379,7 +379,7 @@ def loopback_openai_receiver(records, strict_messages=False):
             }
         if any(message.get("role") == "tool" for message in body.get("messages") or []):
             return {
-                "id": "chatcmpl-openbot-loopback-tool-result",
+                "id": "chatcmpl-xiongbao-loopback-tool-result",
                 "object": "chat.completion",
                 "created": 1,
                 "model": body["model"],
@@ -400,7 +400,7 @@ def loopback_openai_receiver(records, strict_messages=False):
                 },
             }
         return {
-            "id": "chatcmpl-openbot-loopback",
+            "id": "chatcmpl-xiongbao-loopback",
             "object": "chat.completion",
             "created": 1,
             "model": body["model"],
@@ -491,7 +491,7 @@ def run_litellm_loopback_proof(proof_case, output):
         with httpx.Client(base_url=harness_url, timeout=20, trust_env=False) as client:
             response = client.post(
                 "/",
-                headers={main.TOKEN_HEADER: "synthetic-openbot-token"},
+                headers={main.TOKEN_HEADER: "synthetic-xiongbao-token"},
                 json={
                     **run_input(
                         strict_projection_messages()
@@ -511,7 +511,7 @@ def run_litellm_loopback_proof(proof_case, output):
                 tool_call = first_snapshot[-1]["toolCalls"][0]
                 second_response = client.post(
                     "/",
-                    headers={main.TOKEN_HEADER: "synthetic-openbot-token"},
+                    headers={main.TOKEN_HEADER: "synthetic-xiongbao-token"},
                     json={
                         **run_input(
                             [

@@ -132,7 +132,7 @@ APPROVED_RESULT = "CONTRACT_APPROVED_RESULT_9c1e"
 
 
 def _approved_continuation(run_id: str) -> dict:
-    """The run OpenBot sends once a person approves a call the Bot stopped on.
+    """The run XiongBao sends once a person approves a call the Bot stopped on.
 
     `turnInput` in `toolkit/src/run-turn.ts`: the thread up to the call, the call's answer as a tool
     message, and a `resume` entry carrying the same answer for the interrupt that held it.
@@ -171,7 +171,7 @@ def _approved_continuation(run_id: str) -> dict:
 def test_an_approved_call_continues_from_the_whole_thread(monkeypatch, environment):
     """A run carrying `resume` still answers from the whole thread, the approved result included.
 
-    The interrupt it resumes was OpenBot's, not this graph's: nothing here calls `interrupt()`.
+    The interrupt it resumes was XiongBao's, not this graph's: nothing here calls `interrupt()`.
     Handed to LangGraph as `Command(resume=...)`, the request's messages were never read. A warm
     process finished without asking the model, and a fresh one asked it with no conversation at all.
     """

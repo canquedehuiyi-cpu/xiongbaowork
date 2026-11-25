@@ -235,7 +235,7 @@ export type IntelligenceLike = {
     learningContainerId?: string;
     /**
      * The run's analytics context, which the platform records with the run. Sent on the wire only
-     * by a runtime that knows the field, as the one OpenBot installs does; `@copilotkit/runtime`
+     * by a runtime that knows the field, as the one XiongBao installs does; `@copilotkit/runtime`
      * 1.83.0 dropped it and locked as before.
      */
     analyticsContext?: Record<string, unknown>;
@@ -250,7 +250,7 @@ export type IntelligenceLike = {
     threadId: string;
     runId: string;
   }): Promise<void>;
-  /** Records a stop OpenBot made; absent before `@copilotkit/runtime` has it. See `run-stop.ts`. */
+  /** Records a stop XiongBao made; absent before `@copilotkit/runtime` has it. See `run-stop.ts`. */
   ɵrecordRunStop?(params: {
     threadId: string;
     runId: string;

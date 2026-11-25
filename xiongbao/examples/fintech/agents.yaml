@@ -7,7 +7,7 @@ agents:
     role_description: Help with everyday work using clear, concise, and accurate answers.
     avatar_seed: general-assistant
     type: built-in
-    # What the model reads. OpenBot's own prompt tells every Bot how to work; this says what this one
+    # What the model reads. XiongBao's own prompt tells every Bot how to work; this says what this one
     # is for and the habits that make it finish a task: take the step rather than announce it, use
     # what it already has, and ask only when a guess would cost something.
     system_prompt: >-

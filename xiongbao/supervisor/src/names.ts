@@ -21,7 +21,7 @@ const ALLOWED = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 /**
  * The deployment a computer belongs to.
  *
- * Container and volume names are global to a Docker host, so two OpenBot deployments sharing a host
+ * Container and volume names are global to a Docker host, so two XiongBao deployments sharing a host
  * would otherwise derive the same names for the same Bot id and each would treat the other's
  * containers as its own. The namespace is part of every derived name, and is held to the same
  * character rules for the same reason.

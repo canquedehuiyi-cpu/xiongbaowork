@@ -45,8 +45,8 @@ import { firingChecklist } from "./firing-checklist";
 import {
   answersOnLastStep,
   foldingEarlyResults,
-  replayingReasoning,
   type RunSteps,
+  replayingReasoning,
   retryingDroppedConnection,
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
@@ -56,7 +56,7 @@ import { reasoningByToolCall } from "./replayed-reasoning";
 import { FOLD_BUDGET_ENV, foldBudgetFrom } from "./turn-folding";
 
 /**
- * The CopilotKit agents OpenBot runs its Bots as: a built-in Bot that will not send a broken
+ * The CopilotKit agents XiongBao runs its Bots as: a built-in Bot that will not send a broken
  * conversation, one whose tools are chosen when its run starts, a remote Bot that survives being
  * cloned, a Bot that is no longer there, and the platform client with its expected answers kept quiet.
  *
@@ -229,7 +229,7 @@ export class CloningRemoteAgent extends AbstractAgent {
 
   constructor(
     remote: AbstractAgent,
-    private readonly attachOpenBotMiddleware: (target: AbstractAgent) => void,
+    private readonly attachXiongBaoMiddleware: (target: AbstractAgent) => void,
   ) {
     super({
       agentId: remote.agentId,
@@ -243,7 +243,7 @@ export class CloningRemoteAgent extends AbstractAgent {
     if (this.remote.headers) {
       this.headers = { ...this.remote.headers };
     }
-    this.attachOpenBotMiddleware(this);
+    this.attachXiongBaoMiddleware(this);
     this.captureExtraMiddleware = true;
   }
 
@@ -267,7 +267,7 @@ export class CloningRemoteAgent extends AbstractAgent {
     const clonedRemote = this.remote.clone() as AbstractAgent;
     const clone = new CloningRemoteAgent(
       clonedRemote,
-      this.attachOpenBotMiddleware,
+      this.attachXiongBaoMiddleware,
     );
     clone.use(...this.extraMiddleware);
     if (this.headers) {
@@ -912,7 +912,7 @@ const LOCK_CONFLICT_RETRY_MAX_MS = 1_000;
  * A gateway address on `localhost` as 127.0.0.1, and any other as it is.
  *
  * The Recorder opens a plain ws:// gateway only at 127.0.0.1 or [::1], never at the name (Decision 21,
- * `isAllowedGatewayUrl` in shared/recorder-api.ts), and refused OpenBot Desktop's `ws://localhost:<port>` after
+ * `isAllowedGatewayUrl` in shared/recorder-api.ts), and refused XiongBao Desktop's `ws://localhost:<port>` after
  * Intelligence had already minted the recording's join token. A local gateway answers on 127.0.0.1 wherever it answers
  * on localhost (Docker publishes its ports there), and the page opens it there as well as it did at the name.
  */

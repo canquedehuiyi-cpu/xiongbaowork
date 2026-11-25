@@ -99,7 +99,7 @@ async function start() {
   }
 }
 
-/** Quit, as closing OpenBot does: the process is told to end, and its browser goes with it. */
+/** Quit, as closing XiongBao does: the process is told to end, and its browser goes with it. */
 async function stop() {
   child?.kill();
   if (child) await child.exited;

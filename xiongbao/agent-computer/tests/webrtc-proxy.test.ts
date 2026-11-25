@@ -43,7 +43,7 @@ describe.skipIf(!asked || !lan)("WebRTC from a Bot's browser", () => {
     });
     await startEgressFilter({ env: {} });
     const { createProfiles } = await import("../src/profiles");
-    const root = await mkdtemp(join(tmpdir(), "openbot-webrtc-"));
+    const root = await mkdtemp(join(tmpdir(), "xiongbao-webrtc-"));
     const profiles = createProfiles(root);
     const bot = "webrtc-test";
     try {

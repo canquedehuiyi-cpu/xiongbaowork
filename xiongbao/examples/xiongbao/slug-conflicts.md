@@ -25,7 +25,7 @@
 | kind | 归属 | 丢弃物 | 原因 |
 | --- | --- | --- | --- |
 | agent | engineering-workflow-coach | plugins/marketplaces/experts/plugins/ex_eqoqYRT1NIwb/.codebuddy-plugin/plugin.json | 与 engineering-workflow-skills 同名同版本且内容一致（按 plugin.json + agents/*.md 的 sha256 去重） |
-| connector | github | connectors-marketplace/connectors/github/mcp.json | WorkBuddy auth_mode=server-side 无 openbot 等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供 |
+| connector | github | connectors-marketplace/connectors/github/mcp.json | WorkBuddy auth_mode=server-side 本产品无等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供 |
 | connector | github | connectors-marketplace/connectors/github/skill/SKILL.md | 连接器附带的 SKILL.md 只是教模型如何安装该连接器 |
 | connector | tapd | connectors-marketplace/connectors/tapd/skills/SKILL.md | 连接器附带的 SKILL.md 只是教模型如何安装该连接器 |
 | skill | browser-use | plugins/marketplaces/experts/plugins/senior-developer/skills/browser-use/SKILL.md | 与 plugins/marketplaces/experts/plugins/frontend-developer/skills/browser-use/SKILL.md 内容一致（sha256 fb839ae844ae…） |

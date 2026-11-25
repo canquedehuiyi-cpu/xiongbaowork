@@ -25,7 +25,7 @@ const workspaceHome = "/workspace/sales";
 
 const secrets = {
   KEY_ENCRYPTION_KEY: "deployment-key",
-  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1/openbot",
+  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1/xiongbao",
   OPENAI_API_KEY: "sk-secret",
   COMPUTER_TOKEN: "computer-token",
   INTELLIGENCE_API_KEY: "cpk-secret",
@@ -269,7 +269,7 @@ describe("the command that actually runs", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "openbot-shell-"));
+    root = await mkdtemp(join(tmpdir(), "xiongbao-shell-"));
   });
 
   afterEach(async () => {
@@ -423,7 +423,7 @@ describe("what a command cannot do to the computer", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "openbot-shell-limits-"));
+    root = await mkdtemp(join(tmpdir(), "xiongbao-shell-limits-"));
   });
 
   afterEach(async () => {
@@ -683,7 +683,7 @@ describe("a command run as the employee's own user", () => {
   let launcher: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "openbot-shell-run-as-"));
+    root = await mkdtemp(join(tmpdir(), "xiongbao-shell-run-as-"));
     launcher = join(root, "fake-xb.sh");
     await writeFile(
       launcher,
@@ -804,7 +804,7 @@ describe("an employee's command out of this process's reach", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "openbot-shell-reach-"));
+    root = await mkdtemp(join(tmpdir(), "xiongbao-shell-reach-"));
   });
 
   afterEach(async () => {

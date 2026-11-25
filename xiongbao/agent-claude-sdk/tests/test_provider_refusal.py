@@ -19,7 +19,7 @@ from ag_ui.core import RunAgentInput
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 
 REFUSALS = [
     (
@@ -110,7 +110,7 @@ def test_a_provider_refusal_ends_the_run_as_a_refusal(monkeypatch, model_only, e
     refused(monkeypatch, error, text)
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="refused", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="refused", model_only=model_only)
         try:
             async with asyncio.timeout(5):
                 return [event async for event in adapter.run(ask())]

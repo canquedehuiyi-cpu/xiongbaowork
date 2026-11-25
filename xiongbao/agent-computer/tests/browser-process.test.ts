@@ -9,7 +9,7 @@ import { browsersOnProfile } from "./fixtures/browser-process";
  */
 
 const PROFILE =
-  "/tmp/openbot-person-browser-XVLqde/person-0123456789abcdef0123456789abcdef";
+  "/tmp/xiongbao-person-browser-XVLqde/person-0123456789abcdef0123456789abcdef";
 const SWITCHES = `--remote-debugging-pipe --user-data-dir=${PROFILE} --no-first-run --no-default-browser-check --enable-features=CDPScreenshotNewSurface --edge-skip-compat-layer-relaunch --disable-blink-features=AutomationControlled --enable-unsafe-extension-debugging --headless`;
 const BROWSER = `5064    3099 /opt/google/chrome/chrome ${SWITCHES}`;
 const VERSION_CHECK = `5375    5064 /opt/google/chrome/chrome ${SWITCHES} --noerrdialogs --ozone-platform=headless --ozone-override-screen-size=800,600 --use-angle=swiftshader-webgl --flag-switches-begin --flag-switches-end --product-version`;

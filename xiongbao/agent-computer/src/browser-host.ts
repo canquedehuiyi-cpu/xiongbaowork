@@ -1,5 +1,5 @@
 /**
- * The OpenBot Browser's routes on this computer: open a person's browser with the Recorder in it and
+ * The XiongBao Browser's routes on this computer: open a person's browser with the Recorder in it and
  * connected, and act for the person in it (record, narrate, tabs, navigate, close, clear).
  *
  * Under the computer token like every other route, with the person's browser id in
@@ -68,9 +68,9 @@ const VISIBILITY_MS = 1_000;
  *
  * A browser that answers at all answers this in milliseconds: the end-to-end run measured 2 to 19 ms. One whose main
  * thread is stuck never answers DevTools at all, and the route used to wait for it for as long as its caller did:
- * OpenBot gave up after 45 s, after its own server had already closed the person's request with an empty reply at 10.
+ * XiongBao gave up after 45 s, after its own server had already closed the person's request with an empty reply at 10.
  * The Browser page asks every second, and then had no browser to show and no sentence, and the sidebar lost its Browser
- * button. Bounded well under OpenBot's own wait for this route (server/src/browser/routes.ts, STATE_TIMEOUT_MS), so the
+ * button. Bounded well under XiongBao's own wait for this route (server/src/browser/routes.ts, STATE_TIMEOUT_MS), so the
  * person hears it from here, where it is known that the browser is open and not answering.
  */
 export const STATE_ANSWER_MS = 5_000;
@@ -81,7 +81,7 @@ export const STATE_ANSWER_MS = 5_000;
  */
 const RECORDER_REPORT_MS = 3_000;
 
-/** What the state route answers, for OpenBot's log, when the browser did not answer in time. */
+/** What the state route answers, for XiongBao's log, when the browser did not answer in time. */
 export const NOT_ANSWERING = `The browser did not answer within ${STATE_ANSWER_MS / 1000} s.`;
 
 /** The work's value if it settles within `ms`, else nothing; it is left running, and a rejection is the caller's. */
@@ -154,7 +154,7 @@ export function createBrowserHost(options: BrowserHostOptions) {
    * In a native window the person changes tabs in the browser itself, which tells this process
    * nothing, so the tab in front is asked of the pages: the one the browser is showing, and of two
    * windows showing a tab each, the one with the focus. With no window in focus (the person is in
-   * OpenBot), the tab already in front stays while it still shows; and a minimised browser, where
+   * XiongBao), the tab already in front stays while it still shows; and a minimised browser, where
    * none shows, keeps the one it had.
    *
    * This reads true only because a native window has no focus emulation (`native-browser.ts`): with
@@ -246,7 +246,7 @@ export function createBrowserHost(options: BrowserHostOptions) {
   /*
    * OPENS OF ONE BROWSER TAKE TURNS, AND EACH HANDS THE RECORDER THE NEWEST CONNECTION.
    *
-   * Every open carries a connection OpenBot minted for it, and minting one revokes the one before:
+   * Every open carries a connection XiongBao minted for it, and minting one revokes the one before:
    * the browser holds one connection, by its install id. Two opens close together, which is what the
    * Browser page sends when it is loaded again while it is still opening, used to run side by side.
    * The first handed the Recorder a connection the second had revoked already, the Recorder refused
@@ -257,7 +257,7 @@ export function createBrowserHost(options: BrowserHostOptions) {
    * 2.5 s apart failed both, every time; 3.5 s apart, the first had finished and both opened.
    *
    * So an open waits for the one before it, and connects the Recorder with the newest connection any
-   * open has brought, which is the one OpenBot holds: an open that had waited finds the Recorder
+   * open has brought, which is the one XiongBao holds: an open that had waited finds the Recorder
    * holding it already, which connects at once. And a browser no open has connected since it
    * launched is closed after a failed connect only when no other open is waiting to connect it.
    */
@@ -336,7 +336,7 @@ export function createBrowserHost(options: BrowserHostOptions) {
       const at = error instanceof PersonOpenError ? error.step : "launch";
       /*
        * A browser this computer cannot run at all (Playwright's Chromium missing from a hosted image,
-       * say) is OpenBot's setup: 503, in the computer's own words for whoever runs OpenBot, which the
+       * say) is XiongBao's setup: 503, in the computer's own words for whoever runs XiongBao, which the
        * server keeps in its log and never shows the person, as for a missing Recorder. Run 4 saw such
        * a failure reach the person as a 502 with Playwright's text, its install box included.
        */
@@ -352,7 +352,7 @@ export function createBrowserHost(options: BrowserHostOptions) {
 
     /*
      * An open that brought no connection, with none from another open waiting either, hands the Recorder nothing: it
-     * keeps the connection it holds, which the state this answers names (`recorder.connectionId`). OpenBot opens so
+     * keeps the connection it holds, which the state this answers names (`recorder.connectionId`). XiongBao opens so
      * when it holds a connection that stands for this browser, and connects it with a new one only if the Recorder
      * turns out not to hold that one.
      */
@@ -477,9 +477,9 @@ export function createBrowserHost(options: BrowserHostOptions) {
     if (pathname === browserComputerPaths.clear) return clear(botId);
 
     /*
-     * OpenBot revoked this browser's connection: the Recorder forgets it now rather than at its next
-     * call to OpenBot. A closed browser has no Recorder running to tell, and is not opened to tell
-     * it: the next open hands the Recorder whatever connection OpenBot gives it then.
+     * XiongBao revoked this browser's connection: the Recorder forgets it now rather than at its next
+     * call to XiongBao. A closed browser has no Recorder running to tell, and is not opened to tell
+     * it: the next open hands the Recorder whatever connection XiongBao gives it then.
      */
     if (pathname === browserComputerPaths.disconnect) {
       const browser = profiles.person(botId);

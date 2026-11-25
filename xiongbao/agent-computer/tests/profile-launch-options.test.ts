@@ -47,7 +47,7 @@ describe.skipIf(
       const { createProfiles } = await import(
         `../src/profiles?launch-options=${backend}-${recorder}`
       );
-      const root = await mkdtemp(join(tmpdir(), "openbot-launch-options-"));
+      const root = await mkdtemp(join(tmpdir(), "xiongbao-launch-options-"));
       const profiles = createProfiles(root);
       try {
         await expect(profiles.page("bot-one")).rejects.toThrow(
@@ -147,7 +147,7 @@ describe.skipIf(
       join(import.meta.dir, "fixtures", "recorder"),
     );
     if (!found.ok) throw new Error(found.error);
-    const root = await mkdtemp(join(tmpdir(), "openbot-launch-options-"));
+    const root = await mkdtemp(join(tmpdir(), "xiongbao-launch-options-"));
     const profiles = createProfiles(root);
     try {
       await expect(profiles.page("bot-one")).rejects.toThrow(

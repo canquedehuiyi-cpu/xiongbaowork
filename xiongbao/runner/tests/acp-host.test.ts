@@ -30,7 +30,7 @@ import type { FakeAcpScript } from "./fixtures/fake-acp-agent";
 type Frame = Record<string, unknown>;
 
 const fixture = join(import.meta.dir, "fixtures", "fake-acp-agent.ts");
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-acp-host-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-acp-host-"));
 const work = join(scratch, "work");
 mkdirSync(work, { recursive: true });
 

@@ -4,7 +4,7 @@ Claude Code saves a tool result over its threshold (50,000 characters, or 25,000
 for an MCP tool) to `<config>/projects/<cwd>/<session>/tool-results/` and shows the model a preview
 and the path, and that notice is what the turn kept as the call's result. A full Bot was given no
 built-in tools, so it had nothing that could open the file: it tried its computer's `Read file`,
-which OpenBot refused for a path outside the Bot's workspace, then `grep` on its computer, a
+which XiongBao refused for a path outside the Bot's workspace, then `grep` on its computer, a
 different machine, and lost the result.
 
 No provider requests or Claude subprocesses. The tool list is read through the SDK's own bridge,
@@ -28,7 +28,7 @@ from claude_agent_sdk import ToolResultBlock, UserMessage
 from claude_agent_sdk._internal.sdk_mcp_bridge import SdkMcpBridge
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import INLINE_RESULT_CHARS, READ_TOOL_NOTE, OpenBotClaudeAgentAdapter
+from src.adapter import INLINE_RESULT_CHARS, READ_TOOL_NOTE, XiongBaoClaudeAgentAdapter
 from test_tool_continuation import request as tool_request
 from test_tool_continuation import sdk, tool_name  # noqa: F401 - fixtures
 
@@ -83,9 +83,9 @@ async def tools_list(options):
         await bridge.aclose()
 
 
-def test_openbot_tools_keep_a_large_result_in_the_conversation():
+def test_xiongbao_tools_keep_a_large_result_in_the_conversation():
     for model_only in (False, True):
-        adapter = OpenBotClaudeAgentAdapter(name="test", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="test", model_only=model_only)
         tools = listed_tools(adapter.build_options(request(), "thread-a"))
         assert tools, "the ag_ui server lists the run's tools"
         for tool in tools:
@@ -139,7 +139,7 @@ def test_a_large_result_stays_whole_in_the_history(saving, size):
     result = "HEAD " + "r" * size + " RESULT_TAIL"
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             await events(adapter, tool_request())
             resumed = await events(
@@ -204,7 +204,7 @@ def test_a_full_bot_can_read_back_its_own_saved_tool_result(tmp_path):
     result = saved / "toolu_01ABC.json"
     result.write_text(json.dumps({"messages": ["SAVED_RESULT_MARKER"]}), encoding="utf-8")
 
-    options = OpenBotClaudeAgentAdapter(name="test").build_options(request(), "thread-a")
+    options = XiongBaoClaudeAgentAdapter(name="test").build_options(request(), "thread-a")
     assert "Read" in options.tools
     # And the Bot is told what it is for, so it does not reach for it for files on its computer.
     assert READ_TOOL_NOTE in options.system_prompt
@@ -226,7 +226,7 @@ def test_read_opens_nothing_but_this_sessions_saved_results(tmp_path):
     secret.write_text("no", encoding="utf-8")
     os.symlink(secret, saved / "toolu_link.json")
 
-    hook = read_hook(OpenBotClaudeAgentAdapter(name="test").build_options(request(), "thread-a"))
+    hook = read_hook(XiongBaoClaudeAgentAdapter(name="test").build_options(request(), "thread-a"))
 
     for refused in (
         "/etc/passwd",

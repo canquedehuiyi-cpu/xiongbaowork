@@ -15,7 +15,7 @@ import type { Profiles } from "../src/profiles";
 /**
  * Record pressed in a person's hosted browser that has just started, before any page has loaded.
  *
- * The Recorder asks OpenBot for its capture pass from its offscreen document, through the computer's
+ * The Recorder asks XiongBao for its capture pass from its offscreen document, through the computer's
  * egress filter, whose browser listener answers 407 until the browser sends its credentials.
  * Playwright answers that 407 for the pages and workers it attaches to, and never attaches to an
  * offscreen document, so the document's request goes with only what the browser itself holds for the
@@ -44,11 +44,11 @@ const RUNTIME: BrowserRuntime = {
   allowExec: true,
 };
 
-/** The capture passes OpenBot was asked for. */
+/** The capture passes XiongBao was asked for. */
 const passes: string[] = [];
 
-/** The OpenBot the person's browser may reach. */
-const openbot = asked
+/** The XiongBao the person's browser may reach. */
+const xiongbao = asked
   ? Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -94,21 +94,21 @@ describe.skipIf(!asked)(
     let root = "";
     let profiles: Profiles;
     let routes: ReturnType<typeof Bun.serve>;
-    const OPENBOT = `http://127.0.0.1:${openbot?.port ?? 0}`;
+    const XIONGBAO = `http://127.0.0.1:${xiongbao?.port ?? 0}`;
 
     beforeAll(async () => {
-      root = await mkdtemp(join(tmpdir(), "openbot-capture-pass-"));
+      root = await mkdtemp(join(tmpdir(), "xiongbao-capture-pass-"));
       await startEgressFilter({ env: {} });
       // Chromium asks names of its own (www.google.com among them), which a test must not reach.
       setEgressResolver(async () => ["127.0.0.1"]);
-      // A person's hosted browser may reach its OpenBot and nothing else, as the server pushes it.
+      // A person's hosted browser may reach its XiongBao and nothing else, as the server pushes it.
       setEgressPolicy(PERSON, {
         mode: "allowlist_only",
         rules: [
           {
             type: "cidr",
             value: "127.0.0.1/32",
-            ports: String(openbot?.port),
+            ports: String(xiongbao?.port),
           },
         ],
       });
@@ -141,7 +141,7 @@ describe.skipIf(!asked)(
       await profiles?.closeAll();
       setEgressResolver(null);
       await stopEgressFilter();
-      openbot?.stop(true);
+      xiongbao?.stop(true);
       if (root) await rm(root, { recursive: true, force: true });
     }, 60_000);
 
@@ -159,7 +159,7 @@ describe.skipIf(!asked)(
         handing
           ? {
               connection: {
-                openbotUrl: OPENBOT,
+                openbotUrl: XIONGBAO,
                 token: "obr_fixture-token",
                 connectionId: "connection-1",
                 user: {
@@ -177,7 +177,7 @@ describe.skipIf(!asked)(
       );
     };
 
-    /** What OpenBot's answer to the offscreen document's capture pass was, as the document saw it. */
+    /** What XiongBao's answer to the offscreen document's capture pass was, as the document saw it. */
     const passStatus = async (): Promise<unknown> => {
       const browser = profiles.person(PERSON);
       const worker = browser?.context
@@ -192,12 +192,12 @@ describe.skipIf(!asked)(
       );
     };
 
-    test("Record before any page has loaded, in a browser opened again on its profile, reaches OpenBot", async () => {
-      // The computer's first start: the Recorder is handed its connection and asks OpenBot about it.
+    test("Record before any page has loaded, in a browser opened again on its profile, reaches XiongBao", async () => {
+      // The computer's first start: the Recorder is handed its connection and asks XiongBao about it.
       await open(true);
-      // The computer starts again: the browser closes, and OpenBot opens it on the same profile with
+      // The computer starts again: the browser closes, and XiongBao opens it on the same profile with
       // no connection, since the one the Recorder holds stands (browser-host.ts), so the Recorder
-      // asks OpenBot nothing.
+      // asks XiongBao nothing.
       expect((await person("/browser/close", {})).status).toBe(200);
       expect(profiles.isLive(PERSON)).toBe(false);
       await open(false);
@@ -207,7 +207,7 @@ describe.skipIf(!asked)(
         title: "Right after the computer started",
       });
       expect(started.status).toBe(200);
-      // OpenBot's own answer, not the filter's 407.
+      // XiongBao's own answer, not the filter's 407.
       expect(await passStatus()).toBe(200);
       expect(passes).toHaveLength(1);
       expect(

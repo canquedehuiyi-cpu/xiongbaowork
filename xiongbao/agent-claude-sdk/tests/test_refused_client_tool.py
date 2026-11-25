@@ -29,7 +29,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import StreamEvent
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 
 BROKEN = '{"title":"Weekend picks in Chicago","columns":"Event","When","Where"],"rows":[]}'
 GOOD = '{"title":"Weekend picks in Chicago","columns":["Event"],"rows":[]}'
@@ -201,7 +201,7 @@ def test_the_model_answers_a_refused_call_in_the_same_run(claude, refused_before
     claude.update(calls=[("toolu_table", BROKEN, False)], refused_before_stop=refused_before_stop)
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="openbot")
+        adapter = XiongBaoClaudeAgentAdapter(name="xiongbao")
         try:
             run = await events(adapter, request())
             # The refusal, then the model's own answer to it, and the turn's end after that.
@@ -223,7 +223,7 @@ def test_a_call_claude_code_runs_still_waits_for_the_browser(claude):
     claude.update(calls=[("toolu_table", GOOD, True)], refused_before_stop=True)
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="openbot")
+        adapter = XiongBaoClaudeAgentAdapter(name="xiongbao")
         try:
             first = await events(adapter, request())
             assert any(event.type == EventType.TOOL_CALL_END for event in first)
@@ -247,7 +247,7 @@ def test_a_refused_call_beside_one_claude_code_runs_hands_over_only_that_one(cla
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="openbot")
+        adapter = XiongBaoClaudeAgentAdapter(name="xiongbao")
         try:
             first = await events(adapter, request())
             assert first[-1].type == EventType.RUN_FINISHED

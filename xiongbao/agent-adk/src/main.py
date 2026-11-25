@@ -1,7 +1,7 @@
 """Google ADK as a Bot, through `ag_ui_adk`, which AG-UI maintains.
 
 ADK is Gemini-first and model-agnostic after that, so the provider stays the person's choice: ADK
-reads LiteLLM model strings, and OpenBot writes the one it was told.
+reads LiteLLM model strings, and XiongBao writes the one it was told.
 """
 
 from contextlib import aclosing
@@ -362,13 +362,13 @@ async def health():
 
 agent = WholeThreadADKAgent(
     adk_agent=Agent(
-        name="openbot",
+        name="xiongbao",
         tools=[AGUIToolset()],
         model=CompleteToolCallsLiteLlm(model=_model_id()),
         instruction="Answer the question you are asked, briefly and correctly.",
     ),
-    app_name="openbot",
-    user_id="openbot",
+    app_name="xiongbao",
+    user_id="xiongbao",
     # The session is a cache of the thread the server sends every run, never its record. The
     # library forgets a session idle for 20 minutes, but its ledger of messages already seen is
     # keyed by thread and cleared on that delete only when the session id is the thread id. With

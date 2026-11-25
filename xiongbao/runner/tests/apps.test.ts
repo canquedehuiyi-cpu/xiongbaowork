@@ -15,7 +15,7 @@ import { APP_REF, createAppRegistry } from "../src/apps";
  * the server as a reference and a name only: the command, its environment and the url stay here.
  */
 
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-apps-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-apps-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 let made = 0;
 

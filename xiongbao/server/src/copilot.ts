@@ -284,7 +284,7 @@ type RegisteredBuiltInAgent = {
   type: "built_in";
   systemPrompt: string;
   /**
-   * The subtitle under its name ("Everyday life. Powered by OpenBot."). Told to the Bot with its
+   * The subtitle under its name ("Everyday life. Powered by XiongBao Work."). Told to the Bot with its
    * name (`identityGuidance`), as a remote Bot's standing role tells it.
    */
   title?: string;

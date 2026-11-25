@@ -1,7 +1,7 @@
 /**
  * THE PERSON'S OWN BROWSER: their everyday Google Chrome or Microsoft Edge, with their own profile,
- * extensions and logins, as opposed to the OpenBot-profile browser `browser-host.ts` opens. OpenBot
- * Desktop registers the Recorder with it from the store, and these routes do the two things OpenBot
+ * extensions and logins, as opposed to the XiongBao-profile browser `browser-host.ts` opens. XiongBao
+ * Desktop registers the Recorder with it from the store, and these routes do the two things XiongBao
  * then needs of it: bring it forward when its Recorder is connected, and open the Recorder's store
  * page in it while the Recorder is not there yet.
  *
@@ -11,7 +11,7 @@
  *
  * NOTHING HERE DRIVES THE BROWSER. It is not started on a DevTools pipe and no Playwright reaches it:
  * the person's everyday browser is started, or handed an address, the way the person's own desktop
- * does it, and is never this process's child. That last part matters as much as the first. OpenBot
+ * does it, and is never this process's child. That last part matters as much as the first. XiongBao
  * Desktop stops the computer by stopping its whole process tree (`stop_host_children`), so a browser
  * started as this process's child would be killed, with every tab the person had open, the next time
  * they pressed Stop. Each command below hands the browser to something else and exits:
@@ -45,7 +45,7 @@ import {
 
 type Environment = Record<string, string | undefined>;
 
-/** The person's own browsers, in the order OpenBot prefers them, as the OpenBot browser prefers them. */
+/** The person's own browsers, in the order XiongBao prefers them, as the XiongBao browser prefers them. */
 const REAL_BROWSERS: readonly RealBrowser[] = ["chrome", "msedge"];
 
 const NAMES: Record<RealBrowser, string> = {
@@ -161,7 +161,7 @@ export const runCommand: RunCommand = (command) =>
   });
 
 /**
- * The environment the person's browser starts in: this process's, which is OpenBot Desktop's and
+ * The environment the person's browser starts in: this process's, which is XiongBao Desktop's and
  * so the person's session's, without what this computer was given for itself (its token, its port
  * and folders, the Recorder's build), and on Linux with the person's own display rather than the
  * virtual one a headed computer draws its Bots' browsers on. `open` and `start` pass the environment
@@ -191,7 +191,7 @@ export function realBrowserEnv(
 export type InstalledRealBrowser = { browser: RealBrowser; executable: string };
 
 /**
- * The person's own browsers installed here, found exactly where the OpenBot browser finds them
+ * The person's own browsers installed here, found exactly where the XiongBao browser finds them
  * (`browserExecutableCandidates`, Playwright's own stable-channel locations). Nothing is started.
  */
 export async function installedRealBrowsers(
@@ -380,7 +380,7 @@ export function createRealBrowserHost(options: RealBrowserHostOptions) {
         args: [
           "-c",
           LINUX_HANDOFF,
-          "openbot-real-browser",
+          "xiongbao-real-browser",
           launcher,
           ...address,
         ],

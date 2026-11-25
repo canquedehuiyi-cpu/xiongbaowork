@@ -16,7 +16,7 @@ import {
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const root = mkdtempSync(join(tmpdir(), "openbot-runner-credentials-"));
+const root = mkdtempSync(join(tmpdir(), "xiongbao-runner-credentials-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 test("a new machine gets a UUID v4, a different one each time", () => {

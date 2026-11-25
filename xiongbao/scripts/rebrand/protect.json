@@ -1375,18 +1375,6 @@
     "reason": "断言服务器发往电脑端的头不再带旧前缀 x-openbot-（旧名就是被测对象）"
   },
   {
-    "file": "xiongbao/server/tests/bot-knows-its-model.test.ts",
-    "pattern": "Powered by OpenBot",
-    "until": "R2",
-    "reason": "断言 examples/personal/agents.yaml 里出厂 Bot 的 subtitle 原文，随 Task 10（examples/）同一 PR 改"
-  },
-  {
-    "file": "xiongbao/server/tests/tenant-package-personal.test.ts",
-    "pattern": "Powered by OpenBot",
-    "until": "R2",
-    "reason": "断言 examples/personal/agents.yaml 里出厂 Bot 的 subtitle 原文，随 Task 10（examples/）同一 PR 改"
-  },
-  {
     "file": "xiongbao/server/tests/brand-third-party.test.ts",
     "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
     "until": "R3",
@@ -1513,12 +1501,6 @@
     "reason": "注释里举的是 shared/harnesses.ts 已保护的框架名 OpenBot"
   },
   {
-    "file": "xiongbao/server/src/copilot.ts",
-    "text": "Powered by OpenBot",
-    "until": "R2",
-    "reason": "注释里引用 examples/personal/agents.yaml 的出厂 subtitle 原文，随 Task 10（examples/）同改"
-  },
-  {
     "file": "xiongbao/server/src/plugins/composio-adapter.ts",
     "text": "\"Linear (OpenBot)\"",
     "until": "R3",
@@ -1643,5 +1625,65 @@
     "pattern": "openbot\\.recorder\\.(?:configure|stop)\\b|openbot\\.recorder\"",
     "until": "R2",
     "reason": "旧版录制扩展注入页面主世界的 Symbol.for 名（页面里旧版 page-network 留下的钩子），测试证明新版回退只调 xb.recorder.* 而不碰旧名；与同文件已保护的旧 DOM 标记 openbot-recorder-* 一起归任务 17 处理"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/session-cookies-rename.test.ts",
+    "text": "\"openbot-session-cookies.json\"",
+    "until": "R4",
+    "reason": "旧版本留在电脑卷上的 session-cookie 文件旧名：测试证明它被清理（agent-computer/src/session-cookies.ts 按后缀识别，不拼旧名），旧名就是被测对象，随兼容代码删除"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/local-chrome-startup.test.ts",
+    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
+    "until": "R3",
+    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），测试断言与之同值；该脚本归 Task 12，改名需带迁移"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/neutral-page-marks.test.ts",
+    "pattern": "/openbot\\|xiongbao/i|data-openbot-",
+    "until": "R4",
+    "reason": "断言页面标记不带产品名、源码不再写旧属性名 data-openbot-：旧名就是被测对象"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/wire-headers.test.ts",
+    "text": "`x-openbot-*`",
+    "until": "R4",
+    "reason": "注释说明电脑端已不认的旧头 x-openbot-*（同文件的旧头常量已全仓保护），旧名就是被测对象"
+  },
+  {
+    "file": "xiongbao/supervisor/tests/names.test.ts",
+    "pattern": "\\bopenbots?-(?:computer|postgres)\\b|\"openbot(?:\\.(?:supervisor|bot-id|namespace|computer-kind|person-id))?\"",
+    "until": "R3",
+    "reason": "supervisor/src/names.ts 已保护的默认命名空间 openbot 与容器标签 openbot.*（已落在客户主机的容器与卷上），测试断言同值；networkHostFor 用例按默认命名空间算出恰好 63 字符的容器名"
+  },
+  {
+    "file": "xiongbao/supervisor/tests/fixtures/docker-lifecycle.ts",
+    "pattern": "openbot\\.(?:supervisor|namespace|bot-id|computer-kind|person-id)\\b",
+    "until": "R3",
+    "reason": "supervisor/src/names.ts 已保护的容器标签 openbot.*（已落在客户主机的容器上），夹具按同名标签造容器与过滤"
+  },
+  {
+    "file": "xiongbao/toolkit/src/run-turn.ts",
+    "text": "\"openbotSkill\"",
+    "until": "R3",
+    "reason": "落库键：审批续跑快照里的 forwardedProps.openbotSkill（turnInput 续跑时原样带回快照里的 forwardedProps，server/src/plugins/picked-skill.ts 读取），Task 22 迁移"
+  },
+  {
+    "file": "xiongbao/agent-adk/src/main.py",
+    "text": "SERVER_RUN_CONTEXT_ID_PREFIX = \"openbot:\"",
+    "until": "R3",
+    "reason": "服务器写的系统行 id 前缀 openbot:（openbot:personal-memory、openbot:learned-skills 已保护到 R3），与服务器同值"
+  },
+  {
+    "file": "xiongbao/agent-langgraph-agui/src/tool_runtime.py",
+    "text": "\"openbot_run\"",
+    "until": "R3",
+    "reason": "forwardedProps.openbotRun 的 snake 写法（openbotRun 随审批续跑快照落库，保护到 R3）"
+  },
+  {
+    "file": "xiongbao/docker/tests/xb-bot.test.sh",
+    "text": "openbot-apt",
+    "until": "R4",
+    "reason": "断言旧名 openbot-apt 的链接、路径与 sudoers 条目已不在镜像里：旧名就是被测对象"
   }
 ]

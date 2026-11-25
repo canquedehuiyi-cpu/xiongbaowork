@@ -95,7 +95,7 @@ describe.skipIf(!asked)("a session cookie across a restart", () => {
     "comes back after the browser is stopped and started again, and after shutdown",
     async () => {
       const { createProfiles } = await import("../src/profiles");
-      const root = await mkdtemp(join(tmpdir(), "openbot-profiles-"));
+      const root = await mkdtemp(join(tmpdir(), "xiongbao-profiles-"));
       const bot = "session-cookie-test";
       const sent = async (profiles: ReturnType<typeof createProfiles>) => {
         const page = await profiles.page(bot);
@@ -151,7 +151,7 @@ describe.skipIf(!asked)("a session cookie across a restart", () => {
     "a Bot never receives another Bot's session cookie",
     async () => {
       const { createProfiles } = await import("../src/profiles");
-      const root = await mkdtemp(join(tmpdir(), "openbot-profiles-"));
+      const root = await mkdtemp(join(tmpdir(), "xiongbao-profiles-"));
       const profiles = createProfiles(root, () => undefined);
       try {
         const one = await profiles.page("bot-one");

@@ -59,7 +59,7 @@ agent = ChatAgent(
     )
 )
 
-app = create_langroid_app(FrontendToolsAgent(name="openbot", agent=agent))
+app = create_langroid_app(FrontendToolsAgent(name="xiongbao", agent=agent))
 
 
 @app.middleware("http")

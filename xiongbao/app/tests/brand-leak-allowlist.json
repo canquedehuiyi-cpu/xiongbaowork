@@ -749,22 +749,8 @@
     "plan": "keep"
   },
   {
-    "file": "agent-computer/src/index.ts",
-    "text": ".openbot-write-probe-",
-    "reason": "developer-only: probe file removed right after the write check",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
     "file": "agent-computer/src/real-browser.ts",
     "text": "startsWith(\"OPENBOT_\")",
-    "reason": "developer-only: env-var prefix filter and temporary profile directory name",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
-    "file": "agent-computer/src/real-browser.ts",
-    "text": "\"openbot-real-browser\"",
     "reason": "developer-only: env-var prefix filter and temporary profile directory name",
     "category": "developer-only",
     "plan": "keep"
@@ -808,13 +794,6 @@
     "file": "supervisor/src/index.ts",
     "text": "openbot-agent-computer:latest",
     "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "supervisor/src/identity.ts",
-    "text": "openbot.local",
-    "reason": "persisted-identifier: SPIFFE trust domain and join token name already issued",
     "category": "persisted-data",
     "plan": "keep"
   },

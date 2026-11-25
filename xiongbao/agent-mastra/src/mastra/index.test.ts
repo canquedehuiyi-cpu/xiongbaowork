@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildOpenBotInstructions, openbotBaseInstructions } from "./index";
+import { buildXiongBaoInstructions, xiongbaoBaseInstructions } from "./index";
 
 type ModelCase = {
   name: string;
@@ -170,10 +170,10 @@ async function providerStartup(botProvider: string) {
   return { exitCode, stderr };
 }
 
-describe("OpenBot Mastra receiver instructions", () => {
+describe("XiongBao Mastra receiver instructions", () => {
   test("delivers the learned catalog after the standing role and tool guidance", () => {
     expect(
-      buildOpenBotInstructions({
+      buildXiongBaoInstructions({
         requestContext: requestContextWith([
           {
             description: "XiongBao learned skills",
@@ -191,14 +191,14 @@ describe("OpenBot Mastra receiver instructions", () => {
       }),
     ).toBe(
       [
-        openbotBaseInstructions,
+        xiongbaoBaseInstructions,
         "Follow company policy.",
         "Published skill: refunds",
       ].join("\n\n"),
     );
   });
-  test("adds model-visible OpenBot role context in receiver order", () => {
-    const instructions = buildOpenBotInstructions({
+  test("adds model-visible XiongBao role context in receiver order", () => {
+    const instructions = buildXiongBaoInstructions({
       requestContext: requestContextWith([
         {
           description: "XiongBao granted tools guidance",
@@ -217,18 +217,18 @@ describe("OpenBot Mastra receiver instructions", () => {
 
     expect(instructions).toBe(
       [
-        openbotBaseInstructions,
+        xiongbaoBaseInstructions,
         "Use MODEL_BOUNDARY_MANAGED_ROLE in the answer.",
         "Use only the granted Slack tool.",
       ].join("\n\n"),
     );
   });
 
-  test("delivers the caller's context after OpenBot's, and never OpenBot's machine-only entries", () => {
+  test("delivers the caller's context after XiongBao's, and never XiongBao's machine-only entries", () => {
     // The server forwards whatever context the surface sent (`callerMastraContext` in
     // server/src/copilot.ts). Every other harness puts it in front of the model; dropping it here
     // left a Mastra Bot without, say, the component catalogue the surface asked it to draw from.
-    const instructions = buildOpenBotInstructions({
+    const instructions = buildXiongBaoInstructions({
       requestContext: requestContextWith([
         {
           description: "Components you can draw",
@@ -252,7 +252,7 @@ describe("OpenBot Mastra receiver instructions", () => {
 
     expect(instructions).toBe(
       [
-        openbotBaseInstructions,
+        xiongbaoBaseInstructions,
         "Follow company policy.",
         "Components you can draw: CALLER_CATALOG_MARKER",
       ].join("\n\n"),
@@ -260,16 +260,16 @@ describe("OpenBot Mastra receiver instructions", () => {
   });
 
   test("keeps ordinary Mastra calls on the base receiver instruction", () => {
-    expect(buildOpenBotInstructions()).toBe(openbotBaseInstructions);
+    expect(buildXiongBaoInstructions()).toBe(xiongbaoBaseInstructions);
     expect(
-      buildOpenBotInstructions({
+      buildXiongBaoInstructions({
         requestContext: requestContextWith("not ag-ui context entries"),
       }),
-    ).toBe(openbotBaseInstructions);
+    ).toBe(xiongbaoBaseInstructions);
   });
 });
 
-describe("OpenBot Mastra model configuration", () => {
+describe("XiongBao Mastra model configuration", () => {
   const modelCases: ModelCase[] = [
     { name: "absent", expected: "gpt-4o-mini" },
     { name: "empty", value: "", expected: "gpt-4o-mini" },
@@ -292,7 +292,7 @@ describe("OpenBot Mastra model configuration", () => {
  * A provider this Bot cannot answer for is refused before it can fall into the OpenAI branch and
  * quietly answer with somebody else's model.
  */
-describe("OpenBot Mastra provider configuration", () => {
+describe("XiongBao Mastra provider configuration", () => {
   test("refuses a provider it loads no module for", async () => {
     const { exitCode, stderr } = await providerStartup("google");
 
@@ -308,7 +308,7 @@ describe("OpenBot Mastra provider configuration", () => {
   });
 });
 
-describe("OpenBot Mastra listen port configuration", () => {
+describe("XiongBao Mastra listen port configuration", () => {
   const validPortCases: PortCase[] = [
     { name: "absent", expected: 4213 },
     { name: "empty", value: "", expected: 4213 },
@@ -353,7 +353,7 @@ describe("OpenBot Mastra listen port configuration", () => {
   }
 });
 
-describe("OpenBot Mastra provider requests", () => {
+describe("XiongBao Mastra provider requests", () => {
   const choices: {
     provider: string;
     base: string;

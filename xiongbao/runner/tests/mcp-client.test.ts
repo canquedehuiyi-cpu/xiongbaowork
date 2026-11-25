@@ -14,8 +14,8 @@ import {
   childEnv,
   connectApp,
   launchSpec,
-  type McpConnection,
   McpAppError,
+  type McpConnection,
   resolveWindowsCommand,
 } from "../src/mcp-client";
 import { startFakeHttpMcp } from "./fixtures/fake-mcp-http";
@@ -28,7 +28,7 @@ import { startFakeHttpMcp } from "./fixtures/fake-mcp-http";
 const fixture = join(import.meta.dir, "fixtures", "fake-mcp-stdio.ts");
 const open: McpConnection[] = [];
 const stops: Array<() => void> = [];
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-mcp-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-mcp-"));
 
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 

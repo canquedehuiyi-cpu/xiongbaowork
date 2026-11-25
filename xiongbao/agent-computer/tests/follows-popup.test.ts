@@ -49,7 +49,7 @@ describe.skipIf(!asked)("the page a Bot is on", () => {
     "follows a window the site opens, and comes back when it closes",
     async () => {
       const { createProfiles } = await import("../src/profiles");
-      const root = await mkdtemp(join(tmpdir(), "openbot-profiles-"));
+      const root = await mkdtemp(join(tmpdir(), "xiongbao-profiles-"));
       const profiles = createProfiles(root);
       const bot = "popup-test";
       const url = async () => (await profiles.page(bot)).url();

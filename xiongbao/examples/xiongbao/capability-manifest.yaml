@@ -1614,10 +1614,10 @@
   attribution: © WorkBuddy 能力市场
   runnable: full
   dropped:
-    - WorkBuddy auth_mode=server-side 无 openbot 等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供
-    - connectors-marketplace/connectors/github/mcp.json — WorkBuddy auth_mode=server-side 无 openbot 等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供
+    - WorkBuddy auth_mode=server-side 本产品无等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供
+    - connectors-marketplace/connectors/github/mcp.json — WorkBuddy auth_mode=server-side 本产品无等价物（平台代持凭证），本包按 user-oauth 声明，凭证需自行提供
     - connectors-marketplace/connectors/github/skill/SKILL.md — 连接器附带的 SKILL.md 只是教模型如何安装该连接器
-    - skill/SKILL.md（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）
+    - skill/SKILL.md（连接器自带的安装说明，本产品由 connectors.yaml 直接声明，不移植）
 - kind: connector
   slug: tapd
   source: workbuddy connector-marketplace:tapd
@@ -1631,7 +1631,7 @@
   runnable: full
   dropped:
     - connectors-marketplace/connectors/tapd/skills/SKILL.md — 连接器附带的 SKILL.md 只是教模型如何安装该连接器
-    - skills/SKILL.md（连接器自带的安装说明，openbot 侧由 connectors.yaml 直接声明，不移植）
+    - skills/SKILL.md（连接器自带的安装说明，本产品由 connectors.yaml 直接声明，不移植）
 - kind: connector
   slug: tencent-docs
   source: workbuddy connector-marketplace:tencent-docs

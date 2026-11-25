@@ -3,13 +3,13 @@
  *
  * Mastra brings its own HTTP server, so unlike the Python harnesses this one is not a FastAPI app
  * with a route bolted on: it is a plain Mastra server, and that is the whole point. Mastra already
- * serves its agents over its own API, and OpenBot dials that API through `@ag-ui/mastra`, the bridge
+ * serves its agents over its own API, and XiongBao dials that API through `@ag-ui/mastra`, the bridge
  * Mastra and AG-UI maintain between them. See `remoteTransport` in server/src/copilot.ts.
  *
  * SO THERE IS NO AG-UI ROUTE HERE, deliberately. An earlier version mounted `registerCopilotKit`
  * from `@ag-ui/mastra/copilotkit`, which serves the CopilotKit Runtime protocol rather than AG-UI:
  * a different wire format that answers a run with a complaint about a missing `method` field. The
- * translation belongs on OpenBot's side, in one place, where every remote Bot is governed the same
+ * translation belongs on XiongBao's side, in one place, where every remote Bot is governed the same
  * way — not in each harness.
  */
 import { Agent } from "@mastra/core/agent";
@@ -80,7 +80,7 @@ async function buildModel() {
 const port = listenPort(process.env.PORT, 4213);
 if (!port.ok) throw new Error(port.reason);
 
-export const openbotBaseInstructions =
+export const xiongbaoBaseInstructions =
   "Answer the question you are asked, briefly and correctly.";
 
 const OPENBOT_CONTEXT_DESCRIPTIONS = [
@@ -89,14 +89,14 @@ const OPENBOT_CONTEXT_DESCRIPTIONS = [
   "XiongBao learned skills",
 ] as const;
 
-type OpenBotInstructionArgs = {
+type XiongBaoInstructionArgs = {
   requestContext?: {
     get(key: string): unknown;
   };
 };
 
 function agUiContextEntries(
-  requestContext?: OpenBotInstructionArgs["requestContext"],
+  requestContext?: XiongBaoInstructionArgs["requestContext"],
 ) {
   const agUi = requestContext?.get("ag-ui");
   if (
@@ -125,10 +125,10 @@ function isUsableEntry(entry: unknown): entry is ContextEntry {
 }
 
 /**
- * What the model is told: the base line, OpenBot's three model-visible entries in a fixed order,
+ * What the model is told: the base line, XiongBao's three model-visible entries in a fixed order,
  * then whatever the calling surface sent, as `description: value`.
  *
- * Every other `OpenBot …` entry is for this process, not the model: the Bot id, the deployment's
+ * Every other `XiongBao …` entry is for this process, not the model: the Bot id, the deployment's
  * tool list, and the signed run assertion, which is a credential. The server keeps callers out of
  * that namespace (`RESERVED_MASTRA_CONTEXT_DESCRIPTIONS` in server/src/copilot.ts), so the prefix
  * is a safe line to draw. `XiongBao personal memory` is for the model, but as untrusted data, not
@@ -137,12 +137,12 @@ function isUsableEntry(entry: unknown): entry is ContextEntry {
  * used to be dropped here altogether, although the server forwards it and every other harness puts
  * it in front of the model.
  */
-export function buildOpenBotInstructions({
+export function buildXiongBaoInstructions({
   requestContext,
-}: OpenBotInstructionArgs = {}) {
+}: XiongBaoInstructionArgs = {}) {
   const contextEntries =
     agUiContextEntries(requestContext).filter(isUsableEntry);
-  const openbotInstructions = OPENBOT_CONTEXT_DESCRIPTIONS.flatMap(
+  const xiongbaoInstructions = OPENBOT_CONTEXT_DESCRIPTIONS.flatMap(
     (description) =>
       contextEntries
         .filter((entry) => entry.description === description)
@@ -156,19 +156,19 @@ export function buildOpenBotInstructions({
         : entry.value.trim(),
     );
 
-  const instructions = [...openbotInstructions, ...callerInstructions];
-  if (instructions.length === 0) return openbotBaseInstructions;
-  return [openbotBaseInstructions, ...instructions].join("\n\n");
+  const instructions = [...xiongbaoInstructions, ...callerInstructions];
+  if (instructions.length === 0) return xiongbaoBaseInstructions;
+  return [xiongbaoBaseInstructions, ...instructions].join("\n\n");
 }
 
 const xiongbao = new Agent({
   id: "xiongbao",
   name: "xiongbao",
-  instructions: buildOpenBotInstructions,
+  instructions: buildXiongBaoInstructions,
   model: await buildModel(),
 });
 
-/** The one header OpenBot's server sends, compared without leaking length through timing. */
+/** The one header XiongBao's server sends, compared without leaking length through timing. */
 function carriesTheServerToken(request: Request): boolean {
   const expected = (process.env.MANAGED_AGENT_TOKEN ?? "").trim();
   const offered = (request.headers.get("x-xiongbao-agent-token") ?? "").trim();

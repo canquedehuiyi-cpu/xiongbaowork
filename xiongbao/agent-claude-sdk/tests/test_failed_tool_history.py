@@ -22,7 +22,7 @@ from claude_agent_sdk import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 
 # Recorded from a real run of this harness (Claude Code refusing a directory outside /app).
 DENIED = (
@@ -84,7 +84,7 @@ async def events(adapter, input_data):
 
 
 def test_a_failed_tool_call_stays_failed_in_the_history(sdk):
-    adapter = OpenBotClaudeAgentAdapter(name="openbot")
+    adapter = XiongBaoClaudeAgentAdapter(name="xiongbao")
     request = RunAgentInput.model_validate(
         {
             "threadId": "thread-a",

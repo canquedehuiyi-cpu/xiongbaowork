@@ -25,7 +25,7 @@ import {
  * root on the host, a supervisor that forwarded arbitrary calls would hand that straight back
  * through a politer door. Four verbs, expressed in whose computer it is, and nothing else.
  *
- * Every write is scoped by ownership. Containers are created carrying `openbot.supervisor`, and
+ * Every write is scoped by ownership. Containers are created carrying `xiongbao.supervisor`, and
  * stop, reset and inspect refuse anything without it. A container whose name happens to match but
  * lacks the label is treated as absent.
  */
@@ -340,7 +340,7 @@ async function inspectOwned(names: ComputerNames): Promise<{
  * Whether the computer that exists is running the image this deployment now ships.
  *
  * `ensure` reused any container with the right name, whatever it was built from, so once a Bot had a
- * computer, upgrading OpenBot never reached it. Rebuilding the image moves the tag; the container
+ * computer, upgrading XiongBao never reached it. Rebuilding the image moves the tag; the container
  * goes on running the old one, indefinitely, and nothing says so. Found by rebuilding every image,
  * restarting the whole stack, and watching a Bot's computer answer with in-memory state from an hour
  * earlier: `docker compose down` does not touch these, because the supervisor makes them rather than
@@ -376,7 +376,7 @@ async function runsCurrentImage(
  *
  * Compose removes its network when the stack stops and makes a new one, with a new id, when it
  * starts. The computers are the supervisor's, not compose's, so a stopped one keeps the old id and
- * Docker refuses to start it: "network ... not found". Every Bot's computer was dead after OpenBot
+ * Docker refuses to start it: "network ... not found". Every Bot's computer was dead after XiongBao
  * was quit and opened again, or updated, and the Bot told the person Docker was unreachable.
  *
  * Unknown is answered as live, like `runsCurrentImage`: a failed inspect is no reason to replace a

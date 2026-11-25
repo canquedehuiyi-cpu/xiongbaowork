@@ -39,7 +39,7 @@ def _config() -> AnthropicConfig | OpenAIConfig:
 
 
 agent = Agent(
-    name="openbot",
+    name="xiongbao",
     prompt="Answer the question you are asked, briefly and correctly.",
     config=_config(),
 )

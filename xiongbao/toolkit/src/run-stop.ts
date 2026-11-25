@@ -1,8 +1,8 @@
 /**
- * Recording a stop OpenBot makes with Intelligence, so the run's summary reads `cancelled` rather
+ * Recording a stop XiongBao makes with Intelligence, so the run's summary reads `cancelled` rather
  * than `success`.
  *
- * A browser's Stop reaches Intelligence on the thread's channel and is recorded there. A stop OpenBot
+ * A browser's Stop reaches Intelligence on the thread's channel and is recorded there. A stop XiongBao
  * makes itself (a person's cancel, a pause, a deadline) goes only to the runner, so Intelligence would
  * count the stopped run as finished. CopilotKit's client records such a stop as `ɵrecordRunStop`, and
  * its Intelligence runner calls the `recordStop` a run was started with when the runner is asked to
@@ -10,7 +10,7 @@
  * most the runner's own short deadline. A failed record never keeps the run going, and a stop
  * Intelligence relayed to the runner is already recorded, so the runner does not call it then.
  *
- * The runtime OpenBot installs has both halves. A client without `ɵrecordRunStop`, as in
+ * The runtime XiongBao installs has both halves. A client without `ɵrecordRunStop`, as in
  * `@copilotkit/runtime` 1.83.0, is handed nothing, and a stop works exactly as it did there.
  */
 

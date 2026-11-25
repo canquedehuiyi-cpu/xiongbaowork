@@ -42,7 +42,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from google.antigravity.models import GeminiAPIEndpoint
 
-from .whole_thread import OpenBotAntigravityAgent
+from .whole_thread import XiongBaoAntigravityAgent
 
 TOKEN_HEADER = "x-xiongbao-agent-token"
 
@@ -74,7 +74,7 @@ def _api_key() -> str | None:
     return None
 
 
-def _agent() -> OpenBotAntigravityAgent:
+def _agent() -> XiongBaoAntigravityAgent:
     """The harness, pointed at whatever Gemini this deployment runs.
 
     With a base url the endpoint is spelled out: `AntigravityAgent(base_url=...)` is a DIFFERENT
@@ -85,13 +85,13 @@ def _agent() -> OpenBotAntigravityAgent:
     model, api_key = _model(), _api_key()
     base_url = (os.environ.get(_GOOGLE["base_url_variable"]) or "").strip()
     if base_url:
-        return OpenBotAntigravityAgent(
+        return XiongBaoAntigravityAgent(
             model=model,
             endpoint=GeminiAPIEndpoint(base_url=base_url, api_key=api_key),
         )
     # Named rather than left to the SDK's own environment read, so a missing key is this Bot's
     # failure at start-up rather than a stream that opens and dies.
-    return OpenBotAntigravityAgent(model=model, api_key=api_key)
+    return XiongBaoAntigravityAgent(model=model, api_key=api_key)
 
 
 app = create_antigravity_app(_agent(), path="/")

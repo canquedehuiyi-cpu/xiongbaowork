@@ -269,7 +269,7 @@ async def test_only_provider_auth_status_emits_model_refresh_code(
         assert "controlled provider refusal" in errors[-1]["message"]
 
 
-# OpenAI's answer to a run offered 202 tools, captured from its API on 2026-11-07. Seen on OpenBot
+# OpenAI's answer to a run offered 202 tools, captured from its API on 2026-11-07. Seen on XiongBao
 # Desktop as "Error code: 400 - Invalid 'tools': array too long. …" in red under the person's message.
 OPENAI_TOO_MANY_TOOLS = (
     400,

@@ -240,7 +240,7 @@ describe("a Bot on XiongBao's own harness, on an API key", () => {
       );
       const starter = agents.find((agent) => agent.id === "personal-assistant");
       if (!starter) throw new Error("the personal package ships no starter");
-      expect(starter.title).toContain("Powered by OpenBot");
+      expect(starter.title).toContain("Powered by XiongBao Work");
       const registered = registeredAgentFromRow(starter);
       if (!registered) throw new Error("the starter does not register");
 

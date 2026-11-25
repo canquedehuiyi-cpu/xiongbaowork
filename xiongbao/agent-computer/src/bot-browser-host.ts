@@ -38,7 +38,7 @@ import { parseBody } from "./browser-host";
 import { createTabBar, type TabbedBrowser } from "./browser-tabs";
 import { type Control, TAKE_CONTROL_FIRST } from "./control";
 import { BrowserNotOpenError } from "./person-access";
-import type { OpenBotBrowser, Profiles } from "./profiles";
+import type { Profiles, XiongBaoBrowser } from "./profiles";
 import {
   type RecorderLauncher,
   RecorderUnavailableError,
@@ -159,7 +159,7 @@ export function createBotBrowserHost(options: BotBrowserHostOptions) {
     return undefined;
   };
 
-  const tabbed = async (view: OpenBotBrowser): Promise<TabbedBrowser> => ({
+  const tabbed = async (view: XiongBaoBrowser): Promise<TabbedBrowser> => ({
     context: view.context,
     session: await view.session(),
     window: "screen",
@@ -170,7 +170,7 @@ export function createBotBrowserHost(options: BotBrowserHostOptions) {
 
   const stateOf = async (
     botId: string,
-    view: OpenBotBrowser,
+    view: XiongBaoBrowser,
     fresh?: LauncherState,
   ): Promise<BotBrowserState> => {
     const recording = recordingOf(botId);
@@ -197,7 +197,9 @@ export function createBotBrowserHost(options: BotBrowserHostOptions) {
   const closedState: BotBrowserState = { open: false, tabs: [] };
 
   /** The Bot's browser, started if it is not running, as a person's input on the screen starts it. */
-  const running = async (botId: string): Promise<OpenBotBrowser | Response> => {
+  const running = async (
+    botId: string,
+  ): Promise<XiongBaoBrowser | Response> => {
     try {
       await profiles.page(botId);
     } catch (error) {
@@ -323,7 +325,7 @@ export function createBotBrowserHost(options: BotBrowserHostOptions) {
       narration: "external",
     });
     if (!connected.ok) {
-      // The Recorder's own words are for the log: the person is told what happened, in OpenBot's.
+      // The Recorder's own words are for the log: the person is told what happened, in XiongBao's.
       console.info(
         JSON.stringify({
           type: "computer-bot-recording-connect-failed",

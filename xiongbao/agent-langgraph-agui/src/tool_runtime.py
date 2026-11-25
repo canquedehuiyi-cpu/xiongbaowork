@@ -1,7 +1,7 @@
 """The current run's tools, with the same ownership contract as agent-langgraph.
 
 Computer/UI tools finish the run for the surface to execute and resume. Only tools
-marked by OpenBot's server execute here, through its signed callback. The request
+marked by XiongBao's server execute here, through its signed callback. The request
 context is deliberately outside graph state: assertions must never enter a
 checkpoint, model message, or AG-UI state snapshot.
 """
@@ -151,7 +151,7 @@ def provider_name() -> str:
     if host == "generativelanguage.googleapis.com":
         return "Google"
     if "/api/model-provider/" in base:
-        # OpenBot's own sign-in proxy, which serves Google or xAI: the model says which.
+        # XiongBao's own sign-in proxy, which serves Google or xAI: the model says which.
         model = (os.environ.get("BOT_MODEL") or "").strip().lower()
         if model.startswith("grok"):
             return "xAI"
@@ -236,7 +236,7 @@ def provider_message(error: BaseException) -> str:
 # What a person reads when a run fails for a reason that is not the provider's.
 RUN_FAILED = "The Bot stopped before it finished answering. Try again."
 
-_current: ContextVar[RunTools | None] = ContextVar("openbot_run_tools", default=None)
+_current: ContextVar[RunTools | None] = ContextVar("xiongbao_run_tools", default=None)
 
 
 def current_tools() -> RunTools:

@@ -71,7 +71,7 @@ test("the Bot that ships says it runs on XiongBao itself", async () => {
   const { agents } = await loadTenantPackage(personal);
   expect(agents[0]).toMatchObject({
     name: "Personal Assistant",
-    title: "Powered by OpenBot",
+    title: "Powered by XiongBao Work",
     type: "built_in",
   });
 });

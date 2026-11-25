@@ -362,7 +362,7 @@ const IDLE_SWEEP_MS = 60_000;
  *
  * Eighty-five leaves room for the launch that asked, and for a page that grows after the check,
  * before the limit is reached. Zero switches it off, as it does for the idle sweep. A computer with no
- * cgroup of its own (OpenBot Desktop's, on a person's Mac) has no limit to read and closes nothing
+ * cgroup of its own (XiongBao Desktop's, on a person's Mac) has no limit to read and closes nothing
  * for memory either way. In the all-in-one image the share counts the database and the API server as
  * well, deliberately: the OOM kill counts them too, and a browser closed first is what keeps them up.
  */
@@ -469,7 +469,7 @@ export type BotRecorder = {
 type HeldRecorder = BotRecorder & { session: CDPSession };
 
 /** A Bot's running browser, for the bar a person holding its wheel works (`bot-browser-host.ts`). */
-export type OpenBotBrowser = {
+export type XiongBaoBrowser = {
   context: BrowserContext;
   /** Absent where this computer has no Recorder, or runs Bots in local Chrome. */
   recorder?: BotRecorder;
@@ -552,7 +552,7 @@ export function createProfiles(
       recorder?: BotRecorder;
       /** Whether a page is one of the Bot's own, rather than one of the Recorder's. */
       own(page: Page): boolean;
-      /** Put a page in front, and keep it there (see `OpenBotBrowser.activate`). */
+      /** Put a page in front, and keep it there (see `XiongBaoBrowser.activate`). */
       pin(page: Page): void;
       session(): Promise<CDPSession>;
       fitWindows(): Promise<void>;
@@ -956,7 +956,7 @@ export function createProfiles(
       dir,
       runtime,
       recorder: open.recorder,
-      // A hosted browser runs on OpenBot's network, so it goes through the egress filter like any
+      // A hosted browser runs on XiongBao's network, so it goes through the egress filter like any
       // other browser here. A native window is the person's own browser on their own machine, and
       // reaches the network the way their everyday browser does.
       proxy: window === "screen" ? egressFor(botId, process.env) : null,
@@ -1511,7 +1511,7 @@ export function createProfiles(
      * A Bot's browser when it is running, for the bar. Never starts it, and does not count as a use: the app reads the
      * bar's state while the Bot's screen is open, and that alone must not keep an idle browser from being closed.
      */
-    bot(botId: string): OpenBotBrowser | undefined {
+    bot(botId: string): XiongBaoBrowser | undefined {
       const running = live.get(botId);
       const bot = running?.bot;
       if (!running || !bot) return undefined;

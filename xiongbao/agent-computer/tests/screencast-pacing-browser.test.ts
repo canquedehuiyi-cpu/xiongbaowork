@@ -125,7 +125,7 @@ const STOPS_ON_FINAL = `${ANIMATING}<i id=c style="position:fixed;left:0;top:0;w
 
 beforeAll(async () => {
   if (!asked) return;
-  root = await mkdtemp(join(tmpdir(), "openbot-pacing-"));
+  root = await mkdtemp(join(tmpdir(), "xiongbao-pacing-"));
   site = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,

@@ -16,7 +16,7 @@ import type { FakeAcpScript } from "./fixtures/fake-acp-agent";
  */
 
 const fixture = join(import.meta.dir, "fixtures", "fake-acp-agent.ts");
-const scratch = mkdtempSync(join(tmpdir(), "openbot-runner-acp-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-runner-acp-"));
 const open: AcpClient[] = [];
 let logs = 0;
 

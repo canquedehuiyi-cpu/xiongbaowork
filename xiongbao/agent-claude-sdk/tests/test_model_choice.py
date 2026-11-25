@@ -16,7 +16,7 @@ from ag_ui.core import RunAgentInput
 from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 from test_tool_continuation import events, request, sdk, tool_name  # noqa: F401  (fixtures)
 
 
@@ -57,7 +57,7 @@ def flag(cmd, name):
     ],
 )
 def test_the_servers_choice_reaches_claude_code(model_only, choice, model, effort):
-    adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
+    adapter = XiongBaoClaudeAgentAdapter(name="choice", model_only=model_only)
     options = adapter.build_options(run_input({"xiongbaoModel": choice}), "thread")
 
     assert (options.model, options.effort) == (model, effort)
@@ -72,7 +72,7 @@ def test_the_servers_choice_reaches_claude_code(model_only, choice, model, effor
     "props", [{}, {"xiongbaoModel": {"model": 5}}, {"xiongbaoModel": "claude-opus-5-5"}]
 )
 def test_without_a_choice_claude_code_keeps_its_own_model(model_only, props):
-    adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
+    adapter = XiongBaoClaudeAgentAdapter(name="choice", model_only=model_only)
     cmd = command(adapter.build_options(run_input(props), "thread"))
 
     assert "--model" not in cmd
@@ -81,7 +81,7 @@ def test_without_a_choice_claude_code_keeps_its_own_model(model_only, props):
 
 
 def test_the_servers_choice_wins_over_a_forwarded_model():
-    adapter = OpenBotClaudeAgentAdapter(name="choice")
+    adapter = XiongBaoClaudeAgentAdapter(name="choice")
     options = adapter.build_options(
         run_input({"model": "claude-haiku-4-5", "xiongbaoModel": {"model": "claude-opus-5-5"}}),
         "thread",
@@ -94,7 +94,7 @@ def test_the_servers_choice_wins_over_a_forwarded_model():
 @pytest.mark.parametrize("model_only", [True, False])
 def test_a_choice_changed_between_runs_starts_the_next_query_on_it(sdk, model_only):  # noqa: F811
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="choice", model_only=model_only)
         try:
             first = request(run="run-1", tool_count=0)
             first.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5", "reasoningEffort": "high"}}
@@ -120,7 +120,7 @@ def test_a_choice_changed_between_runs_starts_the_next_query_on_it(sdk, model_on
 @pytest.mark.parametrize("model_only", [True, False])
 def test_a_tool_result_sent_with_another_model_moves_the_running_query_to_it(sdk, model_only):  # noqa: F811
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="choice", model_only=model_only)
         try:
             first = request(run="run-1")
             first.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5"}}
@@ -143,7 +143,7 @@ def test_a_tool_result_sent_with_another_model_moves_the_running_query_to_it(sdk
 @pytest.mark.parametrize("model_only", [True, False])
 def test_a_tool_result_on_the_same_model_leaves_the_query_alone(sdk, model_only):  # noqa: F811
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
+        adapter = XiongBaoClaudeAgentAdapter(name="choice", model_only=model_only)
         try:
             first = request(run="run-1")
             first.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5"}}

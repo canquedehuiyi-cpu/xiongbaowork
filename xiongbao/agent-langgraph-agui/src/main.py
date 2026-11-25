@@ -1,6 +1,6 @@
 """LangGraph as a Bot, through the AG-UI integration rather than by hand.
 
-OpenBot already ships `agent-langgraph`, which speaks AG-UI itself because it predates the rule
+XiongBao already ships `agent-langgraph`, which speaks AG-UI itself because it predates the rule
 against writing adapters. This is the same framework served through `ag-ui-langgraph`, which is the
 package the AG-UI project maintains, so the protocol stops being ours to keep working.
 """
@@ -328,7 +328,7 @@ builder.add_node("tools", execute_tools)
 builder.add_conditional_edges("answer", next_step)
 builder.add_edge("tools", "answer")
 # A checkpointer, because the AG-UI integration reads a thread's state by id and LangGraph refuses
-# to without one. In memory rather than in Postgres: OpenBot's database is where a conversation
+# to without one. In memory rather than in Postgres: XiongBao's database is where a conversation
 # lives, and two stores remembering the same thread is how they come to disagree. So this one is
 # never used across runs either: `WholeThreadAgent` gives every run its own, empty.
 graph = builder.compile(checkpointer=MemorySaver())
@@ -382,6 +382,6 @@ async def plan_models():
 
 add_langgraph_fastapi_endpoint(
     app=app,
-    agent=ToolAwareAgent(name="openbot", graph=graph, config={"recursion_limit": 25}),
+    agent=ToolAwareAgent(name="xiongbao", graph=graph, config={"recursion_limit": 25}),
     path="/",
 )

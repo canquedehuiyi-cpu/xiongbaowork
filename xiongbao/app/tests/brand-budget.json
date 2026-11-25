@@ -86,11 +86,6 @@
   },
   {
     "rule": "identifier",
-    "scope": "agent-computer/src",
-    "lines": 6
-  },
-  {
-    "rule": "identifier",
     "scope": "app/src",
     "lines": 34
   },
@@ -162,7 +157,7 @@
   {
     "rule": "identifier",
     "scope": "toolkit/src",
-    "lines": 30
+    "lines": 27
   },
   {
     "rule": "import-close",

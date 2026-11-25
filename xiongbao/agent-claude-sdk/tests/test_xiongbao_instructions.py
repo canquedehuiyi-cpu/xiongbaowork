@@ -1,8 +1,8 @@
-"""A Claude Agent SDK Bot starts with OpenBot's working rules, because nothing else gives it any.
+"""A Claude Agent SDK Bot starts with XiongBao's working rules, because nothing else gives it any.
 
 This harness hands Claude Code the server's own system messages as its whole system prompt
 (`system_prompt_in_file`), which replaces Claude Code's own. So "act when you have enough", "report
-what you skipped" and every other rule Claude Code would have carried are gone unless OpenBot sends
+what you skipped" and every other rule Claude Code would have carried are gone unless XiongBao sends
 them. `fixtures/server-instructions.json` is what the server sends a Claude SDK Bot on a routine, kept
 byte for byte by the server's own test (`server/tests/copilot.test.ts`, "a Claude Agent SDK Bot on a
 routine"); this runs it through the adapter and reads the prompt Claude Code is started with.
@@ -23,7 +23,7 @@ from ag_ui.core import RunAgentInput
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.adapter import OpenBotClaudeAgentAdapter
+from src.adapter import XiongBaoClaudeAgentAdapter
 from test_tool_continuation import started_with
 
 FIXTURE = Path(__file__).parent / "fixtures" / "server-instructions.json"
@@ -74,7 +74,7 @@ def sdk(monkeypatch):
     return clients
 
 
-def test_a_routine_starts_claude_code_with_openbots_working_rules(sdk):
+def test_a_routine_starts_claude_code_with_xiongbaos_working_rules(sdk):
     sent = json.loads(FIXTURE.read_text(encoding="utf-8"))["messages"]
     role = sent[0]["content"]
     request = RunAgentInput.model_validate(
@@ -97,7 +97,7 @@ def test_a_routine_starts_claude_code_with_openbots_working_rules(sdk):
     )
 
     async def scenario():
-        adapter = OpenBotClaudeAgentAdapter(name="test")
+        adapter = XiongBaoClaudeAgentAdapter(name="test")
         try:
             async with asyncio.timeout(2):
                 finished = [event async for event in adapter.run(request)]

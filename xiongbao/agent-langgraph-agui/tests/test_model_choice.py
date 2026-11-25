@@ -356,7 +356,7 @@ async def test_a_plan_refusing_a_model_ends_the_run_with_its_reason_and_refreshe
     assert len(plan.listings) == 2
 
 
-# The Codex backend's refusal of a tool schema, as the harness log showed it on OpenBot Desktop:
+# The Codex backend's refusal of a tool schema, as the harness log showed it on XiongBao Desktop:
 # `openai.APIError: Invalid JSON schema: regex lookaround is not supported. Found at
 # $.properties.email_address.pattern.` raised from `bind_tools(model).ainvoke`. The message is the
 # backend's, verbatim. The envelope is the one shape that raises that class from a stream: the
@@ -430,7 +430,7 @@ async def test_a_run_that_fails_for_its_own_reason_still_ends_with_a_terminal_er
 
 @pytest.mark.asyncio
 async def test_models_answers_the_plans_listing_in_the_servers_shape(plan, monkeypatch):
-    monkeypatch.setenv("LANGCHAIN_CODEX_ORIGINATOR", "openbot-proof")
+    monkeypatch.setenv("LANGCHAIN_CODEX_ORIGINATOR", "xiongbao-proof")
 
     response = await get("/models")
 
@@ -466,7 +466,7 @@ async def test_models_answers_the_plans_listing_in_the_servers_shape(plan, monke
     # The same credentials the plan's answers carry (`_ChatOpenAICodex._build_headers`).
     assert request["headers"]["authorization"] == "Bearer synthetic-access"
     assert request["headers"]["chatgpt-account-id"] == "synthetic-account"
-    assert request["headers"]["originator"] == "openbot-proof"
+    assert request["headers"]["originator"] == "xiongbao-proof"
 
 
 @pytest.mark.asyncio

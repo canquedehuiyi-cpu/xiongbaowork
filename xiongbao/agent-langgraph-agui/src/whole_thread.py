@@ -25,9 +25,9 @@ a tool turn loops `answer` -> `tools` -> `answer` through it. Nothing in this gr
 `interrupt()`, so no run is ever resumed from a later request; a surface tool ends the run, and the
 next request brings the call and its result back in `messages` like the rest of the thread.
 
-THAT INCLUDES A RUN THAT CARRIES `resume`. OpenBot sends one when a person approves a call the Bot
+THAT INCLUDES A RUN THAT CARRIES `resume`. XiongBao sends one when a person approves a call the Bot
 stopped on (`turnInput` in `toolkit/src/run-turn.ts`), with the approved result in `messages` as
-well. The interrupt it answers was OpenBot's, never this graph's, but the integration hands any
+well. The interrupt it answers was XiongBao's, never this graph's, but the integration hands any
 `resume` to LangGraph as `Command(resume=...)` and never reads the request's messages. A warm process
 finished without asking the model, and a fresh one, which every run now is, asked it with no
 conversation at all. So `resume` is dropped and the run starts from the thread, like any other.

@@ -1,5 +1,5 @@
 /*
- * The OpenBot Recorder's launcher API, standing in for the Recorder in agent-computer's tests while
+ * The XiongBao Recorder's launcher API, standing in for the Recorder in agent-computer's tests while
  * the Recorder's own is built alongside it. It answers exactly as `LauncherApi` in
  * shared/xiongbao-browser.ts types it, and keeps what it holds in `chrome.storage.local` as the
  * Recorder does, so it survives its worker being stopped and started again.
@@ -8,15 +8,15 @@
  * that is what makes a browser show its "started debugging this browser" bar, which the live screen
  * must not lose the page to.
  *
- * What it was called with goes to the OpenBot it was connected to, at `/fixture/calls`, with what it
+ * What it was called with goes to the XiongBao it was connected to, at `/fixture/calls`, with what it
  * can see from inside the browser at that moment (its tabs, the one in front, its microphone
  * permission, whether it opened its setup page), so a test reads the Recorder's side of each call
  * rather than taking the computer's word for it.
  *
- * Like the Recorder, it asks OpenBot whether a connection stands before it takes it, and refuses one
- * OpenBot says is signed out.
+ * Like the Recorder, it asks XiongBao whether a connection stands before it takes it, and refuses one
+ * XiongBao says is signed out.
  *
- * Like the Recorder, the last of a recording reaches Intelligence after Stop answers: for as long as the OpenBot it is
+ * Like the Recorder, the last of a recording reaches Intelligence after Stop answers: for as long as the XiongBao it is
  * connected to says at `/fixture/tail` (none when it says nothing), `lastStopped.sending` is true. A disconnect in that
  * time keeps the rest for the person's next connection, as the Recorder does, so it is sending no longer; every report
  * says whether it was still sending when the call came.
@@ -51,7 +51,7 @@ async function held() {
 const sending = (now) =>
   Boolean(now.lastStopped) && Date.now() < now.sendingUntil;
 
-/** How long the OpenBot this is connected to says the last of a stopped recording takes to send. */
+/** How long the XiongBao this is connected to says the last of a stopped recording takes to send. */
 async function tailMs(connection) {
   const answer = await fetch(new URL("/fixture/tail", connection.openbotUrl))
     .then((response) => response.json())
@@ -129,8 +129,8 @@ async function report(method, input) {
 }
 
 /**
- * Whether OpenBot says this connection is signed out, which the Recorder asks before it takes one
- * (`confirm` in extension/src/background/launcher.ts). Only that answer refuses it: an OpenBot that
+ * Whether XiongBao says this connection is signed out, which the Recorder asks before it takes one
+ * (`confirm` in extension/src/background/launcher.ts). Only that answer refuses it: a XiongBao that
  * cannot be reached leaves the connection taken, as the Recorder's does.
  */
 async function signedOut(connection) {
@@ -148,7 +148,7 @@ globalThis[LAUNCHER_GLOBAL] = {
       JSON.stringify(now.connection) === JSON.stringify(input.connection) &&
       now.narration === input.narration;
     if (!holding && (await signedOut(input.connection))) {
-      // As the Recorder ends after OpenBot says its connection is gone: signed out, and a recording
+      // As the Recorder ends after XiongBao says its connection is gone: signed out, and a recording
       // under it stopped.
       if (now.recording)
         await chrome.debugger
@@ -158,7 +158,7 @@ globalThis[LAUNCHER_GLOBAL] = {
       return {
         ok: false,
         error:
-          "OpenBot did not accept this browser's connection. Open the browser from OpenBot again.",
+          "XiongBao did not accept this browser's connection. Open the browser from XiongBao again.",
       };
     }
     await chrome.storage.local.set({
@@ -241,7 +241,7 @@ globalThis[LAUNCHER_GLOBAL] = {
   },
 };
 
-// As the Recorder does on install: open its setup page. A browser OpenBot opened must never show it.
+// As the Recorder does on install: open its setup page. A browser XiongBao opened must never show it.
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set({ setupOpened: true });
   await chrome.tabs.create({ url: chrome.runtime.getURL("setup.html") });

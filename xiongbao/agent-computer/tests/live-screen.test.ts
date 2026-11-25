@@ -352,7 +352,7 @@ describe.skipIf(!asked)("printable punctuation from the live screen", () => {
         modifiers: 0,
       }),
     );
-    // Older OpenBot surfaces did not send the browser keyCode. Keep their punctuation usable while
+    // Older XiongBao surfaces did not send the browser keyCode. Keep their punctuation usable while
     // a deployment rolls the frontend and computer images independently.
     viewer.socket.send(
       JSON.stringify({

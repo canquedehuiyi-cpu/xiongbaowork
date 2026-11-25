@@ -98,9 +98,9 @@ describe("reading a container's memory as Kubernetes reads it", () => {
   });
 
   test("a computer with no cgroup of its own reads nothing, and so closes nothing for memory", async () => {
-    // OpenBot Desktop's computer on a Mac, or one started by hand on a Linux desktop, whose view of
+    // XiongBao Desktop's computer on a Mac, or one started by hand on a Linux desktop, whose view of
     // /sys/fs/cgroup is the root, where none of these files exist.
-    const empty = await mkdtemp(join(tmpdir(), "openbot-no-cgroup-"));
+    const empty = await mkdtemp(join(tmpdir(), "xiongbao-no-cgroup-"));
     try {
       expect(
         await readContainerMemory({ root: empty, machineBytes: VM_BYTES }),

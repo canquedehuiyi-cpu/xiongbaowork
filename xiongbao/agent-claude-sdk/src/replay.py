@@ -1,6 +1,6 @@
 """Every new SDK query answers from the thread the server sent, never from this process's memory.
 
-OpenBot restores a thread from Intelligence and sends all of it in `input.messages`, on every run.
+XiongBao restores a thread from Intelligence and sends all of it in `input.messages`, on every run.
 Upstream `ag-ui-claude-sdk` reads only `messages[-1]` and keeps the rest in a long-lived worker per
 thread, so a restart, or the 30-minute idle eviction, leaves the Bot answering the newest message
 alone. The worker also builds its options once, so context and grants changed after the first run
@@ -11,7 +11,7 @@ person's first message (see `conversation_content`).
 Client-tool continuations do not take this path: the adapter resolves their PostToolUse hook in the
 same SDK query that emitted the tool use. The exceptions are answered by a fresh query from here: a
 model-endpoint step sent other tools than that query holds, and a result whose query is no longer
-running (it outlived the query's bound, or the process restarted); see `OpenBotClaudeAgentAdapter.run`.
+running (it outlived the query's bound, or the process restarted); see `XiongBaoClaudeAgentAdapter.run`.
 """
 
 import asyncio
@@ -326,7 +326,7 @@ def system_prompt_in_file(options):
     prompt = options.system_prompt
     if not isinstance(prompt, str) or not prompt:
         return None
-    handle, path = tempfile.mkstemp(prefix="openbot-system-prompt-", suffix=".md")
+    handle, path = tempfile.mkstemp(prefix="xiongbao-system-prompt-", suffix=".md")
     with os.fdopen(handle, "w", encoding="utf-8") as file:
         file.write(prompt)
     options.system_prompt = {"type": "file", "path": path}

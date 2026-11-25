@@ -388,7 +388,7 @@ def _after_a_tool_call(monkeypatch, thread, *runs):
                     e["delta"] for e in events
                     if e["type"] == "TOOL_CALL_ARGS" and e["toolCallId"] == call["toolCallId"]
                 )
-                session = await manager.get_session(thread, "openbot", "openbot")
+                session = await manager.get_session(thread, "xiongbao", "xiongbao")
                 assert session.state.get("pending_tool_calls") == [call["toolCallId"]]
                 messages = [
                     *first["messages"],
@@ -466,7 +466,7 @@ def test_a_tool_result_for_this_process_continues_its_session(monkeypatch):
         )
 
     async def next_turn(messages, call_id, manager):
-        session = await manager.get_session("continuation-thread", "openbot", "openbot")
+        session = await manager.get_session("continuation-thread", "xiongbao", "xiongbao")
         continued.append(session.state.get("pending_tool_calls"))
         messages.append({"id": "u3", "role": "user", "content": f"And now? {NEWER_QUESTION}"})
 
@@ -507,7 +507,7 @@ def test_parallel_tool_results_for_this_process_continue_its_session(monkeypatch
                 events = await _post(client, first)
                 calls = [e for e in events if e["type"] == "TOOL_CALL_START"]
                 assert len(calls) == 2, events
-                session = await manager.get_session(f"parallel-{shape}", "openbot", "openbot")
+                session = await manager.get_session(f"parallel-{shape}", "xiongbao", "xiongbao")
                 assert sorted(session.state.get("pending_tool_calls")) == sorted(
                     c["toolCallId"] for c in calls
                 )

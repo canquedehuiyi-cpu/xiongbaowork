@@ -39,7 +39,7 @@ export class BrowserNotOpenError extends Error {
 
 const PERSON_PATHS = new Set<string>([
   ...Object.values(browserComputerPaths),
-  // The person's own everyday browser, on OpenBot Desktop: brought forward, or shown the
+  // The person's own everyday browser, on XiongBao Desktop: brought forward, or shown the
   // Recorder's store page. Nothing in it is read or driven (see real-browser.ts).
   ...Object.values(realBrowserComputerPaths),
   // The live screen, and the person's own input through it.
@@ -94,7 +94,7 @@ export function personHoldsTheWheel(since: string): ComputerControlState {
  *     is the person's own, beside only their own Bots' work. The supervisor and a Sandbox start one per person, and
  *     the Bots on it may be shared with them by anybody, so their own browser gets a computer of its own.
  *   - `personal`: the personal edition's one computer (`COMPUTER_PERSON_ID` with `OPENBOT_EDITION=personal`, as
- *     scripts/start.sh and OpenBot Desktop start it). Its one person owns every Bot on it, as on their own laptop, and
+ *     scripts/start.sh and XiongBao Desktop start it). Its one person owns every Bot on it, as on their own laptop, and
  *     already signs in to sites in those Bots' browsers here, so their own browser runs here too, shown in the page as
  *     a hosted one is, and Record runs in their Bots' browsers.
  *   - `shared`: none of these, the one computer every person's Bots reach. No person's browser runs there, and nobody
@@ -121,7 +121,7 @@ export function computerOwner(
     : { kind: "person", id: person };
 }
 
-/** Why a person's browser is refused on a computer Bots run on. Said to whoever runs OpenBot: the server tells the
+/** Why a person's browser is refused on a computer Bots run on. Said to whoever runs XiongBao: the server tells the
  * person their browser cannot open and who can see to it. */
 export const NOT_ITS_OWN_COMPUTER =
   "A person's own browser runs only on a computer of its own, and Bots run on this one. Give people's browsers their own computers (COMPUTER_SUPERVISOR_URL or a Sandbox), or the desktop app's.";
@@ -129,7 +129,7 @@ export const NOT_ITS_OWN_COMPUTER =
 /**
  * Why Record is refused in a Bot's browser on the computer every person shares (`shared`, not a person's own). Record hands the Recorder there a person's own
  * connection, kept in the Bot's profile until Stop, and every other Bot here can run a shell as the same user and read
- * it. Said to whoever runs OpenBot, as `NOT_ITS_OWN_COMPUTER` is; the server tells the person in its own words.
+ * it. Said to whoever runs XiongBao, as `NOT_ITS_OWN_COMPUTER` is; the server tells the person in its own words.
  */
 export const NOT_ITS_OWN_COMPUTER_RECORD =
   "Record in a Bot's browser runs only on a computer that Bot does not share, and every Bot runs on this one. Give each Bot its own computer (COMPUTER_SUPERVISOR_URL or a Sandbox).";

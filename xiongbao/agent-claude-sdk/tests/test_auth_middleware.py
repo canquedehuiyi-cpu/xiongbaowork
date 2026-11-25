@@ -3,7 +3,7 @@
 `/health` is exempt on purpose, so a test that sends tokens there cannot tell a correct
 comparison from a broken one — every case answers 200 regardless of the token. `/model/cancel`
 is protected, and calling it with a `threadId` nothing has ever seen is a safe way to reach a real
-route handler without a Claude subprocess: `OpenBotClaudeAgentAdapter.interrupt()` no-ops when the
+route handler without a Claude subprocess: `XiongBaoClaudeAgentAdapter.interrupt()` no-ops when the
 thread isn't tracked.
 
 The non-ASCII case is the one that distinguishes `hmac.compare_digest` on `str` (raises,
