@@ -59,14 +59,14 @@ function setup(
     route: Parameters<typeof hook>[0]["route"],
     headers: Record<string, string> = {},
   ) => {
-    const request = new Request("http://127.0.0.1/api/copilotkit/x", {
+    const request = new Request("http://127.0.0.1/api/runtime/x", {
       method: "POST",
       headers,
     });
     try {
       await hook({
         request,
-        path: "/api/copilotkit/x",
+        path: "/api/runtime/x",
         runtime: {} as never,
         route,
       });
@@ -239,30 +239,26 @@ describe("createTrajectoryConnectHook", () => {
 describe("isTrajectoryConnectPath", () => {
   test("matches the runtime's unanchored shape", () => {
     expect(
-      isTrajectoryConnectPath(
-        `/api/copilotkit/trajectory/${TRAJECTORY}/connect`,
-      ),
+      isTrajectoryConnectPath(`/api/runtime/trajectory/${TRAJECTORY}/connect`),
     ).toBe(true);
     expect(
       isTrajectoryConnectPath(
-        `/api/copilotkit/x/trajectory/${TRAJECTORY}/connect`,
+        `/api/runtime/x/trajectory/${TRAJECTORY}/connect`,
       ),
     ).toBe(true);
     expect(
-      isTrajectoryConnectPath(
-        `/api/copilotkit/trajectory/${TRAJECTORY}/connect/`,
-      ),
+      isTrajectoryConnectPath(`/api/runtime/trajectory/${TRAJECTORY}/connect/`),
     ).toBe(true);
-    expect(isTrajectoryConnectPath("/api/copilotkit/agent/a/run")).toBe(false);
+    expect(isTrajectoryConnectPath("/api/runtime/agent/a/run")).toBe(false);
     expect(
-      isTrajectoryConnectPath(`/api/copilotkit/trajectory/${TRAJECTORY}/stop`),
+      isTrajectoryConnectPath(`/api/runtime/trajectory/${TRAJECTORY}/stop`),
     ).toBe(false);
   });
 
   test("honours a base path the way the runtime does", () => {
-    const path = `/api/copilotkit/trajectory/${TRAJECTORY}/connect`;
+    const path = `/api/runtime/trajectory/${TRAJECTORY}/connect`;
 
-    expect(isTrajectoryConnectPath(path, "/api/copilotkit")).toBe(true);
+    expect(isTrajectoryConnectPath(path, "/api/runtime")).toBe(true);
     expect(isTrajectoryConnectPath(path, "/elsewhere")).toBe(false);
     expect(isTrajectoryConnectPath(path, "/api/copilot")).toBe(false);
   });

@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"6ab2b425-570a-4fb3-80f6-183d23e1682a\",\"runId\":\"6780558d-6a23-44ab-ad27-d3c170ed373c\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"1b04fc84-05c4-41a5-868b-a89b178317a7\",\"role\":\"user\",\"content\":\"Name one river. One word only. Call no tools.\"}]}}",
       "status": 200,
@@ -38,7 +38,7 @@
     },
     {
       "at": 1234,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"6fb02984-d354-4fa2-9793-866430dd5d6d\",\"runId\":\"c056cbf5-28e9-4425-aa67-d1c8a16ad762\",\"protocolVersion\":\"1.0\",\"tools\":[{\"name\":\"copilotkitSuggest\",\"description\":\"Suggest what the user could say next\",\"parameters\":{\"type\":\"object\",\"properties\":{\"suggestions\":{\"type\":\"array\",\"description\":\"List of suggestions shown to the user as buttons.\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"description\":\"The title of the suggestion. This is shown as a button and should be short.\"},\"message\":{\"type\":\"string\",\"description\":\"The message to send when the suggestion is clicked. This should be a clear, complete sentence and will be sent as an instruction to the AI.\"}},\"required\":[\"title\",\"message\"]}}},\"required\":[\"suggestions\"]}}],\"context\":[],\"forwardedProps\":{\"toolChoice\":{\"type\":\"function\",\"function\":{\"name\":\"copilotkitSuggest\"}}},\"state\":{},\"messages\":[{\"id\":\"1b04fc84-05c4-41a5-868b-a89b178317a7\",\"role\":\"user\",\"content\":\"Name one river. One word only. Call no tools.\"},{\"id\":\"msg_08e9c22f8bed4639006ad7fbd33a9887d0bb6610db4f70a3fb\",\"role\":\"assistant\",\"content\":\"Nile\"},{\"id\":\"6fb02984-d354-4fa2-9793-866430dd5d6d\",\"role\":\"user\",\"content\":\"Suggest what the user could say next. Provide clear, highly relevant suggestions by calling the `copilotkitSuggest` tool.\\nProvide at least 1 and at most 2 suggestions.\\nThe user has the following tools available: [].\\n Suggest what the person could ask next.\"}]}}",
       "status": 200,

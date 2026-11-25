@@ -45,7 +45,7 @@ describe("recorder request schemas", () => {
 describe("recorder constants and paths", () => {
   test("trajectoryConnect encodes the space", () => {
     expect(recorderPaths.trajectoryConnect("a b")).toBe(
-      "/api/copilotkit/trajectory/a%20b/connect",
+      "/api/runtime/trajectory/a%20b/connect",
     );
   });
 

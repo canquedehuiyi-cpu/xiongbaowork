@@ -2404,7 +2404,7 @@ await startupLifecycle.run(async (startup) => {
         type: "openai-api",
         api: "responses",
         model: runtimeModel.defaultModel,
-        message: `${runtimeModel.defaultModel} takes tools only through the Responses API, so the built-in Bots call /responses at OPENAI_BASE_URL. Set COPILOTKIT_OPENAI_API=chat to call /chat/completions instead.`,
+        message: `${runtimeModel.defaultModel} takes tools only through the Responses API, so the built-in Bots call /responses at OPENAI_BASE_URL. Set XIONGBAO_OPENAI_API=chat to call /chat/completions instead.`,
       }),
     );
 

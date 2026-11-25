@@ -286,7 +286,7 @@ export const EXTRA: FixtureRoute[] = [
   ],
   [
     "GET",
-    /^\/api\/copilotkit\/threads\/([^/]+)\/messages$/,
+    /^\/api\/runtime\/threads\/([^/]+)\/messages$/,
     (c) =>
       ok({
         messages: list(c, THREADS[decodeURIComponent(c.match[1]!)] ?? []),

@@ -134,7 +134,7 @@ function request(
   },
 ) {
   const { declare, ...rest } = body;
-  return new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/run`, {
+  return new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/run`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

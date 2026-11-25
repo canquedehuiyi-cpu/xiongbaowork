@@ -19,7 +19,7 @@ import { englishName } from "../brand";
  *
  * DECIDED BY THE API, NOT THE HOST. Measured: Chat Completions refuses a 129th tool on every OpenAI
  * model, and the Responses API took 2,000. The runtime picks the API (Responses on OpenAI's and
- * Azure's hosts, Chat Completions on any other unless `COPILOTKIT_OPENAI_API` says otherwise), so
+ * Azure's hosts, Chat Completions on any other unless `XIONGBAO_OPENAI_API` says otherwise), so
  * the question is asked of the runtime's own `resolveModel` rather than answered again here: a copy
  * of that rule would drift from it, and the first sign would be a Bot refused on the wrong path.
  * The Responses API's real limit is the compiled size of its strict schemas, which depends on what

@@ -251,6 +251,36 @@ describe("the API chosen at boot, before any Bot runs", () => {
     },
   );
 
+  test.each(["chat", "responses"])(
+    "XIONGBAO_OPENAI_API=%p is copied onto the runtime library's switch and stands",
+    (value) => {
+      const environment: Record<string, string | undefined> = {
+        OPENAI_BASE_URL: GATEWAY,
+        XIONGBAO_OPENAI_API: value,
+      };
+      expect(
+        chooseOpenAIApi(
+          { provider: "openai", defaultModel: "gpt-6.1-terra" },
+          environment,
+        ),
+      ).toBeUndefined();
+      expect(environment.COPILOTKIT_OPENAI_API).toBe(value);
+    },
+  );
+
+  test("the runtime library's own switch, set directly, wins over XIONGBAO_OPENAI_API", () => {
+    const environment: Record<string, string | undefined> = {
+      OPENAI_BASE_URL: GATEWAY,
+      XIONGBAO_OPENAI_API: "chat",
+      COPILOTKIT_OPENAI_API: "responses",
+    };
+    chooseOpenAIApi(
+      { provider: "openai", defaultModel: "gpt-6.1-terra" },
+      environment,
+    );
+    expect(environment.COPILOTKIT_OPENAI_API).toBe("responses");
+  });
+
   test.each([
     ["a model Chat Completions takes tools on", "openai", "gpt-5.5"],
     ["an Anthropic model", "anthropic", "claude-sonnet-5"],

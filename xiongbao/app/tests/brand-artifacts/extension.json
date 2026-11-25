@@ -6,7 +6,7 @@
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
   },
   {
-    "word": "/api/copilotkit/trajectory/$",
+    "word": "/api/runtime/trajectory/$",
     "category": "third-party-name",
     "plan": "keep",
     "note": "库约定路径，品牌去痕决定保留"

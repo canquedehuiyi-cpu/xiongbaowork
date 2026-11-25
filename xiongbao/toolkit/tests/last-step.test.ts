@@ -8,9 +8,9 @@ import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
 } from "@xiongbao/shared/step-limit";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
-import { answersOnLastStep, MOST_NUDGES } from "../src/copilotkit/last-step";
 import { parametersFor } from "../src/granted-tool";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
+import { answersOnLastStep, MOST_NUDGES } from "../src/runtime/last-step";
 
 /**
  * A run stops after `maxSteps` model steps. A Bot that searched once per step spent all of them on

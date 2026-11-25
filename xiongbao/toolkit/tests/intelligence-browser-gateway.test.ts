@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isAllowedGatewayUrl } from "@xiongbao/shared/recorder-api";
-import { IntelligenceKnowingANewThread } from "../src/copilotkit/agents";
+import { IntelligenceKnowingANewThread } from "../src/runtime/agents";
 
 /**
  * Two addresses for one gateway: the server's, and the browser's.

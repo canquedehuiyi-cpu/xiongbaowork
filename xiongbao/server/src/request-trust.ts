@@ -16,7 +16,7 @@ import type { DeploymentConfig, SingleUserAccess } from "./config";
  *
  * WHICH SITE IS ASKING. A browser attaches the person's standing to any request a page makes: their
  * cookies, and on a single-user XiongBao simply being on the machine. So a page on another website
- * could POST to this server, open its sockets, and before this read `/api/copilotkit`, whose runtime
+ * could POST to this server, open its sockets, and before this read `/api/runtime`, whose runtime
  * answered `Access-Control-Allow-Origin: *` by default. The browser says which page is asking in
  * `Origin` and `Sec-Fetch-Site`, and a page cannot forge either. A request that changes something,
  * and every WebSocket, from anywhere but this deployment's own pages is refused (web.dev's Fetch

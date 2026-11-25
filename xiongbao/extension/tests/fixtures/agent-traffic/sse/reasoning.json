@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 57,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"reasoner\"},\"body\":{\"threadId\":\"4d582330-f33d-462f-ac79-56afc0616a92\",\"runId\":\"510a0708-f417-4611-a7f5-78c85434091c\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"0e884135-208a-4bb0-8ba4-8725b7c95024\",\"role\":\"user\",\"content\":\"Think it through step by step first: a bat and a ball cost 1.10 dollars in total, and the bat costs 1.00 dollar more than the ball. How much is the ball? Call no tools, answer with the amount only.\"}]}}",
       "status": 200,

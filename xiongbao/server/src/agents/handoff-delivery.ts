@@ -18,9 +18,9 @@ import {
   type RunAgentInput,
 } from "@ag-ui/client";
 import { answeredBy, answerMessageId } from "@xiongbao/shared/handoff-markers";
-import { THREAD_LOCK_TTL_SECONDS } from "@xiongbao/toolkit/copilotkit/thread-lock";
 import { keepLease } from "@xiongbao/toolkit/lease";
 import type { ThreadLock, TurnAdmission } from "@xiongbao/toolkit/ports";
+import { THREAD_LOCK_TTL_SECONDS } from "@xiongbao/toolkit/runtime/thread-lock";
 import { from, type Observable } from "rxjs";
 import { modelNamedIn, recordHeadlessModelUsage } from "../admin/controls";
 import type { AuditInitiator } from "../audit";

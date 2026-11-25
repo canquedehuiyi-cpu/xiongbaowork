@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
 import type { ExchangeResponse } from "@xiongbao/shared/recorder-api";
 import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
-import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/runtime/agents";
 import { count, eq, inArray } from "drizzle-orm";
 import { GATED_ROUTES, runtimeRun } from "../src/admin/gate";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
@@ -266,7 +266,7 @@ describe("a recorder bearer works only on the Recorder's own routes", () => {
 
   test("a bearer on a Bot's run starts no run", async () => {
     const run = (headers: Record<string, string>) =>
-      call(`/api/copilotkit/agent/${BOT}/run`, {
+      call(`/api/runtime/agent/${BOT}/run`, {
         method: "POST",
         headers,
         json: {

@@ -981,7 +981,7 @@ describe("standing agent roles", () => {
       }),
     );
 
-    const request = new Request("http://xiongbao.test/api/copilotkit");
+    const request = new Request("http://xiongbao.test/api/runtime");
     const resolved = await factory({ request });
 
     expect(seen.request).toBe(request);
@@ -1015,7 +1015,7 @@ describe("standing agent roles", () => {
         resolveModelApiKey: async () => null,
       }),
     );
-    const request = new Request("http://xiongbao.test/api/copilotkit");
+    const request = new Request("http://xiongbao.test/api/runtime");
 
     const before = await factory({ request });
     roleDescription = "Reconcile corporate card statements.";
@@ -1431,7 +1431,7 @@ describe("what a built-in Bot is told about searching", () => {
           resolveModelApiKey: async () => "openai-secret",
           computerGuidance: () => "COMPUTER GUIDANCE",
         }),
-      )({ request: new Request("http://127.0.0.1/api/copilotkit") });
+      )({ request: new Request("http://127.0.0.1/api/runtime") });
       const promptOfRun = async (tools: RunAgentInput["tools"]) => {
         const agent = built(agents, "general-assistant").clone();
         agent.setMessages([{ id: "ask", role: "user", content: "Hello" }]);
@@ -2091,7 +2091,7 @@ describe("what day it is", () => {
           }),
         );
         const agents = await onApiKey({
-          request: new Request("http://127.0.0.1/api/copilotkit"),
+          request: new Request("http://127.0.0.1/api/runtime"),
         });
         await ask(agents, "general-assistant");
         await ask(agents, riskRow.id);
@@ -2115,7 +2115,7 @@ describe("what day it is", () => {
         );
         await ask(
           await onPlan({
-            request: new Request("http://127.0.0.1/api/copilotkit"),
+            request: new Request("http://127.0.0.1/api/runtime"),
           }),
           "general-assistant",
         );
@@ -2504,7 +2504,7 @@ describe("a person's standing instructions", () => {
     );
 
     await factory({
-      request: new Request("http://xiongbao.test/api/copilotkit"),
+      request: new Request("http://xiongbao.test/api/runtime"),
     });
 
     /*
@@ -2896,7 +2896,7 @@ describe("where an attachment reaches the model, and where it deliberately does 
   ];
 
   test("a built-in Bot's run fails naming the attachment it could not load", async () => {
-    // Protects `BuiltInAgentWithSaneHistory.run` (toolkit/src/copilotkit/agents.ts). Drop the
+    // Protects `BuiltInAgentWithSaneHistory.run` (toolkit/src/runtime/agents.ts). Drop the
     // `inlineAttachments` call there and this run completes instead of erroring.
     const agents = await buildAgents(
       [assistant],
@@ -2967,7 +2967,7 @@ describe("where an attachment reaches the model, and where it deliberately does 
 
   test("the narrowed built-in path reads the attachment once, not twice", async () => {
     /*
-     * Protects the exclusion: `RunBuiltAgent.run` (toolkit/src/copilotkit/agents.ts) deliberately does not call
+     * Protects the exclusion: `RunBuiltAgent.run` (toolkit/src/runtime/agents.ts) deliberately does not call
      * `resolveAttachmentParts` itself. It only delegates to the built-in agent its `build()`
      * produces, and that agent's own `run` is what inlines the attachment. Re-adding the call at
      * `RunBuiltAgent.run` would read the same attachment a second time, which is what turns this
@@ -3709,7 +3709,7 @@ describe("each coworker runs on the model it was bound to", () => {
       );
 
       const agents = await factory({
-        request: new Request("http://xiongbao.test/api/copilotkit"),
+        request: new Request("http://xiongbao.test/api/runtime"),
       });
       await prepared(agents, developer.id).runAgent();
 

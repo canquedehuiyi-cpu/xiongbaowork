@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   FOLD_BUDGET_ENV,
   FOLDED_PREFIX,
-} from "../../toolkit/src/copilotkit/turn-folding";
+} from "../../toolkit/src/runtime/turn-folding";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { languageModelFor } from "../src/models/runtime-resolver";
 import type { GrantedTool } from "../src/plugins/tools";

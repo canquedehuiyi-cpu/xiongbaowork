@@ -311,7 +311,7 @@ describe("running a Bot whose agent is on the person's own machine", () => {
     const runId = `run-${crypto.randomUUID()}`;
     started.push(`thread-${runId}-${suite}`);
     const response = await runtime.handler.fetch(
-      new Request("http://127.0.0.1/api/copilotkit/agent/mine/run", {
+      new Request("http://127.0.0.1/api/runtime/agent/mine/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

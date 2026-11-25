@@ -6,10 +6,10 @@ import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
 } from "@xiongbao/shared/step-limit";
-import { UNATTENDED_STEPS } from "@xiongbao/toolkit/copilotkit/last-step";
 import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import type { AuditInitiator } from "@xiongbao/toolkit/initiator";
 import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
+import { UNATTENDED_STEPS } from "@xiongbao/toolkit/runtime/last-step";
 import { Observable } from "rxjs";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

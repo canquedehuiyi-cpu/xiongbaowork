@@ -107,7 +107,7 @@ if [[ "$args" == *"/internal/routines/run"* ]]; then
   printf '${status}'
   exit 0
 fi
-if [[ "$args" == *"/api/copilotkit/info"* ]]; then
+if [[ "$args" == *"/api/runtime/info"* ]]; then
   printf '{"licenseStatus":"valid","mode":"test","agents":{"analyst":{}}}'
   exit 0
 fi

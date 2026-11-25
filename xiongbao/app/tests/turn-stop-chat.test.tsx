@@ -264,7 +264,7 @@ function roster(work?: ChannelSummary["work"]) {
 function opened(channelProp: AgentChannel = channel) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ChannelChat channel={channelProp} runtimeAgentId={BOT} />
       </CopilotKitProvider>
     </QueryClientProvider>,

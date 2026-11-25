@@ -185,7 +185,7 @@ function tree(selected: AgentChannel, generativeUi = false) {
   return (
     <QueryClientProvider client={queryClient}>
       <CopilotKitProvider
-        runtimeUrl="http://localhost/api/copilotkit"
+        runtimeUrl="http://localhost/api/runtime"
         {...generativeUiProviderOptions(generativeUi)}
       >
         <CoreProbe />
@@ -310,7 +310,7 @@ test("generated UI actions run the actual channel agent and thread with edited v
   await user.type(destination, "Kyoto");
   await user.click(view.getByRole("button", { name: "Confirm trip" }));
   await waitFor(() => expect(runRequests).toHaveLength(1));
-  expect(runRequests[0]?.path).toBe("/api/copilotkit/agent/refresh-bot/run");
+  expect(runRequests[0]?.path).toBe("/api/runtime/agent/refresh-bot/run");
   expect(runRequests[0]?.input.threadId).toBe(channel.threadId);
   expect(runRequests[0]?.input.messages.at(-1)).toMatchObject({
     role: "user",
@@ -416,7 +416,7 @@ test.each([
     );
     await user.click(view.getByRole("button", { name: "发送消息" }));
     await waitFor(() => expect(runRequests).toHaveLength(1));
-    expect(runRequests[0]?.path).toBe("/api/copilotkit/agent/refresh-bot/run");
+    expect(runRequests[0]?.path).toBe("/api/runtime/agent/refresh-bot/run");
     expect(runRequests[0]?.input.threadId).toBe(channel.threadId);
     expect(runRequests[0]?.input.messages.slice(0, snapshot.length)).toEqual([
       ...snapshot,
@@ -811,7 +811,7 @@ test("a stalled mount history read releases the send gate and shows unavailable 
 
   await view.findByText(unavailable, {}, { timeout: 4000 });
   await waitFor(() => expect(runRequests).toHaveLength(1), { timeout: 4000 });
-  expect(runRequests[0]?.path).toBe("/api/copilotkit/agent/refresh-bot/run");
+  expect(runRequests[0]?.path).toBe("/api/runtime/agent/refresh-bot/run");
   expect(runRequests[0]?.input.threadId).toBe(channel.threadId);
   expect(runRequests[0]?.input.messages.slice(0, -1)).toEqual([initial]);
   expect(runRequests[0]?.input.messages.at(-1)).toMatchObject({

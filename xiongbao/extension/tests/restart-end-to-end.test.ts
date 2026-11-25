@@ -78,7 +78,7 @@ function route(request: Request): Response | null {
       recorderRequests.push(`${request.method} ${path}`);
     return Response.json({ error: "Not found." }, { status: 404 });
   }
-  const pass = /^\/api\/copilotkit\/trajectory\/([^/]+)\/connect$/.exec(path);
+  const pass = /^\/api\/runtime\/trajectory\/([^/]+)\/connect$/.exec(path);
   if (!pass || request.method !== "POST") return null;
   const trajectoryId = decodeURIComponent(pass[1] ?? "");
   passes.push({

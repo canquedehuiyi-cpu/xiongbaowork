@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"broken\"},\"body\":{\"threadId\":\"3a283c98-c95d-47fd-8efd-42069d83dc26\",\"runId\":\"9ed26ec6-e9f5-4010-8a13-f12032d09d14\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"96a00fbd-f7e9-4222-900c-e7048754f84a\",\"role\":\"user\",\"content\":\"Hello?\"}]}}",
       "status": 200,

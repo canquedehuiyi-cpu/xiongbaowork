@@ -249,7 +249,7 @@
         "loaderId": "79261ADF52723D64EF1190D096C3D671",
         "documentURL": "http://127.0.0.1:7620/learning/deals/deal-2",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -770,7 +770,7 @@
         "timestamp": 1786575.68273,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -833,7 +833,7 @@
         "loaderId": "79261ADF52723D64EF1190D096C3D671",
         "documentURL": "http://127.0.0.1:7620/learning/deals/deal-2",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -1033,7 +1033,7 @@
         "timestamp": 1786575.933099,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -1964,7 +1964,7 @@
         "loaderId": "79261ADF52723D64EF1190D096C3D671",
         "documentURL": "http://127.0.0.1:7620/learning/deals/deal-2",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -2176,7 +2176,7 @@
         "timestamp": 1786581.684377,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -3711,7 +3711,7 @@
         "loaderId": "79261ADF52723D64EF1190D096C3D671",
         "documentURL": "http://127.0.0.1:7620/learning/deals/deal-2",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -3813,7 +3813,7 @@
         "timestamp": 1786586.550476,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -4187,7 +4187,7 @@
         "loaderId": "79261ADF52723D64EF1190D096C3D671",
         "documentURL": "http://127.0.0.1:7620/learning/deals/deal-2",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -4309,7 +4309,7 @@
         "timestamp": 1786591.520703,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -5462,7 +5462,7 @@
         "loaderId": "79261ADF52723D64EF1190D096C3D671",
         "documentURL": "http://127.0.0.1:7620/learning/deals/deal-2",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -5564,7 +5564,7 @@
         "timestamp": 1786594.133663,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit-learning",
+          "url": "http://127.0.0.1:7620/api/runtime-learning",
           "status": 200,
           "statusText": "OK",
           "headers": {

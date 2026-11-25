@@ -199,7 +199,7 @@ function runRequest(signal?: AbortSignal) {
   started.push(threadId);
   return {
     threadId,
-    request: new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/run`, {
+    request: new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -513,7 +513,7 @@ describe("a Stop", () => {
     await began;
     const stop = await serving.handler.fetch(
       new Request(
-        `http://127.0.0.1/api/copilotkit/agent/${BOT}/stop/${threadId}`,
+        `http://127.0.0.1/api/runtime/agent/${BOT}/stop/${threadId}`,
         { method: "POST" },
       ),
     );

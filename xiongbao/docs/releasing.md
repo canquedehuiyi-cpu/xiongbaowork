@@ -316,7 +316,7 @@ browser acts, and the trail records it. It cannot run in CI, and this is not a g
 later.
 
 The journey talks to a deployment that is actually up: it reads `/api/capabilities` and
-`/api/copilotkit/info`, mints a thread, and drives a Bot's browser. A hosted runner could hold the
+`/api/runtime/info`, mints a thread, and drives a Bot's browser. A hosted runner could hold the
 `DATABASE_URL` and `KEY_ENCRYPTION_KEY` that `loadConfig` asks for, but it would also have to hold
 the rest of the stack — the Bots, the supervisor, and one real computer per Bot. The `image` check
 starts the container with placeholders precisely because nothing is contacted at start-up, and a

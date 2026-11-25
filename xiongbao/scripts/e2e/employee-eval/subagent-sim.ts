@@ -15,13 +15,13 @@
  * 用法：bun scripts/e2e/employee-eval/subagent-sim.ts [--json]
  */
 
-import type { Prompt } from "../../../toolkit/src/copilotkit/last-step";
+import type { Prompt } from "../../../toolkit/src/runtime/last-step";
 import {
   estimateTokens,
   FOLD_BUDGET_TOKENS,
   FOLDED_PREFIX,
   foldEarlyResults,
-} from "../../../toolkit/src/copilotkit/turn-folding";
+} from "../../../toolkit/src/runtime/turn-folding";
 
 /** 评测 run 44530026370 里调研题单聊路径的实测：模型调用次数、总输入 token、缓存命中。 */
 export const MEASURED = {

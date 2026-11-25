@@ -188,7 +188,7 @@ identifies_as_xiongbao() {
   case "$name" in
     # A field of this server's own payload. A stray 200 does not carry it.
     server)
-      curl -fsS --max-time 3 "http://localhost:$port/api/copilotkit/info" 2>/dev/null \
+      curl -fsS --max-time 3 "http://localhost:$port/api/runtime/info" 2>/dev/null \
         | grep -q '"licenseStatus"'
       ;;
     # The app is static HTML with nothing to interrogate, so its title is the identity available.
@@ -497,7 +497,7 @@ else
 fi
 
 info "3/4  Runtime health"
-INFO="$(curl -fsS --max-time 8 "http://localhost:$SERVER_PORT/api/copilotkit/info")"
+INFO="$(curl -fsS --max-time 8 "http://localhost:$SERVER_PORT/api/runtime/info")"
 # Read with Bun, which every run of this script already needs, rather than python3, which not every
 # machine has. On Windows `python3` is usually the Microsoft Store alias, which prints "Python was not
 # found" and exits 49, so the run stopped here with the server and worker up and the app never

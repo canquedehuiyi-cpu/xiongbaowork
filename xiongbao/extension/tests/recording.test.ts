@@ -4641,7 +4641,7 @@ test("an AG-UI observation from the page hook is accepted only from a recorded t
     kind: "request",
     streamId: "k3x9/0",
     at: now,
-    url: "https://crm.example.test/api/copilotkit",
+    url: "https://crm.example.test/api/runtime",
     agentId: "default",
     method: "agent/run",
     // A long Thread: far past the 64 KiB a page-network event may be.
@@ -4693,7 +4693,7 @@ test("the page hook's word that the page runs CopilotKit (its runtime answered t
   const runtime = {
     kind: "runtime" as const,
     at: now,
-    url: "http://127.0.0.1:7620/api/copilotkit-learning",
+    url: "http://127.0.0.1:7620/api/runtime-learning",
   };
   const fromTab = (observation: object) =>
     fake.sendExternal(
@@ -4771,7 +4771,7 @@ test("one click on a tab's recording mark leaves its site out: what it still hel
     kind: "runtime",
     tabId: 7,
     at: now,
-    url: "https://crm.example.test/api/copilotkit/info",
+    url: "https://crm.example.test/api/runtime/info",
   } as never);
   await settle();
   expect(agents.at(-1)?.observed).toEqual([]);

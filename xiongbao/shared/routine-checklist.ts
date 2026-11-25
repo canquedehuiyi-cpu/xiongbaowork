@@ -5,7 +5,7 @@
  * 3. rank what is left") is several pieces of work, and a run that does the first two and stops has
  * not finished. The parts are read from the instruction's own list, and every one has to end Done,
  * Blocked (with the reason) or Skipped (with the reason) before the run may end. The run harness
- * holds the run to it (`toolkit/src/copilotkit/last-step.ts`); this file only reads.
+ * holds the run to it (`toolkit/src/runtime/last-step.ts`); this file only reads.
  */
 
 import type { OpenPart } from "./run-notices";

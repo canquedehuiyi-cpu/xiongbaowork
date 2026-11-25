@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "@xiongbao/toolkit/copilotkit/agents";
 import { parametersFor } from "@xiongbao/toolkit/granted-tool";
 import {
   HeadlessToolsMiddleware,
   RUN_ENDED_EARLY,
 } from "@xiongbao/toolkit/headless-tools";
+import { BuiltInAgentWithSaneHistory } from "@xiongbao/toolkit/runtime/agents";
 import {
   acceptedDeliveryIndex,
   runErrorAfterDelivery,

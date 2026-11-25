@@ -249,7 +249,7 @@ async function mounted() {
   cacheChannel();
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <CoreProbe />
         <ChannelChat channel={channel} runtimeAgentId="failed-send-bot" />
       </CopilotKitProvider>

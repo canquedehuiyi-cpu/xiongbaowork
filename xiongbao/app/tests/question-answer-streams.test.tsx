@@ -356,7 +356,7 @@ function conversation() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <BotsNavBadge />
         <ChannelChat channel={channel} runtimeAgentId={BOT} />
       </CopilotKitProvider>

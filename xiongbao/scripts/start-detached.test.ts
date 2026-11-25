@@ -84,7 +84,7 @@ test("startup closes updater pipes while its background services remain live", a
   await executable(
     "curl",
     `case "$*" in
-  *"/api/copilotkit/info"*)
+  *"/api/runtime/info"*)
     [ -f "$TEST_ROOT/server.pid" ] || exit 7
     printf '{"licenseStatus":"valid","mode":"test","agents":{"test":{}}}' ;;
   *"http://localhost:3010/"*)

@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 55,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"5fa049ed-fbcc-4ac9-8e59-bdc843946c86\",\"runId\":\"9fb80749-50d9-4d5c-9e47-61e6b589cb5e\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"b26ef2b1-4268-4457-85ca-149781a1ec17\",\"role\":\"user\",\"content\":\"What is the weather in Lisbon? Call lookupWeather once, then answer in one sentence.\"}]}}",
       "status": 200,

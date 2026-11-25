@@ -9,12 +9,12 @@ import {
 import { LLMock } from "@copilotkit/aimock";
 import { MODEL_TOOL_LIMIT } from "@xiongbao/shared/model-tool-limit";
 import { ownToolLabel } from "@xiongbao/shared/tool-name";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import {
   RUNTIME_STATE_TOOLS,
   TOOL_LIMIT_EXCEEDED,
   toolNamesSent,
-} from "@xiongbao/toolkit/copilotkit/agents";
-import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+} from "@xiongbao/toolkit/runtime/agents";
 import { lastValueFrom, toArray } from "rxjs";
 import { z } from "zod";
 import {

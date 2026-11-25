@@ -206,6 +206,7 @@ describe("findLeftovers", () => {
         "const v = { __copilotkit_interrupt_value__: 1 };",
         'const t = "copilotkitSuggest";',
         'const c = "[&_.copilotKitInput]:border";',
+        "process.env.COPILOTKIT_OPENAI_API = 1;",
         "const w = { __copilotkit_other__: 1 };",
         'const s = "CopilotKit Intelligence";',
       ].join("\n"),
@@ -215,7 +216,7 @@ describe("findLeftovers", () => {
       findLeftovers(["xiongbao/server/src/wire.ts"], "R1", root).map(
         (hit) => hit.line,
       ),
-    ).toEqual([4, 5]);
+    ).toEqual([5, 6]);
     expect(findLeftovers(["xiongbao/app/src/s.css"], "R1", root)).toEqual([]);
   });
 

@@ -423,7 +423,7 @@ afterAll(async () => {
 function app() {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ActiveBotProvider>
           <ComputerTools />
           <GalleryTools />

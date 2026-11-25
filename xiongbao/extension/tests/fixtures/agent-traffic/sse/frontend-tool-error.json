@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"c2b2f47c-2b7f-4e95-84f2-eab74d881db8\",\"runId\":\"14d8900f-49b9-42a6-b034-e602100be6e5\",\"protocolVersion\":\"1.0\",\"tools\":[{\"name\":\"showGreeting\",\"description\":\"Show a greeting card to the person in the page.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"mood\":{\"type\":\"string\"}},\"required\":[\"name\",\"mood\"]}}],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"f580558d-cb0a-4935-a439-d9b98a7f9892\",\"role\":\"user\",\"content\":\"Call showGreeting with name Ada and mood cheerful, then say done in one word.\"}]}}",
       "status": 200,
@@ -42,7 +42,7 @@
     },
     {
       "at": 1497,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"c2b2f47c-2b7f-4e95-84f2-eab74d881db8\",\"runId\":\"54aa7613-547f-4369-b03b-a92d1005df22\",\"protocolVersion\":\"1.0\",\"tools\":[{\"name\":\"showGreeting\",\"description\":\"Show a greeting card to the person in the page.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"mood\":{\"type\":\"string\"}},\"required\":[\"name\",\"mood\"]}}],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"f580558d-cb0a-4935-a439-d9b98a7f9892\",\"role\":\"user\",\"content\":\"Call showGreeting with name Ada and mood cheerful, then say done in one word.\"},{\"id\":\"8345eee7-7315-44e1-aefe-f039af1a7071\",\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call_LcvTNdQtSmze8wpFHBDFPwSJ\",\"type\":\"function\",\"function\":{\"name\":\"showGreeting\",\"arguments\":\"{\\\"name\\\":\\\"Ada\\\",\\\"mood\\\":\\\"cheerful\\\"}\"}}]},{\"id\":\"2ae1eec0-0ec0-4a42-9a5c-b89c5d9bddcd\",\"role\":\"tool\",\"toolCallId\":\"call_LcvTNdQtSmze8wpFHBDFPwSJ\",\"content\":\"Error: The greeting card could not be shown.\"},{\"id\":\"148ce4af-af2d-4722-a3f0-55fca64463aa\",\"role\":\"user\",\"content\":\"Say ok in one word. Call no tools.\"}]}}",
       "status": 200,

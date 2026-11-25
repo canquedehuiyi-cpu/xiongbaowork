@@ -1,7 +1,7 @@
 /**
  * A Bot's subtasks as they were recorded off a real run (2026-11-02, the built-in Bot on
  * gpt-5.6-terra, with an accounts app over MCP): the `run_subagent` call the Bot made, the result the
- * server handed back, and the subagent's own thread exactly as `/api/copilotkit/threads/:id/messages`
+ * server handed back, and the subagent's own thread exactly as `/api/runtime/threads/:id/messages`
  * returned it, in the store's `{ id, name, args }` dialect. One finished with an answer; the other
  * stopped before an action that needed the person's yes, with "Ask before making changes" on.
  */

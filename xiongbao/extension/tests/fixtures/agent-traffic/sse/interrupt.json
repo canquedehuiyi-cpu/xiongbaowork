@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 55,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"shopper\"},\"body\":{\"threadId\":\"0bc2bf7f-bc91-4595-8bd8-9e7aee365732\",\"runId\":\"398a0b9d-f0d5-4122-b4a6-87c866292d53\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"0695f26a-2add-4221-9ff1-e03a4a8636a3\",\"role\":\"user\",\"content\":\"Buy one coffee for 4 dollars. Ask for approval with approvePurchase first.\"}]}}",
       "status": 200,
@@ -62,7 +62,7 @@
     },
     {
       "at": 917,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"shopper\"},\"body\":{\"threadId\":\"0bc2bf7f-bc91-4595-8bd8-9e7aee365732\",\"runId\":\"e77d6829-4490-4147-b78e-c27ea2ff5de0\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"0695f26a-2add-4221-9ff1-e03a4a8636a3\",\"role\":\"user\",\"content\":\"Buy one coffee for 4 dollars. Ask for approval with approvePurchase first.\"},{\"id\":\"27958ff2-ead5-40a5-a9d0-4efec6bfda1a\",\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call_PgBiPdnQS2p05EDKRLa6DKm2\",\"type\":\"function\",\"function\":{\"name\":\"approvePurchase\",\"arguments\":\"{\\\"item\\\":\\\"coffee\\\",\\\"amount\\\":4}\"}}]}],\"resume\":[{\"interruptId\":\"call_PgBiPdnQS2p05EDKRLa6DKm2\",\"status\":\"resolved\",\"payload\":{\"approved\":true}}]}}",
       "status": 200,

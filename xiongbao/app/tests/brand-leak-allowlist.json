@@ -639,14 +639,14 @@
   {
     "file": "extension/src/background/network/index.ts",
     "text": "OPENBOT_AGENT_RUN",
-    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit agent route",
+    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/runtime agent route",
     "category": "persisted-data",
     "plan": "keep"
   },
   {
     "file": "extension/src/background/network/index.ts",
     "text": "OPENBOT_RUNTIME_INFO",
-    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/copilotkit runtime route",
+    "reason": "persisted-identifier: identifier whose pattern matches the upstream /api/runtime runtime route",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -749,7 +749,7 @@
     "plan": "keep"
   },
   {
-    "file": "toolkit/src/copilotkit/agents.ts",
+    "file": "toolkit/src/runtime/agents.ts",
     "text": "\"OPENBOT_TOOL_LIMIT_EXCEEDED\"",
     "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",

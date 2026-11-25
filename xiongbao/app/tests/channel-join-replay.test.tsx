@@ -281,7 +281,7 @@ function HoldJoin() {
 function opened() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <CoreProbe />
         <HoldJoin />
         <ChannelChat channel={channel} runtimeAgentId="join-bot" />
@@ -438,7 +438,7 @@ test("a reply is shown once and whole after leaving its conversation and coming 
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <CoreProbe />
         <HoldJoin />
         <RouterProvider router={router as never} />

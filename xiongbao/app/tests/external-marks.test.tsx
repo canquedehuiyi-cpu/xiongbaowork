@@ -439,7 +439,7 @@ describe("对话顶栏", () => {
     const opened: string[] = [];
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+        <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
           <EmployeeCardContext.Provider
             value={{ openEmployeeCard: (id) => opened.push(id) }}
           >

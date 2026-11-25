@@ -3,7 +3,7 @@
  *
  * Every sentence the harness itself puts in front of the model lives here and nowhere else, so the
  * wording can be changed in one place without touching the mechanism that decides when to send it
- * (`toolkit/src/copilotkit/last-step.ts`). Each one is sent as a one-turn message: it is added to
+ * (`toolkit/src/runtime/last-step.ts`). Each one is sent as a one-turn message: it is added to
  * the prompt of the call it is for and never written to the conversation, so the person never sees
  * it and the next run never inherits it.
  */

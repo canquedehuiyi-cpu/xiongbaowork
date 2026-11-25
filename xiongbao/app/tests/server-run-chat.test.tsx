@@ -442,7 +442,7 @@ afterAll(async () => {
 function app(screen = false) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ActiveBotProvider>
           <ServerComputerToolsProvider value>
             <ComputerTools />

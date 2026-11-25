@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { Prompt } from "../src/copilotkit/last-step";
+import type { Prompt } from "../src/runtime/last-step";
 import {
   BLOB_CHARS_PER_TOKEN,
   FOLD_KEEP_STEPS,
   FOLDED_PREFIX,
   foldEarlyResults,
-} from "../src/copilotkit/turn-folding";
+} from "../src/runtime/turn-folding";
 
 /*
  * 兜底：工具结果文字里夹着二进制数据（截图的 base64）时，估算按每 1.5 个字符 1 个 token，越线判断才不会慢；

@@ -30,16 +30,6 @@ import { type Persona, personaGuidance } from "@xiongbao/shared/persona";
 import { researchRoleOfToolName } from "@xiongbao/shared/research";
 import { checklistNotice } from "@xiongbao/shared/run-notices";
 import { SUBAGENT_TOOL } from "@xiongbao/shared/subagent";
-import {
-  type BuiltInAgentHooks,
-  BuiltInAgentWithSaneHistory,
-  CloningRemoteAgent,
-  RUNTIME_STATE_TOOLS,
-  RunBuiltAgent,
-  UnavailableAgent,
-} from "@xiongbao/toolkit/copilotkit/agents";
-import { firingChecklist } from "@xiongbao/toolkit/copilotkit/firing-checklist";
-import { UNATTENDED_STEPS } from "@xiongbao/toolkit/copilotkit/last-step";
 import type {
   GrantedTool,
   ToolExecution,
@@ -49,6 +39,16 @@ import { HeadlessToolsMiddleware } from "@xiongbao/toolkit/headless-tools";
 import { sanitizeSeededHistory } from "@xiongbao/toolkit/history-sanitize";
 import { executeNativeApprovalTool } from "@xiongbao/toolkit/native-approval";
 import type { ThreadLock } from "@xiongbao/toolkit/ports";
+import {
+  type BuiltInAgentHooks,
+  BuiltInAgentWithSaneHistory,
+  CloningRemoteAgent,
+  RUNTIME_STATE_TOOLS,
+  RunBuiltAgent,
+  UnavailableAgent,
+} from "@xiongbao/toolkit/runtime/agents";
+import { firingChecklist } from "@xiongbao/toolkit/runtime/firing-checklist";
+import { UNATTENDED_STEPS } from "@xiongbao/toolkit/runtime/last-step";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
@@ -699,14 +699,18 @@ export function runtimeModelForEnvironment(
  * runtime's rule, so a server that serves only Chat Completions, or serves it better (Groq's `/responses` refuses
  * tool calls), is asked as it always was.
  *
- * Set on the environment because `COPILOTKIT_OPENAI_API` is the runtime's own switch, read whenever a Bot's model is
- * resolved, and a deployment runs its built-in Bots on one model, decided once at boot. An operator who set the
- * switch has decided, and that stands, `chat` included.
+ * Set on the environment because `COPILOTKIT_OPENAI_API` is the runtime library's own switch, read whenever a Bot's
+ * model is resolved, and a deployment runs its built-in Bots on one model, decided once at boot. An operator decides
+ * with `XIONGBAO_OPENAI_API` (`responses` or `chat`), copied onto the library's switch here; one who set the library's
+ * switch directly has decided too. Either stands, `chat` included.
  */
 export function chooseOpenAIApi(
   model: RuntimeModel,
   environment: Record<string, string | undefined> = process.env,
 ): "responses" | undefined {
+  const chosen = environment.XIONGBAO_OPENAI_API?.trim();
+  if (chosen && !environment.COPILOTKIT_OPENAI_API?.trim())
+    environment.COPILOTKIT_OPENAI_API = chosen;
   if (
     model.provider !== "openai" ||
     environment.COPILOTKIT_OPENAI_API?.trim() ||
@@ -4441,7 +4445,7 @@ export function mountCopilotRuntime(
   } = {},
 ): MountedCopilotRuntime {
   const {
-    basePath = "/api/copilotkit",
+    basePath = "/api/runtime",
     onRunBusy,
     localRunner,
     trajectoryCapture,

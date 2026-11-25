@@ -39,7 +39,7 @@ async function body(context: Ctx): Promise<Record<string, unknown>> {
   }
 }
 
-const COPILOT_BASE = "/api/copilotkit";
+const COPILOT_BASE = "/api/runtime";
 
 /**
  * A run or connect of a Bot through the CopilotKit runtime, matched the way the runtime matches it.
@@ -47,7 +47,7 @@ const COPILOT_BASE = "/api/copilotkit";
  * The runtime does not anchor its routes: its router (`fetch-router` `matchSegments`) takes any path
  * under its base whose LAST segments are `agent/<id>/run`, `agent/<id>/connect` or `agent/<id>/suggest`
  * (a suggestion runs the Bot's model on whatever messages the caller sends). So
- * `/api/copilotkit/x/agent/<id>/run` runs the Bot exactly as `/api/copilotkit/agent/<id>/run` does,
+ * `/api/runtime/x/agent/<id>/run` runs the Bot exactly as `/api/runtime/agent/<id>/run` does,
  * and an anchored pattern here would let the first one through ungoverned.
  */
 export function runtimeRun(

@@ -377,7 +377,7 @@ describe("XiongBao's own origin, as a caller on this machine reached it", () => 
     singleUserAccess: { thisMachineOnly: false, hosts: [] },
   };
   const request = (host: string) =>
-    new Request(`http://${host}/api/copilotkit/trajectory/x/connect`, {
+    new Request(`http://${host}/api/runtime/trajectory/x/connect`, {
       headers: { host },
     });
 

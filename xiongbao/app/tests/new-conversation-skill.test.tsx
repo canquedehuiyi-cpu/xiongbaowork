@@ -241,7 +241,7 @@ test("the first message of a new conversation carries its skill, as the next one
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <RouterProvider router={router} />
       </CopilotKitProvider>
     </QueryClientProvider>,

@@ -211,7 +211,7 @@ function mounting() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <PickDate />
         <ChannelChat channel={channel} runtimeAgentId="waiting-bot" />
       </CopilotKitProvider>

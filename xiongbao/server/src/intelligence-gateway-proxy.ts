@@ -43,7 +43,7 @@ const capturePass = new AsyncLocalStorage<string>();
  */
 export function createCapturePassOrigin(
   config: Pick<DeploymentConfig, "singleUser" | "singleUserAccess">,
-  basePath = "/api/copilotkit",
+  basePath = "/api/runtime",
 ): MiddlewareHandler {
   return async (context, next) => {
     // The raw path, which is the one the runtime routes on.

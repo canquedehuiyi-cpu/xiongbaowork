@@ -159,7 +159,7 @@ function opened() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ChannelChat channel={channel} runtimeAgentId={BOT} />
       </CopilotKitProvider>
     </QueryClientProvider>,

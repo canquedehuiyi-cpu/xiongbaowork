@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { BaseEvent } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
-import { answersOnLastStep } from "../src/copilotkit/last-step";
 import { parametersFor } from "../src/granted-tool";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
+import { answersOnLastStep } from "../src/runtime/last-step";
 
 /*
  * 交付即收尾：看板卡的员工调用 `deliver_task` 被接受之后，这一轮就结束，不再为一句收尾的话多调一次模型。

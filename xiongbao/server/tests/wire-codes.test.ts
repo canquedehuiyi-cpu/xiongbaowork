@@ -165,7 +165,7 @@ function mount() {
 }
 
 function inbound(path: string, runId: string, threadId = "thread-wire-codes") {
-  return new Request(`http://127.0.0.1/api/copilotkit${path}`, {
+  return new Request(`http://127.0.0.1/api/runtime${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

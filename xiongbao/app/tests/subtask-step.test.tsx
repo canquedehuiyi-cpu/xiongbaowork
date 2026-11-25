@@ -31,9 +31,7 @@ beforeAll(() => {
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
       const path = new URL(String(input), "http://localhost/").pathname;
-      const id = /^\/api\/copilotkit\/threads\/([^/]+)\/messages$/.exec(
-        path,
-      )?.[1];
+      const id = /^\/api\/runtime\/threads\/([^/]+)\/messages$/.exec(path)?.[1];
       const messages = id ? served.get(decodeURIComponent(id)) : undefined;
       return messages
         ? Response.json({ messages })

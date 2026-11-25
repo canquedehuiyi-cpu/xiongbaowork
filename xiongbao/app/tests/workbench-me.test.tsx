@@ -119,7 +119,7 @@ beforeEach(() => {
     ["GET /api/me/avatar/sources", { agentId: "avatar-alice" }],
     ["GET /api/channels", { channels: [], nextCursor: null }],
     ["GET /api/bots/attention", { bots: [], lastPingId: null }],
-    ["GET /api/copilotkit/info", { version: "test", agents: {} }],
+    ["GET /api/runtime/info", { version: "test", agents: {} }],
     ["POST /api/auth/sign-out", { success: true }],
   ]);
   globalThis.fetch = Object.assign(

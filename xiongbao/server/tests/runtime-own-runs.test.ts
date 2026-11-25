@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { SUBAGENT_TOOL } from "@xiongbao/shared/subagent";
-import { RUNTIME_STATE_TOOLS } from "@xiongbao/toolkit/copilotkit/agents";
 import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
+import { RUNTIME_STATE_TOOLS } from "@xiongbao/toolkit/runtime/agents";
 import { inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
@@ -253,7 +253,7 @@ async function personAsks(
   const threadId = `thread-${randomUUID()}`;
   const runId = `run-${randomUUID()}`;
   const response = await runtime.handler.fetch(
-    new Request(`http://127.0.0.1/api/copilotkit/agent/${botId}/run`, {
+    new Request(`http://127.0.0.1/api/runtime/agent/${botId}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -603,7 +603,7 @@ test("a suggestion holds none of the Bot's tools, even when it carries everythin
 
   for (const botId of [BUILT_IN, REMOTE]) {
     const response = await runtime.handler.fetch(
-      new Request(`http://127.0.0.1/api/copilotkit/agent/${botId}/suggest`, {
+      new Request(`http://127.0.0.1/api/runtime/agent/${botId}/suggest`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

@@ -177,11 +177,11 @@ test("CopilotKit's own capture asking its runtime for a capture pass is the page
   // empty body, and the single route's envelope.
   const trajectoryId = "6b0e2f1c-9d3a-4c5e-8f7a-1b2c3d4e5f60";
   const rest = {
-    url: `https://crm.example.test/api/copilotkit/trajectory/${encodeURIComponent(trajectoryId)}/connect`,
+    url: `https://crm.example.test/api/runtime/trajectory/${encodeURIComponent(trajectoryId)}/connect`,
     body: JSON.stringify({}),
   };
   const single = {
-    url: "https://crm.example.test/api/copilotkit",
+    url: "https://crm.example.test/api/runtime",
     body: JSON.stringify({
       method: "trajectory/connect",
       params: { trajectoryId },
@@ -204,7 +204,7 @@ test("CopilotKit's own capture asking its runtime for a capture pass is the page
   // The same runtime's agent run, and an app's own route that mentions trajectories, are not.
   expect(
     isTelemetry(
-      "https://crm.example.test/api/copilotkit",
+      "https://crm.example.test/api/runtime",
       JSON.stringify({
         method: "agent/run",
         params: { agentId: "default" },

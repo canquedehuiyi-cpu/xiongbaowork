@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 53,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"ce9a71ec-6fee-4fe1-a0f6-b42b3a8c5c26\",\"runId\":\"89abb4f6-4d47-426b-85f1-7c2c2168fd49\",\"protocolVersion\":\"1.0\",\"tools\":[{\"name\":\"showGreeting\",\"description\":\"Show a greeting card to the person in the page.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"mood\":{\"type\":\"string\"}},\"required\":[\"name\",\"mood\"]}}],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"498ac57b-d649-4f9f-98e5-3a1adb7393d7\",\"role\":\"user\",\"content\":\"Call showGreeting with name Ada and mood cheerful, then say done in one word.\"}]}}",
       "status": 200,
@@ -42,7 +42,7 @@
     },
     {
       "at": 1229,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"ce9a71ec-6fee-4fe1-a0f6-b42b3a8c5c26\",\"runId\":\"d60b007e-0118-488a-8c7c-46d547636340\",\"protocolVersion\":\"1.0\",\"tools\":[{\"name\":\"showGreeting\",\"description\":\"Show a greeting card to the person in the page.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"mood\":{\"type\":\"string\"}},\"required\":[\"name\",\"mood\"]}}],\"context\":[],\"forwardedProps\":{},\"state\":{},\"messages\":[{\"id\":\"498ac57b-d649-4f9f-98e5-3a1adb7393d7\",\"role\":\"user\",\"content\":\"Call showGreeting with name Ada and mood cheerful, then say done in one word.\"},{\"id\":\"bf80e13c-f5c3-40dc-9b73-dc2ed4648fc6\",\"role\":\"assistant\",\"toolCalls\":[{\"id\":\"call_dT7Oa2spQDAON1HCKWBkFUQx\",\"type\":\"function\",\"function\":{\"name\":\"showGreeting\",\"arguments\":\"{\\\"name\\\":\\\"Ada\\\",\\\"mood\\\":\\\"cheerful\\\"}\"}}]},{\"id\":\"7f0b70ff-eb5b-45dc-8e11-26296df60301\",\"role\":\"tool\",\"toolCallId\":\"call_dT7Oa2spQDAON1HCKWBkFUQx\",\"content\":\"Shown a greeting card for Ada.\"}]}}",
       "status": 200,

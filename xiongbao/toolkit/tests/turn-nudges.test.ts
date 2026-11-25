@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
+import { parametersFor } from "../src/granted-tool";
 import {
   answersOnLastStep,
   MOST_NUDGES,
   type RunSteps,
-} from "../src/copilotkit/last-step";
-import { parametersFor } from "../src/granted-tool";
+} from "../src/runtime/last-step";
 
 /*
  * 收尾前的提醒要看「这一轮」做过什么，而不是「这一次运行」做过什么。

@@ -9,7 +9,7 @@ import { createTrajectoryConnect } from "../src/recorder/trajectory-connect";
 const ID = "11111111-2222-4333-8444-555555555555";
 const settings = { apiUrl: "http://intelligence.test", apiKey: "k" };
 const request = () =>
-  new Request(`http://xiongbao.test/api/copilotkit/trajectory/${ID}/connect`, {
+  new Request(`http://xiongbao.test/api/runtime/trajectory/${ID}/connect`, {
     method: "POST",
   });
 

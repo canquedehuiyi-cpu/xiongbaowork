@@ -102,6 +102,8 @@ export const DEPENDENCY_WIRE_NAMES: readonly string[] = [
   "copilotkitSuggest",
   // 依赖样式表里聊天输入框的类名（app 用 Tailwind 任意选择器改它的外观）。
   "copilotKitInput",
+  // @copilotkit/runtime 读的环境变量：选 OpenAI 的哪套 API（对外的名字是 XIONGBAO_OPENAI_API）。
+  "COPILOTKIT_OPENAI_API",
 ];
 
 /**

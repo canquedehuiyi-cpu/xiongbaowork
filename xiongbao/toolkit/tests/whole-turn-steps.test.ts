@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { BaseEvent } from "@ag-ui/client";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
 import { parametersFor } from "../src/granted-tool";
 import { HeadlessToolsMiddleware } from "../src/headless-tools";
+import { BuiltInAgentWithSaneHistory } from "../src/runtime/agents";
 
 /*
  * A turn the host carries on between runs is several runs: the Bot asks for a tool the host runs,

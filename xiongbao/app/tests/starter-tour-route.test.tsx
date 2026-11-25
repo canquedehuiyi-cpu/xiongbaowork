@@ -351,7 +351,7 @@ function draw(path: string) {
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <RouterProvider router={router} />
       </CopilotKitProvider>
     </QueryClientProvider>,

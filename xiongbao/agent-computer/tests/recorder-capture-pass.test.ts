@@ -54,7 +54,7 @@ const xiongbao = asked
       port: 0,
       fetch(request) {
         const { pathname } = new URL(request.url);
-        const pass = /^\/api\/copilotkit\/trajectory\/([^/]+)\/connect$/.exec(
+        const pass = /^\/api\/runtime\/trajectory\/([^/]+)\/connect$/.exec(
           pathname,
         );
         if (pass?.[1]) {

@@ -120,7 +120,7 @@ describe.skipIf(!asked)("a deployment that is up", () => {
     const info = await json<{
       licenseStatus?: string;
       agents: Record<string, unknown>;
-    }>("/api/copilotkit/info");
+    }>("/api/runtime/info");
     if (info.licenseStatus !== undefined)
       expect(info.licenseStatus).toBe("valid");
     expect(Object.keys(info.agents).length).toBeGreaterThan(0);

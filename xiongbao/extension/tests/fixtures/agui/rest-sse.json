@@ -1,5 +1,5 @@
 {
-  "description": "CopilotKit main (c21eeda029) v2 react demo home page on its multi-route runtime (POST /api/copilotkit/agent/default/run, a body over CDP's 64 KiB inline limit, SSE answer; suggestions on /agent/default/suggest), real BuiltInAgent on OpenAI gpt-5.2, real Chrome over CDP.",
+  "description": "CopilotKit main (c21eeda029) v2 react demo home page on its multi-route runtime (POST /api/runtime/agent/default/run, a body over CDP's 64 KiB inline limit, SSE answer; suggestions on /agent/default/suggest), real BuiltInAgent on OpenAI gpt-5.2, real Chrome over CDP.",
   "browser": "Chrome/156.0.8078.47",
   "entries": [
     {
@@ -231,7 +231,7 @@
         "loaderId": "E4003487BF6E176CA0BE045AB222E71F",
         "documentURL": "http://127.0.0.1:7620/",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/info",
+          "url": "http://127.0.0.1:7620/api/runtime/info",
           "method": "GET",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -853,7 +853,7 @@
         "timestamp": 1786647.507566,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/info",
+          "url": "http://127.0.0.1:7620/api/runtime/info",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -1102,7 +1102,7 @@
         "loaderId": "E4003487BF6E176CA0BE045AB222E71F",
         "documentURL": "http://127.0.0.1:7620/",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/threads?agentId=default",
+          "url": "http://127.0.0.1:7620/api/runtime/threads?agentId=default",
           "method": "GET",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -1129,7 +1129,7 @@
         "loaderId": "E4003487BF6E176CA0BE045AB222E71F",
         "documentURL": "http://127.0.0.1:7620/",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/agent/default/suggest",
+          "url": "http://127.0.0.1:7620/api/runtime/agent/default/suggest",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -1467,7 +1467,7 @@
         "timestamp": 1786647.752681,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/threads?agentId=default",
+          "url": "http://127.0.0.1:7620/api/runtime/threads?agentId=default",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -1551,7 +1551,7 @@
         "timestamp": 1786647.758408,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/agent/default/suggest",
+          "url": "http://127.0.0.1:7620/api/runtime/agent/default/suggest",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -2970,7 +2970,7 @@
         "loaderId": "E4003487BF6E176CA0BE045AB222E71F",
         "documentURL": "http://127.0.0.1:7620/",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/agent/default/run",
+          "url": "http://127.0.0.1:7620/api/runtime/agent/default/run",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -3058,7 +3058,7 @@
         "timestamp": 1786654.779214,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/agent/default/run",
+          "url": "http://127.0.0.1:7620/api/runtime/agent/default/run",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -3213,7 +3213,7 @@
         "loaderId": "E4003487BF6E176CA0BE045AB222E71F",
         "documentURL": "http://127.0.0.1:7620/",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/threads?agentId=default",
+          "url": "http://127.0.0.1:7620/api/runtime/threads?agentId=default",
           "method": "GET",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -3251,7 +3251,7 @@
         "loaderId": "E4003487BF6E176CA0BE045AB222E71F",
         "documentURL": "http://127.0.0.1:7620/",
         "request": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/agent/default/suggest",
+          "url": "http://127.0.0.1:7620/api/runtime/agent/default/suggest",
           "method": "POST",
           "headers": {
             "sec-ch-ua-platform": "\"macOS\"",
@@ -3354,7 +3354,7 @@
         "timestamp": 1786656.630093,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/threads?agentId=default",
+          "url": "http://127.0.0.1:7620/api/runtime/threads?agentId=default",
           "status": 200,
           "statusText": "OK",
           "headers": {
@@ -3418,7 +3418,7 @@
         "timestamp": 1786656.634667,
         "type": "Fetch",
         "response": {
-          "url": "http://127.0.0.1:7620/api/copilotkit/agent/default/suggest",
+          "url": "http://127.0.0.1:7620/api/runtime/agent/default/suggest",
           "status": 200,
           "statusText": "OK",
           "headers": {

@@ -1824,7 +1824,7 @@ export function createApp(
     });
   }
   // The CopilotKit runtime, behind the same session guard as every other API route. Mounted last so
-  // its own routing under /api/copilotkit cannot shadow an XiongBao route declared above.
+  // its own routing under /api/runtime cannot shadow an XiongBao route declared above.
   if (copilotHandler) {
     /*
      * The runtime admits the single-user administrator by itself (`resolveRequestActor`), from a
@@ -1834,7 +1834,7 @@ export function createApp(
      */
     if (config.singleUser)
       app.use(
-        "/api/copilotkit/*",
+        "/api/runtime/*",
         createSingleUserGate(config.singleUserAccess, (request) =>
           Boolean(
             request.headers
@@ -1849,10 +1849,10 @@ export function createApp(
      * address is a path. The page resolves a path against itself; the Recorder is not on the page, so
      * its pass is answered knowing this server's own origin as the Recorder reached it.
      */
-    app.use("/api/copilotkit/*", createCapturePassOrigin(config));
+    app.use("/api/runtime/*", createCapturePassOrigin(config));
     // Mounted at the ROOT with the handler carrying its own basePath. Mounting it at
-    // "/api/copilotkit" as well double-prefixes it: Hono strips the prefix before the handler sees
-    // the path, so every route lands at /api/copilotkit/api/copilotkit/* and /info 404s. The browser
+    // "/api/runtime" as well double-prefixes it: Hono strips the prefix before the handler sees
+    // the path, so every route lands at /api/runtime/api/runtime/* and /info 404s. The browser
     // reports that as "Runtime info request failed with status 404" and every run fails before it
     // starts, with nothing at all in the server log.
     app.route("/", copilotHandler);

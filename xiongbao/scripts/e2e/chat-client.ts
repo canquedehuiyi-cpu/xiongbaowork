@@ -51,9 +51,9 @@ export type Stream = {
 
 /** Where a Bot's run and connect endpoints are. */
 export const RUN_PATH = (bot: string) =>
-  `/api/copilotkit/agent/${encodeURIComponent(bot)}/run`;
+  `/api/runtime/agent/${encodeURIComponent(bot)}/run`;
 export const CONNECT_PATH = (bot: string) =>
-  `/api/copilotkit/agent/${encodeURIComponent(bot)}/connect`;
+  `/api/runtime/agent/${encodeURIComponent(bot)}/connect`;
 
 export async function openStream(
   origin: string,
@@ -175,7 +175,7 @@ export async function fetchStoredMessages(
   threadId: string,
 ): Promise<StoredMessage[]> {
   const response = await fetch(
-    `${origin}/api/copilotkit/threads/${encodeURIComponent(threadId)}/messages?agentId=${encodeURIComponent(botId)}`,
+    `${origin}/api/runtime/threads/${encodeURIComponent(threadId)}/messages?agentId=${encodeURIComponent(botId)}`,
     {
       headers: { origin, ...(cookie ? { cookie } : {}) },
       signal: AbortSignal.timeout(20_000),

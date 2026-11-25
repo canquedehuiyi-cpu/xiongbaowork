@@ -447,10 +447,10 @@ test("a recording made in XiongBao itself sees its chat's runs, as on any other 
 
   const all = posts(fixture);
   const connect = all.find(({ url }) =>
-    url.endsWith("/api/copilotkit/agent/general-assistant/connect"),
+    url.endsWith("/api/runtime/agent/general-assistant/connect"),
   );
   const run = all.find(({ url }) =>
-    url.endsWith("/api/copilotkit/agent/general-assistant/run"),
+    url.endsWith("/api/runtime/agent/general-assistant/run"),
   );
   if (!connect || !run) throw new Error("no connect or run");
   const thread = (connect.body as { threadId: string }).threadId;
@@ -485,7 +485,7 @@ test("a recording made in XiongBao itself sees its chat's runs, as on any other 
 
 test("a recording made in XiongBao itself knows its page runs CopilotKit: its runtime answered the info call, and nothing else XiongBao answered says so", async () => {
   // End-to-end run 3's clicks named no Thread at all: XiongBao's page asked its runtime's `info` (GET
-  // /api/copilotkit/info, answered with CopilotKit's RuntimeInfo) when it loaded and again after the run, but the capture
+  // /api/runtime/info, answered with CopilotKit's RuntimeInfo) when it loaded and again after the run, but the capture
   // ignored it with the rest of XiongBao's own calls.
   const fixture = loadFixture("xiongbao-chat");
   const navigate = String(marks(fixture, "navigate")[0]?.data?.url);
@@ -500,7 +500,7 @@ test("a recording made in XiongBao itself knows its page runs CopilotKit: its ru
   );
   expect(
     infos.map(({ method, url }) => `${method} ${new URL(url).pathname}`),
-  ).toEqual(["GET /api/copilotkit/info", "GET /api/copilotkit/info"]);
+  ).toEqual(["GET /api/runtime/info", "GET /api/runtime/info"]);
   expect(
     runtimes.map(({ kind, tabId, url }) => ({ kind, tabId, url })),
   ).toEqual(infos.map(({ url }) => ({ kind: "runtime", tabId: TAB, url })));
@@ -709,9 +709,9 @@ test("CopilotKit's runtime info call, answered by CopilotKit's runtime, is known
       ),
   );
   expect(found).toEqual([
-    'single-route-sse: POST /api/copilotkit-learning {"method":"info"}',
-    "rest-sse: GET /api/copilotkit/info ",
-    'intelligence-websocket: POST /api/copilotkit-learning {"method":"info"}',
+    'single-route-sse: POST /api/runtime-learning {"method":"info"}',
+    "rest-sse: GET /api/runtime/info ",
+    'intelligence-websocket: POST /api/runtime-learning {"method":"info"}',
   ]);
 });
 

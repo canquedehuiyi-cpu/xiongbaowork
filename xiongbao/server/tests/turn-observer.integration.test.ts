@@ -68,7 +68,7 @@ async function runTurn(text: string) {
     forwardedProps: {},
   } satisfies RunAgentInput;
   const response = await serving.handler.fetch(
-    new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/run`, {
+    new Request(`http://127.0.0.1/api/runtime/agent/${BOT}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

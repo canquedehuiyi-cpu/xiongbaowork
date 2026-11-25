@@ -34,7 +34,7 @@ function actorFor(options: {
   return { ...functions, calls };
 }
 
-const request = () => new Request("http://127.0.0.1/api/copilotkit");
+const request = () => new Request("http://127.0.0.1/api/runtime");
 
 describe("createRequestActor", () => {
   test("single-user mode answers every request as the dev actor without asking for a session", async () => {
@@ -132,7 +132,7 @@ describe("createRequestActor", () => {
 
   describe("a Recorder bearer", () => {
     const bearer = `Bearer obr_${"a".repeat(43)}`;
-    const passRequest = (pathname = "/api/copilotkit/trajectory/t-1/connect") =>
+    const passRequest = (pathname = "/api/runtime/trajectory/t-1/connect") =>
       new Request(`http://127.0.0.1${pathname}`, {
         method: "POST",
         headers: { authorization: bearer },
@@ -177,11 +177,11 @@ describe("createRequestActor", () => {
           },
         });
         for (const path of [
-          "/api/copilotkit/agent/bot/run",
-          "/api/copilotkit/trajectory/t-1/connect/extra",
-          "/api/copilotkit/trajectory/connect",
+          "/api/runtime/agent/bot/run",
+          "/api/runtime/trajectory/t-1/connect/extra",
+          "/api/runtime/trajectory/connect",
           // The id the runtime would decode: one that does not decode is no trajectory.
-          "/api/copilotkit/trajectory/%E0%A4%A/connect",
+          "/api/runtime/trajectory/%E0%A4%A/connect",
         ]) {
           await expect(resolveRequestActor(passRequest(path))).rejects.toThrow(
             "A CopilotKit run requires a signed-in user.",

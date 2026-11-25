@@ -256,7 +256,7 @@ export async function readThreadMessages(
   try {
     const read = async () => {
       const response = await tryClient(
-        `/api/copilotkit/threads/${encodeURIComponent(threadId)}/messages?agentId=${encodeURIComponent(agentId)}`,
+        `/api/runtime/threads/${encodeURIComponent(threadId)}/messages?agentId=${encodeURIComponent(agentId)}`,
         { signal: controller.signal },
       );
       if (!response.ok) return UNAVAILABLE_THREAD;

@@ -167,7 +167,7 @@ test("a Bot that can't be reached is named in words, without the socket error", 
   const runId = `run-${crypto.randomUUID()}`;
   started.push(`thread-${runId}-${suite}`);
   const response = await runtime.handler.fetch(
-    new Request("http://127.0.0.1/api/copilotkit/agent/picked-harness/run", {
+    new Request("http://127.0.0.1/api/runtime/agent/picked-harness/run", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

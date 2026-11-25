@@ -336,7 +336,7 @@ afterAll(async () => {
 function app(inConversation: boolean) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/copilotkit">
+      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
         <ActiveBotProvider>
           <ComputerTools />
           {inConversation ? (

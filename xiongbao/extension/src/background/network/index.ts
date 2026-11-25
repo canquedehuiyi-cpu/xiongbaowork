@@ -76,11 +76,11 @@ const refusedSentence = (message: string) =>
 
 /** XiongBao's agent runtime routes that run a Bot's agent or join its run: the runtime is mounted at its base path
  * (server/src/copilot.ts) with REST routes only, `/agent/<id>/run` and `/agent/<id>/connect`. */
-const OPENBOT_AGENT_RUN = /^\/api\/copilotkit\/agent\/[^/]+\/(?:run|connect)$/;
+const OPENBOT_AGENT_RUN = /^\/api\/runtime\/agent\/[^/]+\/(?:run|connect)$/;
 /** Where the page asks XiongBao's agent runtime what it serves (`info`): a GET of the base path's /info, or, were
- * its transport to fall back to the single route, a POST of `{ method: "info" }` to /api/copilotkit. The answer names no
+ * its transport to fall back to the single route, a POST of `{ method: "info" }` to /api/runtime. The answer names no
  * secret, only the runtime's version, mode and agents. */
-const OPENBOT_RUNTIME_INFO = /^\/api\/copilotkit(?:\/info)?\/?$/;
+const OPENBOT_RUNTIME_INFO = /^\/api\/runtime(?:\/info)?\/?$/;
 /** CopilotKit Intelligence's client socket, as the page opens it from a run's join credentials (`<clientUrl>/websocket?
  * join_token=...`): on XiongBao's own origin when a deployment serves Intelligence's gateway there. */
 const INTELLIGENCE_SOCKET = /\/websocket$/;

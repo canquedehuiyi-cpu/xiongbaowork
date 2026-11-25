@@ -219,8 +219,7 @@ export const recorderPaths = {
   learning: "/api/recorder/learning",
   /** POST `RecorderActivity`, with the Recorder's bearer: what this browser's Recorder is doing now (the red dot). */
   activity: "/api/recorder/activity",
-  trajectoryConnect: (t: string) =>
-    `/api/copilotkit/trajectory/${id(t)}/connect`,
+  trajectoryConnect: (t: string) => `/api/runtime/trajectory/${id(t)}/connect`,
 } as const;
 
 /**

@@ -152,7 +152,7 @@ if (root) {
   createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <CopilotKitProvider
-        runtimeUrl="/api/copilotkit"
+        runtimeUrl="/api/runtime"
         {...generativeUiProviderOptions(true)}
       >
         <CopilotChatConfigurationProvider agentId="default" threadId={THREAD}>

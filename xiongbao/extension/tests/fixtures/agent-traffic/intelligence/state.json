@@ -8,7 +8,7 @@
   "exchanges": [
     {
       "at": 56,
-      "url": "http://127.0.0.1:4000/api/copilotkit",
+      "url": "http://127.0.0.1:4000/api/runtime",
       "method": "POST",
       "body": "{\"method\":\"agent/run\",\"params\":{\"agentId\":\"default\"},\"body\":{\"threadId\":\"e190b000-d47e-4b2e-9c40-bd291c72e586\",\"runId\":\"d9a2743a-15f8-47ff-a528-857867b6436b\",\"protocolVersion\":\"1.0\",\"tools\":[],\"context\":[],\"forwardedProps\":{},\"state\":{\"todos\":[]},\"messages\":[{\"id\":\"088af6cb-f367-4dd1-89ad-49ccb221ac3f\",\"role\":\"user\",\"content\":\"First call AGUISendStateSnapshot with snapshot {\\\"todos\\\":[\\\"buy milk\\\"]}. Then call AGUISendStateDelta to add \\\"walk dog\\\" at /todos/-. Then call AGUISendStateDelta again to add \\\"post letter\\\" at /todos/-. Then say done.\"}]}}",
       "status": 200,
