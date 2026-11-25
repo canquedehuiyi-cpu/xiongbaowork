@@ -1,21 +1,21 @@
 /**
- * The chart installing Intelligence with OpenBot, wired by itself: rendered by real Helm from the
+ * The chart installing Intelligence with XiongBao, wired by itself: rendered by real Helm from the
  * real chart and its real Intelligence dependency.
  *
  * What must not regress, because each of these fails silently on a cluster rather than at install:
  *  - the server's Intelligence addresses are the Services the Intelligence chart actually renders;
  *  - the runtime key the server reads is the Secret the key Job writes, and the Job's service token is
  *    the one Intelligence's API mounts, for an organization Intelligence's bootstrap creates;
- *  - the licence, given once, reaches OpenBot's server and Intelligence's API;
- *  - OpenBot's bundled PostgreSQL and Intelligence's never render as the same object, and
+ *  - the licence, given once, reaches XiongBao's server and Intelligence's API;
+ *  - XiongBao's bundled PostgreSQL and Intelligence's never render as the same object, and
  *    Intelligence's database URL names its own database with the password that database is given;
  *  - `intelligence.enabled: false` renders today's chart: no Intelligence, the addresses and key the
  *    operator named, and no gateway proxy;
- *  - Automatic Learning is on in the bundled Intelligence, as it is in OpenBot: its agent, scheduler
+ *  - Automatic Learning is on in the bundled Intelligence, as it is in XiongBao: its agent, scheduler
  *    and object store render, every Secret they read is one the chart writes with the key they ask
  *    for, and every client of the store reaches the store's pod, whatever the release is called;
  *  - the Job that installs Learning's queue waits out the restart of Intelligence's database an
- *    upgrade causes for as long as OpenBot's own migrations wait.
+ *    upgrade causes for as long as XiongBao's own migrations wait.
  */
 import { describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
@@ -28,7 +28,7 @@ import {
 } from "../scripts/chart-reuse-values";
 
 const helm = Bun.which("helm") !== null;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 const LICENCE = "licence-given-once";
 
 type Doc = {
@@ -64,10 +64,10 @@ function renderChart(from: string, ...args: string[]): Doc[] {
     [
       "helm",
       "template",
-      "openbot",
+      "xiongbao",
       from,
       "--namespace",
-      "openbot",
+      "xiongbao",
       "--set-string",
       `secrets.keyEncryptionKey=${randomBytes(32).toString("base64")}`,
       ...args,
@@ -186,7 +186,7 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
     ).toBeUndefined();
   });
 
-  test("generates OpenBot's runtime key once, and the server and Intelligence's bootstrap read that one Secret", () => {
+  test("generates XiongBao's runtime key once, and the server and Intelligence's bootstrap read that one Secret", () => {
     const docs = render(...vanilla);
     const server = workload(docs, "Deployment", component("server"));
     const bootstrap = workload(docs, "Job", component("bootstrap"));
@@ -199,7 +199,7 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
       /^cpk(-[A-Za-z0-9-]*)?_[A-Za-z0-9]{8,64}_[A-Za-z0-9]{24,256}$/,
     );
 
-    // Intelligence's bootstrap reads the same Secret and key for OpenBot's project, in OpenBot's
+    // Intelligence's bootstrap reads the same Secret and key for XiongBao's project, in XiongBao's
     // organization, with the container Automatic Learning assigns.
     const fromBootstrap = (containerEnv(bootstrap) ?? []).filter((e) =>
       /^BOOTSTRAP_PROJECT_\d+_API_KEY$/.test(e.name),
@@ -228,20 +228,26 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
     );
     expect(project?.learningContainers?.map((c) => c.id)).toContain("openbot");
 
-    // No Job of OpenBot's makes the key, so none of its pods is allowed to write a Secret.
+    // No Job of XiongBao's makes the key, so none of its pods is allowed to write a Secret.
+    // The filter below keys on the chart's own name label; prove it still selects this chart's objects.
+    expect(
+      docs.some(
+        (d) => d.metadata.labels?.["app.kubernetes.io/name"] === "xiongbao",
+      ),
+    ).toBe(true);
     const ownRoles = docs.filter(
       (d) =>
         (d.kind === "Role" || d.kind === "RoleBinding") &&
-        d.metadata.labels?.["app.kubernetes.io/name"] === "openbot",
+        d.metadata.labels?.["app.kubernetes.io/name"] === "xiongbao",
     );
     expect(ownRoles.map((d) => d.metadata.name)).toEqual([]);
   });
 
-  test("hands the licence, given once, to OpenBot's server and to Intelligence's API", () => {
+  test("hands the licence, given once, to XiongBao's server and to Intelligence's API", () => {
     const docs = render(...vanilla);
     const server = workload(docs, "Deployment", component("server"));
     const appApi = workload(docs, "Deployment", component("app-api"));
-    const openbotSide = envSecret(
+    const xiongbaoSide = envSecret(
       containerEnv(server),
       "COPILOTKIT_LICENSE_TOKEN",
     );
@@ -250,7 +256,7 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
       "COPILOTKIT_LICENSE_TOKEN",
     );
     expect(
-      secretValue(docs, openbotSide?.name ?? "", openbotSide?.key ?? ""),
+      secretValue(docs, xiongbaoSide?.name ?? "", xiongbaoSide?.key ?? ""),
     ).toBe(LICENCE);
     expect(
       secretValue(
@@ -274,23 +280,23 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
       "--set",
       "config.extraEnv[0].value=warn",
       "--set-string",
-      "postgresql.auth.existingSecret=openbot",
+      "postgresql.auth.existingSecret=xiongbao",
       "--set-string",
-      "secrets.existingSecret=openbot",
+      "secrets.existingSecret=xiongbao",
       "--set-string",
-      "intelligence.appApi.licenseSecret.existingSecret=openbot",
+      "intelligence.appApi.licenseSecret.existingSecret=xiongbao",
     );
     const server = workload(docs, "Deployment", component("server"));
     const appApi = workload(docs, "Deployment", component("app-api"));
     expect(
       envSecret(containerEnv(server), "COPILOTKIT_LICENSE_TOKEN"),
-    ).toMatchObject({ name: "openbot", key: "license-token" });
+    ).toMatchObject({ name: "xiongbao", key: "license-token" });
     expect(envSecret(containerEnv(appApi), "COPILOTKIT_LICENSE_TOKEN")).toEqual(
-      { name: "openbot", key: "license-token" },
+      { name: "xiongbao", key: "license-token" },
     );
   });
 
-  test("keeps OpenBot's database and Intelligence's apart, and gives Intelligence the URL of its own", () => {
+  test("keeps XiongBao's database and Intelligence's apart, and gives Intelligence the URL of its own", () => {
     const docs = render(...vanilla);
     const names = docs.map((d) => `${d.kind}/${d.metadata.name}`);
     expect(names.filter((name, i) => names.indexOf(name) !== i)).toEqual([]);
@@ -310,11 +316,11 @@ describe.skipIf(!helm)("the chart with the bundled Intelligence", () => {
       secretValue(docs, ref?.name ?? "", ref?.key ?? "") ?? "",
     );
     const intelligenceDb = find(docs, "Service", url.hostname);
-    const openbotServer = workload(docs, "Deployment", component("server"));
-    const openbotDbUrl =
-      envValue(containerEnv(openbotServer), "DATABASE_URL") ?? "";
-    expect(openbotDbUrl).not.toContain(`@${url.hostname}:`);
-    expect(intelligenceDb.metadata.name).not.toBe("openbot-postgresql");
+    const xiongbaoServer = workload(docs, "Deployment", component("server"));
+    const xiongbaoDbUrl =
+      envValue(containerEnv(xiongbaoServer), "DATABASE_URL") ?? "";
+    expect(xiongbaoDbUrl).not.toContain(`@${url.hostname}:`);
+    expect(intelligenceDb.metadata.name).not.toBe("xiongbao-postgresql");
     // The password in the URL is the one Bitnami initializes that database with.
     expect(decodeURIComponent(url.password)).toBe(
       secretValue(docs, ref?.name ?? "", "postgres-password"),
@@ -487,7 +493,7 @@ describe.skipIf(!helm)("Automatic Learning in the bundled Intelligence", () => {
   });
 
   test("every client of the object store reaches the store's pod, under any release name", () => {
-    for (const release of ["openbot", "ci"]) {
+    for (const release of ["xiongbao", "ci"]) {
       const result = Bun.spawnSync(
         [
           "helm",
@@ -495,7 +501,7 @@ describe.skipIf(!helm)("Automatic Learning in the bundled Intelligence", () => {
           release,
           chart,
           "--namespace",
-          "openbot",
+          "xiongbao",
           "--set-string",
           `secrets.keyEncryptionKey=${randomBytes(32).toString("base64")}`,
           ...learningVanilla,
@@ -581,7 +587,7 @@ describe.skipIf(!helm)("Automatic Learning in the bundled Intelligence", () => {
    * On Intelligence's 300 seconds, an in-place upgrade from 0.16.0-rc.5 failed with the Job's
    * DeadlineExceeded while the new database pod came up, and reported UPGRADE FAILED.
    */
-  test("gives the Job that installs Learning's queue as long to wait out a database restart as OpenBot's own migrations", () => {
+  test("gives the Job that installs Learning's queue as long to wait out a database restart as XiongBao's own migrations", () => {
     const docs = render(...learningVanilla);
     const queue = workload(
       docs,
@@ -594,7 +600,7 @@ describe.skipIf(!helm)("Automatic Learning in the bundled Intelligence", () => {
     const migrations = docs.find(
       (d) =>
         d.kind === "Job" &&
-        d.metadata.labels?.["app.kubernetes.io/name"] === "openbot" &&
+        d.metadata.labels?.["app.kubernetes.io/name"] === "xiongbao" &&
         component("migrations")(d),
     ) as (Doc & { spec: { activeDeadlineSeconds?: number } }) | undefined;
 
@@ -605,6 +611,7 @@ describe.skipIf(!helm)("Automatic Learning in the bundled Intelligence", () => {
         (c) => c.name,
       ),
     ).toContain("wait-for-database");
+    expect(migrations).toBeDefined();
     expect(migrations?.spec.activeDeadlineSeconds).toBe(900);
     expect(queue.spec.activeDeadlineSeconds).toBe(
       migrations?.spec.activeDeadlineSeconds,
@@ -682,7 +689,7 @@ describe.skipIf(!helm)("the chart with intelligence.enabled=false", () => {
       "--set",
       "externalSecrets.data[5].secretKey=intelligence-api-key",
       "--set",
-      "externalSecrets.data[5].remoteRef.key=openbot/intelligence-api-key",
+      "externalSecrets.data[5].remoteRef.key=xiongbao/intelligence-api-key",
     );
     expect(
       docs.some(
@@ -692,6 +699,10 @@ describe.skipIf(!helm)("the chart with intelligence.enabled=false", () => {
     expect(
       docs.some((d) => d.kind === "Job" && component("intelligence-key")(d)),
     ).toBe(false);
+    // The prefix below is the bundled Intelligence's kept Secret names; prove the chart still renders.
+    expect(docs.some((d) => d.metadata.name.startsWith("xiongbao-"))).toBe(
+      true,
+    );
     expect(docs.some((d) => d.metadata.name.startsWith("openbot-intel-"))).toBe(
       false,
     );
@@ -704,7 +715,7 @@ describe.skipIf(!helm)("the chart with intelligence.enabled=false", () => {
       "wss://realtime.intelligence.copilotkit.ai",
     );
     expect(envSecret(env, "INTELLIGENCE_API_KEY")).toEqual({
-      name: "openbot-secrets",
+      name: "xiongbao-secrets",
       key: "intelligence-api-key",
     });
     expect(envValue(env, "INTELLIGENCE_GATEWAY_PROXY")).toBeUndefined();

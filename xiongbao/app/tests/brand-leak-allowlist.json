@@ -211,13 +211,6 @@
   },
   {
     "file": "server/src/config.ts",
-    "text": "\"/etc/openbot/sandbox-template.json\"",
-    "reason": "persisted-identifier: file path mounted by the Helm chart",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/config.ts",
     "text": "creates the openbot Learning container",
     "reason": "persisted-identifier: names the Learning container id the operator must create",
     "category": "persisted-data",
@@ -333,20 +326,6 @@
     "text": "\"Declined in OpenBot Desktop.\"",
     "reason": "parsed-exact-text: reply an older desktop sends; matched verbatim",
     "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/computer/sandbox.ts",
-    "text": "openbot.dev/",
-    "reason": "persisted-identifier: Kubernetes labels/annotations on live sandboxes",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/computer/sandbox.ts",
-    "text": "\"app.kubernetes.io/managed-by\": \"openbot\"",
-    "reason": "persisted-identifier: Kubernetes label on live sandboxes",
-    "category": "persisted-data",
     "plan": "keep"
   },
   {

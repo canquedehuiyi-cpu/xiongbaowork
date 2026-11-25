@@ -113,12 +113,6 @@
     "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"/etc/openbot/sandbox-template.json\"",
-    "file": "xiongbao/server/src/config.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/config.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "\"<<openbot:staffing-proposal>>\"",
     "file": "xiongbao/shared/staffing-proposal.ts",
     "until": "R3",
@@ -998,18 +992,6 @@
     "reason": "断言继续拦截上游名：模型可见文字里既不许出现旧名也不许出现新名"
   },
   {
-    "file": "xiongbao/server/src/computer/sandbox.ts",
-    "pattern": "openbot\\.dev/|\\\"app\\.kubernetes\\.io/managed-by\\\": \\\"openbot\\\"",
-    "until": "R2",
-    "reason": "Task 11：电脑 pod 的 K8s 标签/注解，与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/computer-sandbox.test.ts",
-    "pattern": "openbot\\.dev/|\\\"app\\.kubernetes\\.io/managed-by\\\": \\\"openbot\\\"",
-    "until": "R2",
-    "reason": "Task 11：电脑 pod 的 K8s 标签/注解，与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
     "file": "xiongbao/server/scripts/reset-test-database.ts",
     "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
     "until": "R2",
@@ -1385,30 +1367,6 @@
     "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
     "until": "R3",
     "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
-  },
-  {
-    "file": "xiongbao/server/src/browser/egress.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/src/channels/attachments.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/attachment-routes.test.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
-  },
-  {
-    "file": "xiongbao/server/tests/handoff-caps-defaults.test.ts",
-    "pattern": "charts/openbot",
-    "until": "R2",
-    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
   },
   {
     "file": "xiongbao/server/tests/learning-personal-skills.test.ts",
@@ -1793,5 +1751,113 @@
     "pattern": "startsWith\\(\"OpenBot \"\\)|`OpenBot …`",
     "until": "R3",
     "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）；agent-mastra 按这个前缀把服务器的条目与调用方的分开"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/values.yaml",
+    "pattern": "database: openbot\\b|5432/openbot\\?",
+    "until": "R4",
+    "reason": "持久卷上的已有库，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/README.md",
+    "pattern": "5432/openbot\\?",
+    "until": "R4",
+    "reason": "持久卷上的已有库，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/values.yaml",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/README.md",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/templates/validation.yaml",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/templates/intelligence/secrets.yaml",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-bundled-intelligence.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-model-keys.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-vanilla-secrets.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-database-wait.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-routines.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-aws-attribution.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/promote-kubernetes-helm.test.ts",
+    "pattern": "openbot-intel-[\\w-]*|openbot-learning\\b|org_openbot\\b|cpk-openbot_|(?:slug|organizationSlug): openbot\\b|`openbot` project",
+    "until": "R4",
+    "reason": "持久卷或已生成 Secret 里的存量名字，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/README.md",
+    "pattern": "openbot_rls_enforce",
+    "until": "R2",
+    "reason": "链接锚点指向 docs/configuration.md 里 OPENBOT_RLS_ENFORCE 标题，随 Task 15 一起改"
+  },
+  {
+    "file": "xiongbao/tests/chart-bundled-intelligence.test.ts",
+    "pattern": "toContain\\(\"openbot\"\\)",
+    "until": "R3",
+    "reason": "断言 Learning 容器 id openbot，该 id 落在 Intelligence 库里，已保护"
+  },
+  {
+    "file": "xiongbao/tests/chart-database-wait.test.ts",
+    "pattern": ":5432/openbot\\?",
+    "until": "R4",
+    "reason": "持久卷上的已有库，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/chart-vanilla-secrets.test.ts",
+    "pattern": ":5432/openbot\\?",
+    "until": "R4",
+    "reason": "持久卷上的已有库，R4 基线化时改"
+  },
+  {
+    "file": "xiongbao/tests/promote-kubernetes-helm.test.ts",
+    "pattern": "(?i:acme[./]openbot|openbot\\.tgz|images\\.openbot|openbot\\.ai/|mirror/openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具，随 release-policy 与 promote 脚本改名，归 Task 12"
   }
 ]

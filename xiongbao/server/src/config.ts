@@ -1687,7 +1687,7 @@ function computerConfig(environment: Environment): ComputerConfig | undefined {
       ),
       templateFile:
         optional(environment, "COMPUTER_SANDBOX_TEMPLATE_FILE") ??
-        "/etc/openbot/sandbox-template.json",
+        "/etc/xiongbao-sandbox/sandbox-template.json",
       allowPrivateHosts,
       ...(computerToken ? { token: computerToken } : {}),
       ...(policy ? { policy } : {}),

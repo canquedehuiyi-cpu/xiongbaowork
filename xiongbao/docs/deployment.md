@@ -45,7 +45,7 @@ point at a managed database instead: set `DATABASE_URL` and leave `EMBEDDED_POST
 creates it. The first migration creates it and migration `0010` drops it again, since nothing stores
 vectors any more, and only the extension's owner can drop it. So do not enable it ahead of time as
 an administrator: that leaves the migrations failing with `must be owner of extension vector`. RDS,
-Cloud SQL and Azure Database all offer it; [Your own database](../charts/openbot/README.md#your-own-database-which-is-what-a-real-deployment-uses)
+Cloud SQL and Azure Database all offer it; [Your own database](../charts/xiongbao/README.md#your-own-database-which-is-what-a-real-deployment-uses)
 has the grant each one needs.
 
 **Not in it:**
@@ -230,7 +230,7 @@ No shared-memory configuration is needed or possible.
 **Kubernetes.** Everything above describes one container run by hand. A cluster is the other shape,
 and it is the only one that gives each person (or an Isolated Bot) a computer of its own, runs the routines schedule without
 something outside the container, and scales the API past a single replica. That is the Helm chart:
-[charts/openbot/README.md](../charts/openbot/README.md), which covers EKS, GKE, AKS and a plain
+[charts/xiongbao/README.md](../charts/xiongbao/README.md), which covers EKS, GKE, AKS and a plain
 self-hosted cluster from the same templates.
 
 **Azure Container Apps.** Managed ingress with TLS and custom domains. Note the **240-second request

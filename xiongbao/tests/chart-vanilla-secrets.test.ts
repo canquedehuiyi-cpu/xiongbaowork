@@ -2,7 +2,7 @@
  * A vanilla install from the licence and the model key alone, rendered by real Helm from the real
  * chart: the README's secrets file is those two lines, and the chart makes everything else.
  *
- * What must not regress, because each one is a person stuck before OpenBot ever starts, or a database
+ * What must not regress, because each one is a person stuck before XiongBao ever starts, or a database
  * locked out of itself on the next upgrade:
  *  - with the bundled database, the key encryption key, the computer token and the database password
  *    are generated when nobody gives them, into Secrets the chart writes and keeps on uninstall, and
@@ -22,7 +22,7 @@ import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
 const kubeconfig = process.env.OPENBOT_KIND_KUBECONFIG;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 
 type EnvVar = {
   name: string;
@@ -54,10 +54,10 @@ function render(...args: string[]): Doc[] {
     [
       "helm",
       "template",
-      "openbot",
+      "xiongbao",
       chart,
       "--namespace",
-      "openbot",
+      "xiongbao",
       "--values",
       join(chart, "ci/vanilla-values.yaml"),
       ...args,
@@ -116,7 +116,8 @@ function credentials(docs: Doc[]) {
     (d) => d.kind === "StatefulSet" && component("computer")(d),
   );
   const database = docs.find(
-    (d) => d.kind === "StatefulSet" && d.metadata.name === "openbot-postgresql",
+    (d) =>
+      d.kind === "StatefulSet" && d.metadata.name === "xiongbao-postgresql",
   );
   const kek = ref(server, "KEY_ENCRYPTION_KEY");
   const token = ref(server, "COMPUTER_TOKEN");
@@ -201,8 +202,12 @@ describe.skipIf(!helm)(
         "mine",
         "mine",
       ]);
-      expect(secrets(docs, "openbot-secrets")).toEqual([]);
-      expect(secrets(docs, "openbot-postgresql")).toEqual([]);
+      // The chart still rendered: its server Deployment is there, only its Secrets are not.
+      expect(docs.some((d) => d.metadata.name === "xiongbao-server")).toBe(
+        true,
+      );
+      expect(secrets(docs, "xiongbao-secrets")).toEqual([]);
+      expect(secrets(docs, "xiongbao-postgresql")).toEqual([]);
     });
 
     test("with a database of the operator's, still requires the key encryption key and the computer token", () => {
@@ -216,7 +221,7 @@ describe.skipIf(!helm)(
         "database.roleWriterUrl=postgres://openbot_role_writer:secret@db.example.com:5432/openbot?sslmode=require",
         // The migrations Job runs as the owner, never as the API's role (validation.yaml refuses the URL alone).
         "--set-string",
-        "database.migrationUrl=postgres://openbot_owner:secret@db.example.com:5432/openbot?sslmode=require",
+        "database.migrationUrl=postgres://xiongbao_owner:secret@db.example.com:5432/openbot?sslmode=require",
       ];
       expect(
         refusal(
@@ -245,7 +250,7 @@ describe.skipIf(!helm)(
 describe.skipIf(!helm || !kubeconfig)(
   "a vanilla install against a cluster",
   () => {
-    const namespace = `openbot-vanilla-${randomBytes(3).toString("hex")}`;
+    const namespace = `xiongbao-vanilla-${randomBytes(3).toString("hex")}`;
     const kubectl = (args: string[], stdin?: string) => {
       const result = Bun.spawnSync(
         ["kubectl", "--kubeconfig", kubeconfig ?? "", "-n", namespace, ...args],
@@ -280,7 +285,7 @@ describe.skipIf(!helm || !kubeconfig)(
             name,
             labels: { "app.kubernetes.io/managed-by": "Helm" },
             annotations: {
-              "meta.helm.sh/release-name": "openbot",
+              "meta.helm.sh/release-name": "xiongbao",
               "meta.helm.sh/release-namespace": namespace,
             },
           },
@@ -301,7 +306,7 @@ describe.skipIf(!helm || !kubeconfig)(
         // Installed from the two-line file: what the chart generated is what the upgrade reads back.
         const first = renderLive();
         const installed = credentials(first);
-        for (const name of ["openbot-secrets", "openbot-postgresql"]) {
+        for (const name of ["xiongbao-secrets", "xiongbao-postgresql"]) {
           const secret = secrets(first, name)[0];
           owned(name, secret?.stringData ?? {});
         }
@@ -310,11 +315,11 @@ describe.skipIf(!helm || !kubeconfig)(
         // Installed with the three supplied, the database's Secret written by the subchart itself: an
         // upgrade that still supplies them, and one that has stopped, both keep what is there.
         const kek = randomBytes(32).toString("base64");
-        owned("openbot-secrets", {
+        owned("xiongbao-secrets", {
           "key-encryption-key": kek,
           "computer-token": "supplied-at-install",
         });
-        owned("openbot-postgresql", {
+        owned("xiongbao-postgresql", {
           "postgres-password": "supplied-password",
         });
         const supplied = {

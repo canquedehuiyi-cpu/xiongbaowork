@@ -18,7 +18,7 @@ function fixture(version: string, unreleased = "- Something new.\n") {
   const root = mkdtempSync(join(tmpdir(), "openbot-release-prepare-"));
   directories.push(root);
   mkdirSync(join(root, "scripts"));
-  mkdirSync(join(root, "charts/openbot"), { recursive: true });
+  mkdirSync(join(root, "charts/xiongbao"), { recursive: true });
   const write = (path: string, text: string) =>
     writeFileSync(join(root, path), text);
   write("package.json", `${JSON.stringify({ version }, null, 2)}\n`);
@@ -26,7 +26,7 @@ function fixture(version: string, unreleased = "- Something new.\n") {
     "CHANGELOG.md",
     `# Changelog\n\n## Unreleased\n\n${unreleased}\n## 0.1.0\n\n- First.\n`,
   );
-  write("charts/openbot/Chart.yaml", 'name: openbot\nappVersion: "0.0.1"\n');
+  write("charts/xiongbao/Chart.yaml", 'name: openbot\nappVersion: "0.0.1"\n');
   copyFileSync(
     join(import.meta.dir, "release-version.ts"),
     join(root, "scripts/release-version.ts"),
@@ -51,7 +51,7 @@ test("a stable patch promotes the changelog and moves the chart", () => {
   expect(read("CHANGELOG.md")).toContain(
     "## Unreleased\n\n## 0.2.1\n\n- Something new.",
   );
-  expect(read("charts/openbot/Chart.yaml")).toContain('appVersion: "0.2.1"');
+  expect(read("charts/xiongbao/Chart.yaml")).toContain('appVersion: "0.2.1"');
 });
 
 test("a minor release candidate leaves the changelog alone", () => {
@@ -62,7 +62,7 @@ test("a minor release candidate leaves the changelog alone", () => {
   expect(result.base).toBe("release/0.3");
   expect(result.notes).toBe("- Something new.");
   expect(read("CHANGELOG.md")).toBe(before);
-  expect(read("charts/openbot/Chart.yaml")).toContain(
+  expect(read("charts/xiongbao/Chart.yaml")).toContain(
     'appVersion: "0.3.0-rc.1"',
   );
 });

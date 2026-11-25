@@ -38,7 +38,7 @@ setDefaultTimeout(120_000);
 const helm = Bun.which("helm") !== null;
 const digest = `sha256:${"b".repeat(64)}`;
 const mirror = "registry.internal/mirror/openbot";
-const chartSource = join(import.meta.dir, "../charts/openbot");
+const chartSource = join(import.meta.dir, "../charts/xiongbao");
 
 type Values = Record<string, unknown>;
 function merge(base: Values, overlay: Values): Values {
@@ -63,24 +63,24 @@ let chart = "";
 let customerFiles: string[] = [];
 beforeAll(async () => {
   if (!helm) return;
-  work = mkdtempSync(join(tmpdir(), "openbot-promotion-helm-"));
+  work = mkdtempSync(join(tmpdir(), "xiongbao-promotion-helm-"));
   // The packaged chart is the artifact a release pins. Packaging needs the bundled PostgreSQL and
   // Intelligence subcharts in charts/, which `helm dependency build` fetches when this checkout has
   // not.
-  cpSync(chartSource, join(work, "openbot"), { recursive: true });
-  const vendored = existsSync(join(work, "openbot", "charts"))
-    ? readdirSync(join(work, "openbot", "charts"))
+  cpSync(chartSource, join(work, "xiongbao"), { recursive: true });
+  const vendored = existsSync(join(work, "xiongbao", "charts"))
+    ? readdirSync(join(work, "xiongbao", "charts"))
     : [];
   if (
     !["postgresql-", "intelligence-"].every((prefix) =>
       vendored.some((name) => name.startsWith(prefix)),
     )
   )
-    await runCommand(["helm", "dependency", "build", join(work, "openbot")], {
+    await runCommand(["helm", "dependency", "build", join(work, "xiongbao")], {
       cwd: work,
     });
   await runCommand(
-    ["helm", "package", join(work, "openbot"), "--destination", work],
+    ["helm", "package", join(work, "xiongbao"), "--destination", work],
     { cwd: work },
   );
   chart = join(
@@ -142,7 +142,7 @@ async function cluster(options: {
       [
         "helm",
         "template",
-        "openbot",
+        "xiongbao",
         chart,
         "--namespace",
         "customer",
@@ -172,7 +172,7 @@ async function cluster(options: {
       suspend: (job.spec?.suspend as boolean | undefined) ?? false,
     });
   // Something an operator made by hand with the release's label, and paused on purpose.
-  state.cronJobs.set("openbot-operator-report", { suspend: true });
+  state.cronJobs.set("xiongbao-operator-report", { suspend: true });
   const managed = new Set(
     first.cronJobs.map((job) => job.metadata?.name ?? ""),
   );
@@ -199,7 +199,7 @@ async function cluster(options: {
         [
           "helm",
           "template",
-          "openbot",
+          "xiongbao",
           chart,
           "--namespace",
           "customer",
@@ -256,7 +256,7 @@ async function cluster(options: {
       return JSON.stringify({
         items: [
           {
-            metadata: { name: "openbot-server" },
+            metadata: { name: "xiongbao-server" },
             spec: { replicas: state.replicas, template: state.template },
           },
         ],
@@ -341,10 +341,10 @@ function promotion(run: CommandRunner): KubernetesPromotionOptions {
       channel: "stable",
     },
     namespace: "customer",
-    release: "openbot",
+    release: "xiongbao",
     chart,
     customerValues: customerFiles,
-    outputDirectory: mkdtempSync(join(tmpdir(), "openbot-promotion-output-")),
+    outputDirectory: mkdtempSync(join(tmpdir(), "xiongbao-promotion-output-")),
     backupReference: "snapshot:verified-backup",
     backupCommand: ["customer-backup"],
     acknowledgeInterruption: true,
@@ -373,8 +373,8 @@ describe.skipIf(!helm)("Helm promotion of the real chart", () => {
       const before = new Map(
         [...state.cronJobs].map(([name, job]) => [name, job.suspend]),
       );
-      expect(before.get("openbot-attachments-culler")).toBe(false);
-      expect(before.get("openbot-operator-report")).toBe(true);
+      expect(before.get("xiongbao-attachments-culler")).toBe(false);
+      expect(before.get("xiongbao-operator-report")).toBe(true);
       expect((await promoteKubernetes(promotion(run))).phase).toBe("accepted");
       for (const [name, suspended] of before)
         expect([name, state.cronJobs.get(name)?.suspend]).toEqual([

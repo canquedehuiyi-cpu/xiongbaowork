@@ -789,7 +789,7 @@ describe("POST /:channelId/attachments", () => {
        * It used to end "anything still unsent is cleared within a day", which is a promise about
        * `attachments.culler.olderThanHours` — an operator's value, defaulting to 24 and documented as
        * raisable — made on a deployment that may also have set `attachments.culler.enabled: false`,
-       * which charts/openbot/README.md offers as the way to "keep every staged row for ever". On such
+       * which charts/xiongbao/README.md offers as the way to "keep every staged row for ever". On such
        * a deployment the sentence was a flat lie told to the one person who could not act on it: some
        * of these rows are in channels they can no longer open, so withdrawing them is not available
        * either.

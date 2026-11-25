@@ -71,7 +71,7 @@ test("rejects a package.json change beyond the version", () => {
 test("allows a Chart.yaml change that only moves appVersion", () => {
   const files = new Map([
     [
-      "charts/openbot/Chart.yaml",
+      "charts/xiongbao/Chart.yaml",
       {
         before: 'name: openbot\nappVersion: "0.3.0-rc.1"\n',
         after: 'name: openbot\nappVersion: "0.3.0"\n',

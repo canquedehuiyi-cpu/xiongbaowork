@@ -23,7 +23,7 @@ import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
 const kubeconfig = process.env.OPENBOT_KIND_KUBECONFIG;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 const SANDBOX_API = [
   "--api-versions",
   "agents.x-k8s.io/v1beta1/Sandbox",
@@ -57,10 +57,10 @@ function render(...args: string[]): Doc[] {
     [
       "helm",
       "template",
-      "openbot",
+      "xiongbao",
       chart,
       "--namespace",
-      "openbot",
+      "xiongbao",
       "--set-string",
       `secrets.keyEncryptionKey=${randomBytes(32).toString("base64")}`,
       ...SANDBOX_API,
@@ -223,7 +223,7 @@ describe.skipIf(!helm)("routines on a Helm install", () => {
       "--set",
       "externalSecrets.data[5].secretKey=worker-shared-secret",
       "--set",
-      "externalSecrets.data[5].remoteRef.key=openbot/worker-shared-secret",
+      "externalSecrets.data[5].remoteRef.key=xiongbao/worker-shared-secret",
     );
     const ref = workerRef(sweep(docs));
     expect(workerRef(server(docs))).toEqual(ref);
@@ -265,7 +265,7 @@ describe.skipIf(!helm)("routines on a Helm install", () => {
  * sweep must present it), and a key in the operator's own Secret must be used rather than replaced.
  */
 describe.skipIf(!helm || !kubeconfig)("routines against a cluster", () => {
-  const namespace = `openbot-routines-${randomBytes(3).toString("hex")}`;
+  const namespace = `xiongbao-routines-${randomBytes(3).toString("hex")}`;
   const kubectl = (args: string[], stdin?: string) => {
     const result = Bun.spawnSync(
       ["kubectl", "--kubeconfig", kubeconfig ?? "", "-n", namespace, ...args],
@@ -316,7 +316,7 @@ describe.skipIf(!helm || !kubeconfig)("routines against a cluster", () => {
           metadata: {
             ...secret?.metadata,
             annotations: {
-              "meta.helm.sh/release-name": "openbot",
+              "meta.helm.sh/release-name": "xiongbao",
               "meta.helm.sh/release-namespace": namespace,
             },
           },

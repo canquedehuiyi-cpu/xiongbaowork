@@ -260,9 +260,9 @@ jobs:
         run: |
           set -euo pipefail
           pkg=$(bun -e 'console.log(require("./package.json").version)')
-          chart=$(bun -e 'console.log(require("yaml").parse(require("fs").readFileSync("charts/openbot/Chart.yaml","utf8")).appVersion)')
+          chart=$(bun -e 'console.log(require("yaml").parse(require("fs").readFileSync("charts/xiongbao/Chart.yaml","utf8")).appVersion)')
           if [ "$pkg" != "$chart" ]; then
-            echo "::error::package.json is $pkg but charts/openbot/Chart.yaml appVersion is $chart."
+            echo "::error::package.json is $pkg but charts/xiongbao/Chart.yaml appVersion is $chart."
             exit 1
           fi
       # Every test that reads the changelog or the policy, found by name so a new one is included
@@ -398,10 +398,10 @@ jobs:
       - name: Package this release's chart
         run: |
           set -euo pipefail
-          helm dependency build charts/openbot
+          helm dependency build charts/xiongbao
           mkdir -p release-assets
-          helm package charts/openbot --destination release-assets
-          chart_version="$(helm show chart charts/openbot | sed -n 's/^version: //p')"
+          helm package charts/xiongbao --destination release-assets
+          chart_version="$(helm show chart charts/xiongbao | sed -n 's/^version: //p')"
           test -f "release-assets/openbot-$chart_version.tgz"
           echo "OPENBOT_CHART_PATH=release-assets/openbot-$chart_version.tgz" >> "$GITHUB_ENV"
           echo "OPENBOT_CHART_VERSION=$chart_version" >> "$GITHUB_ENV"

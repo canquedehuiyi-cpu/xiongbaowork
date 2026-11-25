@@ -296,7 +296,7 @@ function fakeCluster(initial: {
       name: "bot-general-abc",
       generation: state.generation,
       // Whose computer, as `desired` writes it on every Sandbox the server creates.
-      annotations: { "openbot.dev/bot-id": "general" },
+      annotations: { "xiongbao.dev/bot-id": "general" },
     },
     spec: {
       operatingMode: state.mode,
@@ -697,8 +697,8 @@ describe("whose computer a Sandbox is", () => {
       (created[0] as { metadata: { annotations: Record<string, string> } })
         .metadata.annotations,
     ).toEqual({
-      "openbot.dev/person-id": "ada",
-      "openbot.dev/computer": "person:ada",
+      "xiongbao.dev/person-id": "ada",
+      "xiongbao.dev/computer": "person:ada",
     });
     // A second Bot of Ada's reaches the same Sandbox and creates nothing.
     await provider.locate(personSeat("ada", "notes"));

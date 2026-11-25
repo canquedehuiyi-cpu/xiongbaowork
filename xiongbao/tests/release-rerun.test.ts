@@ -80,14 +80,14 @@ function release() {
     "baseline",
   );
   const upstream = git(repo, "rev-parse", "HEAD");
-  mkdirSync(join(repo, "charts/openbot/templates"), { recursive: true });
+  mkdirSync(join(repo, "charts/xiongbao/templates"), { recursive: true });
   writeFileSync(
-    join(repo, "charts/openbot/Chart.yaml"),
+    join(repo, "charts/xiongbao/Chart.yaml"),
     'apiVersion: v2\nname: openbot\nversion: 0.1.4\nappVersion: "0.3.0"\n',
   );
-  writeFileSync(join(repo, "charts/openbot/values.yaml"), "replicas: 1\n");
+  writeFileSync(join(repo, "charts/xiongbao/values.yaml"), "replicas: 1\n");
   writeFileSync(
-    join(repo, "charts/openbot/templates/configmap.yaml"),
+    join(repo, "charts/xiongbao/templates/configmap.yaml"),
     "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ .Release.Name }}\ndata:\n  replicas: {{ .Values.replicas | quote }}\n",
   );
   writeFileSync(
@@ -118,11 +118,11 @@ function release() {
 /** `helm package`, into the release assets, after the chart's files were touched at a new time. */
 function packageChart(repo: string, stamp: number) {
   for (const file of ["Chart.yaml", "values.yaml", "templates/configmap.yaml"])
-    utimesSync(join(repo, "charts/openbot", file), stamp, stamp);
+    utimesSync(join(repo, "charts/xiongbao", file), stamp, stamp);
   mkdirSync(join(repo, "release-assets"), { recursive: true });
   execFileSync("helm", [
     "package",
-    join(repo, "charts/openbot"),
+    join(repo, "charts/xiongbao"),
     "--destination",
     join(repo, "release-assets"),
   ]);
@@ -242,7 +242,7 @@ describe("rerunning a half-published release", () => {
       "a chart whose templates changed",
       (repo: string, published: string) => {
         const changed = scratch("openbot-changed-");
-        cpSync(join(repo, "charts/openbot"), join(changed, "openbot"), {
+        cpSync(join(repo, "charts/xiongbao"), join(changed, "openbot"), {
           recursive: true,
         });
         writeFileSync(join(changed, "openbot/values.yaml"), "replicas: 2\n");

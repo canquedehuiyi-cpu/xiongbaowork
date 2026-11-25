@@ -1,5 +1,5 @@
 /**
- * Nothing that reads OpenBot's database starts before that database can serve it, rendered by real
+ * Nothing that reads XiongBao's database starts before that database can serve it, rendered by real
  * Helm from the real chart and then run against a real PostgreSQL.
  *
  * What must not regress, seen on a fresh vanilla install: the server pods started five seconds after
@@ -29,7 +29,7 @@ import { SQL } from "bun";
 import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
-const chart = join(import.meta.dir, "../charts/openbot");
+const chart = join(import.meta.dir, "../charts/xiongbao");
 const serverDirectory = join(import.meta.dir, "../server");
 const script = readFileSync(join(chart, "files/wait-for-database.mjs"), "utf8");
 const SANDBOX_API = [
@@ -47,6 +47,7 @@ type EnvVar = {
 type Container = {
   name: string;
   image?: string;
+  volumeMounts?: { name: string; mountPath: string }[];
   command?: string[];
   workingDir?: string;
   env?: EnvVar[];
@@ -73,10 +74,10 @@ function render(...args: string[]): Doc[] {
     [
       "helm",
       "template",
-      "openbot",
+      "xiongbao",
       chart,
       "--namespace",
-      "openbot",
+      "xiongbao",
       "--set-string",
       `secrets.keyEncryptionKey=${randomBytes(32).toString("base64")}`,
       ...SANDBOX_API,
@@ -102,7 +103,7 @@ const component = (doc: Doc) =>
   doc.metadata.labels?.["app.kubernetes.io/component"];
 /** This chart's own objects, not the bundled Intelligence's or PostgreSQL's. */
 const own = (doc: Doc) =>
-  doc.metadata.labels?.["helm.sh/chart"]?.startsWith("openbot-") === true;
+  doc.metadata.labels?.["helm.sh/chart"]?.startsWith("xiongbao-") === true;
 
 function pod(doc: Doc): PodSpec | undefined {
   return doc.spec?.template?.spec ?? doc.spec?.jobTemplate?.spec.template.spec;
@@ -187,6 +188,32 @@ describe.skipIf(!helm)("every database reader waits for the database", () => {
     });
   }
 
+  test("the name filter selects this chart's own objects, so the checks above are not vacuous", () => {
+    for (const target of TARGETS) {
+      const docs = render(...values(target));
+      expect(docs.filter(own).length).toBeGreaterThan(0);
+      expect(readers(docs).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("sandbox mode does not mount over the image's /etc/xiongbao, which holds its defaults.env", () => {
+    const docs = render(...values("eks-sandbox"));
+    const mounts = docs
+      .flatMap((doc) => pod(doc)?.containers ?? [])
+      .flatMap((container) => container.volumeMounts ?? [])
+      .map((mount) => mount.mountPath);
+    expect(mounts.length).toBeGreaterThan(0);
+    for (const path of mounts) {
+      // Neither /etc/xiongbao itself nor a parent of it (/etc, /) may be a mount.
+      expect(
+        path === "/etc/xiongbao" ||
+          "/etc/xiongbao".startsWith(`${path}/`) ||
+          path === "/",
+      ).toBe(false);
+    }
+    expect(mounts).toContain("/etc/xiongbao-sandbox");
+  });
+
   test("the computer culler, which only sandbox mode renders, waits too", () => {
     const docs = render(...values("eks-sandbox"));
     const culler = readers(docs).find((doc) => component(doc) === "culler");
@@ -204,7 +231,7 @@ describe.skipIf(!helm)("every database reader waits for the database", () => {
         "database.roleWriterUrl=postgres://openbot_role_writer:pw@db.example:5432/openbot?sslmode=require",
         // The migrations Job runs as the owner, never as the API's role (validation.yaml refuses the URL alone).
         "--set-string",
-        "database.migrationUrl=postgres://openbot_owner:pw@db.example:5432/openbot?sslmode=require",
+        "database.migrationUrl=postgres://xiongbao_owner:pw@db.example:5432/openbot?sslmode=require",
       ],
       ["--set-string", "database.existingSecret=my-database"],
     ]) {
@@ -281,7 +308,7 @@ function administrative(): string {
 }
 
 async function scratchDatabase(): Promise<string> {
-  const name = `openbot_dbwait_${randomBytes(4).toString("hex")}`;
+  const name = `xiongbao_dbwait_${randomBytes(4).toString("hex")}`;
   const admin = new SQL(administrative());
   try {
     await admin.unsafe(`CREATE DATABASE "${name}"`);
@@ -426,7 +453,7 @@ describe.skipIf(!helm || !databaseUrl)("the wait, against PostgreSQL", () => {
 
     await migrateAll(url);
     const ready = await runWait(url, 30);
-    expect(ready.output).toContain("OpenBot's database is ready");
+    expect(ready.output).toContain("XiongBao's database is ready");
     expect(ready.code).toBe(0);
   }, 120_000);
 
@@ -458,7 +485,7 @@ describe.skipIf(!helm || !databaseUrl)("the wait, against PostgreSQL", () => {
   test("refuses a database that is not there, within its bound", async () => {
     const started = Date.now();
     const { code, output } = await runWait(
-      "postgres://openbot:openbot@127.0.0.1:1/openbot",
+      "postgres://openbot:openbot@127.0.0.1:1/xiongbao",
       3,
     );
     expect(code).toBe(1);

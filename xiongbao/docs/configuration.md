@@ -242,7 +242,7 @@ copied into every Bot container, and a framework Bot holding it may be running o
 own, so a fixed default there would be no boundary at all. Production deployments must set a real
 `WORKER_SHARED_SECRET`; the Helm chart generates one and gives it to both the server and its routines
 CronJob, unless one is supplied (see
-[the chart's routines sweep](../charts/openbot/README.md#the-routines-sweep)).
+[the chart's routines sweep](../charts/xiongbao/README.md#the-routines-sweep)).
 
 **`SERVER_INTERNAL_URL`** is read by the worker, not by the API server, so it is not in the table
 above: it says where the worker's own process can reach this deployment's API, which is a fact about
@@ -991,7 +991,7 @@ is still the record.
 `COMPUTER_SANDBOX` is not the cluster sandbox provider. A Kubernetes deployment can instead run each
 computer as a sandboxed pod, selected by `COMPUTER_SANDBOX_NAMESPACE` with `COMPUTER_SANDBOX_IDLE_AFTER`
 and `COMPUTER_SANDBOX_TEMPLATE_FILE` beside it; those are set by the Helm chart, not by Compose, and
-are covered in [charts/openbot/README.md](../charts/openbot/README.md). The similarly named
+are covered in [charts/xiongbao/README.md](../charts/xiongbao/README.md). The similarly named
 `COMPUTER_SANDBOX` above only toggles Chromium's own process sandbox on a Docker computer.
 
 Changing `COMPUTER_BROWSER_MODE` affects new supervised computers. A computer that already exists is

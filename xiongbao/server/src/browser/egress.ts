@@ -10,7 +10,7 @@ import type { EgressPolicy, EgressRule } from "../computer/policy-network";
  * - On their own desktop (a host-side computer of people's browsers), everything: it is their machine and their network.
  * - On a computer in the cloud, the open internet and nothing inside the deployment, which a laptop could never reach
  *   either: the database, another pod, a node or a cloud metadata endpoint. The same line the chart's NetworkPolicy
- *   draws for computers (charts/openbot/templates/networkpolicy.yaml), and the one OWASP's SSRF guidance draws for a
+ *   draws for computers (charts/xiongbao/templates/networkpolicy.yaml), and the one OWASP's SSRF guidance draws for a
  *   service that must reach any public address: allow what is public, refuse private and reserved space. Written as
  *   the public ranges, because a policy here can only allow; the computer's filter checks every address a name
  *   resolves to and connects to the address it checked, so a name that points inside is refused too.
