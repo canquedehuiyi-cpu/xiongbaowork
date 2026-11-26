@@ -14,6 +14,7 @@ trap 'rm -rf "$T"' EXIT
 rc=0
 
 fail() { echo "FAIL: $1" >&2; rc=1; }
+NO_DEFAULTS=$T/no-such-defaults.env
 # Compare a file's exact bytes: s6 container_environment files carry no trailing newline.
 expect_file() { # dir name value
   if [ ! -f "$1/$2" ]; then fail "$2 missing"; return; fi
@@ -21,8 +22,8 @@ expect_file() { # dir name value
   [ "$got" = "$3" ] || fail "$2 is '$got', wanted '$3'"
 }
 
-# Cases 1-6 pass no defaults file, so the script reads /etc/xiongbao/defaults.env if it is there: they
-# run on the CI host, which has none, not inside the image.
+# Cases 1-6 are about the operator's settings alone: they name a defaults file that does not exist, so the
+# script reads no defaults, on the CI host and inside the image (which has /etc/xiongbao/defaults.env).
 # 1. a setting only under its old name refuses to start: exit 1, the old name named, never its value, and
 #    nothing written (not even the image's defaults)
 d=$T/legacy; mkdir "$d"
@@ -36,7 +37,7 @@ case $err in *http://*) fail "the refusal printed a value: $err" ;; esac
 # 2. new-only deployment reports nothing: untouched, silent, no old name grown
 d=$T/new; mkdir "$d"
 printf %s http://new > "$d/XIONGBAO_PUBLIC_URL"
-err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "new-only exited non-zero"
+err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) || fail "new-only exited non-zero"
 expect_file "$d" XIONGBAO_PUBLIC_URL http://new
 [ "$(ls "$d" | wc -l)" -eq 1 ] || fail "new-only created files: $(ls "$d" | tr '\n' ' ')"
 [ -z "$err" ] || fail "new-only warned: $err"
@@ -45,7 +46,7 @@ expect_file "$d" XIONGBAO_PUBLIC_URL http://new
 d=$T/both; mkdir "$d"
 printf %s http://new > "$d/XIONGBAO_PUBLIC_URL"
 printf %s http://old > "$d/OPENBOT_PUBLIC_URL"
-err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "both set: exited non-zero: $err"
+err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) || fail "both set: exited non-zero: $err"
 expect_file "$d" XIONGBAO_PUBLIC_URL http://new
 [ -z "$err" ] || fail "both set: warned: $err"
 
@@ -53,11 +54,11 @@ expect_file "$d" XIONGBAO_PUBLIC_URL http://new
 d=$T/bare; mkdir "$d"
 printf %s x > "$d/OPENBOT_"
 : > "$d/OPENBOT_EMPTY"
-sh "$SCRIPT" "$d" 2>/dev/null || fail "bare prefix and empty value: exited non-zero"
+sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>/dev/null || fail "bare prefix and empty value: exited non-zero"
 d=$T/several; mkdir "$d"
 printf %s sk-test > "$d/OPENBOT_POOL_OPENAI"
 printf %s warn > "$d/OPENBOT_RLS_ENFORCE"
-err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) && fail "several old-only were not refused"
+err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "several old-only were not refused"
 case $err in *'OPENBOT_POOL_OPENAI, OPENBOT_RLS_ENFORCE'*) ;; *) fail "the refusal does not name both: $err" ;; esac
 case $err in *sk-test*) fail "the refusal printed a key: $err" ;; esac
 [ "$(printf '%s\n' "$err" | grep -c .)" -eq 1 ] || fail "wanted one line, got: $err"
@@ -66,7 +67,7 @@ case $err in *sk-test*) fail "the refusal printed a key: $err" ;; esac
 d=$T/empty-new; mkdir "$d"
 : > "$d/XIONGBAO_SINGLE_USER"
 printf %s true > "$d/OPENBOT_SINGLE_USER"
-err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) && fail "empty new over an old value was not refused"
+err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "empty new over an old value was not refused"
 case $err in *OPENBOT_SINGLE_USER*) ;; *) fail "the refusal does not name OPENBOT_SINGLE_USER: $err" ;; esac
 
 # 5b. another tool's variable under the old prefix (the upstream-sync tooling's) is no setting: left alone,
@@ -74,17 +75,17 @@ case $err in *OPENBOT_SINGLE_USER*) ;; *) fail "the refusal does not name OPENBO
 d=$T/other-tool; mkdir "$d"
 printf %s example/upstream > "$d/OPENBOT_UPSTREAM_REPOSITORY"
 printf %s 0123abc > "$d/OPENBOT_UPSTREAM_COMMIT"
-err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "another tool's variable was refused: $err"
+err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) || fail "another tool's variable was refused: $err"
 [ -z "$err" ] || fail "another tool's variable warned: $err"
 d=$T/families; mkdir "$d"
 printf %s v1 > "$d/OPENBOT_BUILD_VERSION"
 printf %s x > "$d/OPENBOT_POOL_"
-err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) && fail "a build identity under the old name was not refused"
+err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "a build identity under the old name was not refused"
 case $err in *OPENBOT_BUILD_VERSION*) ;; *) fail "the refusal does not name OPENBOT_BUILD_VERSION: $err" ;; esac
 case $err in *OPENBOT_POOL_,*|*'OPENBOT_POOL_。'*) fail "the bare family stem was refused: $err" ;; esac
 
 # 6. missing directory is a no-op, not a failure that would block container start
-sh "$SCRIPT" "$T/nonexistent" 2>/dev/null || fail "missing directory exited non-zero"
+sh "$SCRIPT" "$T/nonexistent" "$NO_DEFAULTS" 2>/dev/null || fail "missing directory exited non-zero"
 
 # 7. the env file the JD cloud deployment runs on after v0.2.16's upgrade sheet (names as measured
 #    2026-11-24, renamed; values made up): starts, silently, with the image's defaults under it
