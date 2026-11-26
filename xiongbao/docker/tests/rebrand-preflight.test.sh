@@ -5,9 +5,10 @@
 #   CI, inside the delivery image (same PostgreSQL 16 and dash the container runs):
 #     docker run --rm --user root --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb \
 #       /repo/docker/tests/rebrand-preflight.test.sh
-#   On a machine with PostgreSQL 16 installed:  sh docker/tests/rebrand-preflight.test.sh
-#   (PG_BIN overrides /usr/lib/postgresql/16/bin; as root, the clusters run as the postgres user,
-#   which must be able to reach TMPDIR.)
+#   On a machine with PostgreSQL 16, pgvector and bun:  sh docker/tests/rebrand-preflight.test.sh
+#   (PG_BIN overrides /usr/lib/postgresql/16/bin; MIGRATOR_DIR the server directory whose migrator builds
+#   the databases the restore is tested on, /app/server when it exists, else this checkout's server/. As
+#   root, the clusters run as the postgres user, which must be able to reach TMPDIR.)
 #
 # Any failed assertion exits 1. Nothing here needs a full disk: the space cases put a stand-in `df`
 # first on PATH, the way production reads free space.
@@ -20,6 +21,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 PREFLIGHT=$HERE/../s6/scripts/rebrand-preflight.sh
 PRECHECK=$HERE/../../scripts/rebrand/pre-upgrade-check.sh
 PG_BIN=${PG_BIN:-/usr/lib/postgresql/16/bin}
+# The restore is tested against databases the server's own migrator built (the image's under /app/server,
+# else this checkout's server/), because what matters there is what the migrations leave behind.
+if [ -z "${MIGRATOR_DIR:-}" ]; then
+  if [ -f /app/server/scripts/migrate.ts ]; then MIGRATOR_DIR=/app/server; else MIGRATOR_DIR=$(cd "$HERE/../../server" && pwd); fi
+fi
 PW=pw-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
 T=$(mktemp -d)
 chmod 755 "$T"
@@ -45,6 +51,9 @@ if [ ! -x "$PG_BIN/initdb" ]; then
   echo "FAIL: no PostgreSQL at $PG_BIN (set PG_BIN)" >&2
   exit 1
 fi
+[ -f "$MIGRATOR_DIR/scripts/migrate.ts" ] || { echo "FAIL: no migrator at $MIGRATOR_DIR (set MIGRATOR_DIR)" >&2; exit 1; }
+command -v bun >/dev/null 2>&1 || { echo "FAIL: bun is not on PATH" >&2; exit 1; }
+mkdir -p "$T/home"
 
 # PostgreSQL refuses to run as root: as root, everything that touches a cluster runs as postgres.
 as_pg() {
@@ -283,7 +292,6 @@ rm -rf "$BACKUP"
 
 # 6. backup is written 0600 before any rename: the rename stand-in looks at the backup first, then
 #    renames a role; the backup is not touched afterwards; `finish` clears the record.
-source_print=$(fingerprint "$OLD" openbot openbot)
 echo stale >"$T/stale"
 mkdir -p "$BACKUP" && cp "$T/stale" "$BACKUP/.pre-rebrand-killed.partial" && cp "$T/stale" "$BACKUP/.rebrand-in-progress.cutoff"
 [ "$(id -u)" = 0 ] && chown -R postgres:postgres "$BACKUP"
@@ -330,45 +338,125 @@ else
   clean && pass "$what"
 fi
 
-# 7. the backup restores, by the documented steps, over a new volume that v0.2.15 has already started
-#    on (tables created, default rows seeded, roles in place): every row comes back exactly. A plain
-#    pg_restore on that same volume does not (the seeded table's rows clash), which is why the steps say
-#    --clean; the control below keeps that reason honest.
+# 7. the backup restores, by the documented steps, over a new volume that v0.2.15 has already started on:
+#    every grant, column grant, default privilege, row-security policy, owner and row comes back exactly
+#    as backed up. Both sides are built by the server's own migrations, so the target carries what a real
+#    first start leaves (0054's default privileges among it). The control shows why the restore goes into
+#    an empty database: pg_restore --clean over the migrated one hands the app role writes it never had.
+#
+# migrated <port> <db>: what v0.2.15's first start does to a database (pgvector, every migration, the app
+# role's password).
+migrated() {
+  sql "$1" openbot postgres "CREATE DATABASE $2 OWNER openbot;" &&
+    sql "$1" openbot "$2" "CREATE EXTENSION IF NOT EXISTS vector;" &&
+    (cd "$MIGRATOR_DIR" && DATABASE_URL="postgres://openbot:$PW@127.0.0.1:$1/$2" HOME="$T/home" bun scripts/migrate.ts) >"$T/migrate.log" 2>&1 &&
+    sql "$1" openbot "$2" "ALTER ROLE openbot_app WITH LOGIN PASSWORD '$PW';" ||
+    { echo "migrating $2 failed: $(tail -n 20 "$T/migrate.log")" >&2; return 1; }
+}
+# Owners, grants, column grants, default privileges, row-security switches and policies, function and
+# schema grants: everything a restore could get wrong about who may do what.
+security_print() { # port db
+  sql "$1" openbot "$2" "SELECT concat_ws('|', n.nspname, c.relname, c.relkind, pg_get_userbyid(c.relowner), c.relacl::text,
+      c.relrowsecurity, c.relforcerowsecurity) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname IN ('public', 'drizzle') ORDER BY 1;
+    SELECT concat_ws('|', a.attrelid::regclass::text, a.attname, a.attacl::text) FROM pg_attribute a
+      JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND a.attacl IS NOT NULL ORDER BY 1;
+    SELECT concat_ws('|', pg_get_userbyid(defaclrole), defaclnamespace::regnamespace::text, defaclobjtype, defaclacl::text)
+      FROM pg_default_acl ORDER BY 1;
+    SELECT concat_ws('|', schemaname, tablename, policyname, permissive, roles::text, cmd, qual, with_check)
+      FROM pg_policies ORDER BY 1;
+    SELECT concat_ws('|', p.oid::regprocedure::text, pg_get_userbyid(p.proowner), p.proacl::text, p.prosecdef)
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' ORDER BY 1;
+    SELECT concat_ws('|', nspname, pg_get_userbyid(nspowner), nspacl::text) FROM pg_namespace
+      WHERE nspname IN ('public', 'drizzle') ORDER BY 1;" | cksum
+}
+data_print() { # port db
+  PGPASSWORD=$PW "$PG_BIN/pg_dump" -w --data-only -h 127.0.0.1 -p "$1" -U openbot -d "$2" 2>/dev/null |
+    grep -v '^--\|^\\\(un\)\{0,1\}restrict ' | cksum
+}
+restore() { # dump
+  env REBRAND_RESTORE_URL_FILE="$T/v15-url" REBRAND_RESTORE_PG_BIN="$PG_BIN" REBRAND_RESTORE_API_SERVICE="$T/no-api" \
+    sh -s "$1" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
+  code=$?
+  cat "$T/out" "$T/err" >>"$ALL"
+}
+databases() { sql "$1" openbot postgres "SELECT string_agg(datname, ',' ORDER BY datname) FROM pg_database WHERE NOT datistemplate;"; }
+# The volume backed up: a v0.2.15 database with a person's rows on top, through the preflight's own backup.
+SRC=$(start_cluster source openbot) || exit 1
+CLUSTERS="$CLUSTERS $T/source/data"
+migrated "$SRC" openbot || exit 1
+sql "$SRC" openbot openbot "CREATE TABLE public.restore_probe (id serial PRIMARY KEY, body text NOT NULL);
+  INSERT INTO public.restore_probe (body) SELECT 'row ' || g FROM generate_series(1, 300) g;
+  GRANT SELECT, INSERT ON public.restore_probe TO openbot_app;
+  GRANT UPDATE (body) ON public.restore_probe TO openbot_app;" || exit 1
+preflight "$SRC" openbot openbot REBRAND_BACKUP_DIR="$T/source-backup"
+src_dump=$(state_of backup)
+[ "$code" -eq 0 ] && [ -f "$src_dump" ] || { echo "backing up the source failed: $(cat "$T/err")" >&2; exit 1; }
+src_security=$(security_print "$SRC" openbot)
+src_data=$(data_print "$SRC" openbot)
+# The volume restored onto: started by v0.2.15 (migrated, so its default privileges are in place), plus a
+# second migrated database on the same cluster for the control.
 V15=$(start_cluster v0215 openbot) || exit 1
 CLUSTERS="$CLUSTERS $T/v0215/data"
-sql "$V15" openbot postgres "CREATE DATABASE openbot OWNER openbot;" || exit 1
-sql "$V15" openbot postgres "CREATE ROLE openbot_app LOGIN; CREATE ROLE openbot_role_writer LOGIN;" || exit 1
-seed "$V15" openbot openbot openbot_app || exit 1
-sql "$V15" openbot postgres "CREATE DATABASE plain OWNER openbot;" || exit 1
-seed "$V15" openbot plain openbot_app || exit 1
-cp "$dump" "$T/restore.dump"
+migrated "$V15" openbot || exit 1
+migrated "$V15" plain || exit 1
+cp "$src_dump" "$T/restore.dump"
 chmod 644 "$T/restore.dump"
 printf 'postgres://openbot:%s@127.0.0.1:%s/openbot' "$PW" "$V15" >"$T/v15-url"
-# The script arrives on stdin, as `docker exec -i <container> sh -s <dump> < rebrand-restore.sh` feeds it.
-env REBRAND_RESTORE_URL_FILE="$T/v15-url" REBRAND_RESTORE_PG_BIN="$PG_BIN" REBRAND_RESTORE_API_SERVICE="$T/no-api" \
-  sh -s "$T/restore.dump" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
-code=$?
-cat "$T/out" "$T/err" >>"$ALL"
-what="the backup restores every row over a volume v0.2.15 has started on"
-if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/out" "$T/err")"
-elif [ "$(fingerprint "$V15" openbot openbot)" != "$source_print" ]; then fail "$what: the restored database differs from the one backed up"
-elif [ "$(sql "$V15" openbot openbot "SELECT string_agg(key || '=' || value, ',' ORDER BY key) FROM settings;")" != "lang=zh,theme=dark" ]; then fail "$what: settings rows differ"
-elif [ "$(sql "$V15" openbot openbot "SELECT count(*) FROM notes WHERE body = 'written by a person' AND embedding = '[1,2,3]';")" != 1 ]; then fail "$what: the person's note is missing"
-else pass "$what"; fi
-PGPASSWORD=$PW "$PG_BIN/pg_restore" -w -h 127.0.0.1 -p "$V15" -U openbot -d plain "$T/restore.dump" >/dev/null 2>&1
-[ "$(sql "$V15" openbot plain "SELECT count(*) FROM settings WHERE key = 'lang';")" = 0 ] &&
-  pass "control: a plain pg_restore over the seeded tables loses the person's rows" ||
-  fail "control: a plain pg_restore over seeded tables kept every row, so --clean may no longer be needed"
 # A file that is not a complete backup is refused before the database is touched.
 head -c 2000 "$T/restore.dump" >"$T/cut.dump"
-before=$(fingerprint "$V15" openbot openbot)
-env REBRAND_RESTORE_URL_FILE="$T/v15-url" REBRAND_RESTORE_PG_BIN="$PG_BIN" REBRAND_RESTORE_API_SERVICE="$T/no-api" \
-  sh -s "$T/cut.dump" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
-code=$?
-cat "$T/out" "$T/err" >>"$ALL"
-[ "$code" -ne 0 ] && [ "$(fingerprint "$V15" openbot openbot)" = "$before" ] &&
+before=$(security_print "$V15" openbot)$(data_print "$V15" openbot)
+restore "$T/cut.dump"
+[ "$code" -ne 0 ] && [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" = "$before" ] && [ "$(databases "$V15")" = "openbot,plain,postgres" ] &&
   pass "a truncated backup is refused and the database is untouched" ||
   fail "a truncated backup is refused and the database is untouched: exit $code: $(cat "$T/err")"
+# A session still connected (the API not stopped): refused, nothing touched, no temporary database left.
+PGPASSWORD=$PW "$PG_BIN/psql" -X -q -w -h 127.0.0.1 -p "$V15" -U openbot_app -d openbot -c 'SELECT pg_sleep(120)' >/dev/null 2>&1 &
+holder=$!
+tries=0
+until [ "$(sql "$V15" openbot postgres "SELECT count(*) FROM pg_stat_activity WHERE usename = 'openbot_app';")" = 1 ]; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 50 ] || { echo "the holding session never connected" >&2; exit 1; }
+  sleep 0.2
+done
+restore "$T/restore.dump"
+sql "$V15" openbot postgres "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'openbot_app';" >/dev/null
+kill "$holder" 2>/dev/null
+wait "$holder" 2>/dev/null
+what="a restore with another session on the database is refused and touches nothing"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "其它连接" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$before" ]; then fail "$what: the database changed"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
+else pass "$what"; fi
+# The restore itself.
+restore "$T/restore.dump"
+what="the backup restores every grant, policy, owner and row over a volume v0.2.15 has started on"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/out" "$T/err")"
+elif [ "$(security_print "$V15" openbot)" != "$src_security" ]; then fail "$what: owners, grants, default privileges or policies differ from the backup"
+elif [ "$(data_print "$V15" openbot)" != "$src_data" ]; then fail "$what: the rows differ from the backup"
+elif [ "$(sql "$V15" openbot openbot "SELECT has_table_privilege('openbot_app', 'public.user_roles', 'UPDATE');")" != f ]; then fail "$what: the app role can update user_roles"
+elif [ "$(PGPASSWORD=$PW "$PG_BIN/psql" -X -q -A -t -w -h 127.0.0.1 -p "$V15" -U openbot_app -d openbot -c "SELECT count(*) FROM public.restore_probe;" 2>&1)" != 300 ]; then fail "$what: the app role cannot read the person's rows"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
+else pass "$what"; fi
+# The control: --clean over a migrated database lets its default privileges widen the app role's grants.
+[ "$(sql "$SRC" openbot openbot "SELECT has_table_privilege('openbot_app', 'public.user_roles', 'UPDATE');")" = f ] ||
+  fail "control: the source's app role can already update user_roles"
+PGPASSWORD=$PW "$PG_BIN/pg_restore" --clean --if-exists --single-transaction --exit-on-error -w -h 127.0.0.1 -p "$V15" -U openbot -d plain "$T/restore.dump" >/dev/null 2>&1
+[ "$(sql "$V15" openbot plain "SELECT has_table_privilege('openbot_app', 'public.user_roles', 'UPDATE');")" = t ] &&
+  pass "control: pg_restore --clean over a migrated database gives the app role writes on user_roles" ||
+  fail "control: --clean over a migrated database no longer widens grants, so the empty-database restore may no longer be needed"
+# A swap cut off after the old database was dropped: running the script again finishes it, without
+# restoring a second time.
+sql "$V15" openbot postgres "ALTER DATABASE openbot RENAME TO openbot_restoring;"
+restore "$T/restore.dump"
+what="a restore cut off between dropping and renaming is finished by running it again"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif ! grep -q "没有再灌一遍" "$T/out"; then fail "$what: $(cat "$T/out")"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
+elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$src_security$src_data" ]; then fail "$what: the database differs from the backup"
+else pass "$what"; fi
 
 # 8. migration failure leaves the backup and prints its path. The stand-in fails without committing
 #    anything (the journal is as it was), so the message says nothing changed and sends nobody to restore.

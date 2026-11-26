@@ -1712,9 +1712,9 @@
   },
   {
     "file": "xiongbao/docker/tests/rebrand-preflight.test.sh",
-    "pattern": "\\bopenbot(?:_app|_role_writer)?\\b",
+    "pattern": "\\bopenbot(?:_app|_role_writer|_restoring)?\\b",
     "until": "R4",
-    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，以及还原脚本的临时库名（旧库名加 _restoring），旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
   },
   {
     "file": "xiongbao/docker/tests/rebrand-superuser.test.sh",

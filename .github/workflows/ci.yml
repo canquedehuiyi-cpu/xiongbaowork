@@ -645,9 +645,10 @@ jobs:
       # The s6 oneshot that copies old-prefix settings onto their XIONGBAO_* names runs on the host: it only reads and writes files.
       - name: env-aliases oneshot
         run: sh docker/tests/env-aliases.test.sh
-      # The v0.2.16 rename preflight (in-flight and space refusals, the pre-rename backup) and the
-      # read-only pre-upgrade check, against PostgreSQL clusters the test makes with the image's own
-      # PostgreSQL 16: inside the image, as root, so the backup's owner and modes are the real ones.
+      # The v0.2.16 rename preflight (in-flight and space refusals, the pre-rename backup), the restore
+      # from that backup (onto databases the image's own migrator built) and the read-only pre-upgrade
+      # check, against PostgreSQL clusters the test makes with the image's own PostgreSQL 16: inside the
+      # image, as root, so the backup's owner and modes are the real ones.
       - name: rename preflight (real PostgreSQL)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb /repo/docker/tests/rebrand-preflight.test.sh
       # The v0.2.16 rename of the superuser and the database (a new volume after its first migrations, a
