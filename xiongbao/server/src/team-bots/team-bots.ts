@@ -16,7 +16,7 @@
  *
  * WHERE THE ROWS LIVE (G01-E P9). A published Bot lives in the shared `team` tenant, moved there by
  * its owner (`moveToTeam`), and its publication, audience and assignment rows are stamped `team` too:
- * row security shows them to a teammate only where `openbot_team_bot_visible` admits the Bot. The
+ * row security shows them to a teammate only where `xiongbao_team_bot_visible` admits the Bot. The
  * owner writes the publication and audience in their own frame; an administrator assigns with the
  * capability, and unpublishes another person's Bot in that OWNER's frame (`adminActAsOwner`, opened
  * by the route), so the Bot goes back to its owner exactly as if the owner had unpublished it.
@@ -616,7 +616,7 @@ export function createTeamBots(options: {
      * OPERATOR NOTE. No app path deletes a person's account, but an operator can, directly in the
      * database. That cascades their publications away (`published_by` ON DELETE CASCADE) and sets the
      * owner of their Bots null. A Bot they had published while it was private is left stamped `team`,
-     * with no owner, private and unpublished: `openbot_team_bot_visible` admits nobody, it is on nobody's
+     * with no owner, private and unpublished: `xiongbao_team_bot_visible` admits nobody, it is on nobody's
      * Team Bots page, and unpublishing it answers 404 because no publication is left. It is not lost:
      * an administrator finds it on the admin agents pages (`platform`, with the capability) and
      * deletes it there, or makes it public. Better, unpublish or hand over a person's Bots before

@@ -110,9 +110,9 @@ describe("renameText", () => {
         loadProtect("R4"),
       ),
     ).toBe("postgres://xiongbao:x@h/db -U xiongbao -d x");
-    // 应用角色的口令随 0054 迁移，角色名本身是库对象；连接串里两处都不动。
+    // 应用角色名由 v0.2.16 的迁移 0240 改成新名（Task 20），不再保护；口令随 0054 迁移不动。
     expect(renameText("postgres://openbot_app:openbot@h/openbot_b", p)).toBe(
-      "postgres://openbot_app:openbot@h/xiongbao_b",
+      "postgres://xiongbao_app:openbot@h/xiongbao_b",
     );
     // 没有用户名的写法（openbot 是主机名）不算超级用户；不带协议头的 <用户>:<口令>@ 片段同样保护。
     expect(renameText("postgres://openbot/x", p)).toBe("postgres://xiongbao/x");
@@ -204,7 +204,8 @@ describe("renameText", () => {
       const { source, out } = R1("xiongbao/scripts/ci/image-smoke.sh");
       // 新装卷首启就改了名：默认口令的反例要连改名后的库，失败才只说明口令不对。
       expect(source).not.toMatch(/-d openbot\b/);
-      expect(count(out, /-U openbot_app -d xiongbao\b/g)).toBe(2);
+      // 应用角色已由迁移 0240 改名（Task 20），反例用新名登录。
+      expect(count(out, /-U xiongbao_app -d xiongbao\b/g)).toBe(2);
       expect(out).toContain("PGPASSWORD=openbot ");
     });
 

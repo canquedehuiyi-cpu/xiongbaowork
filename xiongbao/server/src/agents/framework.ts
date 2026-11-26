@@ -17,17 +17,17 @@
 import {
   declaredHarness,
   harnessForImage,
-  OPENBOT_HARNESS_NAME,
+  XIONGBAO_HARNESS_NAME,
 } from "@xiongbao/shared/harnesses";
 import { englishName } from "../brand";
 
 /**
- * What the model is told the framework is called. `OPENBOT_HARNESS_NAME` stays the identifier on the
+ * What the model is told the framework is called. `XIONGBAO_HARNESS_NAME` stays the identifier on the
  * wire (the app compares `AgentProfile.framework` to it), so only the sentence the model reads is
  * swapped for the product's English name, which a coworker may repeat to a customer.
  */
 export function frameworkLabel(framework: string): string {
-  return framework === OPENBOT_HARNESS_NAME ? englishName() : framework;
+  return framework === XIONGBAO_HARNESS_NAME ? englishName() : framework;
 }
 
 const trimmed = (url: string) => url.trim().replace(/\/+$/, "");
@@ -39,7 +39,7 @@ export function frameworkOf(
   },
   environment: Record<string, string | undefined> = process.env,
 ): string | undefined {
-  if (agent.type === "built_in") return OPENBOT_HARNESS_NAME;
+  if (agent.type === "built_in") return XIONGBAO_HARNESS_NAME;
   const configuration =
     agent.configuration && typeof agent.configuration === "object"
       ? (agent.configuration as Record<string, unknown>)

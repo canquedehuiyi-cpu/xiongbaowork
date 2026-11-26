@@ -1,7 +1,7 @@
 /**
  * The role writer's password, installed by the owner after the migrations that create the role.
  *
- * Migration 0109 creates `openbot_role_writer` as a login with no password ("the operator, or CI, sets
+ * Migration 0109 creates `xiongbao_role_writer` as a login with no password ("the operator, or CI, sets
  * one"), and the server refuses to start without a URL that logs in as it. The chart's migration Job
  * and the embedded image's `docker/s6/scripts/migrate.sh` both set it with `psql` straight after
  * `scripts/migrate.ts`; the compose `migrate` service runs this instead, because the server image has
@@ -23,7 +23,7 @@ export function roleWriterPasswordStatement(
       "ROLE_WRITER_PASSWORD must be letters and digits only, because it goes into a SQL literal. Generate one with: openssl rand -hex 32",
     );
   }
-  return `ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'`;
+  return `ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'`;
 }
 
 if (import.meta.main) {

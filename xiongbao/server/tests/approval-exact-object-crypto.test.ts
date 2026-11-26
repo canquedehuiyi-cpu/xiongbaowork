@@ -13,8 +13,8 @@ const data = () => new Uint8Array([4, 5, 6]);
 const nonce = () => new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 // Independent literal bytes: ASCII version, NUL, u32BE(3), caller AAD(1,2,3).
 const nativeAad = () => new Uint8Array([
-	79, 80, 69, 78, 66, 79, 84, 95, 65, 80, 80, 82, 79, 86, 65, 76,
-	95, 69, 88, 65, 67, 84, 95, 65, 69, 65, 68, 95, 86, 49,
+	88, 73, 79, 78, 71, 66, 65, 79, 95, 65, 80, 80, 82, 79, 86, 65,
+	76, 95, 69, 88, 65, 67, 84, 95, 65, 69, 65, 68, 95, 86, 49,
 	0, 0, 0, 0, 3, 1, 2, 3,
 ]);
 function key(length = 256, extractable = false, usages: KeyUsage[] = ["encrypt", "decrypt"]): Promise<CryptoKey> {
@@ -40,7 +40,7 @@ describe("exact object AEAD byte primitive, not AP4 admission", () => {
 	test("real AES256GCM roundtrip and exact binary shape", async () => {
 		const secret = await key(); const sealed = await sealExactObjectV1(secret, data(), aad());
 		expect(Reflect.ownKeys(sealed)).toEqual(["version", "algorithm", "nonce", "ciphertextAndTag"]);
-		expect(sealed.version).toBe("OPENBOT_APPROVAL_EXACT_AEAD_V1");
+		expect(sealed.version).toBe("XIONGBAO_APPROVAL_EXACT_AEAD_V1");
 		expect(sealed.algorithm).toBe("AES-256-GCM"); expect(sealed.nonce.byteLength).toBe(12);
 		expect(sealed.ciphertextAndTag.byteLength).toBe(19);
 		expect(await openExactObjectV1(secret, sealed, aad())).toEqual(data());

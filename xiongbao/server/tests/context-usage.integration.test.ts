@@ -194,7 +194,7 @@ describe("context usage", () => {
     const poolId = randomUUID();
     poolIds.push(poolId);
     await admin`insert into platform_model_pool (id, provider, model_name, label, api_key_env, context_window)
-                values (${poolId}, ${`p-${suite}`}, ${`m-${randomUUID()}`}, 'pool', 'OPENBOT_POOL_CTXU_TEST', 96000)`;
+                values (${poolId}, ${`p-${suite}`}, ${`m-${randomUUID()}`}, 'pool', 'XIONGBAO_POOL_CTXU_TEST', 96000)`;
     const poolThread = `thread-${randomUUID()}`;
     // 平台模型池的调用把池行 id 同时记作 model_ref 和 credential_id（runtime-resolver 的 poolModel）。
     await call({

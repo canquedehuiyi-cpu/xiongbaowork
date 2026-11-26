@@ -165,7 +165,7 @@ describe("0117 automation tenant policies", () => {
     );
   });
 
-  test("the due, cap and breaker indexes exist, and openbot_app keeps its four rights", () => {
+  test("the due, cap and breaker indexes exist, and the application role keeps its four rights", () => {
     expect(statements).toContain(
       'CREATE INDEX "automation_triggers_enabled_due_idx" ON "public"."automation_triggers" USING btree ("next_run_at") WHERE "enabled" AND "next_run_at" IS NOT NULL;',
     );

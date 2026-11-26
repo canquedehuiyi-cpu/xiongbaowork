@@ -350,7 +350,7 @@ async def test_a_plan_refusing_a_model_ends_the_run_with_its_reason_and_refreshe
         errors[-1]["message"]
     )
     # A refused model is not a sign-in problem: it is a refusal, which the server says in words.
-    assert errors[-1].get("code") == "OPENBOT_MODEL_REFUSED"
+    assert errors[-1].get("code") == "XIONGBAO_MODEL_REFUSED"
     # The listing is read again on the next use, not after six hours.
     assert (await get("/models")).status_code == 200
     assert len(plan.listings) == 2
@@ -403,7 +403,7 @@ async def test_a_refusal_inside_the_streamed_answer_ends_the_run_with_a_terminal
     assert "RUN_FINISHED" not in types
     # The provider's words, marked as a refusal, so the server says it in words of its own
     # (server/src/agents/provider-refusal.ts) and keeps these for its log.
-    assert events[-1]["code"] == "OPENBOT_MODEL_REFUSED"
+    assert events[-1]["code"] == "XIONGBAO_MODEL_REFUSED"
     assert SCHEMA_REFUSAL in events[-1]["message"]
     # The tools went to the backend: this is the request the backend refused.
     assert [tool["name"] for tool in plan.answers[0]["body"]["tools"]] == ["connect_app"]

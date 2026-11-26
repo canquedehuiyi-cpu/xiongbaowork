@@ -13,7 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { OPENBOT_HARNESS_NAME } from "@xiongbao/shared/harnesses";
+import { XIONGBAO_HARNESS_NAME } from "@xiongbao/shared/harnesses";
 import { Fragment, useState } from "react";
 import type { ZodType } from "zod";
 import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";
@@ -664,7 +664,7 @@ export function frameworkName(
   agent: Pick<AgentProfile, "framework" | "builtIn">,
 ): string {
   if (
-    agent.framework === OPENBOT_HARNESS_NAME ||
+    agent.framework === XIONGBAO_HARNESS_NAME ||
     (!agent.framework && agent.builtIn)
   )
     return `${shortName()}内置`;

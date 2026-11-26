@@ -73,7 +73,7 @@ afterEach(async () => {
   await asPlatform(() =>
     database.transaction(async (tx) => {
       await tx.execute(
-        sql`select set_config('openbot.audit_retention_days', '1', true)`,
+        sql`select set_config('xiongbao.audit_retention_days', '1', true)`,
       );
       await tx.delete(auditEvents).where(eq(auditEvents.targetType, MARKER));
     }),
@@ -153,7 +153,7 @@ describe("keeping the audit trail to a retention policy", () => {
         await refusedAsAppendOnly(() =>
           database.transaction(async (tx) => {
             await tx.execute(
-              sql`select set_config('openbot.audit_retention_days', ${window}, true)`,
+              sql`select set_config('xiongbao.audit_retention_days', ${window}, true)`,
             );
             await tx
               .delete(auditEvents)
@@ -215,7 +215,7 @@ describe("keeping the audit trail to a retention policy", () => {
       await refusedAsAppendOnly(() =>
         database.transaction(async (tx) => {
           await tx.execute(
-            sql`select set_config('openbot.audit_retention_days', '3650', true)`,
+            sql`select set_config('xiongbao.audit_retention_days', '3650', true)`,
           );
           await tx
             .delete(auditEvents)
@@ -236,7 +236,7 @@ describe("keeping the audit trail to a retention policy", () => {
       await refusedAsAppendOnly(() =>
         database.transaction(async (tx) => {
           await tx.execute(
-            sql`select set_config('openbot.audit_retention_days', '1', true)`,
+            sql`select set_config('xiongbao.audit_retention_days', '1', true)`,
           );
           await tx
             .update(auditEvents)
@@ -277,7 +277,7 @@ describe("keeping the audit trail to a retention policy", () => {
    * the refusal, so the assertion fails with the table still whole.
    *
    * WHICH GUARD ANSWERS DEPENDS ON WHO IS ASKING, and the suite is not the deployment's owner. These
-   * cases run as `openbot_app` (the role the product is meant to run as, and the one the row-level
+   * cases run as `xiongbao_app` (the role the product is meant to run as, and the one the row-level
    * security tests need), and PostgreSQL refuses a TRUNCATE of a table the caller does not own before
    * any trigger of ours is reached — `must be owner of table audit_events`, not `Audit events are
    * append-only`. So what is asserted here is the product-level promise, which is the one a person
@@ -341,7 +341,7 @@ describe("keeping the audit trail to a retention policy", () => {
     const outcome = await refusedForAnyReason(() =>
       database.transaction(async (tx) => {
         await tx.execute(
-          sql`select set_config('openbot.audit_retention_days', '30', true)`,
+          sql`select set_config('xiongbao.audit_retention_days', '30', true)`,
         );
         await tx.execute(sql`truncate table audit_events`);
         throw new Error(ROLLED_BACK);

@@ -38,9 +38,9 @@ type Statement = { kind: "delete" | "insert"; role: string };
 
 /** These rows are unit doubles only; real PG permission assertions live in the integration suite. */
 const unitRoleFacts = {
-  role: "openbot_app",
-  session_role: "openbot_app",
-  login_role: "openbot_app",
+  role: "xiongbao_app",
+  session_role: "xiongbao_app",
+  login_role: "xiongbao_app",
   can_login: true,
   database: "unit",
   database_oid: "1",
@@ -85,9 +85,9 @@ async function initializeRecordingRoleWriter(
         return async () => [
           {
             ...unitRoleFacts,
-            role: "openbot_role_writer",
-            session_role: "openbot_role_writer",
-            login_role: "openbot_role_writer",
+            role: "xiongbao_role_writer",
+            session_role: "xiongbao_role_writer",
+            login_role: "xiongbao_role_writer",
             inserts_roles: true,
             deletes_roles: true,
             role_column_writes: true,
@@ -110,7 +110,7 @@ function recordingDatabase(beforeInsert: Promise<void> = Promise.resolve()): {
     execute: async (statement: SQL) => {
       const query = new PgDialect().sqlToQuery(statement);
       expect(query.sql).toContain("pg_advisory_xact_lock");
-      expect(query.params).toEqual(["openbot.role-authority:u1"]);
+      expect(query.params).toEqual(["xiongbao.role-authority:u1"]);
       operations.push("lock");
       return [];
     },
@@ -622,9 +622,9 @@ describe("restricted role writer fail-closed facts (CPU only)", () => {
   }
   const writerFacts = {
     ...unitRoleFacts,
-    role: "openbot_role_writer",
-    session_role: "openbot_role_writer",
-    login_role: "openbot_role_writer",
+    role: "xiongbao_role_writer",
+    session_role: "xiongbao_role_writer",
+    login_role: "xiongbao_role_writer",
     inserts_roles: true,
     deletes_roles: true,
     role_column_writes: true,

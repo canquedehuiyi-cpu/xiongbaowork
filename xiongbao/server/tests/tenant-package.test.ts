@@ -610,7 +610,7 @@ describe("tenant YAML validation", () => {
     const configuration = createApplicationConfiguration(
       validateTenantPackage({
         brand:
-          "tenant: { id: openbot, product_name: 熊宝数字员工, english_name: xiongbao work }",
+          "tenant: { id: xiongbao, product_name: 熊宝数字员工, english_name: xiongbao work }",
         agents: "agents: []",
         channels: "channels: []",
         model:
@@ -621,7 +621,7 @@ describe("tenant YAML validation", () => {
     );
     expect(configuration).toEqual({
       brand: {
-        tenantId: "openbot",
+        tenantId: "xiongbao",
         productName: "熊宝数字员工",
         englishName: "xiongbao work",
       },
@@ -631,7 +631,7 @@ describe("tenant YAML validation", () => {
   test("carries the product's short name to the browser when the package gives one", () => {
     const tenantPackage = validateTenantPackage({
       brand:
-        "tenant: { id: openbot, product_name: 熊宝数字员工, short_name: 熊宝 }",
+        "tenant: { id: xiongbao, product_name: 熊宝数字员工, short_name: 熊宝 }",
       agents: "agents: []",
       channels: "channels: []",
       model:
@@ -642,7 +642,7 @@ describe("tenant YAML validation", () => {
     expect(tenantPackage.shortName).toBe("熊宝");
     expect(createApplicationConfiguration(tenantPackage)).toEqual({
       brand: {
-        tenantId: "openbot",
+        tenantId: "xiongbao",
         productName: "熊宝数字员工",
         shortName: "熊宝",
       },
@@ -662,19 +662,19 @@ describe("tenant YAML validation", () => {
       });
     expect(
       withBrand(
-        'tenant: { id: openbot, product_name: 熊宝数字员工, short_name: "" }',
+        'tenant: { id: xiongbao, product_name: 熊宝数字员工, short_name: "" }',
       ),
     ).toThrow("tenant.short_name must be a non-empty string");
     expect(
       withBrand(
-        "tenant:\n  id: openbot\n  product_name: 熊宝数字员工\n  short_name:\n",
+        "tenant:\n  id: xiongbao\n  product_name: 熊宝数字员工\n  short_name:\n",
       ),
     ).toThrow("tenant.short_name must be a non-empty string");
   });
 
   test("a package without a short name sends the browser none", () => {
     const tenantPackage = validateTenantPackage({
-      brand: "tenant: { id: openbot, product_name: 熊宝数字员工 }",
+      brand: "tenant: { id: xiongbao, product_name: 熊宝数字员工 }",
       agents: "agents: []",
       channels: "channels: []",
       model:
@@ -686,7 +686,7 @@ describe("tenant YAML validation", () => {
     const configuration = createApplicationConfiguration(tenantPackage);
     expect("shortName" in configuration.brand).toBe(false);
     expect(configuration).toEqual({
-      brand: { tenantId: "openbot", productName: "熊宝数字员工" },
+      brand: { tenantId: "xiongbao", productName: "熊宝数字员工" },
     });
   });
 
@@ -695,7 +695,7 @@ describe("tenant YAML validation", () => {
       fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
     );
 
-    expect(tenantPackage.tenantId).toBe("openbot");
+    expect(tenantPackage.tenantId).toBe("xiongbao");
     expect(tenantPackage.stylesheet).toBeNull();
     expect(tenantPackage.themeCss).toBe("");
     expect(tenantPackage.checksum).toMatch(/^[a-f0-9]{64}$/);
@@ -3185,7 +3185,9 @@ describe("bundled personal starter", () => {
         .set({ name: "My original Assistant" })
         .where(eq(agents.id, "personal-assistant"));
       const upgraded = await loadStarter(starterTestTenant(), langchain);
-      expect(await deploymentNameOf(database, upgraded)).toBe(formerTenantId);
+      expect((await deploymentNameOf(database, upgraded)).name).toBe(
+        formerTenantId,
+      );
       const current = await synchronizeTenantPackage(database, upgraded);
       await synchronizeTenantPackage(database, upgraded);
       expect(await ownedIds(legacy.id)).toEqual([]);
@@ -3491,7 +3493,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
       const shipped = await loadTenantPackage(
         fileURLToPath(new URL("../../examples/personal", import.meta.url)),
       );
-      expect(shipped.tenantId).toBe("openbot");
+      expect(shipped.tenantId).toBe("xiongbao");
       expect(shipped.formerTenantIds).toEqual(["personal"]);
     },
   );
@@ -3500,7 +3502,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
     expect(() =>
       validateTenantPackage({
         brand:
-          "tenant:\n  id: openbot\n  former_ids: [openbot]\n  product_name: XiongBao\n",
+          "tenant:\n  id: xiongbao\n  former_ids: [xiongbao]\n  product_name: XiongBao\n",
         agents: "agents: []\n",
         channels: "channels: []\n",
         model:
@@ -3508,7 +3510,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
         knowledge: "sources: []\n",
         themeCss: "",
       }),
-    ).toThrow('tenant.former_ids names "openbot"');
+    ).toThrow('tenant.former_ids names "xiongbao"');
   });
 
   catalogueTest(
@@ -3636,7 +3638,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
       expect(before.connections).toHaveLength(1);
 
       // The upgraded server names itself before it synchronises.
-      expect(await deploymentNameOf(database, upgraded)).toBe(formerId);
+      expect((await deploymentNameOf(database, upgraded)).name).toBe(formerId);
 
       const row = await synchronizeTenantPackage(database, upgraded);
       expect(row.tenantId).toBe(currentId);
@@ -3660,7 +3662,7 @@ describe("upgrading a deployment set up under a package's former id", () => {
       expect(channel?.packageId).toBe(row.id);
 
       // And on every boot after: the same name, the same rows.
-      expect(await deploymentNameOf(database, upgraded)).toBe(formerId);
+      expect((await deploymentNameOf(database, upgraded)).name).toBe(formerId);
       await synchronizeTenantPackage(database, upgraded);
       expect(await snapshot()).toEqual(before);
 
@@ -3675,10 +3677,12 @@ describe("upgrading a deployment set up under a package's former id", () => {
     async () => {
       const tenantId = `fresh-${randomUUID().slice(0, 8)}`;
       expect(
-        await deploymentNameOf(database, {
-          tenantId,
-          formerTenantIds: [`never-${randomUUID().slice(0, 8)}`],
-        }),
+        (
+          await deploymentNameOf(database, {
+            tenantId,
+            formerTenantIds: [`never-${randomUUID().slice(0, 8)}`],
+          })
+        ).name,
       ).toBe(tenantId);
     },
   );

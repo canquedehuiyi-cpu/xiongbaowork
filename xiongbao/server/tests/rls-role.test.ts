@@ -25,7 +25,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 test("an ordinary role is governed by the policy", () => {
   expect(
     judgeRlsEnforcement({
-      role: "openbot_app",
+      role: "xiongbao_app",
       super: false,
       bypassesRls: false,
     }),
@@ -41,7 +41,7 @@ test("a superuser is not, and says so with the fix", () => {
   expect(verdict.enforced).toBeFalse();
   if (verdict.enforced) return;
   expect(verdict.reason).toContain("xiongbao is a superuser");
-  expect(verdict.fix).toContain("openbot_app");
+  expect(verdict.fix).toContain("xiongbao_app");
 });
 
 test("BYPASSRLS is named as itself, not as superuser", () => {
@@ -81,13 +81,13 @@ test("the catalog query answers in the shape the reader expects", async () => {
   // suite is testing the layer it claims to test. If it ever starts failing, the isolation tests
   // above it have been passing against an unenforced connection — which is the exact accident this
   // ticket exists to prevent, arriving as a red line instead of as a quiet green.
-  expect(facts.role).toBe("openbot_app");
+  expect(facts.role).toBe("xiongbao_app");
   expect(judgeRlsEnforcement(facts)).toEqual({ enforced: true });
   await database.$client.close();
 });
 
 /**
- * Audit defect #8: `0054_app_role.sql` granted `openbot_app` CREATE on `public` (and ALL on
+ * Audit defect #8: `0054_app_role.sql` granted `xiongbao_app` CREATE on `public` (and ALL on
  * `drizzle`), so the role meant to hold row rights and nothing else could add tables, functions and
  * triggers to the schema it writes through. The server creates nothing at runtime; migrations run as
  * the owner. `0112_app_role_hardening.sql` takes the schema-level CREATE back.
@@ -126,15 +126,15 @@ test("the overlay migration revokes schema CREATE from the application role", ()
 test("the application role cannot create objects in the schemas it writes through", async () => {
   const database = createDatabase(testDatabaseUrl(), TEST_POOL);
   // Schema privileges and DDL belong to no tenant: probed in the platform frame, which still connects
-  // as openbot_app, so the probe tests the application role's own rights.
+  // as xiongbao_app, so the probe tests the application role's own rights.
   const [row] = (await asPlatform(() =>
     database.execute(
       sql.raw(`
       select
-        has_schema_privilege('openbot_app', 'public', 'CREATE') as creates_public,
-        has_schema_privilege('openbot_app', 'drizzle', 'CREATE') as creates_drizzle,
-        has_schema_privilege('openbot_app', 'public', 'USAGE') as uses_public,
-        has_schema_privilege('openbot_app', 'drizzle', 'USAGE') as uses_drizzle
+        has_schema_privilege('xiongbao_app', 'public', 'CREATE') as creates_public,
+        has_schema_privilege('xiongbao_app', 'drizzle', 'CREATE') as creates_drizzle,
+        has_schema_privilege('xiongbao_app', 'public', 'USAGE') as uses_public,
+        has_schema_privilege('xiongbao_app', 'drizzle', 'USAGE') as uses_drizzle
     `),
     ),
   )) as unknown as Record<string, unknown>[];
@@ -145,7 +145,7 @@ test("the application role cannot create objects in the schemas it writes throug
     uses_drizzle: true,
   });
 
-  // And the catalog answer is the behaviour: the suite connects as openbot_app (asserted above).
+  // And the catalog answer is the behaviour: the suite connects as xiongbao_app (asserted above).
   const name = `app_role_create_probe_${Date.now()}`;
   const failure: unknown = await asPlatform(() =>
     database.execute(sql.raw(`create table public.${name} (id int)`)),

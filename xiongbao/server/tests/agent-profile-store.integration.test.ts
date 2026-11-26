@@ -1277,7 +1277,7 @@ describe("agent profile store integration", () => {
   test("a Bot nobody owns cannot be made private, which would hide it from everybody; the admin still deletes it", async () => {
     /*
      * G01-E P9. A shared Bot whose owner's account was deleted stays `team` with no owner. `team`
-     * rows are read only where `openbot_team_bot_visible` admits them (public, the owner, a published
+     * rows are read only where `xiongbao_team_bot_visible` admits them (public, the owner, a published
      * audience), so the same Bot made private would be visible to nobody and changeable by no person.
      * The change is refused with a sentence that says so; taking it down is a delete.
      */

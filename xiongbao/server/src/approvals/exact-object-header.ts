@@ -1,10 +1,10 @@
 import { canonicalExactInputJsonV1 } from "./exact-input-json";
 
-export const EXACT_OBJECT_HEADER_VERSION = "OPENBOT_APPROVAL_EXACT_HEADER_V1";
+export const EXACT_OBJECT_HEADER_VERSION = "XIONGBAO_APPROVAL_EXACT_HEADER_V1";
 
 type CommonRow = Readonly<{
 	id: string;
-	codecVersion: "OPENBOT_EXACT_INPUT_JSON_V1";
+	codecVersion: "XIONGBAO_EXACT_INPUT_JSON_V1";
 	approvalId: string;
 	tenantId: string;
 	ownerUserId: string;
@@ -16,11 +16,11 @@ type CommonRow = Readonly<{
 	sourceActualRunId: string;
 	toolCallId: string;
 	actionDigest: string;
-	sourceBindingVersion: "OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1";
+	sourceBindingVersion: "XIONGBAO_APPROVAL_EXACT_SOURCE_BINDING_V1";
 	sourceBinding: Readonly<Record<string, unknown>>;
 	plaintextSha256: string;
 	keyVersion: string;
-	envelopeWireVersion: "OPENBOT_APPROVAL_EXACT_WIRE_V1";
+	envelopeWireVersion: "XIONGBAO_APPROVAL_EXACT_WIRE_V1";
 }>;
 export type CaptureHeaderRow = CommonRow & Readonly<{ stage: "capture" }>;
 export type PreparedHeaderRow = CommonRow & Readonly<{
@@ -98,7 +98,7 @@ function validated(row: ExactHeaderRow): { fields: Map<string, unknown>; binding
 		const value = fields.get(key);
 		if (typeof value !== "string" || value.length !== 64 || !SHA.test(value)) fail();
 	}
-	if (fields.get("codecVersion") !== "OPENBOT_EXACT_INPUT_JSON_V1" || fields.get("sourceBindingVersion") !== "OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1" || fields.get("envelopeWireVersion") !== "OPENBOT_APPROVAL_EXACT_WIRE_V1") fail();
+	if (fields.get("codecVersion") !== "XIONGBAO_EXACT_INPUT_JSON_V1" || fields.get("sourceBindingVersion") !== "XIONGBAO_APPROVAL_EXACT_SOURCE_BINDING_V1" || fields.get("envelopeWireVersion") !== "XIONGBAO_APPROVAL_EXACT_WIRE_V1") fail();
 	const keyVersion = fields.get("keyVersion");
 	if (typeof keyVersion !== "string" || keyVersion.length === 0) fail();
 	const encoder = new TextEncoder();

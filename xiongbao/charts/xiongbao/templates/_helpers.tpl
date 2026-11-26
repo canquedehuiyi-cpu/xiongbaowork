@@ -281,7 +281,7 @@ migrated one database while the API talked to another is a failure that looks li
 {{- end -}}
 
 {{/*
-The role writer's URL (migration 0109's `openbot_role_writer`), for the API server only.
+The role writer's URL (migration 0109's `xiongbao_role_writer`), for the API server only.
 
 The API refuses to start without it in every mode. With the bundled database: the role writer's
 password from the chart's own `-database-roles` Secret (see database-roles-secret.yaml), declared
@@ -296,7 +296,7 @@ both name what to set, rather than on a nil).
 {{- if .Values.postgresql.enabled -}}
 {{ include "xiongbao.roleWriterPasswordEnv" . }}
 - name: ROLE_WRITER_DATABASE_URL
-  value: postgres://openbot_role_writer:$(ROLE_WRITER_PASSWORD)@{{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.auth.database }}
+  value: postgres://xiongbao_role_writer:$(ROLE_WRITER_PASSWORD)@{{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.auth.database }}
 {{- else -}}
 {{- $database := .Values.database | default dict -}}
 {{- $ownSecret := $database.roleWriterExistingSecret | default "" -}}

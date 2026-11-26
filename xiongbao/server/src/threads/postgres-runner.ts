@@ -57,6 +57,7 @@ import {
   isTenantFramed,
   runAsTenant,
 } from "../tenant/context";
+import { runErrorCode } from "../wire-codes";
 import {
   FLUSH_EVERY_EVENTS,
   FLUSH_EVERY_MS,
@@ -580,7 +581,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         events.push({
           type: EventType.RUN_ERROR,
           message: "Local continuation stream failed.",
-          code: "OPENBOT_AP_LOCAL_STREAM_ERROR",
+          code: runErrorCode("AP_LOCAL_STREAM_ERROR"),
         });
       }
       checkCancellation();
@@ -595,7 +596,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         events.push({
           type: EventType.RUN_ERROR,
           message: "Local continuation has no terminal event.",
-          code: "OPENBOT_AP_LOCAL_TERMINAL_MISSING",
+          code: runErrorCode("AP_LOCAL_TERMINAL_MISSING"),
         });
       }
       const messages = structuredClone(agent.messages);

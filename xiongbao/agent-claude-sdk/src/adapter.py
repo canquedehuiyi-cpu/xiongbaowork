@@ -98,7 +98,7 @@ class ModelRefusedError(Exception):
     the API down) with an assistant message of its own, marked with `error`. Streamed as one, it read
     as the Bot's answer: "API Error: Request rejected (429) · This request would exceed the rate
     limit …", and the turn finished as if it had worked. It ends the run as a RUN_ERROR instead,
-    coded `OPENBOT_MODEL_REFUSED`, and the server says it in words
+    coded `XIONGBAO_MODEL_REFUSED`, and the server says it in words
     (server/src/agents/provider-refusal.ts).
     """
 
@@ -809,7 +809,7 @@ class XiongBaoClaudeAgentAdapter(ClaudeAgentAdapter):
             async for event in self._run_query(input_data):
                 if event.type == EventType.RUN_ERROR and turn.authentication_failed:
                     event = event.model_copy(
-                        update={"code": "OPENBOT_MODEL_AUTH_REQUIRED"}
+                        update={"code": "XIONGBAO_MODEL_AUTH_REQUIRED"}
                     )
                 if (
                     event.type == EventType.TOOL_CALL_START
@@ -830,15 +830,15 @@ class XiongBaoClaudeAgentAdapter(ClaudeAgentAdapter):
                 # process error ("[Errno 7] Argument list too long") is for the log.
                 logger.error("Claude Code did not start: %s", error)
                 await turn.queue.put(
-                    RunErrorEvent(message=START_FAILED, code="OPENBOT_HARNESS_START_FAILED")
+                    RunErrorEvent(message=START_FAILED, code="XIONGBAO_HARNESS_START_FAILED")
                 )
                 return
             await turn.queue.put(
                 RunErrorEvent(
                     message=str(error),
-                    code="OPENBOT_MODEL_AUTH_REQUIRED"
+                    code="XIONGBAO_MODEL_AUTH_REQUIRED"
                     if isinstance(error, ModelAuthenticationError)
-                    else "OPENBOT_MODEL_REFUSED"
+                    else "XIONGBAO_MODEL_REFUSED"
                     if isinstance(error, ModelRefusedError)
                     else None,
                 )

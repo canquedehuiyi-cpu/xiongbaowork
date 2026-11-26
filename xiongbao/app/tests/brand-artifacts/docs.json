@@ -90,18 +90,6 @@
     "note": "开发环境文档里的本地容器名"
   },
   {
-    "word": "openbot_app",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "openbot_role_writer",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
     "word": "openbot_test",
     "category": "persisted-data",
     "plan": "keep",
@@ -121,36 +109,6 @@
   },
   {
     "word": "postgres://openbot:openbot@host.docker.internal:5433/openbot_test",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "postgres://openbot_app:",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "postgres://openbot_app:openbot@127.0.0.1:5433/openbot",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "postgres://openbot_app:openbot@host.docker.internal:5433/openbot",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "postgres://openbot_app:openbot@host.docker.internal:5433/openbot_test",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "postgres://openbot_role_writer:",
     "category": "persisted-data",
     "plan": "keep",
     "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"

@@ -107,7 +107,7 @@ describe("conversation sidebar schema (0216)", () => {
     poolIds.push(poolId);
     const pool = (contextWindow: number | null) =>
       admin`insert into platform_model_pool (id, provider, model_name, label, api_key_env, context_window)
-            values (${poolId}, ${`p-${suite}`}, ${`m-${randomUUID()}`}, 'pool', 'OPENBOT_POOL_SIDEBAR_TEST', ${contextWindow})`;
+            values (${poolId}, ${`p-${suite}`}, ${`m-${randomUUID()}`}, 'pool', 'XIONGBAO_POOL_SIDEBAR_TEST', ${contextWindow})`;
     await expect(Promise.resolve(pool(0))).rejects.toThrow();
     await pool(128_000);
     const [row] =

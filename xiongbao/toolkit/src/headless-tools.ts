@@ -357,7 +357,7 @@ export class HeadlessToolsMiddleware extends Middleware {
           if (subscriber.closed) return;
           subscriber.next({
             type: EventType.RUN_ERROR,
-            code: "OPENBOT_HEADLESS_TOOL_ERROR",
+            code: "XIONGBAO_HEADLESS_TOOL_ERROR",
             message: error instanceof Error ? error.message : String(error),
           });
           subscriber.complete();

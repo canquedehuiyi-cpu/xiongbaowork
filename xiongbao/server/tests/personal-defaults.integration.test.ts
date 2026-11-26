@@ -289,7 +289,7 @@ describe("Parallel Search in the personal edition", () => {
     expect(rows).toHaveLength(2);
     expect(new Set(rows.map((row) => row.tenantId))).toEqual(new Set([OWNER]));
     expect(new Set(rows.map((row) => row.by))).toEqual(
-      new Set(["openbot:personal-defaults"]),
+      new Set(["xiongbao:personal-defaults"]),
     );
     const trail = await asPlatform(() =>
       database

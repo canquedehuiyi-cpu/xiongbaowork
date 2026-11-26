@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { Hono } from "hono";
 import {
   type AuditStore,
   recordPersonAuditEvent,
   recordPlatformAuditEvent,
 } from "../src/audit";
-import { Hono } from "hono";
 import {
   type AppVariables,
   type AuthService,
@@ -42,7 +42,7 @@ describe("boot readiness", () => {
     await checkServerReadiness({
       read: async () => {
         seen.push(currentTenant());
-        return [{ role: "openbot_app", super: false, bypass: false }];
+        return [{ role: "xiongbao_app", super: false, bypass: false }];
       },
       mode: "refuse",
       report: (event) => reports.push(event.type),

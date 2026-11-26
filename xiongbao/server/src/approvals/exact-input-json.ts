@@ -12,7 +12,7 @@
  * before growth. No total peak-memory measurement or hostile-Proxy isolation
  * is claimed. Do not wire this component into business admission on its own.
  */
-export const EXACT_INPUT_JSON_VERSION = "OPENBOT_EXACT_INPUT_JSON_V1";
+export const EXACT_INPUT_JSON_VERSION = "XIONGBAO_EXACT_INPUT_JSON_V1";
 
 const MAX_BYTES = 1_048_576;
 const MAX_STRING = 262_144;

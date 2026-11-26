@@ -53,7 +53,7 @@ on Start. Only the picked Bot's connection still follows the installer.
 An installation from an earlier XiongBao Work Desktop, which ran the team edition, becomes the personal
 edition on its next Start. Its Bots and conversations stay in the database. The team edition's
 settings stored there are not read (see [What is fixed](#what-is-fixed)). The package keeps the
-`openbot` tenant id so the picked Bot retains its package ownership across that switch. It was
+`xiongbao` tenant id (renamed in the database by the v0.2.16 upgrade) so the picked Bot retains its package ownership across that switch. It was
 `personal` up to v0.3.1, and lists that as a former id, so a personal edition set up with
 `start.sh` then keeps its Bots, conversations and deployment name. Stop still stops each
 computer the supervisor made for a Bot.

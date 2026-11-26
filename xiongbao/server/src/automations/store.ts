@@ -408,7 +408,7 @@ export function createAutomationStore(
    * AUT3: a target is accepted only if something can carry it out for this tenant. Runs outside any
    * transaction, in the caller's frame, so the agent read is scoped by row security to what this
    * tenant can see: its own Wakers, the platform's built-in ones, and team Wakers (G01-E). A `team`
-   * row comes back only when `team_read` — `openbot_team_bot_visible` — already let this person see
+   * row comes back only when `team_read` — `xiongbao_team_bot_visible` — already let this person see
    * it, so the stamp alone is enough here; a team Bot this person may not use never reaches the check.
    */
   async function verifyTarget(target: AutomationTarget, tenant: string) {

@@ -321,7 +321,7 @@ describe("registered Copilot agents", () => {
       systemPrompt: "Be helpful.",
       title: "Everyday Work",
       // What runs it, whatever its subtitle says.
-      framework: "OpenBot",
+      framework: "XiongBao",
       // Always present on the record, null when nobody wrote one: the prompt builder asks the record
       // rather than the row, so this is where a missing persona becomes an absent section.
       persona: null,

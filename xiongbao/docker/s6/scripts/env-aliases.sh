@@ -9,7 +9,7 @@
 # file is left as it is. New wins when both are set and differ, and the clash prints one warning line
 # naming the old variable (never a value). An old-only deployment is silent here: the server names the
 # old names in use when it starts. Nothing is ever copied the other way. A platform model key
-# (OPENBOT_POOL_<X>) is not copied: its database row names it.
+# (OPENBOT_POOL_<X>) is copied too: v0.2.16 renames the pool row that names it (migration 0240).
 #
 # THE IMAGE'S DEFAULTS COME FIRST AND COUNT LEAST. Each `<X>=<value>` line of the defaults file
 # (`#` starts a comment) is written as XIONGBAO_<X> only when neither XIONGBAO_<X> nor its old
@@ -52,7 +52,7 @@ for file in "$dir/$old"*; do
   [ -f "$file" ] && [ -s "$file" ] || continue
   name=${file##*/}
   suffix=${name#"$old"}
-  case $suffix in '' | POOL_*) continue ;; esac
+  [ -n "$suffix" ] || continue
   renamed=$dir/XIONGBAO_$suffix
   if [ ! -s "$renamed" ]; then
     cp "$file" "$renamed"

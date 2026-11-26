@@ -24,9 +24,9 @@ function nested(depth: number): unknown {
 	return value;
 }
 
-describe("OPENBOT_EXACT_INPUT_JSON_V1 component (not AP4 admission)", () => {
+describe("XIONGBAO_EXACT_INPUT_JSON_V1 component (not AP4 admission)", () => {
 	test("literal version and primitive bytes", () => {
-		expect(EXACT_INPUT_JSON_VERSION).toBe("OPENBOT_EXACT_INPUT_JSON_V1");
+		expect(EXACT_INPUT_JSON_VERSION).toBe("XIONGBAO_EXACT_INPUT_JSON_V1");
 		exact(null, "null"); exact(true, "true"); exact(false, "false");
 		exact(1.5, "1.5"); exact(1e-7, "1e-7"); exact(0, "0");
 	});

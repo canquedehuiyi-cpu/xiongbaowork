@@ -42,7 +42,14 @@ import { runAsTenant } from "../tenant/context";
  * all, and the queue stays the truth either way. A notification is a latency optimisation, never
  * a delivery mechanism — one lost in transit costs up to one poll interval, not the work.
  */
-export const WORK_OFFERED_TOPIC = "openbot_work_offered";
+export const WORK_OFFERED_TOPIC = "xiongbao_work_offered";
+
+/**
+ * The channel's name before v0.2.16. Heard as well, never said: during a rolling upgrade a v0.2.15
+ * instance still announces on it, and its wake-ups should still reach this one.
+ */
+// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+export const LEGACY_WORK_OFFERED_TOPIC = "openbot_work_offered";
 
 /** Inside the offering transaction where there is one, so it fires on commit and never before. */
 const announceOffered = (db: Pick<Database, "execute">, kind: string) =>
@@ -62,7 +69,7 @@ export async function startWorkOfferedListener(
 ): Promise<WorkOfferedListener> {
   const connection = postgres(databaseUrl, { max: 1 });
 
-  await connection.listen(WORK_OFFERED_TOPIC, (payload) => {
+  const heard = (payload: string) => {
     try {
       /*
        * As `platform`, like the sweep this wake-up starts. The notification arrives on this
@@ -76,7 +83,9 @@ export async function startWorkOfferedListener(
       // A listener's mistake is not a reason to tear down the subscription: the poll behind it is
       // still correct, and the next sweep picks up whatever this wake-up would have.
     }
-  });
+  };
+  await connection.listen(WORK_OFFERED_TOPIC, heard);
+  await connection.listen(LEGACY_WORK_OFFERED_TOPIC, heard);
 
   return {
     stop: async () => {

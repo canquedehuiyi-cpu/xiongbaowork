@@ -45,7 +45,7 @@ test.each(TABLES)(
   async (_tag, table) => {
     const rows = await runAsTenant("platform", () =>
       database.execute<{ ok: boolean }>(
-        sql`select bool_and(has_table_privilege('openbot_app', ${`public.${table}`}, privilege)) as ok
+        sql`select bool_and(has_table_privilege('xiongbao_app', ${`public.${table}`}, privilege)) as ok
         from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE']) as privilege`,
       ),
     );

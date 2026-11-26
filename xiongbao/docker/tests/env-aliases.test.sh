@@ -62,7 +62,7 @@ printf %s sk-test > "$d/OPENBOT_POOL_OPENAI"
 sh "$SCRIPT" "$d" 2>/dev/null || fail "bare prefix exited non-zero"
 [ ! -e "$d/XIONGBAO_" ] || fail "bare OPENBOT_ was copied"
 [ ! -e "$d/XIONGBAO_EMPTY" ] || fail "empty OPENBOT_EMPTY was copied"
-[ ! -e "$d/XIONGBAO_POOL_OPENAI" ] || fail "OPENBOT_POOL_OPENAI was copied: the database row names it"
+[ "$(cat "$d/XIONGBAO_POOL_OPENAI" 2>/dev/null)" = sk-test ] || fail "OPENBOT_POOL_OPENAI was not copied: v0.2.16 renames the pool row to the new name"
 
 # 5. an empty new value counts as unset, as `-e XIONGBAO_X=` leaves it: the old value is copied over it
 d=$T/empty-new; mkdir "$d"

@@ -26,7 +26,7 @@ afterAll(async () => {
 
 /**
  * Catalogue probes and the refused write belong to no tenant: run in the platform frame. The frame
- * changes only the tenant settings, not the role: the connection is still openbot_app.
+ * changes only the tenant settings, not the role: the connection is still xiongbao_app.
  */
 async function rows<T>(query: SQL): Promise<T[]> {
   const result = await asPlatform(() => database.execute(query));
@@ -122,7 +122,7 @@ describe("migration 0120 platform model pool", () => {
     const keyEnv = byName.get("platform_model_pool_api_key_env");
     expect(keyEnv?.kind).toBe("c");
     expect(keyEnv?.def).toContain("api_key_env");
-    expect(keyEnv?.def).toContain("'^OPENBOT_POOL_[A-Z0-9_]{1,64}$'");
+    expect(keyEnv?.def).toContain("'^XIONGBAO_POOL_[A-Z0-9_]{1,64}$'");
     const tiers = byName.get("platform_model_pool_tiers");
     expect(tiers?.kind).toBe("c");
     expect(tiers?.def).toContain("tiers <@ '{free,pro}'::text[]");
@@ -135,13 +135,13 @@ describe("migration 0120 platform model pool", () => {
   test("the application role may read the pool and nothing more", async () => {
     const [privileges] = await rows<Record<string, boolean>>(sql`
       select
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'SELECT') as "select",
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'INSERT') as "insert",
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'UPDATE') as "update",
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'DELETE') as "delete",
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'TRUNCATE') as "truncate",
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'REFERENCES') as "references",
-        has_table_privilege('openbot_app', 'public.platform_model_pool', 'TRIGGER') as "trigger"
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'SELECT') as "select",
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'INSERT') as "insert",
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'UPDATE') as "update",
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'DELETE') as "delete",
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'TRUNCATE') as "truncate",
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'REFERENCES') as "references",
+        has_table_privilege('xiongbao_app', 'public.platform_model_pool', 'TRIGGER') as "trigger"
     `);
     expect(privileges).toEqual({
       select: true,
@@ -159,11 +159,11 @@ describe("migration 0120 platform model pool", () => {
       sql`select current_user as role`,
     );
     // The suite connects as the application role in CI; the refusal below is about that role.
-    expect(who?.role).toBe("openbot_app");
+    expect(who?.role).toBe("xiongbao_app");
     const failure = await asPlatform(() =>
       database.execute(sql`
         insert into public.platform_model_pool (provider, model_name, label, api_key_env)
-        values ('openai', ${`app-insert-${Date.now()}`}, '越权写入', 'OPENBOT_POOL_APP_INSERT')
+        values ('openai', ${`app-insert-${Date.now()}`}, '越权写入', 'XIONGBAO_POOL_APP_INSERT')
       `),
     ).then(
         () => null,

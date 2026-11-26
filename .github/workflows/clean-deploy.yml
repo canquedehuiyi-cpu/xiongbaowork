@@ -236,8 +236,8 @@ jobs:
             < "$RUNNER_TEMP/roles.sql")"
           rm -f "$RUNNER_TEMP/roles.sql"
           printf '%s\n' "$roles" | tee "$EVIDENCE/external-roles.txt"
-          if ! grep -qx 'openbot_app|f|f' <<< "$roles" || ! grep -qx 'openbot_role_writer|f|f' <<< "$roles"; then
-            echo "::error::expected openbot_app|f|f and openbot_role_writer|f|f"
+          if ! grep -qx 'xiongbao_app|f|f' <<< "$roles" || ! grep -qx 'xiongbao_role_writer|f|f' <<< "$roles"; then
+            echo "::error::expected xiongbao_app|f|f and xiongbao_role_writer|f|f"
             exit 1
           fi
           # .env.delivery as the README fetches it (already fetched from our download page when that is
@@ -251,8 +251,8 @@ jobs:
           sed -i 's/^EMBEDDED_POSTGRES=on$/EMBEDDED_POSTGRES=off/' .env.delivery
           {
             printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)"
-            printf 'DATABASE_URL=postgres://openbot_app:%s@%s:5432/xiongbao_b\n' "$app_pw" "$EXTERNAL_DB_HOST"
-            printf 'ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:%s@%s:5432/xiongbao_b\n' "$writer_pw" "$EXTERNAL_DB_HOST"
+            printf 'DATABASE_URL=postgres://xiongbao_app:%s@%s:5432/xiongbao_b\n' "$app_pw" "$EXTERNAL_DB_HOST"
+            printf 'ROLE_WRITER_DATABASE_URL=postgres://xiongbao_role_writer:%s@%s:5432/xiongbao_b\n' "$writer_pw" "$EXTERNAL_DB_HOST"
           } >> .env.delivery
 
       - id: customer
@@ -312,8 +312,8 @@ jobs:
           # The API runs as the non-superuser, non-BYPASSRLS app role (same check as image-smoke.sh).
           role="$(docker exec xiongbao-local sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')"
           printf 'runtime_role=%s\n' "$role" | tee "$EVIDENCE/role.txt"
-          if [ "$role" != 'openbot_app|f|f' ]; then
-            echo "::error::the API database role is '$role', expected openbot_app|f|f"
+          if [ "$role" != 'xiongbao_app|f|f' ]; then
+            echo "::error::the API database role is '$role', expected xiongbao_app|f|f"
             exit 1
           fi
           docker logs xiongbao-local > "$EVIDENCE/container.log" 2>&1
@@ -328,7 +328,7 @@ jobs:
           # postgres-init exits at once with EMBEDDED_POSTGRES=off, so no cluster was created.
           docker exec xiongbao-local sh -c 'test ! -e /var/lib/postgresql/data/PG_VERSION'
           sessions="$(docker exec xiongbao-external-pg psql -U openbot -d xiongbao_b -At -v ON_ERROR_STOP=1 \
-            -c "SELECT count(*) FROM pg_stat_activity WHERE datname = 'xiongbao_b' AND usename = 'openbot_app'")"
+            -c "SELECT count(*) FROM pg_stat_activity WHERE datname = 'xiongbao_b' AND usename = 'xiongbao_app'")"
           printf 'embedded_cluster=absent\nexternal_xiongbao_app_sessions=%s\n' "$sessions" | tee -a "$EVIDENCE/external-db.txt"
           [ "$sessions" -gt 0 ]
       - name: Save container logs

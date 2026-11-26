@@ -535,7 +535,7 @@ describe("role writer startup frame (G01-E P3)", () => {
     const writerUrl = process.env.TEST_ROLE_WRITER_DATABASE_URL?.trim();
     if (!writerUrl)
       throw new Error(
-        "TEST_ROLE_WRITER_DATABASE_URL must connect to the TEST_DATABASE_URL database as openbot_role_writer.",
+        "TEST_ROLE_WRITER_DATABASE_URL must connect to the TEST_DATABASE_URL database as xiongbao_role_writer.",
       );
     const application = createDatabase(testDatabaseUrl(), TEST_POOL);
     const lifecycle = createRoleWriterLifecycle({

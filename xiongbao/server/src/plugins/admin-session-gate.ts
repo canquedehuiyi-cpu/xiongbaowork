@@ -59,7 +59,7 @@ export const COMPUTER_ADMIN_PATHS: readonly AdminPathRule[] = [
 
 /**
  * 组件：数据函数、对员工的授予和收回、发布、草稿。`components`、`component_functions`、
- * `component_exclusions` 都没有行安全，`openbot_app` 能增删改；只有发布开关挂了能力，而且对编译进来的
+ * `component_exclusions` 都没有行安全，`xiongbao_app` 能增删改；只有发布开关挂了能力，而且对编译进来的
  * 组件也不看它。按前缀拦，名字和后面跟什么都算，同样只多拒绝会话和角色不一致的人。
  */
 export const COMPONENT_ADMIN_PATHS: readonly AdminPathRule[] = [
@@ -72,7 +72,7 @@ export const COMPONENT_ADMIN_PATHS: readonly AdminPathRule[] = [
 /**
  * 企业管控：能力开关、部署设置、网络策略、终止电脑，以及挂在同一前缀下的能力批量保存、描述和预演、网络
  * 名单的描述和重放。`capability_settings`、`enterprise_settings`、`network_policies` 都没有行安全，
- * `openbot_app` 能增删改；路由只做 `requireAdmin`，而它的单元装配大多不带角色仓库。`/me` 是任何登录者
+ * `xiongbao_app` 能增删改；路由只做 `requireAdmin`，而它的单元装配大多不带角色仓库。`/me` 是任何登录者
  * 读自己能用什么，不在这里。整组都管，读也算：读到的是整个部署的设置和各人的用量。
  */
 export const ENTERPRISE_ADMIN_PATHS: readonly AdminPathRule[] = [

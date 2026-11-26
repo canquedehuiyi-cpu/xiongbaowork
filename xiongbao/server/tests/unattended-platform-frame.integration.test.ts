@@ -49,7 +49,7 @@ import { expectUnframedRefused } from "./support/frame-guard";
  *
  * Until the delivery image connects as a role that can be governed, a superuser with `BYPASSRLS`
  * answers those same queries with every row and the whole defect is invisible — which is why this file
- * is written against `openbot_app`, and why the first test asserts the EMPTY answer under `system`. That assertion
+ * is written against `xiongbao_app`, and why the first test asserts the EMPTY answer under `system`. That assertion
  * is what makes the rest of the file worth reading: on a connection that enforces nothing every test
  * here would pass, and the fix could be reverted without anybody noticing.
  *

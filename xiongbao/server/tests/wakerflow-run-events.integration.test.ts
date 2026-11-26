@@ -693,7 +693,7 @@ describe("migration 0137 (D1)", () => {
     ]);
     const [usage] = await runAsTenant("flowevt-catalogue", () =>
       database.execute<{ allowed: boolean }>(
-        sql`select has_sequence_privilege('openbot_app', 'public.flow_run_events_sequence_seq', 'USAGE') as allowed`,
+        sql`select has_sequence_privilege('xiongbao_app', 'public.flow_run_events_sequence_seq', 'USAGE') as allowed`,
       ),
     );
     expect(usage?.allowed).toBe(true);

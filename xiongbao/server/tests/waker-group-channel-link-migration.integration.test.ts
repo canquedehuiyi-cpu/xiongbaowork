@@ -24,10 +24,10 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  *
  * Three database pieces are proved here, in the frames production uses:
  *  - the column, its foreign key (`ON DELETE SET NULL`) and the one-live-channel-per-crew index;
- *  - the shared-group guard (`openbot_team_channel_guard`, rewritten from 0179) that lets the
+ *  - the shared-group guard (`xiongbao_team_channel_guard`, rewritten from 0179) that lets the
  *    creator link an unlinked group and lets the foreign key unlink a group whose crew is gone,
  *    and nothing else — a member may not link, unlink or repoint;
- *  - the link trigger (`openbot_channel_waker_group_link`), which reads the crew through the
+ *  - the link trigger (`xiongbao_channel_waker_group_link`), which reads the crew through the
  *    current frame's row security, so a crew of another tenant or a WakerFlow's internal crew is
  *    refused even though the foreign key alone would admit it.
  */

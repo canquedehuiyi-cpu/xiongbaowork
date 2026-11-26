@@ -505,7 +505,7 @@ function harnessRefusedWith(
   });
 }
 
-const REFUSED = "OPENBOT_MODEL_REFUSED";
+const REFUSED = "XIONGBAO_MODEL_REFUSED";
 
 test("the LangGraph harness's refusal seen on Desktop is told in words, from an image without the code too", async () => {
   const words =
@@ -568,14 +568,23 @@ test.each([
   20_000,
 );
 
-test("a harness refused the key is told to check the key, not to sign in, and the browser is sent the code under the new prefix", async () => {
+test("a harness refused the key is told to check the key, not to sign in", async () => {
   // Both Python harnesses send this for a 401, whether the credential is a key or a sign-in.
+  const failure = await harnessRefusedWith({
+    message: "Sign in to your model provider again.",
+    code: "XIONGBAO_MODEL_AUTH_REQUIRED",
+  });
+  expect(failure.message).toBe(said.key("OpenAI"));
+  expect(failure.code).toBe("XIONGBAO_MODEL_AUTH_REQUIRED");
+}, 20_000);
+
+test("a v0.2.15 harness's old key code is still read, and the browser is sent the new prefix", async () => {
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，a harness image from before the rename.
   const failure = await harnessRefusedWith({
     message: "Sign in to your model provider again.",
     code: "OPENBOT_MODEL_AUTH_REQUIRED",
   });
   expect(failure.message).toBe(said.key("OpenAI"));
-  // The browser is sent the renamed code; the server's own readers saw the harness's old one before the rename.
   expect(failure.code).toBe("XIONGBAO_MODEL_AUTH_REQUIRED");
 }, 20_000);
 
@@ -583,7 +592,7 @@ test("a harness's billing sentence is already in words and is left alone", async
   const message =
     'OpenAI didn\'t answer: the account is out of credit or has reached its spending limit. Add credit or raise the limit with OpenAI, then try again. OpenAI said: "You exceeded your current quota."';
   expect(
-    (await harnessRefusedWith({ message, code: "OPENBOT_MODEL_BILLING" }))
+    (await harnessRefusedWith({ message, code: "XIONGBAO_MODEL_BILLING" }))
       .message,
   ).toBe(message);
 }, 20_000);

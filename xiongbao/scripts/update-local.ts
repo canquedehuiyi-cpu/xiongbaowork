@@ -446,8 +446,8 @@ function requirePlainRouting(query: URLSearchParams) {
       );
 }
 /** Where a postgres:// URL connects and which database it opens, not who logs in: since the app
- * role split (`0054_app_role.sql`, 0109) the server and the worker log in as `openbot_app`, the
- * server's role writer as `openbot_role_writer`, and migration as the owner, all in one database.
+ * role split (`0054_app_role.sql`, 0109) the server and the worker log in as `xiongbao_app`, the
+ * server's role writer as `xiongbao_role_writer`, and migration as the owner, all in one database.
  * libpq falls back to the user name for an absent dbname, and so does this. A repeated option or one
  * that reroutes the connection throws. Undefined when the URL is not a postgres:// one. */
 export function databaseIdentity(databaseUrl: string | undefined) {

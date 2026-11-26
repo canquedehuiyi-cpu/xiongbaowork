@@ -510,7 +510,7 @@ describe("Team Bot rows (agents, profiles, publications, audience, assignments, 
         await tx.unsafe(insert, [bot, stranger]);
         await tx`select set_config('app.tenant_id', ${stranger}, true)`;
         const [row] = await tx.unsafe(
-          `select public.openbot_team_bot_visible($1) as visible,
+          `select public.xiongbao_team_bot_visible($1) as visible,
                   (select count(*)::int from public.agents where id = $1) as agents,
                   (select count(*)::int from public.agent_profiles where agent_id = $1) as profiles,
                   (select count(*)::int from public.team_bot_publications

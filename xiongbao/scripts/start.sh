@@ -430,7 +430,7 @@ if [ "$worker_running" = false ]; then
   # The application role, as `.env.example` gives the server: the worker runs the server's tenant
   # isolation preflight before its first tick and refuses the owner, a superuser. It decides with the
   # mode the server reads from .env (either spelling) and the same NODE_ENV, so the two agree.
-  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://openbot_app:openbot@localhost:5432/xiongbao)"
+  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://xiongbao_app:openbot@localhost:5432/xiongbao)"
   # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the old name in a .env written before the rename
   WORKER_RLS_ENFORCE="$(setting XIONGBAO_RLS_ENFORCE "$(setting OPENBOT_RLS_ENFORCE "")")"
   WORKER_NODE_ENV="$(setting NODE_ENV "")"

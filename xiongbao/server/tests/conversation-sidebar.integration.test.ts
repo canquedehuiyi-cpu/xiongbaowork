@@ -552,7 +552,7 @@ describe("conversation sidebar", () => {
 
   test("a platform pool model the run cannot use is shown as the deployment's model", async () => {
     const viewer = await person();
-    const KEY = "OPENBOT_POOL_SIDEBAR_TEST";
+    const KEY = "XIONGBAO_POOL_SIDEBAR_TEST";
     const pool = async (enabled: boolean, tiers: string) => {
       const id = randomUUID();
       poolIds.push(id);

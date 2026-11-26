@@ -119,7 +119,7 @@ def test_a_provider_refusal_ends_the_run_as_a_refusal(monkeypatch, model_only, e
 
     events = asyncio.run(scenario())
     assert events[-1].type == "RUN_ERROR", [event.type for event in events]
-    assert events[-1].code == "OPENBOT_MODEL_REFUSED"
+    assert events[-1].code == "XIONGBAO_MODEL_REFUSED"
     # Claude Code's words go to the server, which keeps them for its log.
     assert events[-1].message == text
     # And never into the conversation as the Bot's reply.

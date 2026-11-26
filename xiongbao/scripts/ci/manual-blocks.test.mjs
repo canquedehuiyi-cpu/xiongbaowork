@@ -328,12 +328,12 @@ test("manual g7:external-roles locks down both runtime roles", () => {
   expect(externalRoles.lang).toBe("sql");
   const body = externalRoles.body;
   expect(body).toMatch(
-    /^ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<[^>]+>';$/m,
+    /^ALTER ROLE xiongbao_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<[^>]+>';$/m,
   );
   expect(body).toMatch(
-    /^ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<[^>]+>';$/m,
+    /^ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<[^>]+>';$/m,
   );
-  expect(body).toContain("'openbot_app', 'openbot_role_writer'");
+  expect(body).toContain("'xiongbao_app', 'xiongbao_role_writer'");
 });
 
 test("clean-deploy.yml fills every placeholder of the manual's role block", () => {
@@ -369,9 +369,9 @@ test("manual section 4 names every database URL an external-database API needs",
     manual.indexOf("## 5. "),
   );
   expect(section).toMatch(/^EMBEDDED_POSTGRES=off$/m);
-  expect(section).toMatch(/^DATABASE_URL=postgres:\/\/openbot_app:/m);
+  expect(section).toMatch(/^DATABASE_URL=postgres:\/\/xiongbao_app:/m);
   expect(section).toMatch(
-    /^ROLE_WRITER_DATABASE_URL=postgres:\/\/openbot_role_writer:/m,
+    /^ROLE_WRITER_DATABASE_URL=postgres:\/\/xiongbao_role_writer:/m,
   );
 });
 

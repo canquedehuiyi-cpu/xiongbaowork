@@ -646,7 +646,7 @@ describe("a person who has connected", () => {
 /*
  * The same selection asked from the asker's OWN frame, which is how a person's chat turn calls a tool
  * (G01-E P10). The team's OAuth client is sealed to `team` and no person's frame may read it by id:
- * it reaches the call through the `openbot_team_server_secret` broker. A person's frame reads only
+ * it reaches the call through the `xiongbao_team_server_secret` broker. A person's frame reads only
  * that person's own connection, so it can never spend anybody else's grant, whoever it names.
  */
 describe("in the asker's own frame", () => {

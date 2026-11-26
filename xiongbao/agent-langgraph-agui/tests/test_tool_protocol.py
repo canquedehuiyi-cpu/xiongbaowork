@@ -265,7 +265,7 @@ async def test_only_provider_auth_status_emits_model_refresh_code(
     errors = [event for event in events if event["type"] == "RUN_ERROR"]
     assert errors
     assert events[-1]["type"] == "RUN_ERROR", "every run ends with a terminal event"
-    assert (errors[-1].get("code") == "OPENBOT_MODEL_AUTH_REQUIRED") is expected
+    assert (errors[-1].get("code") == "XIONGBAO_MODEL_AUTH_REQUIRED") is expected
     if not expected:
         # Any other refusal ends the run in the provider's own words.
         assert "controlled provider refusal" in errors[-1]["message"]
@@ -294,7 +294,7 @@ async def test_a_provider_refusal_is_marked_as_one_for_the_server_to_say_in_word
     assert events[-1]["type"] == "RUN_ERROR", "every run ends with a terminal event"
     # The provider's words, which the server keeps for its log and reads to notice a retired model,
     # marked as a refusal so it tells the person in words (server/src/agents/provider-refusal.ts).
-    assert events[-1]["code"] == "OPENBOT_MODEL_REFUSED"
+    assert events[-1]["code"] == "XIONGBAO_MODEL_REFUSED"
     assert events[-1]["message"] == (
         "Error code: 400 - Invalid 'tools': array too long. Expected an array with maximum "
         "length 128, but got an array with length 202 instead."
@@ -343,7 +343,7 @@ async def test_a_provider_out_of_credit_is_told_as_that_never_as_sign_in_again(
     assert events[-1]["type"] == "RUN_ERROR", "every run ends with a terminal event"
     message = errors[-1]["message"]
     assert "Sign in" not in message
-    assert errors[-1].get("code") == "OPENBOT_MODEL_BILLING"
+    assert errors[-1].get("code") == "XIONGBAO_MODEL_BILLING"
     assert "out of credit or has reached its spending limit" in message
     assert said in message
 

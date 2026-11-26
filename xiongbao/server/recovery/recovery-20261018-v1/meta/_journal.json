@@ -1541,6 +1541,13 @@
       "when": 1795155000000,
       "tag": "0239_aihub_provider_template",
       "breakpoints": true
+    },
+    {
+      "idx": 240,
+      "version": "7",
+      "when": 1795160000000,
+      "tag": "0240_rebrand_names",
+      "breakpoints": true
     }
   ]
 }

@@ -34,10 +34,10 @@ import { createDeliveryRouter } from "../src/delivery/router";
 import { createDeliveryStore } from "../src/delivery/store";
 import { createProactiveEngine } from "../src/proactive/engine";
 import { createProactiveStore } from "../src/proactive/store";
+import { createTurnRunner } from "../src/routines/run-turn";
 import { createTaskRunner } from "../src/tasks/runner";
 import { createTaskStore } from "../src/tasks/store";
 import { createTaskTurn } from "../src/tasks/turn";
-import { createTurnRunner } from "../src/routines/run-turn";
 import { runAsTenant } from "../src/tenant/context";
 import { provisionTenant } from "../src/tenant/provisioning";
 import { createWorkQueue } from "../src/work/queue";
@@ -49,7 +49,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  *
  * Each is claimed by a worker that has no tenant of its own, so the turn's frame named nobody and the
  * usage row was refused (`model-usage-without-tenant`). Each now names the tenant of the row it
- * claimed. Driven against a database that enforces row-level security as `openbot_app`, through the
+ * claimed. Driven against a database that enforces row-level security as `xiongbao_app`, through the
  * real stores and the real queue, with every worker in the `platform` frame a timer's work runs in;
  * the row must land in the person's tenant, once, under the run reference its card is keyed by.
  *

@@ -17,7 +17,7 @@ function barrier() {
   });
   return { promise, resolve };
 }
-const ordinary = [{ role: "openbot_app", super: false, bypass: false }];
+const ordinary = [{ role: "xiongbao_app", super: false, bypass: false }];
 
 function fixture(
   options: {
@@ -400,18 +400,18 @@ describe("the RLS enforcement mode a deployment runs with", () => {
 });
 
 /**
- * `0054_app_role.sql` creates `openbot_app` with the password `openbot`, printed in this repository.
+ * `0054_app_role.sql` creates `xiongbao_app` with the password `openbot`, printed in this repository.
  * A migration cannot tell whether an operator changed it (PostgreSQL does not hand back passwords),
  * so the server checks the one credential it does hold: its own connection string.
  */
 describe("the public default database password", () => {
   const appUrl = (password: string) =>
-    `postgres://openbot_app:${password}@db.example.com:5432/xiongbao`;
+    `postgres://xiongbao_app:${password}@db.example.com:5432/xiongbao`;
 
   test.each([
     appUrl("openbot"),
     "postgres://openbot:openbot@db.example.com:5432/xiongbao",
-    "postgresql://openbot_app:%6Fpenbot@db.example.com/xiongbao",
+    "postgresql://xiongbao_app:%6Fpenbot@db.example.com/xiongbao",
   ])("is recognised in %p", (url) => {
     expect(usesPublicDefaultDatabasePassword(url)).toBeTrue();
   });
@@ -419,7 +419,7 @@ describe("the public default database password", () => {
   test.each([
     appUrl("a-real-secret"),
     appUrl("openbot2"),
-    "postgres://openbot_app@db.example.com/xiongbao",
+    "postgres://xiongbao_app@db.example.com/xiongbao",
     "not a url",
     undefined,
   ])("is not claimed for %p", (url) => {
@@ -475,7 +475,7 @@ describe("the public default database password", () => {
  */
 describe("the public default role writer password", () => {
   const writerUrl =
-    "postgres://openbot_role_writer:openbot@postgres:5432/xiongbao";
+    "postgres://xiongbao_role_writer:openbot@postgres:5432/xiongbao";
 
   test("production refuses it, naming the role writer's setting", () => {
     const diagnostics: ReadinessDiagnostic[] = [];
@@ -492,7 +492,7 @@ describe("the public default role writer password", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]).toMatchObject({
       type: "database-password-public-default",
-      role: "openbot_role_writer",
+      role: "xiongbao_role_writer",
     });
     expect(JSON.stringify(diagnostics)).toContain("ROLE_WRITER_DATABASE_URL");
     expect(JSON.stringify(diagnostics)).not.toContain("postgres:5432");

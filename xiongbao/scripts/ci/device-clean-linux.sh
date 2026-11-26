@@ -141,8 +141,8 @@ phase_server() {
   : "${OWNER_DATABASE_URL:?}" "${APP_DATABASE_URL:?}" "${ROLE_WRITER_URL:?}"
   mkdir -p "$LOG_DIR"
   (cd "$product" && DATABASE_URL="$OWNER_DATABASE_URL" bun run --cwd server scripts/migrate.ts)
-  psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
-  psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+  psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+  psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'ci-role-writer'"
   local pidfile="$LOG_DIR/server.pid" key secret
   key="$(openssl rand -base64 32)"
   secret="$(openssl rand -hex 32)"

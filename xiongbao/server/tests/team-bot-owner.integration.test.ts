@@ -87,8 +87,8 @@ const proPoolBot = `${suite}-pro-pool-bot`;
 const freePoolBot = `${suite}-free-pool-bot`;
 const libraryBot = `${suite}-library-bot`;
 
-const PRO_KEY = `OPENBOT_POOL_PRO_${MARK}`;
-const FREE_KEY = `OPENBOT_POOL_FREE_${MARK}`;
+const PRO_KEY = `XIONGBAO_POOL_PRO_${MARK}`;
+const FREE_KEY = `XIONGBAO_POOL_FREE_${MARK}`;
 const environment: Record<string, string | undefined> = {
   [PRO_KEY]: `pool-pro-secret-${suite}`,
   [FREE_KEY]: `pool-free-secret-${suite}`,
@@ -98,7 +98,7 @@ function ownerConnection(): SQL {
   const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
   if (!raw) {
     throw new Error(
-      "TEST_DATABASE_ADMIN_URL must name the database owner: platform_model_pool is not writable by openbot_app.",
+      "TEST_DATABASE_ADMIN_URL must name the database owner: platform_model_pool is not writable by xiongbao_app.",
     );
   }
   const admin = new URL(raw);

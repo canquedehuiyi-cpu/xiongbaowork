@@ -2313,7 +2313,7 @@ test("clean-deploy fetches from our download page when configured", () => {
     const tools = stubs({
       curl: `out=""; prev=""; for a in "$@"; do [ "$prev" = -o ] && out="$a"; prev="$a"; done; printf 'EMBEDDED_POSTGRES=on\\n' > "$out"`,
       docker:
-        "cat > /dev/null; printf 'openbot_app|f|f\\nopenbot_role_writer|f|f\\n'",
+        "cat > /dev/null; printf 'xiongbao_app|f|f\\nxiongbao_role_writer|f|f\\n'",
     });
     const result = run(
       "linux",

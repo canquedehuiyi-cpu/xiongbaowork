@@ -113,28 +113,28 @@ verifier_kind() { # volume port user db
   sql "$1" "$2" "$3" "$4" "SELECT split_part(rolpassword, '\$', 1) FROM pg_authid WHERE oid = 10;"
 }
 # Every row of the database, as pg_dump prints the data. Its comment lines name each table's owner, which
-# the rename changes, so they are left out.
+# the rename changes, so they are left out; so is the migration journal, which the v0.2.16 migrations
+# (0240) add to, and each table's COPY line, whose column list grows when a migration adds a column.
 data_print() { # volume port user db
-  PGPASSWORD=$(pw_of "$1" pgpassword) "$PG_BIN/pg_dump" -w --data-only -h 127.0.0.1 -p "$2" -U "$3" -d "$4" 2>/dev/null |
-    grep -v '^--\|^\\\(un\)\{0,1\}restrict ' | cksum
+  PGPASSWORD=$(pw_of "$1" pgpassword) "$PG_BIN/pg_dump" -w --data-only --exclude-schema=drizzle -h 127.0.0.1 -p "$2" -U "$3" -d "$4" 2>/dev/null |
+    grep -v '^--\|^\\\(un\)\{0,1\}restrict \|^COPY ' | cksum
 }
 backups() { ls "$T/$1/vol/backup" 2>/dev/null | grep -c '^pre-rebrand-.*\.dump$'; }
 # A connection string the services read, aimed at the test cluster's port (the file says 5432).
 url_at() { sed "s/@127\\.0\\.0\\.1:5432\\//@127.0.0.1:$2\\//" "$T/$1/env/$3"; }
-# Old brand words in what a boot printed, apart from the two application role names the startup log scan
-# already allows: the delivery image's startup log is scanned for them.
-old_words() { grep -o -i 'openbot[a-z0-9_]*' "$@" | grep -v -x 'openbot_app\|openbot_role_writer'; }
+# Old brand words in what a boot printed: the delivery image's startup log is scanned for them.
+old_words() { grep -o -i 'openbot[a-z0-9_]*' "$@"; }
 
 # The migrator, run as migrate.sh runs it (from the server directory, the owner URL in DATABASE_URL).
 MIGRATE="cd \"\$1\" && exec bun scripts/migrate.ts"
 
 # app_passwords <volume> <port> <superuser> <database>: migrate.sh's two ALTER ROLE … PASSWORD, through
-# the superuser on the names it carries this boot. APP_ROLE / WRITER_ROLE stand in for the application
-# roles' names, which a later step of the rename changes.
+# the superuser on the names it carries this boot. The migrations before it (0240) renamed the application
+# roles; APP_ROLE / WRITER_ROLE give v0.2.15's names when a v0.2.15 volume is laid down.
 app_passwords() {
-  printf "ALTER ROLE %s WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "${APP_ROLE:-openbot_app}" "$(pw_of "$1" pgpassword-app)" |
+  printf "ALTER ROLE %s WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "${APP_ROLE:-xiongbao_app}" "$(pw_of "$1" pgpassword-app)" |
     PGPASSWORD=$(pw_of "$1" pgpassword) "$PG_BIN/psql" -X -q -w -h 127.0.0.1 -p "$2" -U "$3" -d "$4" -v ON_ERROR_STOP=1 >/dev/null &&
-    printf "ALTER ROLE %s WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "${WRITER_ROLE:-openbot_role_writer}" "$(pw_of "$1" pgpassword-role-writer)" |
+    printf "ALTER ROLE %s WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "${WRITER_ROLE:-xiongbao_role_writer}" "$(pw_of "$1" pgpassword-role-writer)" |
     PGPASSWORD=$(pw_of "$1" pgpassword) "$PG_BIN/psql" -X -q -w -h 127.0.0.1 -p "$2" -U "$3" -d "$4" -v ON_ERROR_STOP=1 >/dev/null
 }
 
@@ -211,9 +211,9 @@ else
     fail "$what: default privileges do not belong to the renamed superuser"
   [ "$(cat "$T/fresh/env/MIGRATION_DATABASE_URL")" = "postgres://xiongbao:$F_PW@127.0.0.1:5432/xiongbao" ] ||
     fail "$what: MIGRATION_DATABASE_URL does not name the new superuser and database"
-  [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at fresh "$F" DATABASE_URL)" -c "SELECT current_user || ' ' || current_database() || ' ' || rolsuper FROM pg_roles WHERE rolname = current_user;" 2>&1)" = "openbot_app xiongbao false" ] ||
+  [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at fresh "$F" DATABASE_URL)" -c "SELECT current_user || ' ' || current_database() || ' ' || rolsuper FROM pg_roles WHERE rolname = current_user;" 2>&1)" = "xiongbao_app xiongbao false" ] ||
     fail "$what: DATABASE_URL does not log the app role in to the renamed database"
-  [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at fresh "$F" ROLE_WRITER_DATABASE_URL)" -c "SELECT current_user || ' ' || current_database();" 2>&1)" = "openbot_role_writer xiongbao" ] ||
+  [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at fresh "$F" ROLE_WRITER_DATABASE_URL)" -c "SELECT current_user || ' ' || current_database();" 2>&1)" = "xiongbao_role_writer xiongbao" ] ||
     fail "$what: ROLE_WRITER_DATABASE_URL does not log the role writer in to the renamed database"
   for f in MIGRATION_DATABASE_URL DATABASE_URL ROLE_WRITER_DATABASE_URL; do
     [ "$(stat -c %a "$T/fresh/env/$f")" = 600 ] || fail "$what: $f mode $(stat -c %a "$T/fresh/env/$f")"
@@ -233,13 +233,17 @@ clean && pass "$what"
 # A volume made by v0.2.15: the same postgres-init (since v0.2.0: initdb -A scram-sha-256 under the old
 # superuser, createdb under the old database name), migrated, the application roles' passwords set as
 # v0.2.15's migrate.sh sets them, and a person's data on top.
-# The migrations are byte for byte the ones v0.2.15 shipped (server/drizzle and the recovery overlay have
-# not changed since that tag), so the schema is v0.2.15's too.
+# The migrations through 0239 are byte for byte the ones v0.2.15 shipped (server/drizzle and the recovery
+# overlay only grew since that tag), so the schema is v0.2.15's too: the migrator stops there for tests
+# (XIONGBAO_TEST_MIGRATE_THROUGH, honoured only with NODE_ENV=test), before 0240 renames anything.
 v0215_volume() { # name; leaves the port in $port
   fresh_volume "$1" || return 1
   PGPASSWORD=$(pw_of "$1" pgpassword) DATABASE_URL="postgres://openbot:$(pw_of "$1" pgpassword)@127.0.0.1:$port/openbot" HOME="$T/home" \
+    NODE_ENV=test XIONGBAO_TEST_MIGRATE_THROUGH=0239_aihub_provider_template \
     sh -c "$MIGRATE" migrate "$MIGRATOR_DIR" >"$T/out" 2>&1 || { echo "migrating the v0.2.15 volume failed: $(tail -n 20 "$T/out")" >&2; return 1; }
-  app_passwords "$1" "$port" openbot openbot || return 1
+  [ "$(sql "$1" "$port" openbot openbot "SELECT count(*) FROM pg_roles WHERE rolname IN ('openbot_app', 'openbot_role_writer');")" = 2 ] ||
+    { echo "the v0.2.15 volume does not carry v0.2.15's application roles" >&2; return 1; }
+  APP_ROLE=openbot_app WRITER_ROLE=openbot_role_writer app_passwords "$1" "$port" openbot openbot || return 1
   sql "$1" "$port" openbot openbot "CREATE TABLE public.upgrade_probe (id serial PRIMARY KEY, body text NOT NULL);
     INSERT INTO public.upgrade_probe (body) SELECT 'row ' || g FROM generate_series(1, 200) g;
     GRANT SELECT ON public.upgrade_probe TO openbot_app;"
@@ -260,13 +264,14 @@ V_APP=$(pw_of v0215 pgpassword-app)
 PGPASSWORD=$V_APP "$PG_BIN/psql" -X -q -w -h 127.0.0.1 -p "$V" -U openbot_app -d openbot -c 'SELECT pg_sleep(120)' >/dev/null 2>&1 &
 holder=$!
 tries=0
-until [ "$(sql v0215 "$V" openbot postgres "SELECT count(*) FROM pg_stat_activity WHERE usename = 'openbot_app';")" = 1 ]; do
+until [ "$(sql v0215 "$V" openbot postgres "SELECT count(*) FROM pg_stat_activity WHERE usename IN ('openbot_app', 'xiongbao_app');")" = 1 ]; do
   tries=$((tries + 1))
   [ "$tries" -lt 50 ] || { echo "the holding session never connected" >&2; exit 1; }
   sleep 0.2
 done
 boot v0215 "$V"
-sql v0215 "$V" openbot postgres "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'openbot_app';" >/dev/null
+# The business migrations committed before the rename step failed: the session's role is xiongbao_app now.
+sql v0215 "$V" openbot postgres "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename IN ('openbot_app', 'xiongbao_app');" >/dev/null
 kill "$holder" 2>/dev/null
 wait "$holder" 2>/dev/null
 what="rename failure keeps the old names and stops"
@@ -274,7 +279,13 @@ begin
 if [ "$code" -eq 0 ] || [ "$stopped" != rename ]; then fail "$what: stopped at $stopped (exit $code): $(cat "$T/out" "$T/err")"
 else
   [ "$(names_of v0215 "$V" openbot openbot)" = "openbot | openbot" ] || fail "$what: names are now $(names_of v0215 "$V" openbot openbot)"
-  [ "$(sql v0215 "$V" openbot openbot "SELECT count(*) FROM pg_roles WHERE rolname LIKE 'xiongbao%';")" = 0 ] || fail "$what: a new role outlived the transaction"
+  [ "$(sql v0215 "$V" openbot openbot "SELECT count(*) FROM pg_roles WHERE rolname IN ('xiongbao', 'xiongbao_renaming');")" = 0 ] || fail "$what: a new role outlived the transaction"
+  # The business database's transaction ran first and committed (0240 renamed the application roles), and
+  # the failure says so instead of calling the database unchanged.
+  [ "$(sql v0215 "$V" openbot openbot "SELECT string_agg(rolname, ',' ORDER BY rolname) FROM pg_roles WHERE rolname LIKE '%\_app' OR rolname LIKE '%\_role\_writer';")" = "xiongbao_app,xiongbao_role_writer" ] ||
+    fail "$what: the application roles were not renamed by the business migrations"
+  grep -q "业务库已经改动" "$T/err" || fail "$what: does not say the business database changed: $(cat "$T/err")"
+  grep -q "业务库没有改动" "$T/err" && fail "$what: calls a changed business database unchanged: $(cat "$T/err")"
   logs_in "$V" openbot openbot "$V_PW" || fail "$what: the old names no longer log in"
   grep -q "超级用户与库改名" "$T/err" || fail "$what: the step is not named: $(cat "$T/err")"
   grep -q "已整体回滚" "$T/err" || fail "$what: does not say the rename was rolled back: $(cat "$T/err")"
@@ -314,17 +325,19 @@ fi
 clean && pass "$what"
 
 # 4. second start after rename is a no-op: the rename has nothing left to do and says nothing, the names,
-#    the password verifier and the connection strings stay byte for byte. Then the whole boot, once the
-#    application roles carry their new names too (a later step of the rename does that; renamed here by
-#    hand): the preflight finds nothing to do, so nothing is printed, backed up or recorded.
+#    the password verifier and the connection strings stay byte for byte. Then the whole boot again: all
+#    four names are new (the migrations renamed the application roles, the rename step the superuser and
+#    database), so the preflight finds nothing to do and nothing is printed, backed up or recorded, and
+#    the migrations find nothing to apply.
 urls_print=$(cat "$T/v0215/env/MIGRATION_DATABASE_URL" "$T/v0215/env/DATABASE_URL" "$T/v0215/env/ROLE_WRITER_DATABASE_URL" | cksum)
 failed_logins=$(grep -c 'authentication failed' "$T/v0215/server.log")
 superuser v0215 "$V" rename
 what="second start after rename is a no-op"
 begin
 [ "$code" -eq 0 ] && [ ! -s "$T/out" ] && [ ! -s "$T/err" ] || fail "$what: the rename again: exit $code: $(cat "$T/out" "$T/err")"
-sql v0215 "$V" xiongbao xiongbao "ALTER ROLE openbot_app RENAME TO xiongbao_app; ALTER ROLE openbot_role_writer RENAME TO xiongbao_role_writer;"
-APP_ROLE=xiongbao_app WRITER_ROLE=xiongbao_role_writer boot v0215 "$V"
+journal_before=$(sql v0215 "$V" xiongbao xiongbao "SELECT count(*) FROM drizzle.__drizzle_migrations;")
+data_before=$(data_print v0215 "$V" xiongbao xiongbao)
+boot v0215 "$V"
 if [ "$code" -ne 0 ]; then fail "$what: stopped at $stopped (exit $code): $(cat "$T/out" "$T/err")"
 else
   grep -q 'rebrand-' "$T/out" "$T/err" && fail "$what: printed: $(grep 'rebrand-' "$T/out" "$T/err")"
@@ -335,8 +348,12 @@ else
   [ "$(cat "$T/v0215/env/MIGRATION_DATABASE_URL" "$T/v0215/env/DATABASE_URL" "$T/v0215/env/ROLE_WRITER_DATABASE_URL" | cksum)" = "$urls_print" ] ||
     fail "$what: the connection strings changed"
   [ "$(grep -c 'authentication failed' "$T/v0215/server.log")" = "$failed_logins" ] || fail "$what: the boot left failed logins in the server log"
+  [ "$(sql v0215 "$V" xiongbao xiongbao "SELECT count(*) FROM drizzle.__drizzle_migrations;")" = "$journal_before" ] ||
+    fail "$what: the second boot applied migrations"
+  [ "$(data_print v0215 "$V" xiongbao xiongbao)" = "$data_before" ] || fail "$what: the second boot changed data"
+  [ "$(sql v0215 "$V" xiongbao xiongbao "SELECT count(*) FROM pg_roles WHERE rolname LIKE 'openbot%';")" = 0 ] ||
+    fail "$what: a role still carries an old name"
 fi
-sql v0215 "$V" xiongbao xiongbao "ALTER ROLE xiongbao_app RENAME TO openbot_app; ALTER ROLE xiongbao_role_writer RENAME TO openbot_role_writer;"
 clean && pass "$what"
 
 # 5. the hint on the volume only decides which name is tried first: without it a renamed cluster is still
@@ -352,8 +369,9 @@ superuser v0215 "$V" rename
 # 5b. a boot killed after the rename committed, before the hint, the connection strings and finish: the
 #     in-progress record stays, and the next boot connects under the new names, resumes without another
 #     backup, and finishes with connection strings that name the new superuser and database. While it is
-#     in that state, a refusal or a failing step must not call the database unchanged, though the journal
-#     is: the cluster has been renamed and v0.2.15 can no longer log in.
+#     in that state, a refusal or a failing step must not call the database unchanged: the business
+#     migrations (0240) committed before the rename did, and v0.2.15 can no longer log in. (The other
+#     case, a renamed cluster over an unchanged journal, is rebrand-preflight.test.sh's 16b.)
 v0215_volume killed || exit 1
 K=$port
 K_PW=$(pw_of killed pgpassword)
@@ -373,16 +391,16 @@ else
   mv "$T/killed-backup.dump" "$k_dump"
   if [ "$code" -eq 0 ] || [ "$stopped" != check ]; then fail "$what: the missing backup was not refused (stopped at $stopped, exit $code)"
   else
-    grep -q "已经把数据库超级用户与库改成了新名字" "$T/err" && grep -q "v0.2.15 已经登录不了这个库" "$T/err" ||
-      fail "$what: the refusal does not say the cluster was renamed: $(cat "$T/err")"
+    grep -q "上一次改名已经改动了业务库" "$T/err" ||
+      fail "$what: the refusal does not say the database changed: $(cat "$T/err")"
     grep -q "没有改动业务库\|可以直接回去\|数据没有改动" "$T/err" && fail "$what: the refusal calls a renamed cluster unchanged: $(cat "$T/err")"
   fi
   # A failing step while resuming, with the journal as it was at the backup.
   MIGRATE_CMD='echo "migration exploded" >&2; exit 3' boot killed "$K"
   if [ "$code" -eq 0 ] || [ "$stopped" != migrate ]; then fail "$what: the stand-in step did not fail (stopped at $stopped, exit $code)"
   else
-    grep -q "已经改成新名字" "$T/err" && grep -q "不能直接换回 v0.2.15" "$T/err" ||
-      fail "$what: the step failure does not say the cluster was renamed: $(cat "$T/err")"
+    grep -q "业务库已经改动" "$T/err" && grep -q "不能直接换回 v0.2.15" "$T/err" ||
+      fail "$what: the step failure does not say the database changed: $(cat "$T/err")"
     grep -q "业务库没有改动\|直接换回 v0.2.15 镜像继续用这个卷" "$T/err" && fail "$what: the step failure calls a renamed cluster unchanged: $(cat "$T/err")"
   fi
   boot killed "$K"

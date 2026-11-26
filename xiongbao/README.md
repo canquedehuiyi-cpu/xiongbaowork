@@ -106,7 +106,7 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
      --timeout 15m
    ```
 
-   The two `extraEnv` lines acknowledge that the bundled database connects as its superuser, which row-level security does not bind; the chart refuses to render without them. Use your own database with the `openbot_app` role for real tenant isolation ([Helm guide](charts/xiongbao/README.md)).
+   The two `extraEnv` lines acknowledge that the bundled database connects as its superuser, which row-level security does not bind; the chart refuses to render without them. Use your own database with the `xiongbao_app` role for real tenant isolation ([Helm guide](charts/xiongbao/README.md)).
 
 4. **Open your evaluation.**
 

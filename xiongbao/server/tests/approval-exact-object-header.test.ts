@@ -11,20 +11,20 @@ import {
 // implement or certify the missing trusted production materializer/registry.
 // Independent complete ASCII UTF8 oracles, manually ordered by unsigned UTF8
 // key bytes; neither builder nor JSON.stringify is used to issue an oracle.
-const C_EXPECTED = '{"actionDigest":"action","actorUserId":"actor","agentId":"agent","approvalId":"approval","approvalRunId":"approval-run","codecVersion":"OPENBOT_EXACT_INPUT_JSON_V1","domainId":"00000000-0000-0000-0000-000000000002","envelopeWireVersion":"OPENBOT_APPROVAL_EXACT_WIRE_V1","headerVersion":"OPENBOT_APPROVAL_EXACT_HEADER_V1","keyVersion":"key-c","objectId":"00000000-0000-0000-0000-000000000001","ownerUserId":"owner","plaintextSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sourceActualRunId":"source-run","sourceBinding":{},"sourceBindingVersion":"OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1","stage":"capture","tenantId":"tenant","threadId":"thread","toolCallId":"tool"}';
-const P_EXPECTED = '{"actionDigest":"action","actorUserId":"actor","admissionId":"admission","agentId":"agent","approvalId":"approval","approvalRunId":"approval-run","captureId":"00000000-0000-0000-0000-000000000001","captureSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","codecVersion":"OPENBOT_EXACT_INPUT_JSON_V1","domainId":"00000000-0000-0000-0000-000000000002","envelopeWireVersion":"OPENBOT_APPROVAL_EXACT_WIRE_V1","headerVersion":"OPENBOT_APPROVAL_EXACT_HEADER_V1","inputDigest":"opaque-input","keyVersion":"key-p","objectId":"00000000-0000-0000-0000-000000000003","ownerUserId":"owner","plaintextSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","planIdentity":"plan","planRunId":"plan-run","savedResultDigest":"opaque-result","sourceActualRunId":"source-run","sourceBinding":{},"sourceBindingVersion":"OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1","stage":"prepared","targetRunId":"target-run","tenantId":"tenant","threadId":"thread","toolCallId":"tool"}';
+const C_EXPECTED = '{"actionDigest":"action","actorUserId":"actor","agentId":"agent","approvalId":"approval","approvalRunId":"approval-run","codecVersion":"XIONGBAO_EXACT_INPUT_JSON_V1","domainId":"00000000-0000-0000-0000-000000000002","envelopeWireVersion":"XIONGBAO_APPROVAL_EXACT_WIRE_V1","headerVersion":"XIONGBAO_APPROVAL_EXACT_HEADER_V1","keyVersion":"key-c","objectId":"00000000-0000-0000-0000-000000000001","ownerUserId":"owner","plaintextSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sourceActualRunId":"source-run","sourceBinding":{},"sourceBindingVersion":"XIONGBAO_APPROVAL_EXACT_SOURCE_BINDING_V1","stage":"capture","tenantId":"tenant","threadId":"thread","toolCallId":"tool"}';
+const P_EXPECTED = '{"actionDigest":"action","actorUserId":"actor","admissionId":"admission","agentId":"agent","approvalId":"approval","approvalRunId":"approval-run","captureId":"00000000-0000-0000-0000-000000000001","captureSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","codecVersion":"XIONGBAO_EXACT_INPUT_JSON_V1","domainId":"00000000-0000-0000-0000-000000000002","envelopeWireVersion":"XIONGBAO_APPROVAL_EXACT_WIRE_V1","headerVersion":"XIONGBAO_APPROVAL_EXACT_HEADER_V1","inputDigest":"opaque-input","keyVersion":"key-p","objectId":"00000000-0000-0000-0000-000000000003","ownerUserId":"owner","plaintextSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","planIdentity":"plan","planRunId":"plan-run","savedResultDigest":"opaque-result","sourceActualRunId":"source-run","sourceBinding":{},"sourceBindingVersion":"XIONGBAO_APPROVAL_EXACT_SOURCE_BINDING_V1","stage":"prepared","targetRunId":"target-run","tenantId":"tenant","threadId":"thread","toolCallId":"tool"}';
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 function capture(): CaptureHeaderRow {
 	return {
 		id: "00000000-0000-0000-0000-000000000001", stage: "capture",
-		codecVersion: "OPENBOT_EXACT_INPUT_JSON_V1", approvalId: "approval",
+		codecVersion: "XIONGBAO_EXACT_INPUT_JSON_V1", approvalId: "approval",
 		tenantId: "tenant", ownerUserId: "owner", actorUserId: "actor",
 		domainId: "00000000-0000-0000-0000-000000000002", threadId: "thread",
 		agentId: "agent", approvalRunId: "approval-run", sourceActualRunId: "source-run",
 		toolCallId: "tool", actionDigest: "action", sourceBinding: {},
-		sourceBindingVersion: "OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1",
+		sourceBindingVersion: "XIONGBAO_APPROVAL_EXACT_SOURCE_BINDING_V1",
 		plaintextSha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		keyVersion: "key-c", envelopeWireVersion: "OPENBOT_APPROVAL_EXACT_WIRE_V1",
+		keyVersion: "key-c", envelopeWireVersion: "XIONGBAO_APPROVAL_EXACT_WIRE_V1",
 	};
 }
 function prepared(): PreparedHeaderRow {
@@ -45,7 +45,7 @@ function rejectPair(left: unknown, right: unknown): void {
 }
 
 test("complete independent capture C20 bytes", () => {
-	expect(EXACT_OBJECT_HEADER_VERSION).toBe("OPENBOT_APPROVAL_EXACT_HEADER_V1");
+	expect(EXACT_OBJECT_HEADER_VERSION).toBe("XIONGBAO_APPROVAL_EXACT_HEADER_V1");
 	expect(buildExactObjectHeaderAadV1(capture())).toEqual(bytes(C_EXPECTED));
 });
 test("complete independent prepared P28 bytes", () => {

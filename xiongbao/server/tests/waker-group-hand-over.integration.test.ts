@@ -50,6 +50,7 @@ import { createWakerGroupStore } from "../src/waker-groups/store";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { filledLater } from "./support/filled-later";
+import { renamedBy0240 } from "./support/renamed-by-0240";
 
 /**
  * A shared group whose creator leaves, or is deactivated, goes to its earliest member (spec
@@ -982,9 +983,9 @@ describe("hand-over function (0207)", () => {
     expect((await take(bob.id)).code).toBe("42501");
     expect((await take(alice.id)).code).toBe("42501");
     for (const call of [
-      sql`select public.openbot_team_channel_hand_over_write(${channelId}, ${alice.id}, ${bob.id}, ${groupId}::uuid)`,
-      sql`select public.openbot_team_channel_hand_over_core(${channelId})`,
-      sql`select public.openbot_team_person_leaves_groups(${alice.id})`,
+      sql`select public.xiongbao_team_channel_hand_over_write(${channelId}, ${alice.id}, ${bob.id}, ${groupId}::uuid)`,
+      sql`select public.xiongbao_team_channel_hand_over_core(${channelId})`,
+      sql`select public.xiongbao_team_person_leaves_groups(${alice.id})`,
     ]) {
       const denied = await failure(() =>
         runAsTenant(alice.id, () => database.execute(call)),
@@ -1000,13 +1001,13 @@ describe("hand-over function (0207)", () => {
     const functions = (await runAsTenant("platform", () =>
       database.execute(
         sql`select p.proname as name, p.prosecdef as definer, p.proconfig as config,
-                   has_function_privilege('openbot_app', p.oid, 'EXECUTE') as app,
+                   has_function_privilege('xiongbao_app', p.oid, 'EXECUTE') as app,
                    has_function_privilege('public', p.oid, 'EXECUTE') as everyone
               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
              where n.nspname = 'public' and p.proname in (
-               'openbot_team_channel_hand_over_write', 'openbot_team_channel_hand_over_core',
-               'xiongbao_team_channel_hand_over', 'openbot_team_person_leaves_groups',
-               'openbot_team_revoked_leaves')
+               'xiongbao_team_channel_hand_over_write', 'xiongbao_team_channel_hand_over_core',
+               'xiongbao_team_channel_hand_over', 'xiongbao_team_person_leaves_groups',
+               'xiongbao_team_revoked_leaves')
              order by 1`,
       ),
     )) as unknown as {
@@ -1018,11 +1019,11 @@ describe("hand-over function (0207)", () => {
     }[];
 
     expect(functions.map((fn) => fn.name)).toEqual([
-      "openbot_team_channel_hand_over_core",
-      "openbot_team_channel_hand_over_write",
-      "openbot_team_person_leaves_groups",
-      "openbot_team_revoked_leaves",
       "xiongbao_team_channel_hand_over",
+      "xiongbao_team_channel_hand_over_core",
+      "xiongbao_team_channel_hand_over_write",
+      "xiongbao_team_person_leaves_groups",
+      "xiongbao_team_revoked_leaves",
     ]);
     for (const fn of functions) {
       expect(fn.definer).toBe(true);
@@ -1033,15 +1034,16 @@ describe("hand-over function (0207)", () => {
       expect(fn.app).toBe(fn.name === "xiongbao_team_channel_hand_over");
     }
     expect(
-      functions.find((fn) => fn.name === "openbot_team_channel_hand_over_write")
-        ?.config,
+      functions.find(
+        (fn) => fn.name === "xiongbao_team_channel_hand_over_write",
+      )?.config,
     ).toContain("app.tenant_id=platform");
 
     const triggers = (await runAsTenant("platform", () =>
       database.execute(
         sql`select c.relname as "table", t.tgtype as type, t.tgenabled as enabled
               from pg_trigger t join pg_class c on c.oid = t.tgrelid
-             where t.tgname = 'openbot_team_revoked_leaves' and not t.tgisinternal`,
+             where t.tgname = 'xiongbao_team_revoked_leaves' and not t.tgisinternal`,
       ),
     )) as unknown as { table: string; type: number; enabled: string }[];
     // ROW (1) | INSERT (4), and not BEFORE (2): after the row is in.
@@ -1535,11 +1537,12 @@ describe("deactivation (0207 trigger)", () => {
     try {
       await owner.begin(async (tx) => {
         // As a deployment that deny-listed her before 0207 existed.
-        await tx`alter table revoked_access disable trigger openbot_team_revoked_leaves`;
+        await tx`alter table revoked_access disable trigger xiongbao_team_revoked_leaves`;
         await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
-        await tx`alter table revoked_access enable trigger openbot_team_revoked_leaves`;
+        await tx`alter table revoked_access enable trigger xiongbao_team_revoked_leaves`;
         before.set(await read(tx as unknown as SQL));
-        await tx.unsafe(backfill);
+        // 0207 as written calls the helpers by their names before 0240 renamed them.
+        await tx.unsafe(renamedBy0240(backfill));
         after.set(await read(tx as unknown as SQL));
         throw new Rollback();
       });
@@ -1613,12 +1616,12 @@ describe("deactivation (0207 trigger)", () => {
     const twice = filledLater<Awaited<ReturnType<typeof read>>>();
     try {
       await owner.begin(async (tx) => {
-        await tx`alter table revoked_access disable trigger openbot_team_revoked_leaves`;
+        await tx`alter table revoked_access disable trigger xiongbao_team_revoked_leaves`;
         await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
-        await tx`alter table revoked_access enable trigger openbot_team_revoked_leaves`;
-        await tx.unsafe(backfill);
+        await tx`alter table revoked_access enable trigger xiongbao_team_revoked_leaves`;
+        await tx.unsafe(renamedBy0240(backfill));
         once.set(await read(tx as unknown as SQL));
-        await tx.unsafe(backfill);
+        await tx.unsafe(renamedBy0240(backfill));
         twice.set(await read(tx as unknown as SQL));
         throw new Rollback();
       });

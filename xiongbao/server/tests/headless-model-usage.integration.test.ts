@@ -54,7 +54,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * A browser run gets its `model_usage` row from the HTTP gate. A routine firing never crosses that
  * gate, so its card on the board named no model. This drives a real routine firing — the real routine
  * store, the real board projector and the real turn runner — against a database that enforces
- * row-level security as `openbot_app`, and reads the answer back through the board's own route.
+ * row-level security as `xiongbao_app`, and reads the answer back through the board's own route.
  *
  * No model is dialled. The coworker answers from a fake agent; the resolver builds a provider client
  * from a vault row, and building one costs nothing until it is spoken to, which nothing here does.

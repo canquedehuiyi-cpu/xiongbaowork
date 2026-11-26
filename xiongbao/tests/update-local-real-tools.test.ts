@@ -274,7 +274,7 @@ describe.skipIf(!docker)(
   () => {
     test("start.sh's build gets the source's own image names, never the release's digests", async () => {
       const f = installation(
-        "DATABASE_URL=postgres://openbot_app:openbot@127.0.0.1:5432/xiongbao\nMIGRATION_DATABASE_URL=postgres://openbot:openbot@127.0.0.1:5432/xiongbao\n",
+        "DATABASE_URL=postgres://xiongbao_app:openbot@127.0.0.1:5432/xiongbao\nMIGRATION_DATABASE_URL=postgres://openbot:openbot@127.0.0.1:5432/xiongbao\n",
       );
       // start.sh runs `up --build` and `run --build migrate` on the real Compose file. Each service is
       // pointed at a one-file Dockerfile, and its default tag is made unique so no real local
@@ -406,7 +406,7 @@ describe.skipIf(!docker || !pgDump)("host backups with real pg_dump", () => {
     ]);
     const databaseUrl = `postgres://update_owner:${encodeURIComponent(password)}@127.0.0.1:${port}/customer_data?sslmode=disable`;
     // The app role the server would log in as: the same database, never what the backup reads with.
-    const appUrl = `postgres://openbot_app:openbot@127.0.0.1:${port}/customer_data?sslmode=disable`;
+    const appUrl = `postgres://xiongbao_app:openbot@127.0.0.1:${port}/customer_data?sslmode=disable`;
     const f = installation(
       `DATABASE_URL=${appUrl}\nMIGRATION_DATABASE_URL=${databaseUrl}\n`,
     );

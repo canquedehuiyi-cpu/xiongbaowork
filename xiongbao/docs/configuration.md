@@ -25,8 +25,8 @@ Python harness and of `agent-langgraph` fall back to the old name the same way. 
 line listing the old names in use (names only, never values). When both are set and differ, the
 `XIONGBAO_` value wins and the server names the old one. An empty `XIONGBAO_` value counts as unset,
 so it does not hide the old one: to drop an old setting, delete its line rather than writing the new
-name empty. A platform model key's variable (`OPENBOT_POOL_*`) keeps its name, because the model pool
-stores it. The old names stop working in v0.2.17; `scripts/rebrand/rewrite-env.sh <file>` renames them
+name empty. A platform model key's variable is renamed the same way (`XIONGBAO_POOL_*`): the v0.2.16
+upgrade renames the variable names the model pool stores. The old names stop working in v0.2.17; `scripts/rebrand/rewrite-env.sh <file>` renames them
 in an env file and keeps a backup (see docs/deployment-xiongbao.md, section 6.3). An installation from
 v0.2.15 that runs the development Compose file cannot update in place, and v0.2.16 does not take its
 volumes over: its data moves by a manual backup and restore, see docs/local-updates.md.
@@ -43,7 +43,7 @@ four stop server startup if missing.
 
 ### The database role and `XIONGBAO_RLS_ENFORCE`
 
-`DATABASE_URL` must name the application role `openbot_app`, not the owner: PostgreSQL does not apply
+`DATABASE_URL` must name the application role `xiongbao_app`, not the owner: PostgreSQL does not apply
 row-level security to a superuser or a `BYPASSRLS` role, so tenant isolation would rest on the
 application's tenant context alone. The server reads its own role at boot, before it serves anything.
 
@@ -59,7 +59,7 @@ Where that bites, and who already says `warn`:
 - **The desktop app** connects as the compose owner `openbot`, a superuser, on a database published
   on loopback only, and sets no `NODE_ENV`. It writes `XIONGBAO_RLS_ENFORCE=warn` into the `.env` it
   owns, next to `DATABASE_URL` (`desktop/src-tauri/src/env.rs`), so it keeps starting and prints
-  `rls-not-enforced` on every boot. Moving it to `openbot_app` is the real fix; that also moves the
+  `rls-not-enforced` on every boot. Moving it to `xiongbao_app` is the real fix; that also moves the
   worker, which reads the same file.
 - **The Helm chart's bundled database** (`postgresql.enabled`, off by default) connects as `postgres`.
   The chart refuses to render until `config.extraEnv` names `XIONGBAO_RLS_ENFORCE`; `extraEnv` renders
@@ -67,24 +67,25 @@ Where that bites, and who already says `warn`:
 - **An external database whose URL names a superuser or a `BYPASSRLS` role** (the usual way to make
   migrations pass on a self-hosted server) only warned before and now refuses under the chart's
   `NODE_ENV=production`. The chart gives the migrations Job and the API one `DATABASE_URL`, so it has
-  no supported way yet to migrate as the owner and serve as `openbot_app`. Until it does, either give
+  no supported way yet to migrate as the owner and serve as `xiongbao_app`. Until it does, either give
   the URL a role that owns the schema without being a superuser or `BYPASSRLS` (what RDS, Cloud SQL
   and Azure Database hand out, which are unaffected), or set
   `config.extraEnv: [{name: XIONGBAO_RLS_ENFORCE, value: warn}]` and accept that isolation rests on the
   application.
 
-`0054_app_role.sql` creates `openbot_app` with the password `openbot`, which is printed in this
-repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
+`0054_app_role.sql` creates the application role with the password `openbot` (migration 0240
+renames it to `xiongbao_app`; a SCRAM password survives the rename, an md5 one is cleared by PostgreSQL
+and must be set again, see docs/deployment-xiongbao.md), which is printed in this repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
 already changed and resetting it would lock a running deployment out without a word. Instead, under
 `NODE_ENV=production` the server refuses to start when the password in `DATABASE_URL` is `openbot`
 (`{"type":"database-password-public-default", …}` on stderr); elsewhere it only warns. Set a real one
 as the owner, then put it in `DATABASE_URL`:
 
 ```sql
-ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<random>';
+ALTER ROLE xiongbao_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<random>';
 ```
 
-The one-container image and CI already do this with a generated password. `openbot_app` holds row
+The one-container image and CI already do this with a generated password. `xiongbao_app` holds row
 rights only: `0112_app_role_hardening.sql` revokes the `CREATE` on schemas `public` and `drizzle`
 that `0054` granted, so the role the server connects as cannot add tables, functions or triggers.
 Migrations run as the owner.
@@ -1427,16 +1428,18 @@ changing the package, so it does not trigger a re-synchronise.
 
 ```yaml
 tenant:
-  id: openbot
+  id: xiongbao
   product_name: XiongBao Work
 ```
 
 `tenant.id` owns the Bots and channels the package seeds, and names the deployment when
-`DEPLOYMENT_ID` is unset. A package that changes its id lists the ids it had before:
+`DEPLOYMENT_ID` is unset. The bundled packages' id changed in v0.2.16; the upgrade renames the
+package row in the database and keeps a digest of the old name there, so threads made after the
+upgrade carry the same id prefix as before. A package that changes its id lists the ids it had before:
 
 ```yaml
 tenant:
-  id: openbot
+  id: xiongbao
   former_ids: [personal]
   product_name: XiongBao Work
 ```

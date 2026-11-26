@@ -579,12 +579,12 @@ database:
   existingSecret: ""
   existingSecretKey: "database-url"
   # THE SECOND URL: the role writer. The API refuses to start without ROLE_WRITER_DATABASE_URL
-  # ("ROLE_WRITER_DATABASE_URL is required"), because `openbot_role_writer` (migration 0109) is the
+  # ("ROLE_WRITER_DATABASE_URL is required"), because `xiongbao_role_writer` (migration 0109) is the
   # only login allowed to write identity roles, and the API role above may only read them. Two URLs,
   # two roles, two passwords, as in the delivery manual's external-database section:
   #
-  #   url:           postgres://openbot_app:<password>@host:5432/openbot?sslmode=require
-  #   roleWriterUrl: postgres://openbot_role_writer:<other password>@host:5432/openbot?sslmode=require
+  #   url:           postgres://xiongbao_app:<password>@host:5432/openbot?sslmode=require
+  #   roleWriterUrl: postgres://xiongbao_role_writer:<other password>@host:5432/openbot?sslmode=require
   #
   # Set both roles' passwords yourself after the first migration (the migration's are public).
   # Only the API server reads it; the migrations Job and the sweeps do not get it. With the bundled
@@ -598,7 +598,7 @@ database:
   roleWriterExistingSecret: ""
   roleWriterExistingSecretKey: "role-writer-database-url"
   # THE MIGRATION URL: the database OWNER, used by the migrations Job only and never by the API.
-  # The API's role (`url` above, openbot_app) cannot run migrations: the grants and roles they make
+  # The API's role (`url` above, xiongbao_app) cannot run migrations: the grants and roles they make
   # are the owner's. Inline as `migrationUrl` (required with an inline `url`), or with
   # `existingSecret` under `migrationExistingSecretKey` in the same Secret. A Secret without that key
   # still upgrades: the Job logs that it is migrating with `database-url` as it used to, which works

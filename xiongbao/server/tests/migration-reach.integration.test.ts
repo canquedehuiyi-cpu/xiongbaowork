@@ -26,7 +26,7 @@ import { testDatabaseUrl } from "./support/database";
  */
 
 /*
- * The fork's suite connects as `openbot_app`, which may not create databases or tables. A throwaway
+ * The fork's suite connects as `xiongbao_app`, which may not create databases or tables. A throwaway
  * database is made, migrated and dropped as the owner (`TEST_DATABASE_ADMIN_URL`), who runs the real
  * migrations too; without one this falls back to the test URL's own credentials, as upstream does.
  */

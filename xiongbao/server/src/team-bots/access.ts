@@ -42,7 +42,7 @@ const tbProfile = alias(agentProfiles, "team_bot_profile");
  * It also holds the publication to the Bot's own stamp. Anybody may insert a publication, audience
  * or assignment row stamped with their OWN tenant naming any agent id, so a row only counts when it
  * carries the same stamp as the Bot (`team` once the Bot is shared); a stranger's own row never
- * does. Migration 0122's `openbot_team_bot_visible` asks the same, pinned by the parity test.
+ * does. Migration 0122's `xiongbao_team_bot_visible` asks the same, pinned by the parity test.
  */
 export const describedForTeam = sql`exists (
   select 1 from ${agentProfiles} ${tbProfile}

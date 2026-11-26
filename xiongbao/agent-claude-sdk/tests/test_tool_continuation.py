@@ -525,7 +525,7 @@ def test_sdk_authentication_signal_is_typed(sdk, model_only):
         try:
             result = await events(adapter, request(tool_count="auth-failed"))
             assert result[-1].type == "RUN_ERROR"
-            assert result[-1].code == "OPENBOT_MODEL_AUTH_REQUIRED"
+            assert result[-1].code == "XIONGBAO_MODEL_AUTH_REQUIRED"
         finally:
             await adapter.shutdown()
 

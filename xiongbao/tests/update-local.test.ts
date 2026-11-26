@@ -44,11 +44,11 @@ afterEach(() => {
 // As docker-compose.yml resolves them: the server and the worker log in as the app role, the server
 // also holds the role writer, and only migration logs in as the owner. One database throughout.
 const OWNER_URL = "postgres://openbot:openbot@postgres:5432/xiongbao";
-const APP_URL = "postgres://openbot_app:openbot@postgres:5432/xiongbao";
+const APP_URL = "postgres://xiongbao_app:openbot@postgres:5432/xiongbao";
 const ROLE_WRITER_URL =
-  "postgres://openbot_role_writer:openbot@postgres:5432/xiongbao";
+  "postgres://xiongbao_role_writer:openbot@postgres:5432/xiongbao";
 // A host install's .env since the role split: the app role for the server, the owner for the update.
-const HOST_APP_URL = "postgres://openbot_app:openbot@localhost:5432/xiongbao";
+const HOST_APP_URL = "postgres://xiongbao_app:openbot@localhost:5432/xiongbao";
 const HOST_OWNER_URL = "postgres://openbot:openbot@localhost:5432/xiongbao";
 // The updater lets the process environment outrank .env; these fixtures speak through .env alone.
 const inheritedDatabaseUrls = {
@@ -505,15 +505,15 @@ test("database identity is where libpq connects and which database it opens, not
     APP_URL,
     ROLE_WRITER_URL,
     "postgresql://other:secret@POSTGRES/xiongbao",
-    "postgres://openbot_app@postgres:5432/xiongbao?sslmode=disable",
+    "postgres://xiongbao_app@postgres:5432/xiongbao?sslmode=disable",
   ])
     expect([same, databaseIdentity(same)]).toEqual([same, owner]);
   for (const different of [
-    "postgres://openbot_app:openbot@db.example.test:5432/xiongbao",
-    "postgres://openbot_app:openbot@postgres:5433/xiongbao",
-    "postgres://openbot_app:openbot@postgres:5432/customer_db",
+    "postgres://xiongbao_app:openbot@db.example.test:5432/xiongbao",
+    "postgres://xiongbao_app:openbot@postgres:5433/xiongbao",
+    "postgres://xiongbao_app:openbot@postgres:5432/customer_db",
     // No database in the URL: libpq opens the one named after the user.
-    "postgres://openbot_app:openbot@postgres:5432",
+    "postgres://xiongbao_app:openbot@postgres:5432",
   ])
     expect([different, databaseIdentity(different)]).not.toEqual([
       different,
@@ -702,7 +702,7 @@ test("a candidate that changes only the accounts keeps the same database and is 
   const f = fixture();
   const run = rewriteDatabaseUrls(
     f,
-    (url) => url.replace("openbot_app:openbot@", "customer_app:secret@"),
+    (url) => url.replace("xiongbao_app:openbot@", "customer_app:secret@"),
     "after",
   );
   const plan = await planLocalUpdate({ ...f.options, run });

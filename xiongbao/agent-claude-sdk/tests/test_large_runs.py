@@ -215,7 +215,7 @@ def test_a_bot_that_cannot_start_says_so_in_the_conversation(monkeypatch, model_
             assert [event.type for event in finished][0] == "RUN_STARTED"
             assert finished[-1].type == "RUN_ERROR"
             assert finished[-1].message == START_FAILED
-            assert finished[-1].code == "OPENBOT_HARNESS_START_FAILED"
+            assert finished[-1].code == "XIONGBAO_HARNESS_START_FAILED"
             assert "Errno" not in finished[-1].message
         finally:
             await adapter.shutdown()

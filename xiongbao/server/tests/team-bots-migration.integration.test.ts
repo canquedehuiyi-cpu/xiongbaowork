@@ -19,7 +19,7 @@ import { bindTestRoleWriter } from "./support/role-writer";
  * publication of somebody's private Bot would publish it to the team, and a stranger's grant would
  * become a tool on somebody's public Bot. Here a stranger's rows are planted next to the legitimate
  * ones, the migration's own statements run, and the stranger's rows keep their stamp and count for
- * nothing in `openbot_team_bot_visible`.
+ * nothing in `xiongbao_team_bot_visible`.
  *
  * The data statements run as this NOBYPASSRLS application role, from the empty frame a migrator
  * arrives with, inside a transaction that is rolled back. The file's `CREATE OR REPLACE FUNCTION` of
@@ -197,7 +197,7 @@ test("0125 moves only rows their legitimate writer stamped; a stranger's rows st
       const grants = await read(
         tx`select ref, tenant_id from plugin_grants where agent_id in ${tx(bots)} order by ref`,
       );
-      // Who `openbot_team_bot_visible` admits now, each asked in their own frame.
+      // Who `xiongbao_team_bot_visible` admits now, each asked in their own frame.
       const visible: Row[] = [];
       for (const person of [
         invited,
@@ -209,7 +209,7 @@ test("0125 moves only rows their legitimate writer stamped; a stranger's rows st
         await tx`select set_config('app.tenant_id', ${person}, true)`;
         for (const bot of [publishedBot, strangerPublishedBot]) {
           const [row] =
-            await tx`select openbot_team_bot_visible(${bot}) as visible`;
+            await tx`select xiongbao_team_bot_visible(${bot}) as visible`;
           visible.push({ person, bot, visible: (row as Row).visible });
         }
       }
@@ -431,7 +431,7 @@ test("0126 keeps an administrator's waiting assignment as team: inert while unpu
         ] as const) {
           await tx`select set_config('app.tenant_id', ${person}, true)`;
           const [row] =
-            await tx`select public.openbot_team_bot_visible(${waitingBot}) as visible, (select count(*)::int from team_bot_assignments where agent_id = ${waitingBot}) as rows`;
+            await tx`select public.xiongbao_team_bot_visible(${waitingBot}) as visible, (select count(*)::int from team_bot_assignments where agent_id = ${waitingBot}) as rows`;
           out[name] = { visible: row?.visible, rows: row?.rows };
         }
         return out;

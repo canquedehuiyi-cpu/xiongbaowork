@@ -344,12 +344,14 @@ fi
 #    first start leaves (0054's default privileges among it). The control shows why the restore goes into
 #    an empty database: pg_restore --clean over the migrated one hands the app role writes it never had.
 #
-# migrated <port> <db>: what v0.2.15's first start does to a database (pgvector, every migration, the app
-# role's password).
+# migrated <port> <db>: what v0.2.15's first start does to a database (pgvector, every migration v0.2.15
+# shipped, the app role's password). The migrator stops at v0.2.15's last migration for tests
+# (XIONGBAO_TEST_MIGRATE_THROUGH, honoured only with NODE_ENV=test): 0240 and later are v0.2.16's.
 migrated() {
   sql "$1" openbot postgres "CREATE DATABASE $2 OWNER openbot;" &&
     sql "$1" openbot "$2" "CREATE EXTENSION IF NOT EXISTS vector;" &&
-    (cd "$MIGRATOR_DIR" && DATABASE_URL="postgres://openbot:$PW@127.0.0.1:$1/$2" HOME="$T/home" bun scripts/migrate.ts) >"$T/migrate.log" 2>&1 &&
+    (cd "$MIGRATOR_DIR" && DATABASE_URL="postgres://openbot:$PW@127.0.0.1:$1/$2" HOME="$T/home" \
+      NODE_ENV=test XIONGBAO_TEST_MIGRATE_THROUGH=0239_aihub_provider_template bun scripts/migrate.ts) >"$T/migrate.log" 2>&1 &&
     sql "$1" openbot "$2" "ALTER ROLE openbot_app WITH LOGIN PASSWORD '$PW';" ||
     { echo "migrating $2 failed: $(tail -n 20 "$T/migrate.log")" >&2; return 1; }
 }

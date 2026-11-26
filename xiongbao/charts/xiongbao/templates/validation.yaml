@@ -40,7 +40,7 @@ This template renders nothing.
 {{- if has (toString .name) (list "XIONGBAO_RLS_ENFORCE" "OPENBOT_RLS_ENFORCE") }}{{- $rlsModeNamed = true }}{{- end }}
 {{- end }}
 {{- if and .Values.postgresql.enabled (eq .Values.postgresql.auth.username "postgres") (not $rlsModeNamed) }}
-{{- fail "The bundled database connects the API as the superuser postgres, which row-level security does not bind, and the server refuses that in production. To run it anyway, knowing tenant isolation then rests on the application alone, say so: config.extraEnv: [{name: XIONGBAO_RLS_ENFORCE, value: warn}]. For isolation in the database, use your own database (database.existingSecret) with a URL naming openbot_app." }}
+{{- fail "The bundled database connects the API as the superuser postgres, which row-level security does not bind, and the server refuses that in production. To run it anyway, knowing tenant isolation then rests on the application alone, say so: config.extraEnv: [{name: XIONGBAO_RLS_ENFORCE, value: warn}]. For isolation in the database, use your own database (database.existingSecret) with a URL naming xiongbao_app." }}
 {{- end }}
 
 {{- /*
@@ -52,20 +52,20 @@ This template renders nothing.
   pod with an error naming the key, so that path is not refused here.
 */}}
 {{- if and (not .Values.postgresql.enabled) .Values.database.url (not .Values.database.existingSecret) (not (.Values.database).roleWriterUrl) (not (.Values.database).roleWriterExistingSecret) }}
-{{- fail "An external database needs two URLs. database.url is the API's (openbot_app); also set database.roleWriterUrl to openbot_role_writer's (migration 0109), with its own password, or database.roleWriterExistingSecret to a Secret holding it. The API refuses to start without ROLE_WRITER_DATABASE_URL. Prefer database.existingSecret with both keys (database-url, role-writer-database-url): a URL in values is readable by anybody who can read the release." }}
+{{- fail "An external database needs two URLs. database.url is the API's (xiongbao_app); also set database.roleWriterUrl to xiongbao_role_writer's (migration 0109), with its own password, or database.roleWriterExistingSecret to a Secret holding it. The API refuses to start without ROLE_WRITER_DATABASE_URL. Prefer database.existingSecret with both keys (database-url, role-writer-database-url): a URL in values is readable by anybody who can read the release." }}
 {{- end }}
 
 {{- /*
   An external database given by URL, with nothing for the migrations Job to migrate as.
 
-  `database.url` is the API's role (openbot_app), which cannot migrate: the grants and roles the
+  `database.url` is the API's role (xiongbao_app), which cannot migrate: the grants and roles the
   migrations make are the owner's. Only asked when this chart runs migrations (`migrations.enabled`).
   With `database.existingSecret` the owner's URL is read from the
   Secret's `database.migrationExistingSecretKey`, which a render cannot see, so that path is not
   refused here (the Job says so in its log instead).
 */}}
 {{- if and (not .Values.postgresql.enabled) (.Values.migrations).enabled .Values.database.url (not .Values.database.existingSecret) (not (.Values.database).migrationUrl) }}
-{{- fail "An external database needs the owner's URL for migrations. database.url is the API's (openbot_app), which cannot migrate; set database.migrationUrl to the database owner's URL, or use database.existingSecret with a migration-database-url key." }}
+{{- fail "An external database needs the owner's URL for migrations. database.url is the API's (xiongbao_app), which cannot migrate; set database.migrationUrl to the database owner's URL, or use database.existingSecret with a migration-database-url key." }}
 {{- end }}
 
 {{- /*

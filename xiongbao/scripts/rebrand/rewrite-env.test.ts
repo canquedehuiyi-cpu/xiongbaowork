@@ -222,7 +222,7 @@ describe("rewrite-env.sh", () => {
     );
   });
 
-  test("a platform model key keeps its old name, because the database row names it", () => {
+  test("a platform model key is renamed like any other, as v0.2.16 renames the pool row with it", () => {
     const file = write(".env", [
       "OPENBOT_POOL_OPENAI=sk-pool",
       "OPENBOT_EDITION=team",
@@ -230,7 +230,7 @@ describe("rewrite-env.sh", () => {
     const { code, stdout, stderr } = run(file);
     expect(code).toBe(0);
     expect(readFileSync(file, "utf8")).toBe(
-      "OPENBOT_POOL_OPENAI=sk-pool\nXIONGBAO_EDITION=team\n",
+      "XIONGBAO_POOL_OPENAI=sk-pool\nXIONGBAO_EDITION=team\n",
     );
     expect(stderr).toContain("OPENBOT_POOL_OPENAI");
     expect(stdout + stderr).not.toContain("sk-pool");

@@ -31,7 +31,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * or a row switched off all fall back to the deployment default (`null`), and a coworker can never be
  * bound to a pool model and a library model at once.
  *
- * The suite runs as `openbot_app`. The pool is platform-owned and the application may only read it,
+ * The suite runs as `xiongbao_app`. The pool is platform-owned and the application may only read it,
  * so its rows are written through the owner connection (`TEST_DATABASE_ADMIN_URL`, pointed at the
  * same database). No provider is called: the language model factory is a fake, and the pool keys come
  * from an injected environment, never from `process.env`.
@@ -44,7 +44,7 @@ function ownerConnection(): SQL {
   const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
   if (!raw) {
     throw new Error(
-      "TEST_DATABASE_ADMIN_URL must name the database owner: platform_model_pool is not writable by openbot_app.",
+      "TEST_DATABASE_ADMIN_URL must name the database owner: platform_model_pool is not writable by xiongbao_app.",
     );
   }
   const admin = new URL(raw);
@@ -73,11 +73,11 @@ const marker = randomUUID().replaceAll("-", "").slice(0, 10);
 const MARK = marker.toUpperCase();
 const freeTenant = `pool-${marker}-free`;
 const proTenant = `pool-${marker}-pro`;
-const FREE_KEY = `OPENBOT_POOL_FREE_${MARK}`;
-const PRO_KEY = `OPENBOT_POOL_PRO_${MARK}`;
-const UNSET_KEY = `OPENBOT_POOL_UNSET_${MARK}`;
-const EMPTY_KEY = `OPENBOT_POOL_EMPTY_${MARK}`;
-const OFF_KEY = `OPENBOT_POOL_OFF_${MARK}`;
+const FREE_KEY = `XIONGBAO_POOL_FREE_${MARK}`;
+const PRO_KEY = `XIONGBAO_POOL_PRO_${MARK}`;
+const UNSET_KEY = `XIONGBAO_POOL_UNSET_${MARK}`;
+const EMPTY_KEY = `XIONGBAO_POOL_EMPTY_${MARK}`;
+const OFF_KEY = `XIONGBAO_POOL_OFF_${MARK}`;
 const environment: Record<string, string | undefined> = {
   [FREE_KEY]: `pool-free-secret-${marker}`,
   [PRO_KEY]: `pool-pro-secret-${marker}`,
@@ -423,7 +423,7 @@ describe("platform model pool binding", () => {
     expect(failureText(badKey)).toContain("platform_model_pool_api_key_env");
     const badTier = await poolRow(
       "bad-tier",
-      `OPENBOT_POOL_TIER_${MARK}`,
+      `XIONGBAO_POOL_TIER_${MARK}`,
       "{free,enterprise}",
     ).then(
       () => null,

@@ -143,7 +143,7 @@ describe("Composio auth config provenance", () => {
 describe("the framework the model is told", () => {
   test("is the product's English name for a Bot that runs here, and unchanged for others", () => {
     setBrand({ productName: "示例", englishName: "Example Work" });
-    expect(frameworkLabel("OpenBot")).toBe("Example Work");
+    expect(frameworkLabel("XiongBao")).toBe("Example Work");
     expect(frameworkLabel("Claude Agent SDK")).toBe("Claude Agent SDK");
   });
 });

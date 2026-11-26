@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { SQL } from "bun";
 import { testDatabaseUrl } from "./support/database";
+import { renamedBy0240 } from "./support/renamed-by-0240";
 
 /**
  * Migration 0131 (SEC1, docs/specs/2026-11-02-sec1-employee-tool-permissions.md §6.2) on the rows
@@ -109,7 +110,7 @@ describe("migration 0131 on the rules written before it", () => {
         `;
         const dormantGrantsBefore = await tx`
           select count(*)::int as n from information_schema.role_table_grants
-           where table_name = 'agent_security_policies' and grantee = 'openbot_app'
+           where table_name = 'agent_security_policies' and grantee = 'xiongbao_app'
         `;
         // The tables as 0131 found them.
         await tx.unsafe('DROP TABLE "public"."agent_security_settings"');
@@ -136,7 +137,8 @@ describe("migration 0131 on the rules written before it", () => {
           `;
         }
 
-        for (const statement of STATEMENTS) await tx.unsafe(statement);
+        // 0131 as written grants to the role 0240 later renamed.
+        for (const statement of STATEMENTS) await tx.unsafe(renamedBy0240(statement));
 
         const rules = await tx`
           select behaviour from public.approval_rules where owner_user_id = ${person} order by tool_ref
@@ -181,14 +183,14 @@ describe("migration 0131 on the rules written before it", () => {
         `;
         const [grants] = await tx`
           select count(*)::int as n from information_schema.role_table_grants
-           where table_name = 'agent_security_settings' and grantee = 'openbot_app'
+           where table_name = 'agent_security_settings' and grantee = 'xiongbao_app'
         `;
         const [dormantAfter] = await tx`
           select count(*)::int as n from pg_policies where tablename = 'agent_security_policies'
         `;
         const [dormantGrants] = await tx`
           select count(*)::int as n from information_schema.role_table_grants
-           where table_name = 'agent_security_policies' and grantee = 'openbot_app'
+           where table_name = 'agent_security_policies' and grantee = 'xiongbao_app'
         `;
         seen = {
           rules: rules as { behaviour: string }[],

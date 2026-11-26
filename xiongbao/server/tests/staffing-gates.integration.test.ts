@@ -525,7 +525,7 @@ describe("the startup step adds the app once in the team edition", () => {
         if (row)
           await database
             .insert(enterpriseSettings)
-            .values({ key, value: row.value, updatedBy: "openbot:test" });
+            .values({ key, value: row.value, updatedBy: "xiongbao:test" });
       });
     }
   });

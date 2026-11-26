@@ -62,11 +62,27 @@ async function readJournal(
   return { raw, journal: JSON.parse(raw) as Journal };
 }
 
-async function mergedMigrationsFolder(): Promise<string> {
+/**
+ * The merged folder the migrator is handed: `drizzle/` with the recovery overlay appended.
+ *
+ * `through` stops the journal at that tag, so a test can stand a database at an earlier release's
+ * schema with this same migrator and then carry it forward (`tests/rebrand-migration.test.ts`).
+ */
+export async function mergedMigrationsFolder(
+  options: { through?: string } = {},
+): Promise<string> {
   const base = await readJournal(join(baseFolder, "meta", "_journal.json"));
   const overlay = await readJournal(
     join(overlayFolder, "meta", "_journal.json"),
   );
+  if (options.through !== undefined) {
+    const stop = overlay.journal.entries.findIndex(
+      (entry) => entry.tag === options.through,
+    );
+    if (stop < 0) throw new Error(`no migration tagged ${options.through}`);
+    overlay.journal.entries = overlay.journal.entries.slice(0, stop + 1);
+    overlay.raw = JSON.stringify(overlay.journal);
+  }
   const prefix = overlay.journal.entries.slice(0, base.journal.entries.length);
   if (
     overlay.journal.entries.length < base.journal.entries.length ||
@@ -153,7 +169,24 @@ if (import.meta.main) {
    * Migrations are a single ordered conversation with the database, and a pool would let two
    * statements that must be ordered land on different connections.
    */
-  const migrationsFolder = await mergedMigrationsFolder();
+  /*
+   * Tests only (`NODE_ENV=test`): stop at the named migration, so a shell test can lay down a database
+   * the way an earlier release left it (`docker/tests/rebrand-superuser.test.sh` stands a v0.2.15
+   * volume up through 0239). Never honoured outside tests: a deployment always migrates to the end.
+   *
+   * Read through an alias, not `process.env.NODE_ENV` literally: the image bundles this script with
+   * `bun build --minify`, which replaces that exact expression with the build-time value, so the check
+   * would be decided when the image is built and the in-image shell tests could never pass `test`. The
+   * image sets NODE_ENV=production at run time, so deployments still never honour it.
+   */
+  const env = process.env;
+  const through =
+    env.NODE_ENV === "test"
+      ? env.XIONGBAO_TEST_MIGRATE_THROUGH?.trim() || undefined
+      : undefined;
+  const migrationsFolder = await mergedMigrationsFolder(
+    through ? { through } : {},
+  );
   const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
   try {
     await runMigrations(client, migrationsFolder);

@@ -40,11 +40,25 @@ export type ThreadIdentity = {
   owns: (threadId: string) => boolean;
 };
 
-function fingerprintOf(deploymentId: string): Buffer {
-  return createHash("sha256")
-    .update(deploymentId)
-    .digest()
-    .subarray(0, FINGERPRINT_BYTES);
+/**
+ * Which deployment, for the fingerprint: its name, or the SHA-256 digest of the name it went by
+ * before its package id was renamed (`deploymentNameOf`), which keeps the prefix where it was.
+ */
+export type DeploymentFingerprintSource = string | { digest: Buffer };
+
+/** The SHA-256 of a deployment name, the digest a thread id's fingerprint is cut from. */
+export function deploymentDigestOf(name: string): Buffer {
+  return createHash("sha256").update(name).digest();
+}
+
+function fingerprintOf(deployment: DeploymentFingerprintSource): Buffer {
+  const digest =
+    typeof deployment === "string"
+      ? deploymentDigestOf(deployment)
+      : deployment.digest;
+  if (digest.length < FINGERPRINT_BYTES)
+    throw new Error("a deployment digest is shorter than a thread fingerprint");
+  return Buffer.from(digest.subarray(0, FINGERPRINT_BYTES));
 }
 
 function format(bytes: Buffer): string {
@@ -66,8 +80,10 @@ function bytesOf(threadId: string): Buffer | null {
   return Buffer.from(threadId.replaceAll("-", ""), "hex");
 }
 
-export function createThreadIdentity(deploymentId: string): ThreadIdentity {
-  const fingerprint = fingerprintOf(deploymentId);
+export function createThreadIdentity(
+  deployment: DeploymentFingerprintSource,
+): ThreadIdentity {
+  const fingerprint = fingerprintOf(deployment);
 
   return {
     mint() {

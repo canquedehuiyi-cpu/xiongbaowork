@@ -52,7 +52,7 @@ DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你
 
 读 §2 的 `modelConfigured`：为 `false` 时，首页与对话框顶部出一条引导"先接入一个模型"，链到 `/resources` 的模型区
 （模型库 BYOK 已存在，spec H1）。同时确认供应商那句中文 `RUN_ERROR` 在转写里**显示出来**而不是被替换成
-"network error"——事件字段是 `{type:"RUN_ERROR", message, code:"OPENBOT_PROVIDER_REQUEST_REFUSED"}`，
+"network error"——事件字段是 `{type:"RUN_ERROR", message, code:"XIONGBAO_PROVIDER_REQUEST_REFUSED"}`，
 `message` 已经是给人看的中文，界面**原样渲染即可，不要再自己编一句**。
 
 ## 5. 冒烟：手工那遍已经跑过，脚本那遍还没落

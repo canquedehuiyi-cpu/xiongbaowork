@@ -92,7 +92,7 @@ const database = createDatabase(url);
 const asOperator = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 
 /*
- * TRUNCATE is not a data privilege. The role the application runs as (`openbot_app`) is granted
+ * TRUNCATE is not a data privilege. The role the application runs as (`xiongbao_app`) is granted
  * select, insert, update and delete and nothing else, so a wipe through it fails with
  * `permission denied for table …` — an error that reads like a broken ACL rather than like the wrong
  * key. Said here instead, because the fix is a different connection string, not a grant.
@@ -100,7 +100,7 @@ const asOperator = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 const [{ who }] = (await asOperator(() =>
   database.execute(sql.raw(`select current_user as who`)),
 )) as unknown as { who: string }[];
-if (who === "openbot_app") {
+if (who === "xiongbao_app") {
   console.error(
     `Refusing to reset as "${who}": that role holds data privileges only, and TRUNCATE is not one of them.\n` +
       "Connect as the database owner (the URL drizzle-kit migrates with) and run it again.",

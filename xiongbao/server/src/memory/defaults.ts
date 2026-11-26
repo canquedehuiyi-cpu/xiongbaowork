@@ -50,7 +50,7 @@ const MIN_INTERVAL_MS = 5 * 60_000;
 type Executor = Pick<Database, "execute" | "select" | "insert" | "delete">;
 
 const lockKey = (ownerUserId: string, agentId: string) =>
-  `openbot:defaults:${ownerUserId}:${agentId}`;
+  `xiongbao:defaults:${ownerUserId}:${agentId}`;
 
 /**
  * Take the per-person, per-Bot lock adoption and removal share, waiting for it. Removal uses this: a

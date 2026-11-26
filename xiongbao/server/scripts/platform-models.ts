@@ -4,11 +4,11 @@
  *
  *   bun scripts/platform-models.ts list
  *   bun scripts/platform-models.ts add --provider openai --model gpt-6-mini --label "体验模型" \
- *     --api-key-env OPENBOT_POOL_OPENAI [--base-url https://…] [--tiers free,pro]
+ *     --api-key-env XIONGBAO_POOL_OPENAI [--base-url https://…] [--tiers free,pro]
  *   bun scripts/platform-models.ts disable <id>
  *
  * THE KEY IS NEVER AN ARGUMENT. `--api-key-env` takes the NAME of a deployment environment variable
- * (OPENBOT_POOL_*), and the server reads the value from its own environment when a coworker speaks.
+ * (XIONGBAO_POOL_*), and the server reads the value from its own environment when a coworker speaks.
  * A key typed on a command line lands in shell history and in `ps`; this refuses `--api-key` and
  * anything else it does not know rather than quietly ignoring it.
  *
@@ -44,7 +44,7 @@ export type PlatformModelsCommand =
 const USAGE = [
   "Usage:",
   "  bun scripts/platform-models.ts list",
-  "  bun scripts/platform-models.ts add --provider P --model M --label L --api-key-env OPENBOT_POOL_NAME [--base-url URL] [--tiers free,pro]",
+  "  bun scripts/platform-models.ts add --provider P --model M --label L --api-key-env XIONGBAO_POOL_NAME [--base-url URL] [--tiers free,pro]",
   "  bun scripts/platform-models.ts disable <id>",
 ].join("\n");
 
@@ -85,7 +85,7 @@ export function parsePlatformModelsCommand(
     if (!ADD_FLAGS.has(flag)) {
       // Named without its value: `--api-key=sk-…` must not be echoed back into a terminal log.
       return {
-        error: `Unknown option ${flag.startsWith("--") ? flag : "(positional)"}. The key is never an argument: pass --api-key-env with the NAME of an OPENBOT_POOL_* variable.`,
+        error: `Unknown option ${flag.startsWith("--") ? flag : "(positional)"}. The key is never an argument: pass --api-key-env with the NAME of an XIONGBAO_POOL_* variable.`,
       };
     }
     let value: string | undefined;
@@ -114,7 +114,7 @@ export function parsePlatformModelsCommand(
   if (!PLATFORM_POOL_KEY_ENV.test(apiKeyEnv)) {
     return {
       error:
-        "--api-key-env must be the NAME of a variable matching OPENBOT_POOL_[A-Z0-9_]{1,64}, not a key.",
+        "--api-key-env must be the NAME of a variable matching XIONGBAO_POOL_[A-Z0-9_]{1,64}, not a key.",
     };
   }
   const baseUrl = values.get("--base-url") ?? null;

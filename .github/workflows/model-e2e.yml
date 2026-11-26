@@ -150,11 +150,11 @@ jobs:
       - name: Migrate the job's own database (ci.yml recipe)
         run: |
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_model_e2e bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
       - name: One bound-model call, reconciled against model_token_calls
         env:
           MODEL_E2E: "1"
-          DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/xiongbao_model_e2e
+          DATABASE_URL: postgres://xiongbao_app:e2e-app@127.0.0.1:5432/xiongbao_model_e2e
           MODEL_E2E_PROVIDER: deepseek
           MODEL_E2E_MODEL: ${{ vars.MODEL_E2E_MODEL || 'deepseek-chat' }}
           MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
@@ -196,15 +196,15 @@ jobs:
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_g4_real bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
       # No app build: the harness drives the API only, and the server serves no APP_DIST_DIR. The
       # server log stays on the runner (it is neither printed nor uploaded).
       - name: G4 WakerFlow lifecycle with a real model
         env:
           MODEL_E2E: "1"
-          E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/xiongbao_g4_real
-          E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/xiongbao_g4_real
+          E2E_DATABASE_URL: postgres://xiongbao_app:e2e-app@127.0.0.1:5432/xiongbao_g4_real
+          E2E_ROLE_WRITER_DATABASE_URL: postgres://xiongbao_role_writer:e2e-role-writer@127.0.0.1:5432/xiongbao_g4_real
           E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g4-real
           MODEL_E2E_MODEL: ${{ vars.MODEL_E2E_MODEL || 'deepseek-chat' }}
           MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
@@ -290,8 +290,8 @@ jobs:
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_employee_eval bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
       # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（360 分钟）早的截止时间，评测脚本在开始每一对（交付题是每一题）之前
       # 看还剩多少时间，来不及做完一对就不做，已完成的各对照常记录。留出十五分钟给装依赖、出报告和上传。
       - name: Record the wall-clock deadline for repeat pairs
@@ -328,8 +328,8 @@ jobs:
           EVAL_EMPLOYEE_USER: xbeval
           EVAL_COMPUTER_DIR: /opt/xbeval/agent-computer
           PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
-          E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/xiongbao_employee_eval
-          E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/xiongbao_employee_eval
+          E2E_DATABASE_URL: postgres://xiongbao_app:e2e-app@127.0.0.1:5432/xiongbao_employee_eval
+          E2E_ROLE_WRITER_DATABASE_URL: postgres://xiongbao_role_writer:e2e-role-writer@127.0.0.1:5432/xiongbao_employee_eval
         run: |
           status=0
           for path in ${EVAL_PATHS//,/ }; do
@@ -486,8 +486,8 @@ jobs:
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_capability_smoke bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
       - name: One minimal scenario per capability
         env:
           MODEL_E2E: "1"
@@ -504,8 +504,8 @@ jobs:
           # 同对标评测：员工的电脑以专用用户运行、读不到评测仓库。
           EVAL_EMPLOYEE_USER: xbeval
           EVAL_COMPUTER_DIR: /opt/xbeval/agent-computer
-          E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/xiongbao_capability_smoke
-          E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/xiongbao_capability_smoke
+          E2E_DATABASE_URL: postgres://xiongbao_app:e2e-app@127.0.0.1:5432/xiongbao_capability_smoke
+          E2E_ROLE_WRITER_DATABASE_URL: postgres://xiongbao_role_writer:e2e-role-writer@127.0.0.1:5432/xiongbao_capability_smoke
         run: bun scripts/e2e/employee-eval/run-xiongbao.ts
       - name: Step summary
         if: always()

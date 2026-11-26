@@ -7,8 +7,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { agentAuthHeaders } from "../src/agents/auth-header";
 import { createAuditStore } from "../src/audit";
-import type { AppVariables } from "../src/auth/guards";
 import { createAdminScope } from "../src/auth/admin-scope";
+import type { AppVariables } from "../src/auth/guards";
 import { createRoleRepository } from "../src/auth/guards";
 import {
   CredentialRefusedError,
@@ -42,7 +42,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  *
  * An administrator holding the capability adds a server and its token, both stamped `team`; a member's
  * Bot is granted the tool and calls it from the member's own frame, and the token reaches the call
- * through the `openbot_team_server_secret` broker, never by id: the member's frame cannot select the
+ * through the `xiongbao_team_server_secret` broker, never by id: the member's frame cannot select the
  * credential row, and `readSecret(id)` answers null there. A second administrator rotates the token
  * twice (R15). A member, or an administrator without the capability, cannot write a team server or a
  * team secret; the `system` frame sees no team server; a team-sealed envelope fails its tag once its
@@ -373,7 +373,7 @@ describe("an administrator's server is the team's, and its secret reaches a memb
     const brokered = Array.from(
       (await as(member, () =>
         database.execute(
-          sql`select id from public.openbot_team_server_secret(${serverId})`,
+          sql`select id from public.xiongbao_team_server_secret(${serverId})`,
         ),
       )) as unknown as ArrayLike<{ id: string }>,
     );
@@ -520,7 +520,7 @@ describe("only an administrator holding the capability writes a team server or i
       const rows = Array.from(
         (await runAsTenant(frame, () =>
           database.execute(
-            sql`select id from public.openbot_team_server_secret(${serverId})`,
+            sql`select id from public.xiongbao_team_server_secret(${serverId})`,
           ),
         )) as unknown as ArrayLike<{ id: string }>,
       );
@@ -650,7 +650,7 @@ describe("a grant carries its Bot's own stamp, so nobody can squat a Bot's grant
       (await as(stranger, () =>
         database.execute(
           sql`select to_regprocedure('public.openbot_grant_stamp_admissible(text,text)') is null as gone,
-                     has_function_privilege('public.openbot_grant_stamp_guard()', 'EXECUTE') as callable`,
+                     has_function_privilege('public.xiongbao_grant_stamp_guard()', 'EXECUTE') as callable`,
         ),
       )) as unknown as ArrayLike<{ gone: boolean; callable: boolean }>,
     );
