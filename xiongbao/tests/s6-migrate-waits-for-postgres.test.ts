@@ -93,27 +93,23 @@ test("migrate.sh waits for the embedded database before it migrates", () => {
   expect(statSync(WAIT).mode & 0o111).toBe(0o111);
 });
 
-test("migrate.sh runs the rename preflight once the database is ready and the migrator through its step runner", () => {
-  // The preflight itself (in-flight and space refusals, the backup, the failure marker) is tested
-  // against real PostgreSQL by docker/tests/rebrand-preflight.test.sh.
+test("migrate.sh checks the volume may be migrated once the database is ready, before the migrator", () => {
+  // The check itself (a volume v0.2.15 made, v0.2.16's unfinished rename) is tested against real
+  // PostgreSQL by docker/tests/upgrade-gate.test.sh and, in the boot's order, rebrand-superuser.test.sh.
   const migrate = readFileSync(join(SCRIPTS, "migrate.sh"), "utf8");
   const ready = migrate.indexOf("echo 'migrate: embedded PostgreSQL is ready'");
-  const check = migrate.indexOf('"$PREFLIGHT" check -h 127.0.0.1 ');
-  const step = migrate.indexOf('"$PREFLIGHT" step ');
+  const gate = migrate.indexOf(
+    '"$(dirname "$0")/upgrade-gate.sh" -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"',
+  );
   const migrates = migrate.indexOf("/usr/local/bin/bun scripts/migrate.ts");
   expect(ready).toBeGreaterThan(-1);
-  expect(check).toBeGreaterThan(ready);
-  expect(step).toBeGreaterThan(check);
-  expect(migrates).toBeGreaterThan(step);
-  // Nothing between the check and the step runner may reach the database on its own.
-  expect(migrate.slice(check, step)).not.toContain("psql");
-  // The in-progress record is cleared only after every other command: anything that fails before
-  // it makes the next boot resume instead of taking another backup.
-  const finish = migrate.indexOf('"$PREFLIGHT" finish');
-  expect(finish).toBeGreaterThan(migrate.lastIndexOf("psql"));
-  expect(migrate.slice(finish).trim()).toBe('"$PREFLIGHT" finish');
-  for (const script of ["rebrand-preflight.sh", "rebrand-restore.sh"])
-    expect(statSync(join(SCRIPTS, script)).mode & 0o111).toBe(0o111);
+  expect(gate).toBeGreaterThan(ready);
+  expect(migrates).toBeGreaterThan(gate);
+  // Nothing between the check and the migrator may reach the database on its own.
+  expect(migrate.slice(gate, migrates)).not.toContain("psql");
+  // The v0.2.16 upgrade's own rails are gone with the upgrade code.
+  expect(migrate).not.toContain("PREFLIGHT");
+  expect(statSync(join(SCRIPTS, "upgrade-gate.sh")).mode & 0o111).toBe(0o111);
 });
 
 test("migrate.sh renames the superuser and the database last, then writes the connection strings the API reads", () => {
@@ -122,27 +118,25 @@ test("migrate.sh renames the superuser and the database last, then writes the co
   const migrate = readFileSync(join(SCRIPTS, "migrate.sh"), "utf8");
   // The names this boot connects with come from the database, before anything else talks to it.
   const names = migrate.indexOf('"$SUPERUSER" names ');
-  const check = migrate.indexOf(
-    '"$PREFLIGHT" check -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"',
-  );
+  const gate = migrate.indexOf('"$(dirname "$0")/upgrade-gate.sh" ');
   expect(names).toBeGreaterThan(-1);
-  expect(check).toBeGreaterThan(names);
+  expect(gate).toBeGreaterThan(names);
   // The first ask is the readiness wait; a refusal waiting cannot change (exit 3) stops at once instead
   // of being reported as a database that never came up. Both are tested in rebrand-superuser.test.sh.
   expect(migrate).toContain('"$SUPERUSER" names --wait 30 ');
   expect(migrate).toMatch(/\n {2}3\) exit 1 ;;\n/);
   // After the migrations and the application roles' passwords: no other session on the database.
-  const rename = migrate.indexOf(
-    '"$PREFLIGHT" step 超级用户与库改名 数据库超级用户名与库名 -- \\\n  "$SUPERUSER" rename ',
-  );
+  const rename = migrate.indexOf('"$SUPERUSER" rename ');
   expect(rename).toBeGreaterThan(migrate.indexOf("scripts/migrate.ts"));
   expect(rename).toBeGreaterThan(migrate.lastIndexOf("psql"));
-  // Then the strings, under the names the database answers to after it, and then finish.
+  // Then the strings, under the names the database answers to after it, last.
   const urls = migrate.indexOf('"$(dirname "$0")/database-urls.sh" ');
   expect(urls).toBeGreaterThan(rename);
   expect(migrate.lastIndexOf('"$SUPERUSER" names ')).toBeGreaterThan(rename);
   expect(migrate.lastIndexOf('"$SUPERUSER" names ')).toBeLessThan(urls);
-  expect(migrate.indexOf('"$PREFLIGHT" finish')).toBeGreaterThan(urls);
+  expect(migrate.trim().split("\n").at(-1)).toStartWith(
+    '"$(dirname "$0")/database-urls.sh" ',
+  );
   // migrate.sh no longer reads an owner URL postgres-init wrote with names it could not know yet.
   expect(migrate).not.toContain("MIGRATION_DATABASE_URL");
   const init = readFileSync(join(SCRIPTS, "postgres-init.sh"), "utf8");

@@ -25,24 +25,9 @@
     "lines": 4
   },
   {
-    "rule": "env-name",
-    "scope": "desktop-device/src-tauri",
-    "lines": 5
-  },
-  {
     "rule": "identifier",
     "scope": "app/src",
     "lines": 20
-  },
-  {
-    "rule": "identifier",
-    "scope": "docker/compose.delivery.yml",
-    "lines": 1
-  },
-  {
-    "rule": "identifier",
-    "scope": "docker/delivery.env.example",
-    "lines": 1
   },
   {
     "rule": "identifier",
@@ -56,42 +41,12 @@
   },
   {
     "rule": "identifier",
-    "scope": "shared/person-time-zone.ts",
-    "lines": 1
-  },
-  {
-    "rule": "identifier",
-    "scope": "shared/waiting.ts",
-    "lines": 1
-  },
-  {
-    "rule": "identifier",
     "scope": "toolkit/src",
-    "lines": 18
+    "lines": 17
   },
   {
     "rule": "mit-attribution",
     "scope": "desktop-device/src-tauri",
-    "lines": 1
-  },
-  {
-    "rule": "never-change",
-    "scope": "server/src",
-    "lines": 3
-  },
-  {
-    "rule": "never-change",
-    "scope": "shared/app-access-request.ts",
-    "lines": 1
-  },
-  {
-    "rule": "never-change",
-    "scope": "toolkit/src",
-    "lines": 1
-  },
-  {
-    "rule": "wire-dom",
-    "scope": "server/src",
     "lines": 1
   }
 ]

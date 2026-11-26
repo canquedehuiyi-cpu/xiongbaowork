@@ -103,15 +103,13 @@ if [ "$healthy" = true ]; then
   # The second boot of a renamed volume finds it renamed and keeps it so.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, current_database()"')" = 'xiongbao|xiongbao'
   # All four names are new after the first boot (the application roles by migration 0240, the superuser
-  # and database by the rename step), so the second boot has nothing to rename and backs nothing up.
+  # and database by the rename step), so the second boot has nothing to rename.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_roles where rolname in ('"'"'xiongbao_app'"'"', '"'"'xiongbao_role_writer'"'"')"')" = 2
-  check docker exec "$name" sh -c 'test -z "$(ls /var/lib/postgresql/backup 2>/dev/null | grep "^pre-rebrand-")"'
   docker logs "$name" > "$evidence/recreated.log" 2>&1
   check test "$(grep -ac 'rls-not-enforced\|rls-role-check-unavailable' "$evidence/recreated.log" || true)" = 0
-  # Credentials are sealed under kid k2 from the first boot, so no credential is left under k1 and neither
-  # boot had any to rekey (the v0.2.16 rekey prints a line only when it rewrites rows).
+  # Credentials are sealed under kid k2 from the first boot, so none is under the kid before v0.2.16 (which
+  # the migrator would refuse on the next start).
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from credentials where encrypted_value::jsonb ->> '"'"'kid'"'"' = '"'"'k1'"'"'"')" = 0
-  check test "$(cat "$evidence/initial.log" "$evidence/recreated.log" | grep -ac 'credentials-rekeyed' || true)" = 0
   # The history rewrite (recovery 0241, stamped 1795165000000) ran once, with the first boot's migrations; the
   # second boot found no migration left to apply, so nothing it rewrites is touched again.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations where created_at = 1795165000000"')" = 1

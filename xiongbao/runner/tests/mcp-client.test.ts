@@ -399,7 +399,7 @@ test("launchSpec: a bundled entry starts the bundled runtime with x --bun on win
     runtime: "bundled" as const,
   };
   const runtime = {
-    command: "C:\\Device\\openbot-runner.exe",
+    command: "C:\\Device\\xiongbao-runner.exe",
     prefix: ["x", "--bun"],
     env: { BUN_BE_BUN: "1" },
   };
@@ -413,7 +413,7 @@ test("launchSpec: a bundled entry starts the bundled runtime with x --bun on win
       () => runtime,
     );
     expect(spec).toEqual({
-      command: "C:\\Device\\openbot-runner.exe",
+      command: "C:\\Device\\xiongbao-runner.exe",
       args: ["x", "--bun", "@scope/server", "a b"],
       env: { BUN_BE_BUN: "1" },
     });

@@ -53,18 +53,9 @@ export { XIONGBAO_WAITING_METADATA };
  */
 export const HEADLESS_WAITING_EVENT = "xiongbao.headless.waiting";
 
-/**
- * The event's name before v0.2.16. The v0.2.16 migration rewrites stored runs to the name above
- * (recovery 0241); this is read, never written.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export const LEGACY_HEADLESS_WAITING_EVENT = "openbot.headless.waiting";
-
-/** Whether a CUSTOM event's name is the waiting event, by either name. */
+/** Whether a CUSTOM event's name is the waiting event. */
 export function isHeadlessWaitingEvent(name: unknown): boolean {
-  return (
-    name === HEADLESS_WAITING_EVENT || name === LEGACY_HEADLESS_WAITING_EVENT
-  );
+  return name === HEADLESS_WAITING_EVENT;
 }
 
 export type HeadlessWaiting = {

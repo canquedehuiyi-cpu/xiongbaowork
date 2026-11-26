@@ -122,21 +122,6 @@ test("Helm plan pins the chart and images while leaving customer values separate
   );
   expect(f.calls).toHaveLength(0);
 });
-/*
- * The installed manifest was accepted before v0.2.16, which named the GHCR image under the key it had then.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("an installed manifest from before v0.2.16 still names the image it runs", async () => {
-  const f = fixture();
-  const { ghcr, ...rest } = f.options.current.artifacts.images;
-  f.options.current.artifacts.images = {
-    ...rest,
-    openbot: ghcr ?? { reference: "" },
-  };
-  const plan = await planKubernetesPromotion(f.options);
-  expect(plan.allowed).toBe(true);
-  expect(plan.values.image.digest).toBe(`sha256:${"b".repeat(64)}`);
-});
 test("wrong chart checksum and missing backup block promotion before cluster mutation", async () => {
   const f = fixture();
   writeFileSync(f.options.chart, "corrupted");

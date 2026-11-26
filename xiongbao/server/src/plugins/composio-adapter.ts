@@ -2407,9 +2407,10 @@ export type ComposioVendor = {
  * again would create the second config this provenance exists to prevent. Renaming `englishName`
  * later would orphan configs made under the earlier non-legacy suffix: only this one is remembered.
  *
- * The configs live in the deployment's Composio project, which no migration here can reach. Before this goes, an
- * operator renames any config still ending in it to the current suffix in Composio's dashboard.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ * The configs live in the deployment's Composio project, which no migration here can reach, so this stays past the
+ * v0.2.17 clean-up (the rename's protect list keeps it until the move to the new repository, R5). Before it goes, an
+ * operator renames every config still ending in it to the current suffix in Composio's dashboard; only then can
+ * this constant and the tests that spell it be deleted.
  */
 const LEGACY_CONFIG_SUFFIX = "(OpenBot)";
 

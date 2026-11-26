@@ -1,7 +1,6 @@
 import type { Message } from "@ag-ui/core";
 import { MessageSchema } from "@ag-ui/core/schemas";
 import { tryClient } from "@/lib/client";
-import { withCurrentCatalogId } from "./a2ui-catalog-id";
 
 /**
  * The messages a thread already holds, for restoring a conversation somebody comes back to.
@@ -81,10 +80,8 @@ export function readableTurns(stored: readonly unknown[]): StoredThread {
   let unreadable = 0;
 
   for (const turn of stored) {
-    const candidate = withCurrentCatalogId(
-      withCurrentA2uiVersion(
-        withNormalisedToolCalls(withoutNullAssistantContent(turn)),
-      ),
+    const candidate = withCurrentA2uiVersion(
+      withNormalisedToolCalls(withoutNullAssistantContent(turn)),
     );
     if (MessageSchema.safeParse(candidate).success) {
       messages.push(candidate as Message);
@@ -171,16 +168,14 @@ function isStoredA2uiVersion(
 }
 
 /**
- * {@link withCurrentA2uiVersion} (and the catalog's current id, `withCurrentCatalogId`) over a
+ * {@link withCurrentA2uiVersion} over a
  * transcript that reached the browser some other way than this reader: the gateway's snapshot when a
  * conversation is joined. The same array when nothing changed.
  */
 export function withCurrentA2uiVersions(messages: Message[]): Message[] {
   let changed = false;
   const current = messages.map((message) => {
-    const translated = withCurrentCatalogId(
-      withCurrentA2uiVersion(message),
-    ) as Message;
+    const translated = withCurrentA2uiVersion(message) as Message;
     if (translated !== message) changed = true;
     return translated;
   });

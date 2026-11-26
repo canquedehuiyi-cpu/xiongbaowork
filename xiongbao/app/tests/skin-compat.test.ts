@@ -11,34 +11,31 @@ import {
   SKIN_STORAGE_KEY,
 } from "../src/skins/store";
 
-describe("the default skin's old name", () => {
+describe("a skin name this build does not ship", () => {
   test("the default is xiongbao", () => {
     expect(DEFAULT_SKIN).toBe("xiongbao");
-    expect(SKIN_IDS).not.toContain("openbot");
   });
 
-  test("normalizeSkinId falls back to the default for a name it does not ship, the old default among them", () => {
-    // The window of the old name closed: it is no longer translated, it is simply unknown, and an
-    // unknown name draws the default. The account's stored value is unchanged until the person picks a skin.
-    expect(normalizeSkinId("openbot")).toBe("xiongbao");
+  test("normalizeSkinId falls back to the default for a name it does not ship", () => {
+    // The default's name before the rename is one of those: no longer translated, simply unknown, and
+    // an unknown name draws the default. The account's stored value is unchanged until the person picks a skin.
     for (const id of SKIN_IDS) expect(normalizeSkinId(id)).toBe(id);
     expect(normalizeSkinId("retired-skin")).toBe(DEFAULT_SKIN);
     expect(normalizeSkinId("")).toBe(DEFAULT_SKIN);
   });
 
-  test("the old name is no longer accepted as input, and an unknown one is not either", () => {
-    expect(isKnownSkinInput("openbot")).toBe(false);
+  test("an unknown name is not accepted as input", () => {
     expect(isKnownSkinInput("xiongbao")).toBe(true);
     expect(isKnownSkinInput("retired-skin")).toBe(false);
     expect(isKnownSkinInput(null)).toBe(false);
   });
 
-  test("a browser cache holding the old name draws the default, clears the attribute and is rewritten to the new name", () => {
-    expect(parseStoredSkin("openbot")).toBe("xiongbao");
+  test("a browser cache holding an unknown name draws the default, clears the attribute and is rewritten to the default", () => {
+    expect(parseStoredSkin("retired-skin")).toBe("xiongbao");
     const roots: Array<string | null> = [];
     const stored: Array<[string, string]> = [];
     expect(
-      reconcileSkin("openbot", {
+      reconcileSkin("retired-skin", {
         setRootSkin: (id) => roots.push(id),
         setStoredValue: (key, value) => stored.push([key, value]),
       }),

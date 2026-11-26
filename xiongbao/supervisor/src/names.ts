@@ -28,13 +28,6 @@ const ALLOWED = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  */
 export const DEFAULT_NAMESPACE = "xiongbao";
 
-/**
- * The default before v0.2.16. A container or volume made before the namespace label existed belongs to it, and
- * a host that has only computers under it keeps using it (see {@link namespaceForHost}).
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export const LEGACY_DEFAULT_NAMESPACE = "openbot";
-
 /** `COMPUTER_NAMESPACE` when the deployment sets one, checked; undefined when it leaves it to the host. */
 export const CONFIGURED_NAMESPACE = (() => {
   const configured = process.env.COMPUTER_NAMESPACE?.trim();
@@ -47,57 +40,8 @@ export const CONFIGURED_NAMESPACE = (() => {
   return configured;
 })();
 
-/**
- * The namespace every name and label here is derived from. The configured one, or until the supervisor has looked
- * at the host (docker.ts resolveNamespace, through {@link useNamespace}) the default.
- */
-export let NAMESPACE: string = CONFIGURED_NAMESPACE ?? DEFAULT_NAMESPACE;
-
-/** Settle the namespace once the host has been looked at. Only for a deployment that configured none. */
-export function useNamespace(namespace: string): void {
-  NAMESPACE = namespace;
-}
-
-/**
- * Which namespace a deployment that configured none uses, from the labels of the containers and volumes on the
- * host that carry the owner label.
- *
- * Before v0.2.16 the default was {@link LEGACY_DEFAULT_NAMESPACE}, and a host upgraded from then holds its people's
- * browser logins and files in volumes named for it. Taking the new default there would derive new names, start every
- * computer on new empty volumes, and leave the old ones unused: nothing deleted, but every login and file gone from
- * where anybody looks. So:
- *
- * - computers only under the earlier default (its label, or no namespace label at all, which was that default): keep
- *   using it;
- * - none at all, or only under the new default: the new default;
- * - both: the new default. Only this version writes the new one, so its computers are the ones used since the
- *   upgrade, and they stay where they are; the earlier ones stay untouched on the host, and setting
- *   `COMPUTER_NAMESPACE` to the earlier default brings them back. Either way nothing is removed.
- *
- * Containers and volumes of other namespaces (another deployment on the host) count for neither.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export function namespaceForHost(
-  owned: readonly (Record<string, string> | undefined)[],
-): { namespace: string; earlier: number; current: number } {
-  let earlier = 0;
-  let current = 0;
-  for (const labels of owned) {
-    if (labelOf(labels, OWNER_LABEL) !== "true") continue;
-    const namespace =
-      labelOf(labels, NAMESPACE_LABEL) ?? LEGACY_DEFAULT_NAMESPACE;
-    if (namespace === LEGACY_DEFAULT_NAMESPACE) earlier += 1;
-    else if (namespace === DEFAULT_NAMESPACE) current += 1;
-  }
-  return {
-    namespace:
-      earlier > 0 && current === 0
-        ? LEGACY_DEFAULT_NAMESPACE
-        : DEFAULT_NAMESPACE,
-    earlier,
-    current,
-  };
-}
+/** The namespace every name and label here is derived from: the configured one, or the default. */
+export const NAMESPACE: string = CONFIGURED_NAMESPACE ?? DEFAULT_NAMESPACE;
 
 /**
  * Whose computer it is.
@@ -153,28 +97,12 @@ export const KIND_LABEL = "xiongbao.computer-kind";
 /** The label holding the deployment a container belongs to. */
 export const NAMESPACE_LABEL = "xiongbao.namespace";
 
-/**
- * The prefix every label above had before v0.2.16. Containers and volumes on a host keep the labels they were
- * made with (a volume's can never change), so each label is read under either prefix and written under the
- * current one: see {@link labelOf}.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-const LEGACY_LABEL_PREFIX = "openbot.";
-const LABEL_PREFIX = "xiongbao.";
-
-/** The same label under the prefix it had before v0.2.16. */
-export function legacyLabel(label: string): string {
-  return label.startsWith(LABEL_PREFIX)
-    ? `${LEGACY_LABEL_PREFIX}${label.slice(LABEL_PREFIX.length)}`
-    : label;
-}
-
-/** A label's value on a container or volume, under the current prefix or, made before v0.2.16, the earlier one. */
+/** A label's value on a container or volume. */
 export function labelOf(
   labels: Record<string, string> | undefined,
   label: string,
 ): string | undefined {
-  return labels?.[label] ?? labels?.[legacyLabel(label)];
+  return labels?.[label];
 }
 
 /** A person or Bot id, checked before it becomes any part of a name. */

@@ -10,16 +10,8 @@ import { SQL } from "bun";
  */
 let cachedTestDatabaseUrl: string | undefined;
 
-/**
- * The names the live development database goes by, both refused: installs made so far carry the
- * first, and the compose file and the production rename move to the second at different times, so
- * either one can be somebody's real data while the move is under way.
- */
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-const LIVE_DATABASE_NAMES: ReadonlySet<string> = new Set([
-  "openbot",
-  "xiongbao",
-]);
+/** The name the live development database goes by, refused. */
+const LIVE_DATABASE_NAMES: ReadonlySet<string> = new Set(["xiongbao"]);
 
 export function testDatabaseUrl() {
   cachedTestDatabaseUrl ??= testDatabaseUrlFrom(process.env);

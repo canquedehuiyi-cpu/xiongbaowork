@@ -40,10 +40,10 @@ describe("renameText", () => {
     );
   });
 
-  test("环境变量名在 R1 受保护，签名域名不被误改", () => {
+  test("环境变量名在 R1 受保护，同一行的别的写法照改", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", p)).toBe("OPENBOT_PUBLIC_URL");
-    expect(renameText('".openbot-release.json", openbotRoot', p)).toBe(
-      '".openbot-release.json", xiongbaoRoot',
+    expect(renameText('"OPENBOT_RELEASE", openbotRoot', p)).toBe(
+      '"OPENBOT_RELEASE", xiongbaoRoot',
     );
   });
 
@@ -373,26 +373,29 @@ describe("保护清单按阶段到期", () => {
     expect(buildProtect([], "R1").test("anything")).toBe(false);
   });
 
-  test("真实清单：环境变量在 R1 受保护、R2 起改名；本机状态文件名到 R3 才改", () => {
+  test("真实清单：环境变量在 R1 受保护、R2 起改名；until R5 的条目到 R4 仍受保护", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R1"))).toBe(
       "OPENBOT_PUBLIC_URL",
     );
     expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R2"))).toBe(
       "XIONGBAO_PUBLIC_URL",
     );
-    const domain = '".openbot-release.json"';
-    expect(renameText(domain, loadProtect("R2"))).toBe(domain);
-    expect(renameText(domain, loadProtect("R3"))).toBe(
-      '".xiongbao-release.json"',
+    const refusal = 'OLD_PREFIX = "OPENBOT_"';
+    for (const phase of ["R1", "R4"] as const)
+      expect(
+        renameText(refusal, loadProtect(phase, "xiongbao/shared/env-name.ts")),
+      ).toBe(refusal);
+    expect(renameText(refusal, loadProtect("R4"))).toBe(
+      'OLD_PREFIX = "XIONGBAO_"',
     );
     const copyright = "Copyright (c) 2026 CopilotKit";
     expect(renameText(copyright, loadProtect("R4"))).toBe(copyright);
   });
 
   test("每个条目的 until 与 reason 合法，pattern 能编译", () => {
-    const phases = new Set(["R1", "R2", "R3", "R4", "forever"]);
+    const phases = new Set(["R1", "R2", "R3", "R4", "R5", "forever"]);
     for (const entry of readProtectEntries()) {
-      expect(phases.has(entry.until as Phase | "forever")).toBe(true);
+      expect(phases.has(entry.until)).toBe(true);
       expect(entry.reason.length).toBeGreaterThan(0);
       expect(Boolean(entry.text) !== Boolean(entry.pattern)).toBe(true);
       if (entry.pattern)

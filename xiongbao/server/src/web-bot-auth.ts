@@ -7,7 +7,7 @@ import {
 import { component, createSignature } from "http-message-sig";
 import { generateNonce, HTTP_MESSAGE_SIGNATURES_DIRECTORY } from "web-bot-auth";
 import { signerFromJWK } from "web-bot-auth/crypto";
-import { envName } from "../../shared/env-aliases";
+import { envName } from "../../shared/env-name";
 
 /**
  * Web Bot Auth: a Bot's browser says, cryptographically, which deployment it browses for.

@@ -4,7 +4,7 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { applyEnvironmentAliases } from "@xiongbao/shared/env-aliases";
+import { refuseOldSettingNames } from "@xiongbao/shared/env-name";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import { appListenHosts, isLoopbackHost } from "@xiongbao/shared/this-machine";
 import { defineConfig, loadEnv, type Plugin } from "vite";
@@ -79,17 +79,15 @@ if (!apiPort.ok) {
 }
 
 /**
- * Whether the deployment names an address beyond this machine, read the way the server reads it:
- * through the alias step on a copy, because this process never runs the server's entry, so a `.env`
- * that still says OPENBOT_PUBLIC_URL or OPENBOT_APP_URL counts too.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ * Whether the deployment names an address beyond this machine, read the way the server reads it. This
+ * process never runs the server's entry, so a `.env` that still sets a setting only under its name
+ * before v0.2.16 is refused here, as the server refuses it, rather than read as unset.
  */
 export function answersBeyondThisMachine(
   environment: Record<string, string | undefined>,
 ): boolean {
-  const aliased = { ...environment };
-  applyEnvironmentAliases(aliased);
-  return appListenHosts(aliased)[0] === "::";
+  refuseOldSettingNames(environment);
+  return appListenHosts(environment)[0] === "::";
 }
 
 /**

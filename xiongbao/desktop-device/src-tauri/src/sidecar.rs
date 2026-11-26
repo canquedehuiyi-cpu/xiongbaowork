@@ -21,222 +21,6 @@ pub const SIDECAR: &str = "xiongbao-runner";
 /// runner reads the desktop through it on macOS and Linux (and on Windows when asked for).
 pub const AGENT_DESKTOP: &str = "agent-desktop";
 
-/// What earlier releases called the sidecar. An app that crashed (or was upgraded in place while
-/// running) can leave one of these alive in the install directory, still holding the runner's data
-/// directory, so the first start of this version stops it.
-pub const LEGACY_SIDECAR: &str = "openbot-runner";
-
-/// A path as comparable text: Windows' `\\?\` verbatim prefix dropped (`canonicalize` adds it, WMI
-/// does not), separators unified, no trailing slash, and a drive-letter path lower-cased because
-/// Windows paths are case-insensitive. Text rather than `Path` so the Windows forms can be tested,
-/// and behave the same, on every platform.
-fn comparable(path: &str) -> String {
-    let path = path.strip_prefix(r"\\?\").unwrap_or(path);
-    let mut text = path.replace('\\', "/");
-    while text.len() > 1 && text.ends_with('/') {
-        text.pop();
-    }
-    let drive = text.as_bytes().get(1) == Some(&b':') && text.as_bytes()[0].is_ascii_alphabetic();
-    if drive {
-        text.make_ascii_lowercase();
-    }
-    text
-}
-
-/// Pids among `processes` (`pid`, executable path) that are a leftover legacy runner of *this* app:
-/// named exactly `openbot-runner` (+ the platform suffix) and living directly in `install_dir`.
-/// A same-named program anywhere else is somebody else's and is left alone.
-pub fn legacy_runner_pids(
-    processes: &[(u32, PathBuf)],
-    install_dir: &Path,
-    exe_suffix: &str,
-) -> Vec<u32> {
-    let wanted = comparable(&format!("{LEGACY_SIDECAR}{exe_suffix}"));
-    let dir = comparable(&install_dir.to_string_lossy());
-    processes
-        .iter()
-        .filter(|(_, exe)| {
-            // Linux reports an executable replaced by a package upgrade as "<path> (deleted)",
-            // which is exactly the orphan this is looking for.
-            let text = exe.to_string_lossy();
-            let text = text.strip_suffix(" (deleted)").unwrap_or(&text);
-            let full = comparable(text);
-            let Some((parent, name)) = full.rsplit_once('/') else {
-                return false;
-            };
-            // `wanted` is already lower-case-safe for the .exe case: compare ignoring case only
-            // for drive-letter (Windows) paths, which `comparable` lower-cased.
-            let name_matches = if parent.as_bytes().get(1) == Some(&b':') {
-                name.eq_ignore_ascii_case(&wanted)
-            } else {
-                name == wanted
-            };
-            name_matches && parent == dir
-        })
-        .map(|(pid, _)| *pid)
-        .collect()
-}
-
-/// `command`'s stdout, or None if it fails or has not finished within `limit` (then it is killed).
-/// The process listing must not be able to hang the supervisor thread that `stop()` waits for.
-#[cfg(any(target_os = "macos", windows))]
-fn stdout_within(mut command: Command, limit: std::time::Duration) -> Option<String> {
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    let mut pipe = child.stdout.take()?;
-    let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = pipe.read_to_end(&mut bytes);
-        bytes
-    });
-    let until = std::time::Instant::now() + limit;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let bytes = reader.join().ok()?;
-                return status
-                    .success()
-                    .then(|| String::from_utf8_lossy(&bytes).into_owned());
-            }
-            Ok(None) if std::time::Instant::now() < until => {
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-        }
-    }
-}
-
-#[cfg(any(target_os = "macos", windows))]
-const LISTING_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
-
-/// `(pid, executable path)` of every process this user can inspect. Best effort: empty if the
-/// platform tool is missing, which only means a stale runner is not found.
-fn running_executables() -> Vec<(u32, PathBuf)> {
-    #[cfg(target_os = "linux")]
-    {
-        let Ok(entries) = std::fs::read_dir("/proc") else {
-            return Vec::new();
-        };
-        entries
-            .flatten()
-            .filter_map(|entry| {
-                let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
-                Some((pid, std::fs::read_link(entry.path().join("exe")).ok()?))
-            })
-            .collect()
-    }
-    #[cfg(target_os = "macos")]
-    {
-        // On macOS `comm` is the full executable path.
-        let mut ps = Command::new("ps");
-        ps.args(["-A", "-o", "pid=", "-o", "comm="]);
-        let Some(text) = stdout_within(ps, LISTING_LIMIT) else {
-            return Vec::new();
-        };
-        text.lines()
-            .filter_map(|line| {
-                let (pid, path) = line.trim_start().split_once(' ')?;
-                Some((pid.parse().ok()?, PathBuf::from(path.trim())))
-            })
-            .collect()
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let filter = format!("Name = '{LEGACY_SIDECAR}.exe'");
-        let mut powershell = Command::new("powershell");
-        powershell
-            .args(["-NoProfile", "-NonInteractive", "-Command"])
-            .arg(format!(
-                "Get-CimInstance Win32_Process -Filter \"{filter}\" | ForEach-Object {{ \"$($_.ProcessId) $($_.ExecutablePath)\" }}"
-            ))
-            .creation_flags(CREATE_NO_WINDOW);
-        let Some(text) = stdout_within(powershell, LISTING_LIMIT) else {
-            return Vec::new();
-        };
-        text.lines()
-            .filter_map(|line| {
-                let (pid, path) = line.trim().split_once(' ')?;
-                Some((pid.parse().ok()?, PathBuf::from(path.trim())))
-            })
-            .collect()
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
-    {
-        Vec::new()
-    }
-}
-
-/// Whether a legacy runner of this install could be running, so the process table is worth listing.
-/// Windows cannot delete a running executable, so with no `openbot-runner.exe` in the install
-/// directory none of this install's is running, and the slow WMI query is skipped. Unix can: a
-/// package upgrade unlinks the old file while it runs (the " (deleted)" orphan above), so there a
-/// missing file proves nothing and the listing, a cheap one, always runs.
-pub fn legacy_runner_possible(
-    legacy_file_exists: bool,
-    running_files_can_be_removed: bool,
-) -> bool {
-    legacy_file_exists || running_files_can_be_removed
-}
-
-/// Stop a runner left over from before the rename, if one is running from this app's install
-/// directory. Runs once per app process: an orphan from before the upgrade can only exist at the
-/// first start, and later restarts must not pay for (or hang on) a process listing.
-pub fn stop_legacy_runners() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(stop_legacy_runners_now);
-}
-
-fn stop_legacy_runners_now() {
-    let Ok(exe) = std::env::current_exe() else {
-        return;
-    };
-    let Some(dir) = exe.parent() else { return };
-    let dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-    let legacy_file = dir.join(format!("{LEGACY_SIDECAR}{}", std::env::consts::EXE_SUFFIX));
-    if !legacy_runner_possible(legacy_file.exists(), !cfg!(windows)) {
-        return;
-    }
-    for pid in legacy_runner_pids(&running_executables(), &dir, std::env::consts::EXE_SUFFIX) {
-        #[cfg(unix)]
-        {
-            // SAFETY: kill only sends a signal; a pid that is gone is an ESRCH, which is the goal.
-            unsafe {
-                libc::kill(pid as libc::pid_t, libc::SIGTERM);
-            }
-            // Signal 0 only checks that the process is still there.
-            let alive = || unsafe { libc::kill(pid as libc::pid_t, 0) } == 0;
-            for _ in 0..40 {
-                if !alive() {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            // Only if it ignored SIGTERM: a pid that is gone may already belong to someone else.
-            if alive() {
-                unsafe {
-                    libc::kill(pid as libc::pid_t, libc::SIGKILL);
-                }
-            }
-        }
-        #[cfg(windows)]
-        {
-            let _ = Command::new("taskkill")
-                .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .output();
-        }
-    }
-}
-
 /// What this app remembers about a pairing. Not the token: that is the runner's, in its data dir.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -339,16 +123,14 @@ pub fn runner_args(
     args
 }
 
-/// The desktop engine this machine asks for, as `--desktop-engine`: `XIONGBAO_DESKTOP_ENGINE`, or
-/// else `OPENBOT_DESKTOP_ENGINE`, passed on exactly as set. The runner decides what the name means
-/// and refuses one it does not know; the app does not guess. A variable that is empty (or only
-/// spaces), as `setx XIONGBAO_DESKTOP_ENGINE ""` leaves it, counts as not set. Neither set: no flag,
-/// and the runner keeps its own default for the platform.
+/// The desktop engine this machine asks for, as `--desktop-engine`: `XIONGBAO_DESKTOP_ENGINE`,
+/// passed on exactly as set. The runner decides what the name means and refuses one it does not
+/// know; the app does not guess. A variable that is empty (or only spaces), as
+/// `setx XIONGBAO_DESKTOP_ENGINE ""` leaves it, counts as not set. Not set: no flag, and the runner
+/// keeps its own default for the platform.
 pub fn desktop_engine_args(env: &dyn Fn(&str) -> Option<OsString>) -> Vec<OsString> {
-    ["XIONGBAO_DESKTOP_ENGINE", "OPENBOT_DESKTOP_ENGINE"]
-        .iter()
-        .filter_map(|name| env(name))
-        .find(|value| !value.to_string_lossy().trim().is_empty())
+    env("XIONGBAO_DESKTOP_ENGINE")
+        .filter(|value| !value.to_string_lossy().trim().is_empty())
         .map(|engine| vec!["--desktop-engine".into(), engine])
         .unwrap_or_default()
 }
@@ -401,40 +183,28 @@ pub fn detect_browser(candidates: &[PathBuf], exists: &dyn Fn(&Path) -> bool) ->
     candidates.iter().find(|path| exists(path)).cloned()
 }
 
-/// A development override from the environment: the `new` name, and only when it is not set the
-/// `legacy` one (the name before the rename, still read so an existing shell setup keeps working).
-fn dev_override(new: &str, legacy: &str) -> Option<OsString> {
-    dev_override_in(&|name| std::env::var_os(name), new, legacy)
+/// A development override from the environment.
+fn dev_override(name: &str) -> Option<OsString> {
+    dev_override_in(&|name| std::env::var_os(name), name)
 }
 
 /// `dev_override` against any environment. An empty value counts as not set, as a cleared
-/// `setx NAME ""` leaves it, so an empty new name falls back to the old one.
-fn dev_override_in(
-    env: &dyn Fn(&str) -> Option<OsString>,
-    new: &str,
-    legacy: &str,
-) -> Option<OsString> {
-    [new, legacy]
-        .iter()
-        .filter_map(|name| env(name))
-        .find(|value| !value.is_empty())
+/// `setx NAME ""` leaves it.
+fn dev_override_in(env: &dyn Fn(&str) -> Option<OsString>, name: &str) -> Option<OsString> {
+    env(name).filter(|value| !value.is_empty())
 }
 
-/// The development override names, new then old, for the runner and for the desktop helper.
-const RUNNER_BINARY_VARS: (&str, &str) = ("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY");
-const AGENT_DESKTOP_BINARY_VARS: (&str, &str) = (
-    "XIONGBAO_AGENT_DESKTOP_BINARY",
-    "OPENBOT_AGENT_DESKTOP_BINARY",
-);
+/// The development override names, for the runner and for the desktop helper.
+const RUNNER_BINARY_VAR: &str = "XIONGBAO_RUNNER_BINARY";
+const AGENT_DESKTOP_BINARY_VAR: &str = "XIONGBAO_AGENT_DESKTOP_BINARY";
 
 /// The sidecar next to this executable, where Tauri's `externalBin` puts it in every bundle.
 ///
-/// A debug build also honours `XIONGBAO_RUNNER_BINARY` (or else the old `OPENBOT_RUNNER_BINARY`),
-/// so the shell can be run with `cargo run` against a runner compiled by `scripts/build-sidecar.ts`
+/// A debug build also honours `XIONGBAO_RUNNER_BINARY`, so the shell can be run with `cargo run` against a runner compiled by `scripts/build-sidecar.ts`
 /// without bundling.
 pub fn sidecar_path() -> io::Result<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(path) = dev_override(RUNNER_BINARY_VARS.0, RUNNER_BINARY_VARS.1) {
+        if let Some(path) = dev_override(RUNNER_BINARY_VAR) {
             return Ok(PathBuf::from(path));
         }
     }
@@ -447,12 +217,11 @@ pub fn sidecar_path() -> io::Result<PathBuf> {
 
 /// The desktop helper next to this executable, where the sidecar is.
 ///
-/// A debug build also honours `XIONGBAO_AGENT_DESKTOP_BINARY` (or else the old
-/// `OPENBOT_AGENT_DESKTOP_BINARY`), as `sidecar_path` does `XIONGBAO_RUNNER_BINARY`. Whether the
-/// file is there is found out by the runner, when a desktop action first needs it.
+/// A debug build also honours `XIONGBAO_AGENT_DESKTOP_BINARY`, as `sidecar_path` does
+/// `XIONGBAO_RUNNER_BINARY`. Whether the file is there is found out by the runner, when a desktop action first needs it.
 pub fn agent_desktop_path() -> io::Result<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(path) = dev_override(AGENT_DESKTOP_BINARY_VARS.0, AGENT_DESKTOP_BINARY_VARS.1) {
+        if let Some(path) = dev_override(AGENT_DESKTOP_BINARY_VAR) {
             return Ok(PathBuf::from(path));
         }
     }
@@ -577,7 +346,6 @@ impl Launcher for RunnerLauncher {
         std::fs::create_dir_all(&self.data_dir)?;
         // The last runner's stdin is not this one's: nothing is written to it from here on.
         self.control.disconnect();
-        stop_legacy_runners();
         let log = Arc::new(Mutex::new(self.open_log()?));
         let mut tree = crate::process_tree::spawn(self.command(pairing))?;
         if let Ok(mut file) = log.lock() {
@@ -654,69 +422,6 @@ mod tests {
         args.iter()
             .map(|a| a.to_string_lossy().into_owned())
             .collect()
-    }
-
-    #[test]
-    fn only_a_legacy_runner_in_the_install_dir_is_stopped() {
-        let dir = Path::new("/opt/xiongbao-device");
-        let table = vec![
-            (10, PathBuf::from("/opt/xiongbao-device/openbot-runner")),
-            (11, PathBuf::from("/opt/xiongbao-device/xiongbao-runner")),
-            (12, PathBuf::from("/usr/local/bin/openbot-runner")),
-            (13, PathBuf::from("/opt/xiongbao-device/sub/openbot-runner")),
-            (
-                14,
-                PathBuf::from("/opt/xiongbao-device/openbot-runner-helper"),
-            ),
-            (
-                15,
-                PathBuf::from("/opt/xiongbao-device/openbot-runner (deleted)"),
-            ),
-        ];
-        assert_eq!(legacy_runner_pids(&table, dir, ""), vec![10, 15]);
-        let windows = vec![
-            (20, PathBuf::from("/opt/xiongbao-device/openbot-runner.exe")),
-            (21, PathBuf::from("/opt/xiongbao-device/openbot-runner")),
-        ];
-        assert_eq!(legacy_runner_pids(&windows, dir, ".exe"), vec![20]);
-    }
-
-    #[test]
-    fn windows_paths_match_across_verbatim_prefix_slashes_and_case() {
-        // canonicalize() gives the verbatim form; WMI gives the plain one, in whatever case.
-        let dir = Path::new(r"\\?\C:\Program Files\Xiongbao Device");
-        let table = vec![
-            (
-                1,
-                PathBuf::from(r"C:\Program Files\Xiongbao Device\openbot-runner.exe"),
-            ),
-            (
-                2,
-                PathBuf::from(r"c:\program files\xiongbao device\OPENBOT-RUNNER.EXE"),
-            ),
-            (3, PathBuf::from(r"C:\Other\openbot-runner.exe")),
-            (
-                4,
-                PathBuf::from(r"C:\Program Files\Xiongbao Device\xiongbao-runner.exe"),
-            ),
-        ];
-        assert_eq!(legacy_runner_pids(&table, dir, ".exe"), vec![1, 2]);
-    }
-
-    #[test]
-    fn the_process_table_is_listed_only_when_a_legacy_runner_could_be_running() {
-        // Windows: no legacy file in the install directory, no legacy process from it.
-        assert!(!legacy_runner_possible(false, false));
-        assert!(legacy_runner_possible(true, false));
-        // Unix: an upgrade can unlink the file under a running orphan, so always look.
-        assert!(legacy_runner_possible(false, true));
-        assert!(legacy_runner_possible(true, true));
-    }
-
-    #[test]
-    fn unix_paths_stay_case_sensitive() {
-        let table = vec![(1, PathBuf::from("/opt/App/OPENBOT-RUNNER"))];
-        assert!(legacy_runner_pids(&table, Path::new("/opt/App"), "").is_empty());
     }
 
     #[test]
@@ -852,21 +557,12 @@ mod tests {
         };
         // Neither variable: no flag, and the runner keeps its own default.
         assert!(desktop_engine_args(&env(&[])).is_empty());
-        // The product's own name first.
-        assert_eq!(
-            strings(&desktop_engine_args(&env(&[
-                ("XIONGBAO_DESKTOP_ENGINE", "agent-desktop"),
-                ("OPENBOT_DESKTOP_ENGINE", "legacy"),
-            ]))),
-            ["--desktop-engine", "agent-desktop"]
-        );
-        // The older name when the product's is not set.
         assert_eq!(
             strings(&desktop_engine_args(&env(&[(
-                "OPENBOT_DESKTOP_ENGINE",
-                "legacy"
+                "XIONGBAO_DESKTOP_ENGINE",
+                "agent-desktop"
             )]))),
-            ["--desktop-engine", "legacy"]
+            ["--desktop-engine", "agent-desktop"]
         );
         // As set: the runner, not the app, decides what an engine name means.
         assert_eq!(
@@ -877,18 +573,8 @@ mod tests {
             ["--desktop-engine", "Agent-Desktop "]
         );
         // Cleared (`setx XIONGBAO_DESKTOP_ENGINE ""`): as if not set.
-        assert_eq!(
-            strings(&desktop_engine_args(&env(&[
-                ("XIONGBAO_DESKTOP_ENGINE", ""),
-                ("OPENBOT_DESKTOP_ENGINE", "agent-desktop"),
-            ]))),
-            ["--desktop-engine", "agent-desktop"]
-        );
-        assert!(desktop_engine_args(&env(&[
-            ("XIONGBAO_DESKTOP_ENGINE", "  "),
-            ("OPENBOT_DESKTOP_ENGINE", ""),
-        ]))
-        .is_empty());
+        assert!(desktop_engine_args(&env(&[("XIONGBAO_DESKTOP_ENGINE", "")])).is_empty());
+        assert!(desktop_engine_args(&env(&[("XIONGBAO_DESKTOP_ENGINE", "  ")])).is_empty());
     }
 
     #[test]
@@ -1043,7 +729,7 @@ mod tests {
 
     #[test]
     fn the_sidecar_sits_next_to_the_app() {
-        if dev_override(RUNNER_BINARY_VARS.0, RUNNER_BINARY_VARS.1).is_some() {
+        if dev_override(RUNNER_BINARY_VAR).is_some() {
             return;
         }
         let path = sidecar_path().unwrap();
@@ -1058,8 +744,8 @@ mod tests {
     #[test]
     fn agent_desktop_path_is_next_to_the_app() {
         // Either override moves a path this test compares, as in `the_sidecar_sits_next_to_the_app`.
-        if dev_override(AGENT_DESKTOP_BINARY_VARS.0, AGENT_DESKTOP_BINARY_VARS.1).is_some()
-            || dev_override(RUNNER_BINARY_VARS.0, RUNNER_BINARY_VARS.1).is_some()
+        if dev_override(AGENT_DESKTOP_BINARY_VAR).is_some()
+            || dev_override(RUNNER_BINARY_VAR).is_some()
         {
             return;
         }
@@ -1073,28 +759,15 @@ mod tests {
         assert_eq!(path.parent(), sidecar_path().unwrap().parent());
     }
 
-    // These two use names of their own: the process environment is shared by every test thread.
+    // Names of its own: the process environment is shared by every test thread.
     #[test]
-    fn dev_override_prefers_the_new_name() {
-        std::env::set_var("XB_TEST_OVERRIDE_NEW_A", "new");
-        std::env::set_var("XB_TEST_OVERRIDE_LEGACY_A", "old");
+    fn dev_override_reads_its_name() {
+        std::env::set_var("XB_TEST_OVERRIDE_A", "new");
         assert_eq!(
-            dev_override("XB_TEST_OVERRIDE_NEW_A", "XB_TEST_OVERRIDE_LEGACY_A"),
+            dev_override("XB_TEST_OVERRIDE_A"),
             Some(OsString::from("new"))
         );
-    }
-
-    #[test]
-    fn dev_override_falls_back_to_the_legacy_name() {
-        std::env::set_var("XB_TEST_OVERRIDE_LEGACY_B", "old");
-        assert_eq!(
-            dev_override("XB_TEST_OVERRIDE_NEW_B", "XB_TEST_OVERRIDE_LEGACY_B"),
-            Some(OsString::from("old"))
-        );
-        assert_eq!(
-            dev_override("XB_TEST_OVERRIDE_NEW_C", "XB_TEST_OVERRIDE_LEGACY_C"),
-            None
-        );
+        assert_eq!(dev_override("XB_TEST_OVERRIDE_UNSET_B"), None);
     }
 
     #[test]
@@ -1107,16 +780,9 @@ mod tests {
                     .map(|(_, value)| OsString::from(value))
             }
         };
+        assert_eq!(dev_override_in(&env(&[("N", "")]), "N"), None);
         assert_eq!(
-            dev_override_in(&env(&[("N", ""), ("L", "old")]), "N", "L"),
-            Some(OsString::from("old"))
-        );
-        assert_eq!(
-            dev_override_in(&env(&[("N", ""), ("L", "")]), "N", "L"),
-            None
-        );
-        assert_eq!(
-            dev_override_in(&env(&[("N", "new"), ("L", "")]), "N", "L"),
+            dev_override_in(&env(&[("N", "new")]), "N"),
             Some(OsString::from("new"))
         );
     }
@@ -1124,25 +790,7 @@ mod tests {
     #[test]
     fn the_real_override_names_are_the_ones_documented() {
         // `sidecar_path` and `agent_desktop_path` read exactly these.
-        assert_eq!(
-            RUNNER_BINARY_VARS,
-            ("XIONGBAO_RUNNER_BINARY", "OPENBOT_RUNNER_BINARY")
-        );
-        assert_eq!(
-            AGENT_DESKTOP_BINARY_VARS,
-            (
-                "XIONGBAO_AGENT_DESKTOP_BINARY",
-                "OPENBOT_AGENT_DESKTOP_BINARY"
-            )
-        );
-        let env = |name: &str| match name {
-            "XIONGBAO_RUNNER_BINARY" => Some(OsString::from("/new/runner")),
-            "OPENBOT_AGENT_DESKTOP_BINARY" => Some(OsString::from("/old/helper")),
-            _ => None,
-        };
-        let (new, old) = RUNNER_BINARY_VARS;
-        assert_eq!(dev_override_in(&env, new, old), Some("/new/runner".into()));
-        let (new, old) = AGENT_DESKTOP_BINARY_VARS;
-        assert_eq!(dev_override_in(&env, new, old), Some("/old/helper".into()));
+        assert_eq!(RUNNER_BINARY_VAR, "XIONGBAO_RUNNER_BINARY");
+        assert_eq!(AGENT_DESKTOP_BINARY_VAR, "XIONGBAO_AGENT_DESKTOP_BINARY");
     }
 }

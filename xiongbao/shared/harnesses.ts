@@ -119,16 +119,13 @@ export function declaredHarness(id: unknown): Harness | undefined {
 
 /**
  * The harness an image reference runs, by the directory a release builds it from:
- * `ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:…` is LangChain. Undefined for
+ * `ghcr.io/<owner>/xiongbao-agent-langgraph-agui@sha256:…` is LangChain. Undefined for
  * an image XiongBao does not publish.
  */
 export function harnessForImage(reference: string): Harness | undefined {
-  // The earlier prefix is an image a release built before v0.2.16, which a Bot may still run.
-  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-  const name =
-    /(?:^|\/)(?:xiongbao-)?(?:openbot-)?(agent-[a-z0-9-]+)(?::|@|$)/.exec(
-      reference.trim(),
-    )?.[1];
+  const name = /(?:^|\/)(?:xiongbao-)?(agent-[a-z0-9-]+)(?::|@|$)/.exec(
+    reference.trim(),
+  )?.[1];
   if (!name) return undefined;
   return HARNESSES.find((harness) => harness.image === name);
 }

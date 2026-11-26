@@ -8,10 +8,6 @@ import { createThreadIdentity } from "../src/channels/thread-identity";
 import { applyMigrations } from "../src/db/apply-migrations";
 import { createDatabase } from "../src/db/client";
 import { deploymentNameOf } from "../src/tenant-package";
-import {
-  startWorkOfferedListener,
-  WORK_OFFERED_TOPIC,
-} from "../src/work/queue";
 
 /**
  * The v0.2.16 rename migration (0240), run the way a deployment runs it: a database is migrated by
@@ -406,30 +402,6 @@ describe.skipIf(!owner)("the v0.2.16 rename migration", () => {
       for (const statement of statements) await tx.unsafe(statement);
     });
     expect(await fingerprint(client)).toBe(before);
-  });
-
-  test("work offered on either channel name wakes a v0.2.16 listener, which announces on the new one", async () => {
-    const [{ name }] = await client<
-      { name: string }[]
-    >`select current_database() as name`;
-    const heard: string[] = [];
-    const listener = await startWorkOfferedListener(
-      databaseUrl(name),
-      (kind) => {
-        heard.push(kind);
-      },
-    );
-    try {
-      await client`select pg_notify(${WORK_OFFERED_TOPIC}, 'from-v0216')`;
-      await client`select pg_notify('openbot_work_offered', 'from-v0215')`;
-      const deadline = Date.now() + 5_000;
-      while (heard.length < 2 && Date.now() < deadline)
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(heard.sort()).toEqual(["from-v0215", "from-v0216"]);
-      expect(WORK_OFFERED_TOPIC).toBe("xiongbao_work_offered");
-    } finally {
-      await listener.stop();
-    }
   });
 
   test("audit_events rows are untouched", async () => {

@@ -2,7 +2,6 @@ import {
   afterAll,
   afterEach,
   beforeAll,
-  describe,
   expect,
   setDefaultTimeout,
   spyOn,
@@ -21,7 +20,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  adoptLegacyLocalState,
   applyLocalUpdate,
   assertLocalStartAllowed,
   type CommandRunner,
@@ -398,133 +396,6 @@ test("manual startup refuses an interrupted journal while the exact update opera
     "recovery",
   );
   expect(() => assertLocalStartAllowed(f.root, "this-operation")).not.toThrow();
-});
-
-/*
- * An installation from before v0.2.16 keeps its accepted release, update journal and model sign-in folder under
- * the names it had then. They are renamed once, nothing is overwritten, and an updater still holding the old lock
- * is left alone, its journal still deciding whether a start is safe.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-describe("state files from before v0.2.16", () => {
-  const legacy = {
-    release: ".openbot-release.json",
-    journal: ".openbot-update-journal.json",
-    signIn: ".openbot",
-    lock: ".openbot-update.lock",
-  };
-
-  test("are renamed once, with what they hold", () => {
-    const f = fixture();
-    const accepted = readFileSync(join(f.root, ".xiongbao-release.json"));
-    rmSync(join(f.root, ".xiongbao-release.json"));
-    writeFileSync(join(f.root, legacy.release), accepted);
-    writeFileSync(
-      join(f.root, legacy.journal),
-      JSON.stringify({ phase: "accepted" }),
-    );
-    mkdirSync(join(f.root, legacy.signIn));
-    writeFileSync(join(f.root, legacy.signIn, "model-oauth.json"), "{}");
-
-    expect(adoptLegacyLocalState(f.root)).toEqual({
-      renamed: [
-        `${legacy.release} -> .xiongbao-release.json`,
-        `${legacy.journal} -> .xiongbao-update-journal.json`,
-        `${legacy.signIn} -> .xiongbao`,
-      ],
-      kept: [],
-      locked: false,
-    });
-    expect(readFileSync(join(f.root, ".xiongbao-release.json"))).toEqual(
-      accepted,
-    );
-    expect(
-      readFileSync(join(f.root, ".xiongbao", "model-oauth.json"), "utf8"),
-    ).toBe("{}");
-    for (const name of [legacy.release, legacy.journal, legacy.signIn])
-      expect(existsSync(join(f.root, name))).toBe(false);
-    // A second run has nothing to do.
-    expect(adoptLegacyLocalState(f.root)).toEqual({
-      renamed: [],
-      kept: [],
-      locked: false,
-    });
-  });
-
-  test("never replace a file that already has its current name", () => {
-    const f = fixture();
-    writeFileSync(join(f.root, legacy.release), "{}\n");
-    const current = readFileSync(join(f.root, ".xiongbao-release.json"));
-    expect(adoptLegacyLocalState(f.root)).toEqual({
-      renamed: [],
-      kept: [legacy.release],
-      locked: false,
-    });
-    expect(readFileSync(join(f.root, ".xiongbao-release.json"))).toEqual(
-      current,
-    );
-    expect(readFileSync(join(f.root, legacy.release), "utf8")).toBe("{}\n");
-  });
-
-  test("are left alone while an older updater holds its lock, and its journal still guards startup", () => {
-    const f = fixture();
-    mkdirSync(join(f.root, legacy.lock));
-    writeFileSync(
-      join(f.root, legacy.journal),
-      JSON.stringify({ phase: "starting", operation: "older-operation" }),
-    );
-    expect(adoptLegacyLocalState(f.root)).toEqual({
-      renamed: [],
-      kept: [],
-      locked: true,
-    });
-    expect(existsSync(join(f.root, legacy.journal))).toBe(true);
-    expect(() => assertLocalStartAllowed(f.root)).toThrow(legacy.journal);
-    expect(() =>
-      assertLocalStartAllowed(f.root, "older-operation"),
-    ).not.toThrow();
-  });
-
-  test("an update is refused while an older updater's lock is there", async () => {
-    const f = fixture();
-    mkdirSync(join(f.root, legacy.lock));
-    const plan = await planLocalUpdate(f.options);
-    expect(plan.allowed).toBe(false);
-    expect(plan.reasons.join("\n")).toContain("update lock exists");
-  });
-});
-
-/*
- * The update that brings in this source is run by the updater already installed, and the v0.2.15 one
- * names the operation OPENBOT_UPDATE_OPERATION. Its start of the new source must still be allowed, and
- * an operation under neither name still refused.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("the start an older updater runs is allowed by the operation it names under the old name", () => {
-  const f = fixture();
-  writeFileSync(
-    join(f.root, ".xiongbao-update-journal.json"),
-    JSON.stringify({ phase: "starting", operation: "this-operation" }),
-  );
-  const assertStart = (environment: Record<string, string>) =>
-    Bun.spawnSync(
-      [
-        process.execPath,
-        "--no-env-file",
-        join(import.meta.dir, "../scripts/update.ts"),
-        "local",
-        "assert-start",
-        "--root",
-        f.root,
-      ],
-      { env: { PATH: process.env.PATH ?? "", ...environment } },
-    ).exitCode;
-  expect(assertStart({ OPENBOT_UPDATE_OPERATION: "this-operation" })).toBe(0);
-  expect(assertStart({ XIONGBAO_UPDATE_OPERATION: "this-operation" })).toBe(0);
-  expect(assertStart({})).not.toBe(0);
-  expect(
-    assertStart({ OPENBOT_UPDATE_OPERATION: "another-operation" }),
-  ).not.toBe(0);
 });
 
 test("binary subprocess backups stream to disk and close without hanging", () => {

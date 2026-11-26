@@ -291,19 +291,19 @@ test.each([
   },
 );
 
-test("a stored skin under the old default's name reads as the new default, and a patch with it is stored under the new one", async () => {
+test("a stored skin name this build does not ship reads as the default, and a later patch stores the default", async () => {
   const id = await person();
   // Their own preferences, read and written in their own tenant.
   await runAsTenant(id, async () => {
     await database
       .update(users)
-      .set({ preferences: sql`'{"skin":"openbot"}'::jsonb` })
+      .set({ preferences: sql`'{"skin":"retired-skin"}'::jsonb` })
       .where(eq(users.id, id));
     expect((await store.read(id)).skin).toBe("xiongbao");
     await store.patch(id, { skin: "openmuse" });
     await database
       .update(users)
-      .set({ preferences: sql`'{"skin":"openbot"}'::jsonb` })
+      .set({ preferences: sql`'{"skin":"retired-skin"}'::jsonb` })
       .where(eq(users.id, id));
     expect((await store.patch(id, { messageListEmphasis: "agent" })).skin).toBe(
       "xiongbao",

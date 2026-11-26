@@ -174,8 +174,7 @@ jobs:
           # migration renamed the cluster's roles first, and the baseline's own migrations then made
           # roles under the old names for its database. They get the same passwords. Once the pin moves
           # past 0240 these roles no longer exist (hence the guard) and the baseline URLs below move
-          # to the new names with it.
-          # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+          # to the new names with it. (Checked in R4 Task 25: the pin, e63acdfb, still predates 0240.)
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'openbot_app') THEN ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS; END IF; IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'openbot_role_writer') THEN ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'; END IF; END \$\$"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE xiongbao_fixture LOGIN PASSWORD 'ci-fixture' NOSUPERUSER BYPASSRLS IN ROLE xiongbao_app"
           printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env
@@ -189,7 +188,7 @@ jobs:
         # that binds the writer died in its hook — 38 unnamed failures on shard 1 alone — and
         # test-report.mjs refuses to compare a log with unnamed failures at all.
         # The baseline predates migration 0240, so its database's roles still have the old names (see the
-        # preparation step). legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+        # preparation step); the URLs move to the new names when the pin moves past 0240.
         env:
           DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_base
           TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/xiongbao_b_base
@@ -651,20 +650,24 @@ jobs:
           bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
           bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
           exit "$rc"
-      # The s6 oneshot that copies old-prefix settings onto their XIONGBAO_* names runs on the host: it only reads and writes files.
-      - name: env-aliases oneshot
-        run: sh docker/tests/env-aliases.test.sh
-      # The v0.2.16 rename preflight (in-flight and space refusals, the pre-rename backup), the restore
-      # from that backup (onto databases the image's own migrator built) and the read-only pre-upgrade
-      # check, against PostgreSQL clusters the test makes with the image's own PostgreSQL 16: inside the
-      # image, as root, so the backup's owner and modes are the real ones.
-      - name: rename preflight (real PostgreSQL)
-        run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb /repo/docker/tests/rebrand-preflight.test.sh
-      # The v0.2.16 rename of the superuser and the database (a new volume after its first migrations, a
-      # v0.2.15-shaped one keeping its password, a failure rolling back, a second start doing nothing) and
-      # the connection strings written after it: clusters made with the image's PostgreSQL 16, migrated
+      # The s6 oneshot that writes the image's defaults and refuses settings still under their names before
+      # v0.2.16 only reads and writes files: on the host as the runner's own user, and in the image as root.
+      - name: env-defaults oneshot
+        run: |
+          sh docker/tests/env-defaults.test.sh
+          docker run --rm --user root --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb /repo/docker/tests/env-defaults.test.sh
+      # The check that refuses a volume v0.2.16 never upgraded (v0.2.15's names and journal, v0.2.16's
+      # unfinished rename), against clusters made with the image's PostgreSQL 16: as root, as migrate.sh
+      # runs it, and as the image's postgres user.
+      - name: upgrade gate (real PostgreSQL)
+        run: |
+          docker run --rm --user root --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb /repo/docker/tests/upgrade-gate.test.sh
+          docker run --rm --user postgres --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb /repo/docker/tests/upgrade-gate.test.sh
+      # A new volume's first boot (migrations under the names postgres-init gives it, then the rename of the
+      # superuser and the database), a second start doing nothing, a v0.2.15-shaped volume refused untouched,
+      # and the connection strings written after it: clusters made with the image's PostgreSQL 16, migrated
       # with the image's own migrator under /app/server, as root as migrate.sh runs.
-      - name: superuser and database rename (real PostgreSQL)
+      - name: embedded database boot and rename (real PostgreSQL)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD:/repo:ro" xiongbao:trackb /repo/docker/tests/rebrand-superuser.test.sh
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)

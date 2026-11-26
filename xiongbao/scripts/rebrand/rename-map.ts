@@ -10,6 +10,12 @@ import { join } from "node:path";
 export type Phase = "R1" | "R2" | "R3" | "R4";
 
 /**
+ * 条目到期的阶段：R1–R4 是产品仓库里的改名阶段；R5 是迁到新仓库那一步，`until: "R5"` 的条目挺过 R4 的清理
+ * （例如须由运维先在第三方系统里改名的登记），在产品仓库里的每个阶段都受保护。
+ */
+export type Until = Phase | "R5" | "forever";
+
+/**
  * 保护清单的一条：`text` 按字面匹配，`pattern` 是正则源码（二选一）。
  * `until` 是负责改掉它的阶段：当前阶段早于 `until` 时保护，到了 `until` 就不再保护；
  * `forever` 永远保护。
@@ -22,7 +28,7 @@ export type ProtectEntry = {
    * 取自品牌白名单的 `file` 字段，避免一个短字符串冻结全仓同样的子串。不带则全仓生效。
    */
   file?: string;
-  until: Phase | "forever";
+  until: Until;
   reason: string;
 };
 
@@ -61,11 +67,12 @@ export const GUARD_PATHS: readonly string[] = [
   "xiongbao/app/tests/product-name-allowlist.json",
 ];
 
-const PHASE_ORDER: Readonly<Record<Phase, number>> = {
+const PHASE_ORDER: Readonly<Record<Phase | "R5", number>> = {
   R1: 1,
   R2: 2,
   R3: 3,
   R4: 4,
+  R5: 5,
 };
 
 const PROTECT_FILE = join(import.meta.dir, "protect.json");
@@ -113,6 +120,23 @@ export function buildProtect(
   );
   const parts = [...texts, ...patterns];
   return parts.length === 0 ? /$^/g : new RegExp(parts.join("|"), "g");
+}
+
+/**
+ * 挺过 R4 的条目（`forever` 与 `until: "R5"`）合成的保护正则：剩余旧词报告的 `--fail-on-any` 只放行落在它里面的命中。
+ * 文件作用域与 {@link buildProtect} 相同。
+ */
+export function buildLasting(
+  entries: readonly ProtectEntry[],
+  file?: string,
+): RegExp {
+  return buildProtect(
+    entries.filter(
+      (entry) => entry.until === "forever" || entry.until === "R5",
+    ),
+    "R4",
+    file,
+  );
 }
 
 /** 不传 `file` 时只含不带作用域的条目；传了则再加上作用域是该文件的条目。 */

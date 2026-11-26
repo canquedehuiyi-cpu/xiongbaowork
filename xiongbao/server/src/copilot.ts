@@ -76,11 +76,7 @@ import {
   CoworkerUnavailableError,
 } from "./agents/agent-resolver";
 import { attributeBotAnswers } from "./agents/bot-answers";
-import {
-  LEGACY_RUN_ASSERTION_PROP,
-  RUN_ASSERTION_PROP,
-  runAssertionIn,
-} from "./agents/callback-token";
+import { RUN_ASSERTION_PROP, runAssertionIn } from "./agents/callback-token";
 import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { HANDOFF_TOOL } from "./agents/handoff-tool";
@@ -243,7 +239,6 @@ import { asPersonChat, boardTurnNow } from "./threads/unattended-card";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { holdsOwnWebSearch, webResearchGuidance } from "./web/guidance";
-import { withBrowserWireCodeRunner } from "./wire-codes";
 
 /**
  * The agent runtime, in one of two thread backends.
@@ -3542,10 +3537,6 @@ function remoteAgentWithStandingRole(
     };
     // Nor one it carried in: a statement copied from another run would still be accepted.
     if (!held) delete forwardedProps[RUN_ASSERTION_PROP];
-    // The name before v0.2.16, from a stored continuation or an old agent image: never passed on.
-    delete (forwardedProps as Record<string, unknown>)[
-      LEGACY_RUN_ASSERTION_PROP
-    ];
     // The model is this deployment's decision, never the request's. Set below when it applies.
     delete (forwardedProps as Record<string, unknown>).xiongbaoModel;
     /*
@@ -3809,24 +3800,9 @@ const MASTRA_CONTEXT = {
   learnedSkills: "XiongBao learned skills",
 } as const;
 
-/**
- * The same titles before v0.2.16. An approval's stored continuation from before the upgrade carries
- * its run's context under them, and a resumed run must not pass them on as the caller's own.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-const LEGACY_MASTRA_CONTEXT = [
-  "OpenBot standing role",
-  "OpenBot granted tools guidance",
-  "OpenBot Bot id",
-  "OpenBot deployment tools",
-  "OpenBot signed run assertion",
-  "OpenBot learned skills",
-];
-
-const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set<string>([
-  ...Object.values(MASTRA_CONTEXT),
-  ...LEGACY_MASTRA_CONTEXT,
-]);
+const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set<string>(
+  Object.values(MASTRA_CONTEXT),
+);
 
 function callerMastraContext(context: AgentContext[]): AgentContext[] {
   return context.filter(
@@ -4527,13 +4503,10 @@ export function mountCopilotRuntime(
 
   /*
    * The runner as the runtime is handed it. A turn refused for quota is said on its stream, not
-   * dropped with it (story K4); every error code the browser is sent, live or replayed, carries the
-   * new prefix (`wire-codes.ts`); and the watchers below patch their own layer on top. See
+   * dropped with it (story K4); and the watchers below patch their own layer on top. See
    * {@link patchableRunner}.
    */
-  const runtimeRunner = patchableRunner(
-    withBrowserWireCodeRunner(withQuotaRunErrors(runner)),
-  );
+  const runtimeRunner = patchableRunner(withQuotaRunErrors(runner));
 
   // Before any runtime exists: its constructor logs a disclosure and records properties unless this is set.
   disableRuntimeTelemetryByDefault();

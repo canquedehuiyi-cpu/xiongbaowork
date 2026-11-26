@@ -77,9 +77,9 @@ export type ApprovedActionDependencies = {
   answer(result: { text: string; isError: boolean }): string;
   privateShareToolRef: string;
   /**
-   * The same tool's ref before v0.2.16: an approval opened before the upgrade keeps it, because the
-   * ref is part of the action's digest (`approvalAction`) and the migration leaves both alone.
-   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   * The same tool's ref before v0.2.16, kept for good: an approval opened before the upgrade keeps it,
+   * because the ref is part of the action's digest (`approvalAction`), so the record cannot be rewritten
+   * and the migration left both alone.
    */
   legacyPrivateShareToolRef?: string;
   refusalMarker: string;

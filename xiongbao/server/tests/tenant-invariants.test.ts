@@ -196,15 +196,15 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/computer/waits.ts": { 'runAsTenant("platform"': 1 },
   // A signed-out runtime `/info` reads the deployment's catalogue roster, as `system` (P16f).
   "src/copilot.ts": { 'runAsTenant("system"': 1 },
-  // The v0.2.16 credential rekey, run only inside the migration transaction (`scripts/migrate.ts`),
-  // never from a request: it reads and rewrites every tenant's k1 rows as `platform`, as migrations
+  "src/credentials-reseal.ts": { 'runAsTenant("platform"': 2 },
+  "src/db/client.ts": { "set_config('app.tenant_id', ${tenant}": 2 },
+  // The pre-migration upgrade check, run only inside the migration transaction (`scripts/migrate.ts`),
+  // never from a request: it counts every tenant's pre-v0.2.16 credentials as `platform`, as migrations
   // 0114, 0115, 0121 and 0240 do, then puts the caller's frame back.
-  "src/credentials-rekey.ts": {
+  "src/db/upgrade-gate.ts": {
     "set_config('app.tenant_id', 'platform'": 1,
     "set_config('app.tenant_id', ${frame}": 1,
   },
-  "src/credentials-reseal.ts": { 'runAsTenant("platform"': 2 },
-  "src/db/client.ts": { "set_config('app.tenant_id', ${tenant}": 2 },
   // M3: the third finds the binding a chat sender names, then checked against its own tenant.
   "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/router.ts": { 'runAsTenant("platform"': 3 },

@@ -1,5 +1,5 @@
 import { type SQL, sql } from "drizzle-orm";
-import { envName } from "../../../shared/env-aliases";
+import { envName } from "../../../shared/env-name";
 import { judgeRlsEnforcement, ROLE_FACTS_SQL } from "../db/rls-role";
 import { runAsTenant } from "../tenant/context";
 
@@ -43,11 +43,15 @@ export function resolveRlsEnforcementMode(
 const PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot";
 
 /** The role name when `url` authenticates with the public default password, else undefined. */
-function publicDefaultCredentialRole(url: string | undefined): string | undefined {
+function publicDefaultCredentialRole(
+  url: string | undefined,
+): string | undefined {
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
-    if (decodeURIComponent(parsed.password) !== PUBLIC_DEFAULT_DATABASE_PASSWORD)
+    if (
+      decodeURIComponent(parsed.password) !== PUBLIC_DEFAULT_DATABASE_PASSWORD
+    )
       return undefined;
     return decodeURIComponent(parsed.username) || "unknown";
   } catch {

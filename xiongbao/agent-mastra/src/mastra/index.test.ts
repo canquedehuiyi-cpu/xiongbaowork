@@ -259,32 +259,6 @@ describe("XiongBao Mastra receiver instructions", () => {
     );
   });
 
-  test("reads the entries a server before v0.2.16 titled the old way, and keeps its machine-only ones out", () => {
-    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-    const instructions = buildXiongBaoInstructions({
-      requestContext: requestContextWith([
-        {
-          description: "OpenBot standing role",
-          value: "Follow company policy.",
-        },
-        { description: "OpenBot signed run assertion", value: "secret" },
-        {
-          description: "OpenBot learned skills",
-          value: "Published skill: refunds",
-        },
-        { description: "Components you can draw", value: "CALLER" },
-      ]),
-    });
-    expect(instructions).toBe(
-      [
-        xiongbaoBaseInstructions,
-        "Follow company policy.",
-        "Published skill: refunds",
-        "Components you can draw: CALLER",
-      ].join("\n\n"),
-    );
-  });
-
   test("keeps ordinary Mastra calls on the base receiver instruction", () => {
     expect(buildXiongBaoInstructions()).toBe(xiongbaoBaseInstructions);
     expect(

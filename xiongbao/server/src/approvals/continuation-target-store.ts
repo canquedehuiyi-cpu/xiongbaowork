@@ -16,30 +16,22 @@ import type {
 } from "./continuation-protocol";
 import {
   isLocalReceipt,
+  type LocalReceipt,
+  type LocalRunPlan,
+  type LocalTargetPersistence,
+  type LocalTerminal,
   localDigest,
   localProofId,
   localReceipt,
   localRunId,
   sameLocalIdentity,
   terminalObservation,
-  type LocalReceipt,
-  type LocalRunPlan,
-  type LocalTargetPersistence,
-  type LocalTerminal,
 } from "./continuation-target-local";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 const STEP = "local_run";
 /** The CUSTOM event a local run's terminal journal ends on, holding the run's final messages. */
 export const LOCAL_TERMINAL_MARKER = "xiongbao.ap.local-terminal.v1";
-/**
- * The marker's name before v0.2.16. Only the name changed: the receipt's digest covers the events
- * before the marker and the messages in it, never the marker's name, so a journal written under
- * either name verifies the same (recovery 0241 renames the stored marker and nothing else in a run
- * that has one).
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export const LEGACY_LOCAL_TERMINAL_MARKER = "openbot.ap.local-terminal.v1";
 const TABLES = [
   "approval_requests",
   "approval_continuations",
@@ -328,8 +320,7 @@ export function createLocalTargetStore(
       !("type" in last) ||
       last.type !== EventType.CUSTOM ||
       !("name" in last) ||
-      (last.name !== LOCAL_TERMINAL_MARKER &&
-        last.name !== LEGACY_LOCAL_TERMINAL_MARKER) ||
+      last.name !== LOCAL_TERMINAL_MARKER ||
       !("value" in last) ||
       !last.value ||
       typeof last.value !== "object" ||
@@ -629,6 +620,7 @@ export function createLocalTargetStore(
 
 // Parsing actual JSONB is essential: a TS $type does not validate database data.
 import { BaseEventSchema, MessageSchema } from "@ag-ui/core/schemas";
+
 function decodeTerminal(
   events: unknown[],
   messages: unknown[],

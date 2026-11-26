@@ -35,9 +35,7 @@ This template renders nothing.
 */}}
 {{- $rlsModeNamed := false -}}
 {{- range .Values.config.extraEnv }}
-{{- /* The name before the rename counts too, because values written then still say it.
-  legacy-compat：introducedIn 0.2.16，removeIn 0.2.17 */}}
-{{- if has (toString .name) (list "XIONGBAO_RLS_ENFORCE" "OPENBOT_RLS_ENFORCE") }}{{- $rlsModeNamed = true }}{{- end }}
+{{- if eq (toString .name) "XIONGBAO_RLS_ENFORCE" }}{{- $rlsModeNamed = true }}{{- end }}
 {{- end }}
 {{- if and .Values.postgresql.enabled (eq .Values.postgresql.auth.username "postgres") (not $rlsModeNamed) }}
 {{- fail "The bundled database connects the API as the superuser postgres, which row-level security does not bind, and the server refuses that in production. To run it anyway, knowing tenant isolation then rests on the application alone, say so: config.extraEnv: [{name: XIONGBAO_RLS_ENFORCE, value: warn}]. For isolation in the database, use your own database (database.existingSecret) with a URL naming xiongbao_app." }}

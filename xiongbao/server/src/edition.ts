@@ -6,7 +6,7 @@
  * itself (the gateway, its policy, approvals and the audit trail) runs the same in both; the edition
  * only fixes what feeds it.
  */
-import { envName } from "../../shared/env-aliases";
+import { envName } from "../../shared/env-name";
 import type { Capability } from "./admin/capabilities";
 import type { EnterpriseSettings } from "./admin/settings-store";
 

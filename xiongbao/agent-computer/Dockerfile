@@ -76,7 +76,7 @@ COPY agent-computer/src ./src
 # index.ts imports ../../shared/file-download at runtime (shared/computer-control is type-only and
 # erased), and the Bot's browser routes import ../../shared/xiongbao-browser and ../../shared/bot-browser,
 # so the files they need go where those paths resolve from /app/src.
-COPY shared/file-download.ts shared/env-aliases.ts shared/apply-env-aliases.ts /shared/
+COPY shared/file-download.ts shared/env-name.ts shared/refuse-old-settings.ts /shared/
 # A Bot's browser's contract, and the tab and address requests it shares, which its routes check
 # requests against. They import zod, and a module resolves its imports from its own directory upward, which
 # from /shared never reaches /app/node_modules: so /shared is given that tree to resolve from, rather

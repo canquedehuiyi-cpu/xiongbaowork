@@ -61,21 +61,15 @@ describe("the runtime image's tree", () => {
     );
   });
 
-  test("the build identity is XIONGBAO_BUILD_*, with no OPENBOT_BUILD_ build argument left", () => {
+  test("the build identity is XIONGBAO_BUILD_*", () => {
     expect(dockerfile).toContain("ARG XIONGBAO_BUILD_VERSION");
-    expect(dockerfile).not.toContain("ARG OPENBOT_BUILD_");
   });
 
-  test("an unset build argument cannot erase a run-time OPENBOT_BUILD_* (no XIONGBAO_BUILD_* is baked into ENV)", () => {
-    // An unset ARG still becomes an EMPTY variable. Baked under its XIONGBAO_ name, the alias layer
-    // would copy that empty value over an OPENBOT_BUILD_* the deployment supplies at run time.
+  test("an unset build argument cannot erase a run-time XIONGBAO_BUILD_* (none is baked into ENV)", () => {
+    // An unset ARG still becomes an EMPTY variable. Baked into ENV, it would stand in for the identity
+    // the deployment supplies at run time.
     expect(dockerfile).not.toMatch(/^ENV\s+XIONGBAO_BUILD_/m);
     expect(dockerfile).not.toMatch(/^\s+XIONGBAO_BUILD_\w+=\$\{/m);
-  });
-
-  test("no build identity is baked into ENV under its legacy name either", () => {
-    expect(dockerfile).not.toMatch(/^ENV\s+OPENBOT_BUILD_/m);
-    expect(dockerfile).not.toMatch(/^\s+OPENBOT_BUILD_\w+=/m);
   });
 
   test("one RUN writes the build arguments that are set into the defaults file, and refuses a line break", () => {

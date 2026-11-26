@@ -720,25 +720,6 @@ test("the release record names this repository's GHCR image, read through the RE
   }
 });
 
-/*
- * A release from before v0.2.16 named its GHCR image under the image key it had then. Mirroring one again
- * still reads it from there.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("a record from before v0.2.16 still names its GHCR image", () => {
-  const before = {
-    version: "0.2.15",
-    images: { xiongbao: { repository: "x" }, openbot: OWN_IMAGE },
-  };
-  const ok = record({}, before);
-  expect(ok.status).toBe(0);
-  expect(ok.outputs).toEqual({
-    repository: "ghcr.io/o/r",
-    digest: DIGEST,
-    tag: "v0.2.15",
-  });
-});
-
 test("the record is checked against the version tag on GHCR before anything is copied", () => {
   const verify = (digestOnGhcr) => {
     const temp = scratch();

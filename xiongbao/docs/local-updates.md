@@ -4,20 +4,9 @@
 
 The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.xiongbao-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Use `scripts/integrate-upstream.ts` to create a separate integration candidate; review/build that distribution's release first. The updater never merges arbitrary upstream changes into production.
 
-**Not from v0.2.15 with the development Compose file, and v0.2.16 does not take the old volumes over.**
-This release renames the Compose project, its volumes, its database and the server's mount directory in
-`docker-compose.yml`. The v0.2.15 updater compares the database and the mounts before it stops anything and
-refuses the update, leaving the services running and the database untouched; no later release changes that.
-Do not start the new file by hand with `docker compose up` either: it would start a new project on new,
-empty volumes while the existing data stays in the old ones. To keep the data, migrate it by hand: back the
-old database up with `pg_dump -Fc` in the old project, start the v0.2.16 project's database and run its
-migration once, replace that database with an empty one, create two empty roles under v0.2.15's
-application role names for the backup's grants to land on, restore with
-`pg_restore --single-transaction --exit-on-error`, run the migration again (it moves those grants to the
-renamed roles and drops the two empty ones) and start the services. The
-exact commands, and why the database must be empty, are in docs/deployment-xiongbao.md, section 6.3,
-item 6. The delivery container (`docker/compose.delivery.yml`) is not affected: it backs up and renames in
-place on its first v0.2.16 start.
+**Only from v0.2.16.** This release no longer renames anything an installation kept under the product's
+earlier name. An installation still on v0.2.15 or earlier updates to v0.2.16 first, as the v0.2.16 tag of this
+document describes (a v0.2.15 checkout on the development Compose file migrates its data by hand there).
 
 ## Trust and preparation
 
@@ -60,7 +49,7 @@ The accepted source remains pinned in Git. `docker compose restart` retains exis
 
 ## Interrupted operations and recovery
 
-The updater takes `.xiongbao-update.lock`, writes `.xiongbao-update-journal.json` before lifecycle changes, and retains previous/candidate source archives, the prior manifest, customer-state archive, database dump and its checksum in an operation-specific backup directory. `local status --root /srv/xiongbao` reads the journal. The operation lock survives process interruption; inspect it before manually removing a stale lock. Before v0.2.16 these files, and the `.xiongbao` sign-in folder, had the product's earlier name; every `scripts/update.ts local` action and `scripts/start.sh` rename them once (`local adopt-state` does only that), keep a file that already has its current name, and leave everything alone while an older updater still holds its lock.
+The updater takes `.xiongbao-update.lock`, writes `.xiongbao-update-journal.json` before lifecycle changes, and retains previous/candidate source archives, the prior manifest, customer-state archive, database dump and its checksum in an operation-specific backup directory. `local status --root /srv/xiongbao` reads the journal. The operation lock survives process interruption; inspect it before manually removing a stale lock.
 
 After migration begins, failure never automatically resets source or restores SQL. The accepted manifest remains unchanged, owned candidate services are stopped, and the journal records `recovery-required`. Normal `scripts/start.sh` is blocked by any unaccepted journal; only the matching active update operation may enter its startup phase. A kill/engine failure is retained in recovery diagnostics.
 

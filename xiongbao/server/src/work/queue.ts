@@ -44,13 +44,6 @@ import { runAsTenant } from "../tenant/context";
  */
 export const WORK_OFFERED_TOPIC = "xiongbao_work_offered";
 
-/**
- * The channel's name before v0.2.16. Heard as well, never said: during a rolling upgrade a v0.2.15
- * instance still announces on it, and its wake-ups should still reach this one.
- */
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-export const LEGACY_WORK_OFFERED_TOPIC = "openbot_work_offered";
-
 /** Inside the offering transaction where there is one, so it fires on commit and never before. */
 const announceOffered = (db: Pick<Database, "execute">, kind: string) =>
   db.execute(sql`select pg_notify(${WORK_OFFERED_TOPIC}, ${kind})`);
@@ -85,7 +78,6 @@ export async function startWorkOfferedListener(
     }
   };
   await connection.listen(WORK_OFFERED_TOPIC, heard);
-  await connection.listen(LEGACY_WORK_OFFERED_TOPIC, heard);
 
   return {
     stop: async () => {

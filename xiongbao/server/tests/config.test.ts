@@ -335,20 +335,6 @@ describe("deployment configuration", () => {
     },
   );
 
-  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-  const PREVIOUS_PUBLIC_WORKER_SECRET = "openbot-dev-worker-secret";
-
-  test("still refuses the worker secret scripts/start.sh fell back to before the rename", () => {
-    expect(() =>
-      loadConfig({
-        ...productionEnvironment,
-        WORKER_SHARED_SECRET: PREVIOUS_PUBLIC_WORKER_SECRET,
-      }),
-    ).toThrow(
-      "WORKER_SHARED_SECRET is the public development default from scripts/start.sh; refusing to start in production.",
-    );
-  });
-
   test("takes a worker secret of the deployment's own in production, without a word", () => {
     const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
     try {

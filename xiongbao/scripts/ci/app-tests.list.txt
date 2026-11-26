@@ -352,7 +352,6 @@ tests/join-thread.test.ts
 tests/key-only-apps-directory.test.tsx
 tests/knowledge-screen.test.tsx
 tests/late-renderers.test.tsx
-tests/legacy-address-settings.test.ts
 tests/legacy-agent-routes.test.ts
 tests/live-screen-app-shortcuts.test.tsx
 tests/live-screen-keyboard.test.tsx
@@ -382,6 +381,7 @@ tests/new-group-at-menu.test.tsx
 tests/new-id.test.ts
 tests/notify-prompt.test.tsx
 tests/off-screen-tool-calls.test.tsx
+tests/old-setting-names.test.ts
 tests/onboarding-computer-copy.test.tsx
 tests/onboarding-frame.test.tsx
 tests/onboarding-name-step.test.tsx
@@ -531,7 +531,6 @@ tests/starter-tour.test.tsx
 tests/step-limit-continue.test.tsx
 tests/stopped-turn.test.ts
 tests/storage-compat.test.ts
-tests/storage-migrate.test.ts
 tests/stream-activity.test.ts
 tests/subagent-cards.test.tsx
 tests/subtask-step.test.tsx

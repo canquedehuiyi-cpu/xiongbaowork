@@ -445,13 +445,6 @@ function notRunBeside(
  */
 export const PICKED_SKILL_PROP = "xiongbaoSkill";
 
-/**
- * The key before v0.2.16. A continuation stored before the upgrade carries its run's properties
- * under it, and a resumed turn hands them back as they were; read, never written.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export const LEGACY_PICKED_SKILL_PROP = "openbotSkill";
-
 export function turnInput(input: {
   threadId: string;
   runId: string;

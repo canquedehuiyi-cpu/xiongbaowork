@@ -54,9 +54,9 @@ if [ ! -s "$DATA/PG_VERSION" ]; then
 
   # The superuser and the database still get the names they had before v0.2.16: a historical migration
   # (0054) grants default privileges FOR ROLE that superuser, so an empty database can only be migrated
-  # under it. migrate.sh renames both to xiongbao right after this volume's first migrations, the same way
-  # it renames an existing volume.
-  # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+  # under it. migrate.sh renames both to xiongbao right after this volume's first migrations.
+  # legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，until the migrations are squashed into a baseline
+  # that new volumes start from under the new names (R4 Task 26)
   #
   # initdb reads the superuser password from a file (never an argument, which would show in `ps`), and
   # sets scram for both local and TCP connections. The temp file is removed the moment initdb returns.

@@ -33,7 +33,6 @@ import {
   like,
   ne,
   notLike,
-  or,
   sql,
 } from "drizzle-orm";
 import {
@@ -958,11 +957,7 @@ export async function personalGrantsLeftInTeam(
     .from(pluginGrants)
     .where(
       and(
-        or(
-          like(pluginGrants.grantedBy, `${SYSTEM_MARKER_PREFIX}%`),
-          // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，written before 0240 rewrote it.
-          like(pluginGrants.grantedBy, "openbot:%"),
-        ),
+        like(pluginGrants.grantedBy, `${SYSTEM_MARKER_PREFIX}%`),
         // 小管家默认的招聘能力两个版本都给，团队版里它是正常的，不是个人版留下的宽授予。
         ne(pluginGrants.grantedBy, STAFFING_DEFAULT_BY),
       ),

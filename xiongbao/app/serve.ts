@@ -14,8 +14,8 @@
  */
 
 // Must stay the first import: this process never runs the server's entry, so a `.env` that still
-// names the deployment's address under the old prefix is copied onto the XIONGBAO_ names here.
-import "@xiongbao/shared/apply-env-aliases";
+// sets a setting only under its name before v0.2.16 is refused here, as the server refuses it.
+import "@xiongbao/shared/refuse-old-settings";
 import { join, normalize, sep } from "node:path";
 import { DICTATION_HTTP_IDLE_SECONDS } from "@xiongbao/shared/dictation";
 import { listenPort } from "@xiongbao/shared/listen-port";

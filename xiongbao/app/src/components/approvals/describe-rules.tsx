@@ -296,7 +296,7 @@ export function mediaOf(toolRef: string): ReplayRow["media"] {
     return { icon: <IconUsers />, label: "转交给其他员工的工作" };
   if (toolRef.startsWith("xiongbao/"))
     return { icon: <IconLock />, label: "私密信息" };
-  // v0.2.16 之前的审批记录与审计行里的引用。legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+  // v0.2.16 之前的审批记录与审计行里的引用，永久保留：审批记录的动作摘要覆盖它、审计只追加，都不能改写。
   if (toolRef.startsWith("openbot/"))
     return { icon: <IconLock />, label: "私密信息" };
   return { icon: <IconPlug />, label: "应用调用" };

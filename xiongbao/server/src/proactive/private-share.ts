@@ -30,9 +30,9 @@ import { cutAtCodeUnits } from "../channels/text";
 
 export const PRIVATE_SHARE_TOOL_REF = "xiongbao/share_private_information";
 /**
- * 这个工具 v0.2.16 之前的引用。保存的规则由改名迁移（recovery 0241）改成新引用；审批记录里的引用在动作摘要里，
- * 迁移不改，读的时候两个都认。
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ * 这个工具 v0.2.16 之前的引用，永久保留、只读不写。保存的规则已由改名迁移（recovery 0241）改成新引用，
+ * 规则匹配只认新引用；审批记录里的引用在动作摘要里（摘要覆盖它），记录不能改写，迁移不改，所以执行审批记录
+ * 里的动作时仍要认它（approvals/execute.ts）。
  */
 export const LEGACY_PRIVATE_SHARE_TOOL_REF =
   "openbot/share_private_information";
@@ -136,8 +136,7 @@ export function createPrivateShareCheck(deps: {
         (rule) =>
           !rule.revokedAt &&
           rule.botId === input.botId &&
-          (rule.toolRef === PRIVATE_SHARE_TOOL_REF ||
-            rule.toolRef === LEGACY_PRIVATE_SHARE_TOOL_REF) &&
+          rule.toolRef === PRIVATE_SHARE_TOOL_REF &&
           rule.effect === PRIVATE_SHARE_EFFECT &&
           rule.scope === scope,
       )

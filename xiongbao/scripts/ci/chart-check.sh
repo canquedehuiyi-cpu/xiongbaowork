@@ -148,14 +148,10 @@ render --values "$external" "${inline[@]}" --set migrations.enabled=false \
   fail "With migrations.enabled=false an inline database without database.migrationUrl was refused."
 echo "ok: migrations.enabled=false needs no owner URL"
 
-# The bundled superuser renders once the operator names the RLS mode, under either name: values
-# written before the rename say OPENBOT_RLS_ENFORCE.
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-for name in XIONGBAO_RLS_ENFORCE OPENBOT_RLS_ENFORCE; do
-  render --values "$bundled" --set "config.extraEnv[0].name=$name" \
-    --set-string "config.extraEnv[0].value=warn" >/dev/null ||
-    fail "Bundled superuser with $name named in config.extraEnv: the chart refused to render."
-done
+# The bundled superuser renders once the operator names the RLS mode.
+render --values "$bundled" --set "config.extraEnv[0].name=XIONGBAO_RLS_ENFORCE" \
+  --set-string "config.extraEnv[0].value=warn" >/dev/null ||
+  fail "Bundled superuser with XIONGBAO_RLS_ENFORCE named in config.extraEnv: the chart refused to render."
 if refusal="$(render --values "$bundled" --set config.extraEnv=null 2>&1)"; then
   fail "The bundled superuser with no RLS mode named rendered; it must be refused."
 fi

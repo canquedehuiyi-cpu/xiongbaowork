@@ -671,71 +671,6 @@ test("tells the shared computer which edition it runs in", () => {
   ).toBe("");
 });
 
-/*
- * A `.env` written before the rename spells these with the old prefix; Compose reads it for the
- * interpolation, so each host setting falls back to its old name.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("a host setting under its old name still reaches the containers, and the new name wins", () => {
-  const legacy = runComposeConfig({
-    OPENBOT_EDITION: "personal",
-    OPENBOT_TOOL_URL: "http://old.example/api/agent-tools/call",
-    OPENBOT_HOST_GATEWAY: "10.0.2.2",
-  }).services;
-  expect(legacy["agent-computer"]?.environment.XIONGBAO_EDITION).toBe(
-    "personal",
-  );
-  expect(legacy["agent-langgraph"]?.environment.XIONGBAO_TOOL_URL).toBe(
-    "http://old.example/api/agent-tools/call",
-  );
-  expect(legacy.server?.extra_hosts).toContain("host.docker.internal=10.0.2.2");
-  const both = runComposeConfig({
-    XIONGBAO_EDITION: "team",
-    OPENBOT_EDITION: "personal",
-  }).services;
-  expect(both["agent-computer"]?.environment.XIONGBAO_EDITION).toBe("team");
-});
-
-/*
- * A model sign-in file named in `.env` under the old name. Compose cannot nest the `:+` that turns it
- * into the container's path inside a fallback, so the server gets it under the old name too and its
- * alias step copies it over the empty new one.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("a model sign-in file named under the old name still reaches the server", () => {
-  const legacy = runComposeConfig({
-    OPENBOT_MODEL_OAUTH_FILE: "/home/someone/.xiongbao/model-oauth.json",
-  }).services.server?.environment;
-  expect(legacy?.OPENBOT_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
-  expect(legacy?.XIONGBAO_MODEL_OAUTH_FILE ?? "").toBe("");
-  const renamed = runComposeConfig({
-    XIONGBAO_MODEL_OAUTH_FILE: "/home/someone/.xiongbao/model-oauth.json",
-  }).services.server?.environment;
-  expect(renamed?.XIONGBAO_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
-  expect(renamed?.OPENBOT_MODEL_OAUTH_FILE ?? "").toBe("");
-});
-
-/*
- * The v0.2.15 local updater, already installed, hands a release's identity to `up --build` under the
- * old names. The image it builds must still carry it, or the candidate answers /release without one
- * and the update is never accepted.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("a build identity under the old names still reaches the server image's build", () => {
-  const args = runComposeConfig({
-    OPENBOT_BUILD_VERSION: "v0.2.16",
-    OPENBOT_BUILD_COMMIT: "abc123",
-  }).services.migrate?.build?.args;
-  expect(args?.XIONGBAO_BUILD_VERSION).toBe("v0.2.16");
-  expect(args?.XIONGBAO_BUILD_COMMIT).toBe("abc123");
-  expect(
-    runComposeConfig({
-      XIONGBAO_BUILD_VERSION: "v0.2.17",
-      OPENBOT_BUILD_VERSION: "v0.2.16",
-    }).services.migrate?.build?.args?.XIONGBAO_BUILD_VERSION,
-  ).toBe("v0.2.17");
-});
-
 test("gives the selected harness the same governed callback as the framework Bot", () => {
   const config = runComposeConfig({
     XIONGBAO_TOOL_URL: "http://callback.example/api/agent-tools/call",
@@ -1018,7 +953,7 @@ test("mounts the model sign-in folder into the server, and only there", () => {
   );
   expect(server.user).toBe(
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
-    "${XIONGBAO_SERVER_USER:-${OPENBOT_SERVER_USER:-1001:1001}}",
+    "${XIONGBAO_SERVER_USER:-1001:1001}",
   );
   for (const [name, service] of Object.entries(services)) {
     if (name === "server") continue;
@@ -1192,31 +1127,15 @@ function deliveryConfig(lines: string[]) {
   }
 }
 
-/*
- * An env file written before the rename names the image and the port with the old prefix; one written
- * after, with the new. Both must start the same container.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-test("the delivery file resolves the same image and port from the old names as from the new", () => {
+/* The delivery file names the image and the port; neither set is the image built from source. */
+test("the delivery file resolves the image and port it names", () => {
   const image = `ghcr.io/example/xiongbaowork@sha256:${"0".repeat(64)}`;
-  const legacy = deliveryConfig([
-    `OPENBOT_IMAGE=${image}`,
-    "OPENBOT_PORT=3780",
-  ]);
   const renamed = deliveryConfig([
     `XIONGBAO_IMAGE=${image}`,
     "XIONGBAO_PORT=3780",
   ]);
   expect(renamed.image).toBe(image);
   expect(renamed.ports).toContain("127.0.0.1:3780:3001");
-  expect(legacy).toEqual(renamed);
-  // Both set: the new name wins, as it does inside the container.
-  expect(
-    deliveryConfig([
-      `XIONGBAO_IMAGE=${image}`,
-      "OPENBOT_IMAGE=ghcr.io/example/old:v0",
-    ]).image,
-  ).toBe(image);
   // Neither: the image built from source, on the usual port.
   const unset = deliveryConfig([]);
   expect(unset.image).toBe("xiongbao-digital-employee:local");

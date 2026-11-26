@@ -203,8 +203,8 @@ Two more things to set up on the GitHub side:
 
 **Copying an older release.** Run **补同步镜像到自有仓库** (`mirror-release.yml`) from `main`, with the
 tag, for example `v0.2.15`. It reads `container-images.json` of that Release, which must have been uploaded by the release
-workflow, and takes the GHCR image under `ghcr` (a record from before v0.2.16 names it under its former image
-key, still read for those), which must be this repository's own. The
+workflow, and takes the GHCR image under `ghcr` (every record from v0.2.16 on has it), which must be this
+repository's own. The
 digest in it must be the one the GHCR version tag has: the run stops otherwise. It then copies its linux/amd64 manifest to `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>:<tag>`
 with the same sign-in and copy steps as `release.yml` (a test keeps their text identical), and writes
 the target and the platform manifest's digest in the step summary. The Release and its assets are not

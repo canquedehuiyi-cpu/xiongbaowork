@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
-import { envName } from "../../../shared/env-aliases";
+import { envName } from "../../../shared/env-name";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";

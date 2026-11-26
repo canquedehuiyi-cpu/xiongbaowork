@@ -237,10 +237,7 @@ function buildModel() {
 const TOOL_URL =
   // Numeric, never `localhost`: it resolves to `::1` under Node and `127.0.0.1` under bun, so a
   // name here reaches a different interface depending on what started the process.
-  process.env.XIONGBAO_TOOL_URL ??
-  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the name before the rename
-  process.env.OPENBOT_TOOL_URL ??
-  "http://127.0.0.1:3001/api/agent-tools/call";
+  process.env.XIONGBAO_TOOL_URL ?? "http://127.0.0.1:3001/api/agent-tools/call";
 const TOOL_TOKEN = process.env.AGENT_TOOL_TOKEN ?? "";
 
 async function callTool(
@@ -290,11 +287,8 @@ async function callTool(
  * calls a tool, and the deployment that signed it is the only thing that can open it.
  */
 function runAssertionOf(input: RunAgentInput): string {
-  const props = input.forwardedProps as
-    | { xiongbaoRun?: unknown; openbotRun?: unknown }
-    | undefined;
-  // The name before v0.2.16, from a server not yet upgraded. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-  const assertion = props?.xiongbaoRun ?? props?.openbotRun;
+  const props = input.forwardedProps as { xiongbaoRun?: unknown } | undefined;
+  const assertion = props?.xiongbaoRun;
   return typeof assertion === "string" ? assertion : "";
 }
 

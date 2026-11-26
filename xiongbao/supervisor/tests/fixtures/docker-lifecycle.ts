@@ -12,7 +12,6 @@ import {
   BOT_LABEL,
   KIND_LABEL,
   labelOf,
-  legacyLabel,
   legacyNamesFor,
   NAMESPACE,
   NAMESPACE_LABEL,
@@ -67,11 +66,11 @@ const LEGACY_BOT = "notesbot";
 const legacyFound = legacyNamesFor(LEGACY_BOT);
 if (!legacyFound.ok) throw new Error(legacyFound.reason);
 const LEGACY = legacyFound.names;
-/** What every computer of this supervisor's carried before kinds existed. */
+/** What every computer of this supervisor's carried before kinds existed: no kind label. */
 const LEGACY_LABELS = {
-  "openbot.supervisor": "true",
-  "openbot.namespace": namespace,
-  "openbot.bot-id": LEGACY_BOT,
+  [OWNER_LABEL]: "true",
+  [NAMESPACE_LABEL]: namespace,
+  [BOT_LABEL]: LEGACY_BOT,
 };
 
 function isMissing(error: unknown): boolean {
@@ -215,23 +214,12 @@ const OURS = {
 };
 
 /**
- * The same computer as a supervisor before v0.2.16 labelled it.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-const OURS_BEFORE_RENAME = Object.fromEntries(
-  Object.entries(OURS).map(([label, value]) => [legacyLabel(label), value]),
-);
-
-/**
  * Everything this run made in its own namespace, which is unique to it: people's computers, a Bot's
  * old computer and volume, and any copy helper left behind.
  */
 async function removeNamespace() {
   const docker = withDocker().docker;
-  // Under either prefix: what this supervisor makes, and what the cases plant as made before v0.2.16.
-  const labels = [NAMESPACE_LABEL, legacyLabel(NAMESPACE_LABEL)].map(
-    (label) => `${label}=${namespace}`,
-  );
+  const labels = [`${NAMESPACE_LABEL}=${namespace}`];
   const containers = (
     await Promise.all(
       labels.map((label) =>
@@ -352,48 +340,6 @@ describe("a name held by somebody else", () => {
     });
 
     expect(state.status).toBe("running");
-  }, 90_000);
-
-  /*
-   * A supervisor before v0.2.16 labelled what it made under the earlier prefix, and a volume never changes its
-   * labels. With the namespace it was made in, that computer and its files are still this one's.
-   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-   */
-  test("and so is one made before v0.2.16", async () => {
-    await plant(OURS_BEFORE_RENAME, true);
-
-    const state = await withDocker().supervisor.ensure(names, {
-      image: IMAGE,
-      environment: [],
-    });
-
-    expect(state.status).toBe("running");
-  }, 90_000);
-
-  test("and its files made before v0.2.16 are mounted into a new one", async () => {
-    for (const volume of [names.profileVolume, names.workspaceVolume]) {
-      await withDocker().docker.createVolume({
-        Name: volume,
-        Labels: OURS_BEFORE_RENAME,
-      });
-    }
-    await inVolumes(
-      [`${names.workspaceVolume}:/workspace`],
-      "echo saved-work > /workspace/keep",
-    );
-
-    const state = await withDocker().supervisor.ensure(names, {
-      image: IMAGE,
-      environment: [],
-    });
-
-    expect(state.status).toBe("running");
-    expect(
-      await inVolumes(
-        [`${names.workspaceVolume}:/workspace`],
-        "cat /workspace/keep",
-      ),
-    ).toContain("saved-work");
   }, 90_000);
 });
 

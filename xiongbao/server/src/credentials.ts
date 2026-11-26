@@ -21,7 +21,7 @@ type CredentialEnvelope = {
  * additional data. The binding is NEVER read from the envelope: `bind` only names which binding the
  * reader must rebuild, from the row's own columns, so a copied envelope meets a different tenant or
  * id and fails its tag. `kid` names which additional-data label sealed it ({@link aadLabelFor}): `k2`
- * is the only one written, `k1` is still read until every row has been rekeyed.
+ * is the only one written and the only one read.
  */
 type CredentialEnvelopeV2 = {
   version: 2;
@@ -45,23 +45,17 @@ export type CredentialSeal = (binding: CredentialBinding) => Promise<string>;
 /** The kid every envelope is sealed under, and the label its additional data starts with. */
 export const CREDENTIAL_KID = "k2";
 const CREDENTIAL_AAD_LABEL = "xiongbao.vault.credential.v2";
-/** The kid envelopes were sealed under before v0.2.16, read but never written. */
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-export const LEGACY_CREDENTIAL_KID = "k1";
 
 /**
  * The label a v2 envelope's additional data starts with, for the kid it carries.
  *
  * The label is the only part of the binding that is not the row's own, so changing it re-binds every
- * envelope: one sealed under `k1` fails its tag under `k2`'s label and the other way round. Rows sealed
- * before v0.2.16 are `k1`; the v0.2.16 migration rekeys them to `k2` in the same transaction as the
- * rest of the business database's migrations (`credentials-rekey.ts`), and this server reads both so
- * that a row a v0.2.15 replica writes during a rolling upgrade still opens. Any other kid has none.
+ * envelope. Rows sealed before v0.2.16 were `k1`, under the label before the rename; v0.2.16 rekeyed them
+ * all to `k2`, and a database that still holds one is refused before migrating (`db/upgrade-gate.ts`), so
+ * no other kid has a label.
  */
 function aadLabelFor(kid: unknown): string | undefined {
   if (kid === CREDENTIAL_KID) return CREDENTIAL_AAD_LABEL;
-  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-  if (kid === LEGACY_CREDENTIAL_KID) return "openbot.vault.credential.v2";
   return undefined;
 }
 
@@ -368,8 +362,8 @@ export function vaultRequiresAad(
  * and must keep working until they are resealed. v2 opens only with the binding rebuilt from the
  * row the value was read from; a value copied to another tenant, id or kind fails GCM
  * authentication and throws, which is a fault and deliberately not a
- * {@link CredentialUnusableError}. A v2 envelope opens under the label its kid names, `k2` or the
- * pre-v0.2.16 `k1`. Anything else is refused.
+ * {@link CredentialUnusableError}. A v2 envelope opens under the label its kid names, which only `k2`
+ * has. Anything else is refused.
  */
 export async function openCredential(
   encodedKey: string,

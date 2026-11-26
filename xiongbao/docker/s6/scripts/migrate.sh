@@ -14,10 +14,11 @@ export HOME=/home/apiuser
 
 # s6 starting a long-running service does not mean PostgreSQL has finished crash recovery, so wait for an
 # authenticated query before running migrations. That query is also how this boot learns which names the
-# superuser and the database carry: the old ones on a volume made before v0.2.16 (and on a new volume, until
-# its first boot renames them below), xiongbao after. rebrand-superuser.sh asks; the old names are only
-# ever passed to it, as -U and -d.
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+# superuser and the database carry: xiongbao on every volume v0.2.16 or later finished with, and the names
+# before v0.2.16 on a new volume until its first boot renames them below (postgres-init.sh says why).
+# rebrand-superuser.sh asks; the old names are only ever passed to it, as -U and -d.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，until the migrations are squashed into a baseline
+# that new volumes start from under the new names (R4 Task 26)
 OWNER_PW="$(cat /var/lib/postgresql/pgpassword)"
 SUPERUSER="$(dirname "$0")/rebrand-superuser.sh"
 # Up to 30 seconds for a login; a refusal for a reason that waiting does not change (exit 3: both databases
@@ -32,24 +33,16 @@ esac
 DB_USER="${NAMES% *}"
 DB_NAME="${NAMES#* }"
 echo 'migrate: embedded PostgreSQL is ready'
-# The rename of persisted names (v0.2.16) starts here, before any migration can touch data: a volume
-# that still carries the old names is refused while work is in flight or the backup would not fit, and
-# backed up otherwise; a volume already renamed passes straight through; a rename an earlier boot started
-# and did not finish resumes without another backup. See rebrand-preflight.sh for the order the steps
-# keep: the business database in one transaction first, the role and database rename last.
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-PREFLIGHT="$(dirname "$0")/rebrand-preflight.sh"
-PGPASSWORD="$OWNER_PW" "$PREFLIGHT" check -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"
+# This release is reached only from v0.2.16: a volume that has not been through v0.2.16's rename is
+# refused here, before any migration, with the way out (upgrade-gate.sh says which volumes). The migrator
+# checks the database again, the way every deployment's does (server/src/db/upgrade-gate.ts).
+PGPASSWORD="$OWNER_PW" "$(dirname "$0")/upgrade-gate.sh" -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"
 # `scripts/migrate.ts`, not `drizzle-kit`. The CLI is a development dependency and needs esbuild to
 # read its TypeScript config, which `bun install --production` leaves out of this image: asked to
 # migrate here it exits 1 without printing why, and the container comes up against an empty database.
 # The owner URL is scoped to migration; the API's connection strings are written at the end.
-# Every step that may change data runs through `step`, which on failure names the step, the kind of
-# data, the steps already done, whether the business database changed, and the backup.
-# The same transaction rekeys the credentials v0.2.15 sealed (kid k1) with KEY_ENCRYPTION_KEY, which
-# with-contenv hands this script and the step passes on; see server/src/credentials-rekey.ts.
 PGPASSWORD="$OWNER_PW" DATABASE_URL="postgres://$DB_USER:$OWNER_PW@127.0.0.1:5432/$DB_NAME" \
-  "$PREFLIGHT" step 数据库迁移 数据库表结构、系统数据与已存凭据 -- s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
+  s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
 
 APP_PW="$(cat /var/lib/postgresql/pgpassword-app)"
 # Generated secrets are hex. Validate before placing one in a SQL literal.
@@ -67,16 +60,13 @@ printf "ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPAS
   PGPASSWORD="$OWNER_PW" s6-setuidgid apiuser /usr/lib/postgresql/16/bin/psql \
     -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 >/dev/null
 echo 'migrate: xiongbao_role_writer password installed'
-# Last, after every migration of the business database and before any service starts (no other session may
-# be connected to a database being renamed): the superuser and the database take the new name, in one
-# transaction on the `postgres` database. A new volume's first boot does it the same way as an upgrade.
-# Nothing to do on a volume already renamed, and nothing is printed then.
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-PGPASSWORD="$OWNER_PW" "$PREFLIGHT" step 超级用户与库改名 数据库超级用户名与库名 -- \
-  "$SUPERUSER" rename -h 127.0.0.1 -U openbot -d openbot
+# Last, after every migration and before any service starts (no other session may be connected to a
+# database being renamed): on a new volume's first boot the superuser and the database take the new name,
+# in one transaction on the `postgres` database. Nothing to do on a volume already renamed, and nothing is
+# printed then.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，until the migrations are squashed into a baseline
+# that new volumes start from under the new names (R4 Task 26)
+PGPASSWORD="$OWNER_PW" "$SUPERUSER" rename -h 127.0.0.1 -U openbot -d openbot
 # The services' connection strings, under the names the database answers to now, replaced whole.
 NAMES="$(PGPASSWORD="$OWNER_PW" "$SUPERUSER" names -h 127.0.0.1 -U openbot -d openbot)"
 "$(dirname "$0")/database-urls.sh" "${NAMES% *}" "${NAMES#* }"
-# Everything above has run: the rename, if this boot did one, is complete. Until this line runs, every
-# boot resumes the rename instead of making another backup.
-"$PREFLIGHT" finish
