@@ -123,7 +123,9 @@ indb() {
 exists() { [ "$(admin "SELECT count(*) FROM pg_database WHERE datname = :'$1';")" = 1 ]; }
 # The comment on a database: where a complete restore of this backup leaves its mark.
 mark_of() { admin "SELECT coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = :'$1';"; }
-others() { admin "SELECT count(*) FROM pg_stat_activity WHERE datname IN (:'db', :'tmpdb', :'old') AND pid <> pg_backend_pid();"; }
+# Sessions of clients only: an autovacuum worker on a database is told to leave by the drop and the rename
+# themselves, and must not make the script refuse.
+others() { admin "SELECT count(*) FROM pg_stat_activity WHERE datname IN (:'db', :'tmpdb', :'old') AND backend_type = 'client backend' AND pid <> pg_backend_pid();"; }
 target_refused() {
   echo "$1" >&2
   echo "按步骤 2 用 v0.2.15 镜像和一个新的数据库卷另起一个容器，在那个容器里执行本脚本。" >&2

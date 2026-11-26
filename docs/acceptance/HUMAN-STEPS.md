@@ -27,6 +27,7 @@
 | 18 桌面操作第 2 期（macOS / Linux / 多显示器） | 待做（macOS 部分暂缓） | 需要服务器 `v0.2.10` 和同版本设备端；2026-11-13 决定苹果系统暂缓，先只做 Linux 和多显示器，macOS 各项与 Apple 证书一起以后再做，见第 18 节 |
 | 19 桌面操作第 2 期：Windows（引擎开关） | 待做 | 需要服务器和设备端都是 `v0.2.10`（含 Task 28）；验收通过并回复「Windows 验收通过」后才把 Windows 默认切到 agent-desktop，见第 19 节 |
 | 20 招入外部智能体（Codex、Claude Code）真机验收 | 待做 | 需要服务器 `v0.2.15` 和设备端 `device-v0.2.15-rc.1`（预发布，由你推标签）；Windows 一台为主，macOS 可选，见第 20 节 |
+| 21 v0.2.16 改名升级（京东云） | 待做 | 发布 `v0.2.16` 并同步到京东云仓库后，在服务器上按第 21 节逐步执行并回报；设备端重装 `device-v0.2.16` |
 
 ## 1. 把 `main` 设为默认分支
 
@@ -683,3 +684,395 @@ Claude Code 在熊宝里有两种跑法：默认在熊宝云电脑里，和你�
 
 - 在网页「我的设备」里把这台电脑留着就行，不用解除配对。
 - 把所有截图发给 Claude，并回复 20.5、20.6、20.7（以及 20.8 如果做了）各是「通过 / 不通过 / 没做」。Claude 据此更新 `docs/acceptance/STORIES.md` 的外部员工条目，问题另开修复任务。
+
+## 21. v0.2.16 改名升级（京东云交付容器，从 v0.2.15）
+
+v0.2.16 把系统里剩下的旧名字统一换成熊宝自己的名字：数据库的超级用户、库、两个应用角色、数据库函数与触发器、系统写进数据库的标记、对话历史里系统写的名字、已存凭据的加密格式（重新加密，内容不变）、配置名前缀 `OPENBOT_` → `XIONGBAO_`。这些都在 v0.2.16 **第一次启动时自动完成**：先把数据库完整备份到数据库卷上，再在一个事务里改业务库，最后改超级用户和库名，然后才启动服务。之后每次启动都不再做，也不再备份。
+
+- **浏览器扩展已经删除**（「教员工做事」录制和熊宝浏览器一起删了）。浏览器里装过旧扩展的，卸掉即可，不用装新的。
+- **设备端要重装 v0.2.16**（第 ⑥ 步）。服务器先升、设备端后升也没关系：旧设备端在这段时间照常能连上干活。
+- 这台服务器的现状（2026-11-24 摸底）：库约 107 MB，卷上可用约 37 GB，备份空间足够；改名要重新加密的凭据 3 条；自动化钩子签名、OpenTag、学习/Intelligence、共享账号身份都是 0，web-bot-auth 没开，所以**没有要重新连接的东西**（第 ⑦ 步升级当天复查一次）。
+- 停服时间：备份加迁移大约一两分钟，加上拉镜像之外的操作，网站中断约 5 分钟。
+- 这台用的是内置数据库，外接库、Helm、自己写了 `DATABASE_URL` / `ROLE_WRITER_DATABASE_URL` 的部署才要做的事（连接串里的角色名改新名、md5 口令重设、迁移环境带 `KEY_ENCRYPTION_KEY`、先停旧副本、自己做实例快照、Helm 加 `nameOverride`）这里都不涉及；那些写在部署手册第 4 节和 6.3 第 8 条。
+- **回滚**和以前不一样：改名完成后，v0.2.15 登录不了改过名的库，不能再「换回旧镜像」了事。回滚 = 用升级前的备份还原到一个新卷 + v0.2.15 镜像，升级之后写进去的数据会丢（见本节末尾「回滚」）。所以升级后先按第 ⑤ 步核对清楚，再放开使用。
+
+下面的命令都在京东云服务器上以 root 执行，原样复制即可。网页终端断开也没关系：每一步要用的东西都存在 `/opt/xiongbao/upgrade-v0.2.16` 里，重连后从断开的那一步接着做。命令里不含任何口令或密钥，输出里也不会打印。
+
+前提：`v0.2.16` 的发布流水线成功，镜像已同步到京东云仓库（发布后由 Claude 确认，并把 digest 发给你核对）。
+
+### 21.0 准备：下载自查脚本、拉新镜像、记下新旧镜像
+
+1. 下载升级要用的三个脚本（都只读或只改 env 文件，后面几步用）：
+
+<!-- v0216:fetch:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.16
+  mkdir -p "$D"
+  chmod 700 "$D"
+  for f in pre-upgrade-check.sh prod-inspect.sh rewrite-env.sh; do
+    curl --fail --silent --show-error --location -o "$D/$f" \
+      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/v0.2.16/xiongbao/scripts/rebrand/$f"
+  done
+  ls -l "$D"
+)
+```
+<!-- v0216:fetch:end -->
+
+2. 登录京东云仓库：在京东云控制台注册表 `xiongbao-work` 那一行点「获取临时令牌」，把它给出的 `docker login …` 命令复制到服务器上执行，看到 `Login Succeeded` 就行。这条命令带着临时密码，只在服务器上执行，不要发给别人。
+
+3. 拉新镜像（放在后台跑，网页终端断开也不影响）：
+
+```bash
+setsid nohup sh -c 'for i in 1 2 3 4 5; do docker pull xiongbao-work-cn-north-1.jcr.service.jdcloud.com/xiongbao:v0.2.16 && echo PULL_OK && exit 0; sleep 20; done; echo PULL_FAILED' > /opt/xiongbao/upgrade-v0.2.16/pull.log 2>&1 < /dev/null &
+```
+
+隔一两分钟看一次，显示 `PULL_OK` 就是拉好了：
+
+```bash
+tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
+```
+
+4. 记下新镜像（按 digest 固定）和现在跑的 v0.2.15 镜像（回滚时用）：
+
+<!-- v0216:images:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.16
+  NEW_IMAGE=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+    xiongbao-work-cn-north-1.jcr.service.jdcloud.com/xiongbao:v0.2.16 |
+    grep -m 1 '^xiongbao-work-cn-north-1\.jcr\.service\.jdcloud\.com/xiongbao@sha256:')
+  OLD_IMAGE=$(docker inspect --format '{{.Config.Image}}' xiongbao)
+  printf 'NEW_IMAGE=%s\nOLD_IMAGE=%s\n' "$NEW_IMAGE" "$OLD_IMAGE" > "$D/images.env"
+  cat "$D/images.env"
+)
+```
+<!-- v0216:images:end -->
+
+把输出的两行发给 Claude：`NEW_IMAGE` 的 digest 要和发布记录里的一致，`OLD_IMAGE` 应该是 v0.2.15 那次用的 `…/xiongbao@sha256:19f8151c…`。
+
+### 21.① 升级前自查（还在 v0.2.15 上，只读）
+
+先在网页里把「待审批」全部批准或拒绝，等已批准的任务续跑完，并确认这几分钟里没有正在执行的对话或任务。然后：
+
+<!-- v0216:check:begin -->
+```bash
+(
+  D=/opt/xiongbao/upgrade-v0.2.16
+  sh "$D/pre-upgrade-check.sh" xiongbao
+  echo '--- 第 ⑦ 步的几项与凭据（升级前）'
+  sh "$D/prod-inspect.sh" xiongbao /opt/xiongbao/.env.delivery |
+    grep -E '^(automation_hooks_signed|opentag_chat_bindings|learning_[a-z_]+|shared_account_[a-z_]+|web_bot_auth_env_named|approval_exact_input_[a-z]+|credentials_[a-z0-9_]+)='
+  echo '--- 现在这个容器的卷和端口'
+  docker inspect xiongbao --format '{{range .Mounts}}{{.Name}}:{{.Destination}} {{end}}'
+  docker inspect xiongbao --format '{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}{{.HostIp}}:{{.HostPort}}->{{$p}} {{end}}{{end}}'
+  echo '--- 本机所有容器'
+  docker ps -a --format '{{.Names}}  {{.Status}}  {{.Image}}'
+)
+```
+<!-- v0216:check:end -->
+
+看这几处：
+
+- 最后一行是「结论：可以升级」。不是的话按它打印的办法处理（待审批、续跑、空间），处理完再跑一次这一步。
+- `automation_hooks_signed`、`opentag_chat_bindings`、`learning_…`、`shared_account_…`、`web_bot_auth_env_named`、`approval_exact_input_…` 都是 `0`（不是 0 的，先别升级，把输出发给 Claude）。
+- `credentials_…` 只是记一下：`credentials_live_kid_k1` 就是升级时要重新加密的在用凭据数（摸底时是 3）。
+- 卷是 `xiongbao-db:/var/lib/postgresql`、`xiongbao-workspace:/workspace`、`xiongbao-profiles:/profiles`，端口是 `3772->3001/tcp` 与 `3773->3773/tcp`（顺序可以不同）。不一样的话先别往下做，把输出发给 Claude：第 ③ 步的命令是按这几个名字写的。
+- 容器列表里除了 `xiongbao`（运行中）和以前切换留下的、停着的 `xiongbao-v0212-rollback`、`xiongbao-v0214-rollback`，如果还有别的员工框架镜像在跑（名字里带 `agent-` 的），告诉 Claude：它们要和服务器一起升级。
+
+再确认要重新加密的凭据都能用现在的 `KEY_ENCRYPTION_KEY` 解开（只读：只查库、在容器里试着解开，不改任何东西，不打印密钥和凭据内容）。有解不开的，v0.2.16 的迁移会整体回滚、拒绝启动（数据不动，可以按回滚 A 回来），所以先在这里查清：
+
+<!-- v0216:credcheck:begin -->
+```bash
+(
+  printf '%s\n' "SET default_transaction_read_only = on;" \
+    "SELECT coalesce(json_agg(json_build_object('id', id, 'tenant', tenant_id, 'kind', kind, 'value', encrypted_value) ORDER BY id), '[]') FROM credentials WHERE encrypted_value LIKE '{\"version\":2,%' AND encrypted_value LIKE '%\"kid\":\"k1\"%';" |
+    docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -X -q -A -t' |
+    docker exec -i xiongbao sh -c 'OPEN_KEY=$(cat /run/s6/container_environment/KEY_ENCRYPTION_KEY) exec bun -e "$0"' '
+const frame = (p) => { const b = Buffer.from(p, "utf8"); const n = Buffer.alloc(4); n.writeUInt32BE(b.length); return [n, b]; };
+const key = await crypto.subtle.importKey("raw", Buffer.from(process.env.OPEN_KEY, "base64"), { name: "AES-GCM" }, false, ["decrypt"]);
+const rows = JSON.parse((await Bun.stdin.text()).trim() || "[]");
+const bad = [];
+for (const r of rows) {
+  try {
+    const e = JSON.parse(r.value);
+    const aad = Buffer.concat(["openbot.vault.credential.v2", r.tenant, r.id, r.kind].flatMap(frame));
+    await crypto.subtle.decrypt({ name: "AES-GCM", iv: Buffer.from(e.iv, "base64"), additionalData: aad }, key, Buffer.from(e.ciphertext, "base64"));
+  } catch { bad.push(`${r.id}（租户 ${r.tenant}，种类 ${r.kind}）`); }
+}
+console.log(`要重新加密的旧格式凭据 ${rows.length} 条，能解开 ${rows.length - bad.length} 条` + (bad.length ? `，解不开 ${bad.length} 条：${bad.join("、")}` : "。"));
+'
+)
+```
+<!-- v0216:credcheck:end -->
+
+应打印「要重新加密的旧格式凭据 N 条，能解开 N 条。」（N 是 3 或 4，含已停用的）。有「解不开」的先别升级，把这一行发给 Claude。
+
+### 21.② 改写 env 文件里的旧配置名
+
+<!-- v0216:rewrite-env:begin -->
+```bash
+sh /opt/xiongbao/upgrade-v0.2.16/rewrite-env.sh /opt/xiongbao/.env.delivery
+ls -l /opt/xiongbao/.env.delivery*
+grep -c '^OPENBOT_' /opt/xiongbao/.env.delivery
+```
+<!-- v0216:rewrite-env:end -->
+
+它会列出改了哪几个名字（摸底时是 `OPENBOT_PUBLIC_URL`、`OPENBOT_RLS_ENFORCE`、`OPENBOT_SELF_HOST_BANNER`、`OPENBOT_SINGLE_USER` 四个）和备份文件 `/opt/xiongbao/.env.delivery.bak-<时间>`（0600），最后一行打印 `0`。生效的值一个都没变，只是名字换了；正在跑的 v0.2.15 容器不受影响（它启动时就读好了配置）。
+
+### 21.③ 切换到 v0.2.16
+
+这条命令先检查新镜像在本机、没有残留的同名回滚容器，任何一项不满足就什么都不做，服务不会停：
+
+<!-- v0216:switch:begin -->
+```bash
+(
+  set -eu
+  . /opt/xiongbao/upgrade-v0.2.16/images.env
+  docker image inspect "$NEW_IMAGE" >/dev/null 2>&1 || { echo '新镜像不在本机：先做 21.0 的第 3、4 步。这次什么都没动。'; exit 1; }
+  if docker inspect xiongbao-v0215-rollback >/dev/null 2>&1; then
+    echo '已经有一个 xiongbao-v0215-rollback 容器（上一次切换留下的），先把情况发给 Claude。这次什么都没动。'
+    exit 1
+  fi
+  docker stop -t 30 xiongbao
+  docker rename xiongbao xiongbao-v0215-rollback
+  docker update --restart=no xiongbao-v0215-rollback
+  docker run -d --name xiongbao --restart unless-stopped --env-file /opt/xiongbao/.env.delivery \
+    -p 0.0.0.0:3772:3001 -p 0.0.0.0:3773:3773 \
+    -v xiongbao-db:/var/lib/postgresql -v xiongbao-workspace:/workspace -v xiongbao-profiles:/profiles \
+    "$NEW_IMAGE"
+)
+```
+<!-- v0216:switch:end -->
+
+### 21.④ 等服务起来，看迁移摘要和备份
+
+<!-- v0216:health:begin -->
+```bash
+(
+  deadline=$((SECONDS + 300))
+  until curl -fsS --max-time 3 http://127.0.0.1:3772/health; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo
+      echo '5 分钟还没起来：先不要做别的，把下一步的输出发给 Claude。'
+      break
+    fi
+    sleep 3
+  done
+  echo
+)
+```
+<!-- v0216:health:end -->
+
+<!-- v0216:summary:begin -->
+```bash
+docker logs xiongbao 2>&1 | grep -E 'rebrand-|credentials-rekeyed|migrations-applied|OPENBOT_ prefix|业务库|PostgresError' | tail -n 40
+```
+<!-- v0216:summary:end -->
+
+正常时依次能看到：
+
+- `rebrand-preflight: 正在备份数据库到 /var/lib/postgresql/backup/pre-rebrand-<时间>.dump ……`
+- `rebrand-preflight: 升级前备份已写好：/var/lib/postgresql/backup/pre-rebrand-<时间>.dump（… MB，权限 0600）。改名迁移开始。`
+- `{"type":"credentials-rekeyed","rekeyed":3}`（数字是 3 或 4：现网 4 条凭据里 3 条是在用的旧格式，另一条若是已停用的旧格式也一起重新加密）
+- `rebrand-superuser: 数据库超级用户与库已改名为 xiongbao（口令不变）。`
+- `rebrand-preflight: 改名迁移全部完成。升级前的备份保留在 …，确认一切正常后可以删除。`
+
+不应该出现 `These settings still use the old OPENBOT_ prefix`（第 ② 步已改完）。如果出现「这一步失败」：先不要动，把输出发给 Claude，按本节末尾「回滚」里 Claude 指定的那一种处理。
+
+服务起来后，把备份拷一份到宿主机（数据库卷之外再留一份）：
+
+<!-- v0216:backup:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.16
+  docker exec xiongbao ls -l /var/lib/postgresql/backup
+  f=$(docker exec xiongbao sh -c 'ls /var/lib/postgresql/backup/pre-rebrand-*.dump | tail -n 1')
+  docker cp "xiongbao:$f" "$D/"
+  chmod 600 "$D/$(basename "$f")"
+  ls -l "$D"
+)
+```
+<!-- v0216:backup:end -->
+
+备份文件在卷里是 `-rw------- postgres postgres`，在宿主机上是 `-rw-------`。
+
+### 21.⑤ 核对
+
+先在服务器上：
+
+<!-- v0216:verify:begin -->
+```bash
+(
+  printf '%s\n' "select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user;" |
+    docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -At'
+  sh /opt/xiongbao/upgrade-v0.2.16/prod-inspect.sh xiongbao /opt/xiongbao/.env.delivery |
+    sed -n '/^# database$/,/^database_size_bytes/p;/^\(credentials_live_kid_k1\|deployment_packages_tenant_old_brand\|plugin_grants_granted_by_old_brand\|user_skin_old_brand\)=/p'
+)
+```
+<!-- v0216:verify:end -->
+
+第一行应是 `xiongbao_app|f|f`；四个「old brand」名单（角色、库、函数、触发器）下面都是空的；最后四个数都是 `0`。
+
+再在浏览器里（**已经开着的网页先刷新一次**，升级时连接断过）：
+
+1. 登录。
+2. 打开一个升级前的历史对话，内容、卡片、审批记录都在。
+3. 用到已存凭据的地方能用：模型库里正在用的模型点「测试连接」，以及平时用的连接器（如百度网盘）读一次文件。
+4. 新建一个对话，和「我的分身」说一句话，能正常回答。
+
+### 21.⑥ 设备端与浏览器扩展
+
+- 设备端：从 Release `device-v0.2.16`（由你推标签，做法同 12.5）下载安装包，直接覆盖安装，不用解除配对；装完在网页「我的设备」里看到这台电脑在线即可。
+- 浏览器扩展：这一版已经删除，不用装新的；以前装过的，在浏览器的扩展管理里移除。
+
+### 21.⑦ 需要重新连接的项
+
+按 Task 23 列出的项（带签名的自动化钩子、OpenTag、学习/Intelligence、共享账号身份、web-bot-auth）：**现网均为 0，无需操作**；升级当天第 ① 步已经复查过一次，升级后可以再复查：
+
+<!-- v0216:recheck:begin -->
+```bash
+sh /opt/xiongbao/upgrade-v0.2.16/prod-inspect.sh xiongbao /opt/xiongbao/.env.delivery |
+  grep -E '^(automation_hooks_signed|opentag_chat_bindings|learning_[a-z_]+|shared_account_[a-z_]+|web_bot_auth_env_named)='
+```
+<!-- v0216:recheck:end -->
+
+都应是 `0`（`learning_…` 那几行可能是 `n/a`，表示没有这张表，同样不用管）。万一某项不是 0：
+
+- `automation_hooks_signed`：在网页里给这些自动化钩子重新生成签名密钥，把新密钥交给调用方（签名域换了名字，旧密钥算出的签名对不上）。
+- `web_bot_auth_env_named=1` 且没设 `WEB_BOT_AUTH_KEY`：公钥和 keyid 变了，按 `xiongbao/docs/configuration.md`「Registering with Cloudflare」重新登记。
+- `opentag_chat_bindings`：对端要换成认 `/xiongbao/membership`、`/xiongbao/deliver` 和 `xiongbao.sender` 的版本。
+- `shared_account_…`：存量的共享账号照常可用，不用动。
+
+### 21.⑧ 观察两天
+
+每天看一次，有异常把输出发给 Claude：
+
+```bash
+curl -fsS http://127.0.0.1:3772/health; echo
+docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential envelope|凭据|PostgresError|OPENBOT_ prefix' | tail -n 20
+```
+
+第一行是健康检查的结果；第二条正常时什么都不打印。
+两天都正常再说一声，就可以准备 v0.2.17。在那之前**不要删**：卷里和 `/opt/xiongbao/upgrade-v0.2.16` 里的 `pre-rebrand-*.dump`、`.env.delivery.bak-*`、停着的 `xiongbao-v0215-rollback`（回滚要用它记下的镜像）。以前留下的 `xiongbao-v0212-rollback`、`xiongbao-v0214-rollback` 连的是改名前的库，已经用不上了，可以 `docker rm` 掉。
+
+### 21.9 回滚
+
+先看第 ④ 步的日志属于哪一种，**拿不准就先问 Claude**：
+
+- **A. 升级没成功，日志里说「业务库没有改动」（或「数据没有改动」）**：业务数据没动过，直接换回 v0.2.15 用原来的卷，什么数据都不丢。
+- **B. 升级已经成功（或日志说「业务库已经改动」「已经改成新名字」），但还是要回到 v0.2.15**：用第 ④ 步之前自动做的备份还原到一个**新卷**，再用 v0.2.15 镜像起来。**升级之后写进去的数据（新对话、新审批、改过的设置）都会丢**；还原后要重新发起在途的事。
+
+**A. 直接换回 v0.2.15**（这条命令会先核对日志，日志里有任何「已经改动」的字样就什么都不做）：
+
+<!-- v0216:rollback-a:begin -->
+```bash
+(
+  set -eu
+  docker inspect xiongbao-v0215-rollback >/dev/null 2>&1 || { echo '找不到 xiongbao-v0215-rollback：不能走 A，先把情况发给 Claude。'; exit 1; }
+  log=$(docker logs xiongbao 2>&1)
+  if ! printf '%s\n' "$log" | grep -qE '业务库没有改动|数据没有改动' ||
+    printf '%s\n' "$log" | grep -qE '业务库已经改动|已经改成新名字|无法确认|已经改动了'; then
+    echo '日志不是「业务库没有改动」这一种：不能走 A，先把第 ④ 步的输出发给 Claude。这次什么都没动。'
+    exit 1
+  fi
+  docker rm xiongbao-v0216-failed >/dev/null 2>&1 || true
+  docker stop -t 30 xiongbao
+  docker rename xiongbao xiongbao-v0216-failed
+  docker update --restart=no xiongbao-v0216-failed
+  # 删掉卷上的「改名进行中」记录：以后再升级时才会重新备份（备份文件本身留着）。
+  docker run --rm --volumes-from xiongbao-v0216-failed --user root --entrypoint rm \
+    "$(docker inspect -f '{{.Config.Image}}' xiongbao-v0216-failed)" -f /var/lib/postgresql/backup/rebrand-in-progress
+  docker rename xiongbao-v0215-rollback xiongbao
+  docker update --restart=unless-stopped xiongbao
+  docker start xiongbao
+)
+```
+<!-- v0216:rollback-a:end -->
+
+然后用第 ④ 步的第一条命令等它起来。env 文件不用换回：v0.2.15 同样认 `XIONGBAO_` 开头的名字（它是按改写前的配置建的容器，这次只是重新启动）。
+
+**B. 用备份还原到新卷**，分三步。
+
+B1. 停掉 v0.2.16（留着别删，改过名的库还在它的卷里），把备份和还原脚本拷出来，env 文件换回改写前的那份：
+
+<!-- v0216:rollback-b-stop:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.16
+  if docker inspect xiongbao-v0216-stopped >/dev/null 2>&1; then
+    echo '已经有 xiongbao-v0216-stopped：上一次回滚做到一半，先把情况发给 Claude。这次什么都没动。'
+    exit 1
+  fi
+  docker stop -t 30 xiongbao
+  docker rename xiongbao xiongbao-v0216-stopped
+  docker update --restart=no xiongbao-v0216-stopped
+  rm -rf "$D/backup-from-volume"
+  docker cp xiongbao-v0216-stopped:/var/lib/postgresql/backup "$D/backup-from-volume"
+  docker cp xiongbao-v0216-stopped:/etc/s6-overlay/scripts/rebrand-restore.sh "$D/rebrand-restore.sh"
+  chmod -R go-rwx "$D"
+  ls -l "$D/backup-from-volume"
+  envb=$(ls -t /opt/xiongbao/.env.delivery.bak-* 2>/dev/null | head -n 1 || true)
+  if [ -n "$envb" ]; then
+    cp -p /opt/xiongbao/.env.delivery "$D/env.delivery.v0216"
+    cp -p "$envb" /opt/xiongbao/.env.delivery
+    echo "env 文件已换回改写前的 $envb（改写后的那份留在 $D/env.delivery.v0216）"
+  fi
+)
+```
+<!-- v0216:rollback-b-stop:end -->
+
+B2. 用 v0.2.15 镜像和一个新的数据库卷 `xiongbao-db-v0215-restore` 起容器（员工文件和浏览器登录的两个卷照旧用）：
+
+<!-- v0216:rollback-b-start:begin -->
+```bash
+(
+  set -eu
+  . /opt/xiongbao/upgrade-v0.2.16/images.env
+  docker image inspect "$OLD_IMAGE" >/dev/null
+  docker volume create xiongbao-db-v0215-restore
+  docker run -d --name xiongbao --restart unless-stopped --env-file /opt/xiongbao/.env.delivery \
+    -p 0.0.0.0:3772:3001 -p 0.0.0.0:3773:3773 \
+    -v xiongbao-db-v0215-restore:/var/lib/postgresql -v xiongbao-workspace:/workspace -v xiongbao-profiles:/profiles \
+    "$OLD_IMAGE"
+)
+```
+<!-- v0216:rollback-b-start:end -->
+
+用第 ④ 步的第一条命令等它起来（这是一个全新的空库，v0.2.15 首次启动会建好表和角色）。
+
+B3. 把备份还原进去（用的是最新的那份 `pre-rebrand-*.dump`，就是这次升级前做的），再重启：
+
+<!-- v0216:rollback-b-restore:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.16
+  f=$(ls "$D"/backup-from-volume/pre-rebrand-*.dump | tail -n 1)
+  echo "用这份备份还原：$f"
+  docker cp "$f" xiongbao:/tmp/restore.dump
+  docker exec -i xiongbao sh -s /tmp/restore.dump < "$D/rebrand-restore.sh"
+  docker restart xiongbao
+)
+```
+<!-- v0216:rollback-b-restore:end -->
+
+还原脚本先核对：备份完整可读、这是 v0.2.15 刚起来的新卷（不是原来那个卷、库里还没有对话）、盘上放得下一份副本；任何一项不满足就什么都不动并说明原因。它停掉网站服务、把备份灌进一个临时库，成功后在一个事务里换上，最后打印「还原完成」。中途断了就原样再执行一次 B3，它会从断开的地方接着做。
+
+再用第 ④ 步的第一条命令等它起来，然后核对：
+
+<!-- v0216:rollback-b-check:begin -->
+```bash
+printf '%s\n' "select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user;" \
+  "select has_table_privilege(current_user, 'public.user_roles', 'UPDATE');" |
+  docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -At'
+```
+<!-- v0216:rollback-b-check:end -->
+
+应打印 `openbot_app|f|f` 和 `f`（应用角色是 v0.2.15 的名字、不是超级用户、不能改身份角色表）。再登录网页，打开历史对话核对。
+
+回滚 B 之后：数据库在新卷 `xiongbao-db-v0215-restore` 上，原来的卷 `xiongbao-db` 与停着的 `xiongbao-v0216-stopped` 先都留着；以后再升级时，第 ③ 步的卷名要换，先找 Claude 改命令。
