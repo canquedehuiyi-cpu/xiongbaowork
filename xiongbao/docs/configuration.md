@@ -1160,12 +1160,12 @@ cannot reach Docker.
 
 `COMPUTER_NAMESPACE` names the deployment a computer belongs to. It is part of every container and
 volume name the supervisor derives, and the supervisor acts only on computers carrying it, so two
-deployments on one Docker host never adopt each other's. Left unset, the supervisor settles it from the
-host when it first needs it: `xiongbao`, unless every computer and volume it finds under either default
-is under the default from before v0.2.16, in which case it keeps that one and says so in its log, so an
-upgraded host keeps its people's browser logins and files. A host with computers under both stays on
-`xiongbao` and logs how many earlier ones it left; setting `COMPUTER_NAMESPACE` to the earlier default
-uses those instead. Nothing is removed either way.
+deployments on one Docker host never adopt each other's. Left unset, it is `xiongbao`. A host that ran
+v0.2.16 with only computers from before it kept using the namespace those computers were made under
+(the product's earlier name), and its computers since carry that namespace: this release no longer
+looks at the host, so set `COMPUTER_NAMESPACE` to that earlier name to keep using them and their
+browser logins and files. Computers made before v0.2.16 carry their labels under the earlier prefix,
+which this release does not read; they and their volumes stay on the host untouched.
 
 Per-Bot computers belong to the supervisor rather than to Compose, so `docker compose down -v` does
 not remove them: their containers keep running and their profile volumes, which hold whatever the

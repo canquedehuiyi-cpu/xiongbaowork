@@ -8,7 +8,7 @@ describe("TEST_DATABASE_URL isolation", () => {
     const databaseUrl = testDatabaseUrl();
     const databaseName = new URL(databaseUrl).pathname.replace(/^\//, "");
     process.env.DATABASE_URL =
-      "postgres://openbot:openbot@localhost:5432/xiongbao";
+      "postgres://openbot:openbot@localhost:5432/openbot";
 
     const first = createDatabase(databaseUrl, TEST_POOL);
     try {
@@ -26,7 +26,7 @@ describe("TEST_DATABASE_URL isolation", () => {
 
         expect(firstRow?.name).toBe(databaseName);
         expect(secondRow?.name).toBe(databaseName);
-        expect(databaseName).not.toBe("xiongbao");
+        expect(["openbot", "xiongbao"]).not.toContain(databaseName);
       } finally {
         await second.$client.close();
       }

@@ -69,6 +69,20 @@ printf %s true > "$d/OPENBOT_SINGLE_USER"
 err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) && fail "empty new over an old value was not refused"
 case $err in *OPENBOT_SINGLE_USER*) ;; *) fail "the refusal does not name OPENBOT_SINGLE_USER: $err" ;; esac
 
+# 5b. another tool's variable under the old prefix (the upstream-sync tooling's) is no setting: left alone,
+#     silent; a platform model key and a build identity count by their families
+d=$T/other-tool; mkdir "$d"
+printf %s example/upstream > "$d/OPENBOT_UPSTREAM_REPOSITORY"
+printf %s 0123abc > "$d/OPENBOT_UPSTREAM_COMMIT"
+err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) || fail "another tool's variable was refused: $err"
+[ -z "$err" ] || fail "another tool's variable warned: $err"
+d=$T/families; mkdir "$d"
+printf %s v1 > "$d/OPENBOT_BUILD_VERSION"
+printf %s x > "$d/OPENBOT_POOL_"
+err=$(sh "$SCRIPT" "$d" 2>&1 >/dev/null) && fail "a build identity under the old name was not refused"
+case $err in *OPENBOT_BUILD_VERSION*) ;; *) fail "the refusal does not name OPENBOT_BUILD_VERSION: $err" ;; esac
+case $err in *OPENBOT_POOL_,*|*'OPENBOT_POOL_。'*) fail "the bare family stem was refused: $err" ;; esac
+
 # 6. missing directory is a no-op, not a failure that would block container start
 sh "$SCRIPT" "$T/nonexistent" 2>/dev/null || fail "missing directory exited non-zero"
 

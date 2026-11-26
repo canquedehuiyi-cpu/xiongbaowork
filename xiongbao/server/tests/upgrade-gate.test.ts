@@ -4,10 +4,12 @@ import { rm } from "node:fs/promises";
 import postgres from "postgres";
 import { applyRelease, mergedMigrationsFolder } from "../scripts/migrate";
 import { applyMigrations } from "../src/db/apply-migrations";
+import { readMigrationFolder } from "../src/db/migration-reach";
 import {
   PRE_RENAME_CREDENTIAL_KID,
   RENAME_MIGRATIONS,
   RENAMED_ROLES,
+  readUpgradeFacts,
   type UpgradeFacts,
   UpgradeRefusedError,
   upgradeRefusal,
@@ -220,6 +222,30 @@ describe.skipIf(!owner)("migrating with the check", () => {
           select encrypted_value as value from public.credentials where id = ${id}`;
       });
       expect(row?.value).toBe(envelope);
+
+      // The check counts in the platform frame and leaves the caller's frame exactly as it found it.
+      const folder = await mergedMigrationsFolder();
+      try {
+        const migrations = await readMigrationFolder(folder);
+        const applied = (
+          await client<{ hash: string; created_at: string | null }[]>`
+            select hash, created_at from drizzle.__drizzle_migrations`
+        ).map((entry) => ({
+          hash: entry.hash,
+          createdAt:
+            entry.created_at === null ? null : Number(entry.created_at),
+        }));
+        const [after] = await client.begin(async (tx) => {
+          await tx`select set_config('app.tenant_id', 'caller-frame', true)`;
+          const facts = await readUpgradeFacts(tx, migrations, applied);
+          expect(facts.oldCredentials).toBe(1);
+          return tx<{ frame: string | null }[]>`
+            select current_setting('app.tenant_id', true) as frame`;
+        });
+        expect(after?.frame).toBe("caller-frame");
+      } finally {
+        await rm(folder, { recursive: true, force: true });
+      }
     } finally {
       await client.end({ timeout: 5 });
     }

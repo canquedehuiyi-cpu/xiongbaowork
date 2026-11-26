@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   envName,
+  isProductSetting,
   oldSettingsRefusal,
+  PRODUCT_SETTINGS,
   settingsUnderOldNamesOnly,
 } from "../../shared/env-name";
 import { loadConfig } from "../src/config";
@@ -82,6 +85,31 @@ describe("settingsUnderOldNamesOnly", () => {
     ).toEqual([]);
   });
 
+  test("only the product's settings count: another tool's variable under the same prefix does not", () => {
+    // The upstream-sync tooling reads these under the old prefix; they are no setting of this product.
+    expect(
+      settingsUnderOldNamesOnly({
+        [`${OLD}UPSTREAM_REPOSITORY`]: "example/upstream",
+        [`${OLD}UPSTREAM_COMMIT`]: "0123abc",
+        [`${OLD}UPSTREAM_UPGRADES`]: "on",
+        [`${OLD}UPGRADE_CHECKS`]: "all",
+        [`${OLD}DISTRIBUTION_ID`]: "d",
+        [`${OLD}SOMETHING_ELSE`]: "x",
+      }),
+    ).toEqual([]);
+    expect(isProductSetting("UPSTREAM_REPOSITORY")).toBe(false);
+  });
+
+  test("a platform model key and a build identity count, by their families", () => {
+    expect(
+      settingsUnderOldNamesOnly({
+        [`${OLD}POOL_DEEPSEEK`]: "sk-test",
+        [`${OLD}BUILD_VERSION`]: "v1",
+        [`${OLD}POOL_`]: "bare",
+      }),
+    ).toEqual([`${OLD}BUILD_VERSION`, `${OLD}POOL_DEEPSEEK`]);
+  });
+
   test("names come back sorted, so the refusal reads the same on every start", () => {
     expect(
       settingsUnderOldNamesOnly({
@@ -132,5 +160,129 @@ describe("the refusal", () => {
     const started = run({ XIONGBAO_PUBLIC_URL: "https://example.com" });
     expect(started.exitCode).toBe(0);
     expect(started.stderr.toString()).toBe("");
+    // A shell that still exports the upstream-sync tooling's variables starts every process as before.
+    const upstream = run({
+      [`${OLD}UPSTREAM_REPOSITORY`]: "example/upstream",
+      [`${OLD}UPSTREAM_COMMIT`]: "0123abc",
+    });
+    expect(upstream.exitCode).toBe(0);
+    expect(upstream.stderr.toString()).toBe("");
+  });
+
+  test("a runner test run from a shell that exports the upstream-sync variables still runs", () => {
+    const runner = join(import.meta.dir, "../../runner");
+    const result = Bun.spawnSync(
+      [process.execPath, "test", "tests/project-roots.test.ts"],
+      {
+        cwd: runner,
+        env: {
+          ...process.env,
+          [`${OLD}UPSTREAM_REPOSITORY`]: "example/upstream",
+        },
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+  }, 60_000);
+});
+
+/*
+ * The list is the product's settings and nothing else, and it is kept with the source: every
+ * `XIONGBAO_<X>` the production code names is either a setting on the list (or in a family), or one of the
+ * names below that only share the prefix (run error codes, stored version names, constants, the families'
+ * stems). A new setting that is not added fails here, so it cannot slip past the refusal.
+ */
+const NOT_SETTINGS = new Set([
+  "APPROVAL_EXACT_AEAD_V1",
+  "APPROVAL_EXACT_HEADER_V1",
+  "APPROVAL_EXACT_SOURCE_BINDING_V1",
+  "APPROVAL_EXACT_WIRE_V1",
+  "EXACT_INPUT_JSON_V1",
+  "MODEL_REFUSED",
+  "HEADLESS_TOOL_ERROR",
+  "TOOL_LIMIT_EXCEEDED",
+  "TOOL_LIMIT",
+  "ORB",
+  "UI",
+  "UI_ID",
+  "UI_THEME",
+  "ASKS",
+  "HARNESS_NAME",
+  "WAITING_METADATA",
+  "PATH_END",
+  "PATH_START",
+  "WS_PORT",
+  "BUILD",
+  "POOL",
+  "CRAWL",
+  "EMBEDDING",
+  "SEARCH",
+  "VIDEO",
+]);
+const SOURCES = [
+  "server/src",
+  "shared",
+  "worker/src",
+  "runner/src",
+  "supervisor/src",
+  "toolkit/src",
+  "agent-computer/src",
+  "agent-*/src",
+  "app/src",
+  "app/vite.config.ts",
+  "app/serve.ts",
+  "scripts/start.sh",
+  "scripts/start-local-chrome-computer.ts",
+  "scripts/update.ts",
+  "scripts/update-local.ts",
+  "docker",
+  "docker-compose.yml",
+  "charts",
+  "desktop-device/src-tauri/src",
+  "Dockerfile",
+  "server/Dockerfile",
+];
+
+describe("the product's settings", () => {
+  test("every setting the production source names is on the list, and the list names nothing else", () => {
+    const root = join(import.meta.dir, "../..");
+    const grep = Bun.spawnSync(
+      [
+        "git",
+        "grep",
+        "-ohE",
+        "XIONGBAO_[A-Z][A-Z0-9_]*[A-Z0-9]",
+        "--",
+        ...SOURCES,
+        ":!**/*.test.*",
+        ":!**/tests/**",
+        ":!**/*.md",
+      ],
+      { cwd: root },
+    );
+    const named = new Set(
+      grep.stdout
+        .toString()
+        .split("\n")
+        .filter(Boolean)
+        .map((name) => name.slice("XIONGBAO_".length)),
+    );
+    expect(named.size).toBeGreaterThan(100);
+    const missing = [...named].filter(
+      (suffix) => !NOT_SETTINGS.has(suffix) && !isProductSetting(suffix),
+    );
+    expect(missing).toEqual([]);
+    const unknown = PRODUCT_SETTINGS.filter((suffix) => !named.has(suffix));
+    expect(unknown).toEqual([]);
+    expect([...PRODUCT_SETTINGS]).toEqual([...PRODUCT_SETTINGS].sort());
+  });
+
+  test("the container's own check refuses exactly the same list", () => {
+    const script = readFileSync(
+      join(import.meta.dir, "../../docker/s6/scripts/env-defaults.sh"),
+      "utf8",
+    );
+    const listed = /\nsettings='\n([^']*)'\n/.exec(script)?.[1] ?? "";
+    expect(listed.split(/\s+/).filter(Boolean)).toEqual([...PRODUCT_SETTINGS]);
+    expect(script).toContain("BUILD_?* | POOL_?*)");
   });
 });

@@ -17,22 +17,17 @@ import "../../shared/refuse-old-settings";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { hostname, platform, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
-// --- desktop control (sub-project 2) ---
-import type { DesktopEngine } from "../../shared/desktop-control";
+import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
 import { type AcpHost, createAcpHost } from "./acp/host";
 import { createAppHost } from "./app-host";
-import {
-  APP_REF,
-  type AppEntry,
-  type AppInput,
-  createAppRegistry,
-} from "./apps";
 import { createRunnerBrowser, type RunnerBrowser } from "./browser";
 import {
   type CredentialStore,
   createFileCredentialStore,
   deviceIdFor,
 } from "./credentials";
+// --- desktop control (sub-project 2) ---
+import type { DesktopEngine } from "../../shared/desktop-control";
 import {
   compareDesktopEngines,
   createDesktopActions,
@@ -46,11 +41,11 @@ import {
   NO_CONTROL,
 } from "./desktop/control";
 import { createDesktopSessions, type DesktopSessions } from "./desktop/session";
+// --- end desktop control ---
+import { createRunnerDispatcher } from "./dispatch";
 // --- app discovery (sub-project 3) ---
 import type { DiscoverDeps } from "./discover";
 import { createDiscoverActions } from "./discover-actions";
-// --- end desktop control ---
-import { createRunnerDispatcher } from "./dispatch";
 // --- end app discovery ---
 import {
   browserProfileRootFor,
@@ -684,11 +679,7 @@ export function parseAppCommand(
   } else {
     if (!value) return `--${flag} needs the app's name or reference.`;
     command = {
-      kind: flag.replace("-app", "") as
-        | "remove"
-        | "test"
-        | "enable"
-        | "disable",
+      kind: flag.replace("-app", "") as "remove" | "test" | "enable" | "disable",
       target: value,
     };
   }

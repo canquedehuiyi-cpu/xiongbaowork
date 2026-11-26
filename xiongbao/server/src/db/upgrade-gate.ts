@@ -77,8 +77,8 @@ export function upgradeRefusal(facts: UpgradeFacts): string | undefined {
  * The credentials are counted in the `platform` frame: row security on `credentials` is forced, so a
  * migration owner that is neither a superuser nor BYPASSRLS sees only the rows its frame admits, and the
  * `tenant_isolation` policies admit every row to that frame (migrations 0114, 0115, 0121 and 0240 run in
- * it the same way). The setting is transaction-local. A database without the table yet is a fresh one
- * and is not asked.
+ * it the same way). The frame is set inside a savepoint that is rolled back ({@link countOldCredentials}).
+ * A database without the table yet is a fresh one and is not asked.
  */
 export async function readUpgradeFacts(
   tx: TransactionSql,
@@ -100,20 +100,7 @@ export async function readUpgradeFacts(
   if (applied.length > 0) {
     const [table] = await tx<{ present: string | null }[]>`
       select to_regclass('public.credentials')::text as present`;
-    if (table?.present) {
-      const [previous] = await tx<{ frame: string | null }[]>`
-        select current_setting('app.tenant_id', true) as frame`;
-      const frame = previous?.frame ?? "";
-      await tx`select set_config('app.tenant_id', 'platform', true)`;
-      // `sealCredential` writes compact JSON, so the kid is matched as text: casting every row to jsonb
-      // would fail on a v1 envelope, which is not JSON.
-      const [row] = await tx<{ count: string }[]>`
-        select count(*)::text as count from public.credentials
-         where encrypted_value like ${'{"version":2,%'}
-           and encrypted_value like ${`%"kid":"${PRE_RENAME_CREDENTIAL_KID}"%`}`;
-      await tx`select set_config('app.tenant_id', ${frame}, true)`;
-      oldCredentials = Number(row?.count ?? 0);
-    }
+    if (table?.present) oldCredentials = await countOldCredentials(tx);
   }
   return {
     applied: applied.length,
@@ -121,6 +108,37 @@ export async function readUpgradeFacts(
     oldRoles,
     oldCredentials,
   };
+}
+
+/** Thrown only to roll the savepoint back, which puts the tenant frame back exactly as it was. */
+class FrameRestored extends Error {}
+
+/**
+ * The credential rows still sealed under the pre-v0.2.16 kid, counted in the `platform` frame inside a
+ * savepoint that is then rolled back. Rolling back restores `app.tenant_id` to whatever it was before,
+ * unset included, rather than writing a value of ours over it: a migration after this check sees the frame
+ * its caller left. (PostgreSQL itself reads a custom setting that was ever touched in a session as an empty
+ * string afterwards, never NULL; nothing here writes one.)
+ */
+async function countOldCredentials(tx: TransactionSql): Promise<number> {
+  let count = 0;
+  const restored = new FrameRestored();
+  await tx
+    .savepoint(async (sp) => {
+      await sp`select set_config('app.tenant_id', 'platform', true)`;
+      // `sealCredential` writes compact JSON, so the kid is matched as text: casting every row to jsonb
+      // would fail on a v1 envelope, which is not JSON.
+      const [row] = await sp<{ count: string }[]>`
+        select count(*)::text as count from public.credentials
+         where encrypted_value like ${'{"version":2,%'}
+           and encrypted_value like ${`%"kid":"${PRE_RENAME_CREDENTIAL_KID}"%`}`;
+      count = Number(row?.count ?? 0);
+      throw restored;
+    })
+    .catch((failure: unknown) => {
+      if (failure !== restored) throw failure;
+    });
+  return count;
 }
 
 /** Thrown instead of migrating a database that has not been through v0.2.16. */

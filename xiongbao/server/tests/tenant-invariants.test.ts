@@ -200,11 +200,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/db/client.ts": { "set_config('app.tenant_id', ${tenant}": 2 },
   // The pre-migration upgrade check, run only inside the migration transaction (`scripts/migrate.ts`),
   // never from a request: it counts every tenant's pre-v0.2.16 credentials as `platform`, as migrations
-  // 0114, 0115, 0121 and 0240 do, then puts the caller's frame back.
-  "src/db/upgrade-gate.ts": {
-    "set_config('app.tenant_id', 'platform'": 1,
-    "set_config('app.tenant_id', ${frame}": 1,
-  },
+  // 0114, 0115, 0121 and 0240 do, inside a savepoint it rolls back, which puts the caller's frame back.
+  "src/db/upgrade-gate.ts": { "set_config('app.tenant_id', 'platform'": 1 },
   // M3: the third finds the binding a chat sender names, then checked against its own tenant.
   "src/delivery/opentag-agent.ts": { 'runAsTenant("platform"': 3 },
   "src/delivery/router.ts": { 'runAsTenant("platform"': 3 },

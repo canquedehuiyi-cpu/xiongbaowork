@@ -6,7 +6,7 @@ describe("TEST_DATABASE_URL", () => {
     expect(() => testDatabaseUrlFrom({})).toThrow(/TEST_DATABASE_URL/);
   });
 
-  test.each(["xiongbao"])(
+  test.each(["openbot", "xiongbao"])(
     "refuses the live development database %s even when DATABASE_URL names a test one",
     (name) => {
       expect(() =>
