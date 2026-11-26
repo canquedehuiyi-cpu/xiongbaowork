@@ -5,6 +5,8 @@ import { createDictationRoutes } from "../src/dictation/routes";
 const lookup = (headers: Record<string, string>) => (name: string) =>
   headers[name];
 
+// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the marker's spelling before the rename
+
 test.each(["voice", "dictation"] as const)(
   "%s accepts the new and the legacy marker header, and refuses neither",
   (kind) => {

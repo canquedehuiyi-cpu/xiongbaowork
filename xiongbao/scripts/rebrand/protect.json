@@ -10,46 +10,6 @@
     "reason": "环境变量名与错误码（任务 15 处理）"
   },
   {
-    "pattern": "\\bopenbotUrl\\b",
-    "until": "R3",
-    "reason": "打开浏览器请求体 connection.openbotUrl 与录制扩展状态 LauncherState.openbotUrl：服务器与电脑端（旧版可能仍在跑）之间传输的字段名（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-${kind}",
-    "until": "R3",
-    "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-bot-id",
-    "until": "R3",
-    "reason": "电脑端请求头：Bot id（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-build-version",
-    "until": "R3",
-    "reason": "发行站点回给服务器的构建版本头（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-computer-token",
-    "until": "R3",
-    "reason": "电脑令牌头：电脑端到服务器（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-dictation",
-    "until": "R3",
-    "reason": "浏览器请求标记头（server/src/browser-request-marker.ts 同时认新旧两种）（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-egress",
-    "until": "R3",
-    "reason": "电脑端出站过滤头（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
-    "text": "x-openbot-person-id",
-    "until": "R3",
-    "reason": "电脑端请求头：人员 id（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
-  },
-  {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
     "pattern": "-d openbot\\b",
     "until": "R3",
@@ -1056,6 +1016,24 @@
     "reason": "断言服务器发往电脑端的头不再带旧前缀 x-openbot-（旧名就是被测对象）"
   },
   {
+    "file": "xiongbao/server/src/browser-request-marker.ts",
+    "pattern": "x-openbot-(?:\\$\\{kind\\}|\\*)",
+    "until": "R4",
+    "reason": "网页发给服务器的语音/听写标记头旧拼法：服务器仍认 x-openbot-*（网页自 0.2.10 起只发 x-xiongbao-*，升级前打开的标签页刷新前可能还发旧名）；只有网页发这个头，设备端与 runner 从不发（Task 16 核实）；legacy-compat 到 R4 随兼容代码删除"
+  },
+  {
+    "file": "xiongbao/server/tests/browser-request-marker.test.ts",
+    "pattern": "x-openbot-",
+    "until": "R4",
+    "reason": "证明服务器仍接受旧拼法的浏览器标记头（旧名就是被测对象）；legacy-compat 到 R4 随兼容代码删除"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/wire-headers.test.ts",
+    "pattern": "x-openbot-(?:bot-id|person-id|computer-token|egress)",
+    "until": "R4",
+    "reason": "证明电脑端（agent-computer 云端容器，不是设备端）已不认这些旧头：带旧头的请求没有令牌、Bot、人员（旧名就是被测对象）；到 R4 删除"
+  },
+  {
     "file": "xiongbao/server/tests/brand-third-party.test.ts",
     "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
     "until": "R3",
@@ -1102,12 +1080,6 @@
     "pattern": "(?<=`)openbot:(?=`)",
     "until": "R3",
     "reason": "注释里写的是已保护的 granted_by 标记前缀 openbot: 原值"
-  },
-  {
-    "file": "xiongbao/server/src/browser-request-marker.ts",
-    "text": "`x-openbot-*`",
-    "until": "R3",
-    "reason": "注释里写的是仍被认的旧浏览器标记头前缀（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "file": "xiongbao/server/src/agents/profile-types.ts",

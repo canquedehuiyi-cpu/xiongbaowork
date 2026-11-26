@@ -786,6 +786,7 @@ tests/runner-browser-probe.test.ts
 tests/runner-browser.test.ts
 tests/runner-channel.test.ts
 tests/runner-dispatch.test.ts
+tests/runner-previous-release.test.ts
 tests/runs-that-finish.test.ts
 tests/runtime-agents.integration.test.ts
 tests/runtime-own-runs.test.ts

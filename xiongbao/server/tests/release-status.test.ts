@@ -78,7 +78,7 @@ describe("running release identity", () => {
       (
         await app.request(
           "/release?version=v0.3.0",
-          { headers: { "x-openbot-build-version": "v0.3.0" } },
+          { headers: { "x-xiongbao-build-version": "v0.3.0" } },
           from("127.0.0.1"),
         )
       ).status,
