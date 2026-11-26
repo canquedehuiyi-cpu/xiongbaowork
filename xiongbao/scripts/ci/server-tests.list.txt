@@ -346,6 +346,7 @@ tests/conversation-title.integration.test.ts
 tests/copilot-forwarded-headers.test.ts
 tests/copilot-runtime-frames.integration.test.ts
 tests/copilot.test.ts
+tests/credential-rekey.test.ts
 tests/credential-rotation-leak.integration.test.ts
 tests/credentials-reseal.test.ts
 tests/credentials.test.ts

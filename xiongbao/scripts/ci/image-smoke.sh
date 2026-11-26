@@ -107,6 +107,10 @@ if [ "$healthy" = true ]; then
   check docker exec "$name" sh -c 'test -z "$(ls /var/lib/postgresql/backup 2>/dev/null | grep "^pre-rebrand-")"'
   docker logs "$name" > "$evidence/recreated.log" 2>&1
   check test "$(grep -ac 'rls-not-enforced\|rls-role-check-unavailable' "$evidence/recreated.log" || true)" = 0
+  # Credentials are sealed under kid k2 from the first boot, so no credential is left under k1 and neither
+  # boot had any to rekey (the v0.2.16 rekey prints a line only when it rewrites rows).
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from credentials where encrypted_value::jsonb ->> '"'"'kid'"'"' = '"'"'k1'"'"'"')" = 0
+  check test "$(cat "$evidence/initial.log" "$evidence/recreated.log" | grep -ac 'credentials-rekeyed' || true)" = 0
   # Model the upgrade from an older embedded volume which has only an owner secret.
   docker exec "$name" rm /var/lib/postgresql/pgpassword-app
   docker stop "$name" >/dev/null

@@ -102,6 +102,10 @@ services:
       # password in this file, and the server refuses it under NODE_ENV=production; set your own and
       # the server's `ROLE_WRITER_DATABASE_URL` below follows it.
       ROLE_WRITER_PASSWORD: ${ROLE_WRITER_PASSWORD:-openbot}
+      # The server's own key, the same one as below: the v0.2.16 migration rekeys the credentials an
+      # earlier release sealed (kid k1) with it, in the migration's own transaction. Read only when
+      # there is such a credential; a database without one migrates without it.
+      KEY_ENCRYPTION_KEY: ${KEY_ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -123,6 +123,12 @@ export async function applyMigrations(
   client: Sql,
   migrationsFolder: string,
   journal: MigrationsJournal = MIGRATIONS_JOURNAL,
+  /**
+   * Work that belongs to the same release as the migrations and cannot be written in SQL, run in the
+   * same transaction after them, so it commits with their journal rows or not at all. `scripts/migrate.ts`
+   * passes the v0.2.16 credential rekey.
+   */
+  afterMigrations?: (tx: TransactionSql) => Promise<void>,
 ): Promise<void> {
   const folder = await readMigrationFolder(migrationsFolder);
 
@@ -142,6 +148,7 @@ export async function applyMigrations(
       migrationsFolder,
       ...journal,
     });
+    await afterMigrations?.(tx);
   });
 }
 

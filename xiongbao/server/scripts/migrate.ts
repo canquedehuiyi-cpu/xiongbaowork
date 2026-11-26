@@ -31,7 +31,35 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres, { type Sql } from "postgres";
+import { rekeyCredentials } from "../src/credentials-rekey";
 import { applyMigrations } from "../src/db/apply-migrations";
+
+/**
+ * What a deployment applies: every pending migration and then, in the same transaction on the business
+ * database, the v0.2.16 credential rekey (`src/credentials-rekey`).
+ *
+ * One transaction because the delivery container's rebrand-preflight.sh tells whether the business
+ * database changed by counting the migration journal: the rekey commits exactly when the journal rows of
+ * the migrations it came with do, and a credential that will not open rolls those back with it.
+ *
+ * `encryptionKey` is the server's `KEY_ENCRYPTION_KEY`, read only when a `k1` row is there to rekey.
+ * The embedded image passes the container's own; an external database's `.env.migration` has to carry
+ * it (docs/deployment-xiongbao.md, section 4).
+ */
+export function applyRelease(
+  encryptionKey: string | undefined,
+  log: (line: string) => void = (line) => console.info(line),
+): typeof applyMigrations {
+  return async (client, folder, journal) => {
+    let rekeyed = 0;
+    await applyMigrations(client, folder, journal, async (tx) => {
+      ({ rekeyed } = await rekeyCredentials(tx, encryptionKey));
+    });
+    // Only once committed, and only when there was something to say: a second start prints nothing new.
+    if (rekeyed > 0)
+      log(JSON.stringify({ type: "credentials-rekeyed", rekeyed }));
+  };
+}
 
 /*
  * The migrations the Drizzle schema in `src/db/schema` is written against.
@@ -183,7 +211,15 @@ if (import.meta.main) {
   );
   const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
   try {
-    await runMigrations(client, migrationsFolder);
+    /*
+     * A database laid down at an earlier release's schema (`through`, tests only) is v0.2.15's, and
+     * v0.2.15 did not rekey: it keeps the credentials as that release wrote them.
+     */
+    await runMigrations(
+      client,
+      migrationsFolder,
+      through ? applyMigrations : applyRelease(process.env.KEY_ENCRYPTION_KEY),
+    );
   } finally {
     // The merged folder is a temporary copy; removing it cannot fail the run (`force`).
     await rm(migrationsFolder, { recursive: true, force: true });

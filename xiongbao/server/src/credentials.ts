@@ -20,7 +20,8 @@ type CredentialEnvelope = {
  * tenant's row, another kind, another id. v2 authenticates the row's own identity as AES-GCM
  * additional data. The binding is NEVER read from the envelope: `bind` only names which binding the
  * reader must rebuild, from the row's own columns, so a copied envelope meets a different tenant or
- * id and fails its tag. `kid` leaves room for a later key-encryption-key rotation.
+ * id and fails its tag. `kid` names which additional-data label sealed it ({@link aadLabelFor}): `k2`
+ * is the only one written, `k1` is still read until every row has been rekeyed.
  */
 type CredentialEnvelopeV2 = {
   version: 2;
@@ -41,8 +42,29 @@ export type CredentialBinding = {
 /** Seals a plaintext for the row a store is about to write, once that row's identity is known. */
 export type CredentialSeal = (binding: CredentialBinding) => Promise<string>;
 
-const CREDENTIAL_AAD_LABEL = "openbot.vault.credential.v2";
-const CREDENTIAL_KID = "k1";
+/** The kid every envelope is sealed under, and the label its additional data starts with. */
+export const CREDENTIAL_KID = "k2";
+const CREDENTIAL_AAD_LABEL = "xiongbao.vault.credential.v2";
+/** The kid envelopes were sealed under before v0.2.16, read but never written. */
+// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+export const LEGACY_CREDENTIAL_KID = "k1";
+
+/**
+ * The label a v2 envelope's additional data starts with, for the kid it carries.
+ *
+ * The label is the only part of the binding that is not the row's own, so changing it re-binds every
+ * envelope: one sealed under `k1` fails its tag under `k2`'s label and the other way round. Rows sealed
+ * before v0.2.16 are `k1`; the v0.2.16 migration rekeys them to `k2` in the same transaction as the
+ * rest of the business database's migrations (`credentials-rekey.ts`), and this server reads both so
+ * that a row a v0.2.15 replica writes during a rolling upgrade still opens. Any other kid has none.
+ */
+function aadLabelFor(kid: unknown): string | undefined {
+  if (kid === CREDENTIAL_KID) return CREDENTIAL_AAD_LABEL;
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+  if (kid === LEGACY_CREDENTIAL_KID) return "openbot.vault.credential.v2";
+  return undefined;
+}
+
 /** Model-library keys are named after the library row, so the deployment lookup never meets one. */
 export const MODEL_REGISTRY_KEY_PREFIX = "model_registry:";
 
@@ -266,13 +288,10 @@ export async function decryptSecret(encodedKey: string, value: string) {
 }
 
 /** Length-prefixed UTF-8 frames, so no two different bindings can produce the same bytes. */
-function credentialAad(binding: CredentialBinding) {
-  const parts = [
-    CREDENTIAL_AAD_LABEL,
-    binding.tenantId,
-    binding.id,
-    binding.kind,
-  ].map((part) => encoder.encode(part));
+function credentialAad(binding: CredentialBinding, label: string) {
+  const parts = [label, binding.tenantId, binding.id, binding.kind].map(
+    (part) => encoder.encode(part),
+  );
   const out = new Uint8Array(
     parts.reduce((total, part) => total + 4 + part.byteLength, 0),
   );
@@ -307,7 +326,10 @@ export async function sealCredential(
     {
       name: "AES-GCM",
       iv,
-      additionalData: credentialAad(requireBinding(binding)),
+      additionalData: credentialAad(
+        requireBinding(binding),
+        CREDENTIAL_AAD_LABEL,
+      ),
     },
     await aesKey(encodedKey),
     encoder.encode(plaintext),
@@ -346,7 +368,8 @@ export function vaultRequiresAad(
  * and must keep working until they are resealed. v2 opens only with the binding rebuilt from the
  * row the value was read from; a value copied to another tenant, id or kind fails GCM
  * authentication and throws, which is a fault and deliberately not a
- * {@link CredentialUnusableError}. Anything else is refused.
+ * {@link CredentialUnusableError}. A v2 envelope opens under the label its kid names, `k2` or the
+ * pre-v0.2.16 `k1`. Anything else is refused.
  */
 export async function openCredential(
   encodedKey: string,
@@ -372,10 +395,11 @@ export async function openCredential(
     throw new Error("Credential envelope is invalid");
   }
   const envelope = JSON.parse(row.encryptedValue) as CredentialEnvelopeV2;
+  const label = aadLabelFor(envelope.kid);
   if (
     envelope.alg !== "A256GCM" ||
     envelope.bind !== "credential" ||
-    envelope.kid !== CREDENTIAL_KID ||
+    label === undefined ||
     typeof envelope.iv !== "string" ||
     typeof envelope.ciphertext !== "string"
   ) {
@@ -385,7 +409,7 @@ export async function openCredential(
     {
       name: "AES-GCM",
       iv: Buffer.from(envelope.iv, "base64"),
-      additionalData: credentialAad(requireBinding(row)),
+      additionalData: credentialAad(requireBinding(row), label),
     },
     await aesKey(encodedKey),
     Buffer.from(envelope.ciphertext, "base64"),

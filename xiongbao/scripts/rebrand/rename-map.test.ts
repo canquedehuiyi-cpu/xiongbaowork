@@ -40,10 +40,10 @@ describe("renameText", () => {
     );
   });
 
-  test("环境变量名在 R1 受保护，持久化的凭据标记不被误改", () => {
+  test("环境变量名在 R1 受保护，签名域名不被误改", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", p)).toBe("OPENBOT_PUBLIC_URL");
-    expect(renameText('"openbot.vault.credential.v2", openbotRoot', p)).toBe(
-      '"openbot.vault.credential.v2", xiongbaoRoot',
+    expect(renameText('"openbot-bearer", openbotRoot', p)).toBe(
+      '"openbot-bearer", xiongbaoRoot',
     );
   });
 
@@ -63,7 +63,7 @@ describe("renameText", () => {
     const mixed = [
       'import { OpenBotRole } from "@openbot/shared/openbot-actor";',
       "const openBotRun = process.env.OPENBOT_PUBLIC_URL ?? openbotRoot;",
-      'const label = "openbot.vault.credential.v2"; // Openbot',
+      'const label = "openbot-bearer"; // Openbot',
       "Copyright (c) 2026 CopilotKit",
     ].join("\n");
     for (const phase of ["R1", "R2", "R3", "R4"] as const) {
@@ -380,11 +380,9 @@ describe("保护清单按阶段到期", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R2"))).toBe(
       "XIONGBAO_PUBLIC_URL",
     );
-    const aad = '"openbot.vault.credential.v2"';
-    expect(renameText(aad, loadProtect("R2"))).toBe(aad);
-    expect(renameText(aad, loadProtect("R3"))).toBe(
-      '"xiongbao.vault.credential.v2"',
-    );
+    const domain = '"openbot-bearer"';
+    expect(renameText(domain, loadProtect("R2"))).toBe(domain);
+    expect(renameText(domain, loadProtect("R3"))).toBe('"xiongbao-bearer"');
     const copyright = "Copyright (c) 2026 CopilotKit";
     expect(renameText(copyright, loadProtect("R4"))).toBe(copyright);
   });

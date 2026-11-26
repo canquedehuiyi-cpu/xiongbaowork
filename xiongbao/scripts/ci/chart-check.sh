@@ -52,6 +52,11 @@ echo "ok: external database via Secret carries the role-writer URL"
 [[ "$(env_after MIGRATION_DATABASE_URL 5 "$out")" == *"key: migration-database-url"*"optional: true"* ]] ||
   fail "External database via Secret: the migrations Job is not given MIGRATION_DATABASE_URL from the database Secret."
 echo "ok: external database via Secret gives the migrations Job the owner's URL key"
+# ... and the key encryption key, optionally (a pre-install hook runs before the chart's Secret exists):
+# the v0.2.16 migration rekeys stored credentials with it. Only the Job's reference is optional.
+[[ "$(grep -A1 'key: key-encryption-key$' <<<"$out" | grep -c 'optional: true' || true)" -eq 1 ]] ||
+  fail "External database via Secret: the migrations Job is not given KEY_ENCRYPTION_KEY from the chart's Secret, optionally."
+echo "ok: the migrations Job gets the key encryption key for the credential rekey"
 
 # External database given inline: an inline role-writer URL reaches the API.
 out="$(render --values "$external" "${inline[@]}" "${owner[@]}" \
