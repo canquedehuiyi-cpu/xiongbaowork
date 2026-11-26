@@ -305,7 +305,7 @@ describe.skipIf(!owner)("the v0.2.16 rename migration", () => {
 
   test("markers and preferences are rewritten", async () => {
     const grants = await client<{ ref: string; granted_by: string }[]>`
-      select ref, granted_by from plugin_grants where agent_id = ${botId} order by ref`;
+      select ref, granted_by from plugin_grants where agent_id = ${botId} order by ref collate "C"`;
     expect([...grants]).toEqual([
       { ref: "always-on-app", granted_by: "xiongbao:always-on" },
       { ref: "person-picked-skill", granted_by: userA },
