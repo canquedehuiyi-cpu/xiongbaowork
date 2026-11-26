@@ -117,7 +117,7 @@ describe.skipIf(!owner)(
             }
             await tx`insert into channels (id, name, description, tenant_id, created_by, title, waker_group_id)
                    values (${channel}, '员工甲、员工乙', '', 'team', ${from}, ${title}, ${crew}::uuid)`;
-            await tx`select public.openbot_team_channel_hand_over_write(${channel}, ${from}, ${heir}, ${crew}::uuid)`;
+            await tx`select public.xiongbao_team_channel_hand_over_write(${channel}, ${from}, ${heir}, ${crew}::uuid)`;
             return tx<{ tenant: string; bytes: Buffer }[]>`
             select tenant_id as tenant, textsend(name) as bytes from waker_groups where id = ${crew}::uuid`;
           });

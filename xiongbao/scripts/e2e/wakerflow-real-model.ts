@@ -37,7 +37,7 @@
  *   GITHUB_ACTIONS=true                  the gate, or MODEL_E2E_LOCAL_MOCK=1 (local only)
  *   MODEL_E2E_MODEL                      the model name (mock mode: default `g4-real-mock`)
  *   MODEL_E2E_BASE_URL                   the provider's https base URL (ignored in mock mode)
- *   E2E_DATABASE_URL                     the API's role (openbot_app, NOSUPERUSER NOBYPASSRLS)
+ *   E2E_DATABASE_URL                     the API's role (xiongbao_app, NOSUPERUSER NOBYPASSRLS)
  *   E2E_ROLE_WRITER_DATABASE_URL         the restricted role writer (migration 0109)
  *   E2E_ARTIFACTS_DIR                    where the server log goes (default ./e2e-artifacts); never printed
  *   E2E_SERVER_PORT                      default: a free port

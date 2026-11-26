@@ -53,18 +53,18 @@ APP_PW="$(cat /var/lib/postgresql/pgpassword-app)"
 # Generated secrets are hex. Validate before placing one in a SQL literal.
 case "$APP_PW" in ''|*[!0-9a-f]*) echo 'migrate: invalid app password file' >&2; exit 1 ;; esac
 [ "${#APP_PW}" -eq 64 ] || { echo 'migrate: invalid app password length' >&2; exit 1; }
-printf "ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "$APP_PW" | \
+printf "ALTER ROLE xiongbao_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "$APP_PW" | \
   PGPASSWORD="$OWNER_PW" s6-setuidgid apiuser /usr/lib/postgresql/16/bin/psql \
     -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 >/dev/null
-echo 'migrate: openbot_app password installed; NOSUPERUSER NOBYPASSRLS'
+echo 'migrate: xiongbao_app password installed; NOSUPERUSER NOBYPASSRLS'
 
 WRITER_PW="$(cat /var/lib/postgresql/pgpassword-role-writer)"
 case "$WRITER_PW" in ''|*[!0-9a-f]*) echo 'migrate: invalid role writer password file' >&2; exit 1 ;; esac
 [ "${#WRITER_PW}" -eq 64 ] || { echo 'migrate: invalid role writer password length' >&2; exit 1; }
-printf "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "$WRITER_PW" | \
+printf "ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '%s';\n" "$WRITER_PW" | \
   PGPASSWORD="$OWNER_PW" s6-setuidgid apiuser /usr/lib/postgresql/16/bin/psql \
     -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 >/dev/null
-echo 'migrate: openbot_role_writer password installed'
+echo 'migrate: xiongbao_role_writer password installed'
 # Last, after every migration of the business database and before any service starts (no other session may
 # be connected to a database being renamed): the superuser and the database take the new name, in one
 # transaction on the `postgres` database. A new volume's first boot does it the same way as an upgrade.

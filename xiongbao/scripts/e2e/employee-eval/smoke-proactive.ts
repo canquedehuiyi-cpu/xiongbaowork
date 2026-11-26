@@ -12,7 +12,7 @@
  *      通知也可以发了：推迟，没有丢。
  *
  * 用法（在 xiongbao/ 下）：bun scripts/e2e/employee-eval/smoke-proactive.ts
- * 环境：E2E_DATABASE_URL（应用角色 openbot_app，NOSUPERUSER NOBYPASSRLS），跑过迁移；也认 TEST_DATABASE_URL。
+ * 环境：E2E_DATABASE_URL（应用角色 xiongbao_app，NOSUPERUSER NOBYPASSRLS），跑过迁移；也认 TEST_DATABASE_URL。
  */
 import { randomUUID } from "node:crypto";
 import { SQL } from "bun";

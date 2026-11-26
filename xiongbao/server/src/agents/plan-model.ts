@@ -4,6 +4,7 @@ import { EventSchemas } from "@ag-ui/core/schemas";
 import type { BuiltInAgentClassicConfig } from "@copilotkit/runtime/v2";
 import { PLAN_RUN_COMPLETED } from "@xiongbao/toolkit/runtime/agents";
 import type { Subscription } from "rxjs";
+import { isRunErrorCode } from "../wire-codes";
 
 // Use the model contract of the runtime we actually ship, without a second AI SDK version.
 export type PlanLanguageModel = Extract<
@@ -438,7 +439,7 @@ export class PlanModel implements PlanLanguageModel {
                     // The harness's code, so the run can say a provider's refusal in words. See
                     // `provider-refusal.ts`.
                     if (event.code) Object.assign(error, { code: event.code });
-                    if (event.code === "OPENBOT_MODEL_AUTH_REQUIRED") {
+                    if (isRunErrorCode(event.code, "MODEL_AUTH_REQUIRED")) {
                       error.name = "XiongBaoModelAuthenticationError";
                     }
                     throw error;

@@ -199,10 +199,10 @@ describe("a connected app in the personal edition", () => {
     bots.push("travel");
     await store.listForAgent("travel");
     expect(grantedBy.get("travel:notion/search")).toBe(
-      "openbot:personal-defaults",
+      "xiongbao:personal-defaults",
     );
     expect(grantedBy.get("travel:routines/list_routines")).toBe(
-      "openbot:always-on",
+      "xiongbao:always-on",
     );
   });
 

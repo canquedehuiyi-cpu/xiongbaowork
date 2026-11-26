@@ -10,7 +10,7 @@
  * UNIMPLEMENTED. No trusted boolean/token or business wiring is supplied here.
  * This AEAD envelope bound is separate from the JSON codec node/key preconditions.
  */
-export const EXACT_OBJECT_AEAD_VERSION = "OPENBOT_APPROVAL_EXACT_AEAD_V1";
+export const EXACT_OBJECT_AEAD_VERSION = "XIONGBAO_APPROVAL_EXACT_AEAD_V1";
 
 export type Envelope = Readonly<{
 	version: typeof EXACT_OBJECT_AEAD_VERSION;

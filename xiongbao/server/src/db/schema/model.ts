@@ -76,7 +76,7 @@ export type PlatformPoolTier = (typeof PLATFORM_POOL_TIERS)[number];
  * The name shape `api_key_env` must have (0120). The resolver checks it again before it reads the
  * environment, so a row can only ever name a pool key and never DATABASE_URL or the vault key.
  */
-export const PLATFORM_POOL_KEY_ENV = /^OPENBOT_POOL_[A-Z0-9_]{1,64}$/;
+export const PLATFORM_POOL_KEY_ENV = /^XIONGBAO_POOL_[A-Z0-9_]{1,64}$/;
 
 /**
  * The platform's own experience models (stories H1, K1): what a Free tenant's coworkers may speak
@@ -119,7 +119,7 @@ export const platformModelPool = pgTable(
     ),
     check(
       "platform_model_pool_api_key_env",
-      sql`${table.apiKeyEnv} ~ '^OPENBOT_POOL_[A-Z0-9_]{1,64}$'`,
+      sql`${table.apiKeyEnv} ~ '^XIONGBAO_POOL_[A-Z0-9_]{1,64}$'`,
     ),
     check(
       "platform_model_pool_tiers",

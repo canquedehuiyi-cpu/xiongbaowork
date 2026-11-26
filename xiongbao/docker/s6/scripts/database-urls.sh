@@ -56,10 +56,10 @@ owner_pw=$(secret pgpassword)
 put MIGRATION_DATABASE_URL "postgres://$owner:$owner_pw@127.0.0.1:5432/$db"
 if [ -z "${DATABASE_URL:-}" ]; then
   app_pw=$(secret pgpassword-app)
-  put DATABASE_URL "postgres://openbot_app:$app_pw@127.0.0.1:5432/$db"
+  put DATABASE_URL "postgres://xiongbao_app:$app_pw@127.0.0.1:5432/$db"
 fi
 # The server refuses to start without the role writer; same rule as DATABASE_URL for an explicit value.
 if [ -z "${ROLE_WRITER_DATABASE_URL:-}" ]; then
   writer_pw=$(secret pgpassword-role-writer)
-  put ROLE_WRITER_DATABASE_URL "postgres://openbot_role_writer:$writer_pw@127.0.0.1:5432/$db"
+  put ROLE_WRITER_DATABASE_URL "postgres://xiongbao_role_writer:$writer_pw@127.0.0.1:5432/$db"
 fi

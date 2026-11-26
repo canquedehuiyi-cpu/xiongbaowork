@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { connectAppRefusal } from "@xiongbao/shared/connect-prompt";
+import { isSystemMarker } from "@xiongbao/shared/xiongbao-actor";
 import {
   and,
   asc,
@@ -2581,7 +2582,7 @@ export function createPluginStore(options: PluginStoreOptions) {
    *
    * A team server's token and OAuth client are sealed to `team`, and no person's frame may SELECT a
    * `team` credential (an administrator holding the capability may, to rotate it, but reads it the same
-   * way here). So in a person's frame the secret comes from `openbot_team_server_secret(server_id)`:
+   * way here). So in a person's frame the secret comes from `xiongbao_team_server_secret(server_id)`:
    * the one credential that named team server points at, and nothing else. `platform` reads every row
    * and keeps the vault reader; so does any server that is not `team` (the `system` catalogue).
    */
@@ -2609,7 +2610,7 @@ export function createPluginStore(options: PluginStoreOptions) {
   ): Promise<BrokeredSecret | null> {
     const rows = Array.from(
       (await executor.execute(
-        sql`select id, encrypted_value, revoked_at, tenant_id, kind, created_at from public.openbot_team_server_secret(${serverId})`,
+        sql`select id, encrypted_value, revoked_at, tenant_id, kind, created_at from public.xiongbao_team_server_secret(${serverId})`,
       )) as unknown as ArrayLike<{
         id: string;
         encrypted_value: string;
@@ -7587,7 +7588,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         targetType: grantTargetType(kind),
         targetId: ref,
         // XiongBao 自己替人做的授予（granted_by 带系统前缀，见 `./personal-defaults`）记为部署发起，不读成有人按了按钮。
-        ...(by.startsWith("openbot:")
+        ...(isSystemMarker(by)
           ? { initiator: { kind: "deployment" } as AuditInitiator }
           : {}),
         payload: {
@@ -7674,7 +7675,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         eventType: "configuration.changed",
         targetType: "mcp_server",
         targetId: app,
-        ...(by.startsWith("openbot:")
+        ...(isSystemMarker(by)
           ? { initiator: { kind: "deployment" } as AuditInitiator }
           : {}),
         payload: {

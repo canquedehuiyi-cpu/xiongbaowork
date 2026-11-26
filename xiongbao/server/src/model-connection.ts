@@ -5,6 +5,7 @@ import {
   reportModelRejected,
 } from "./model-rejection";
 import { providerFailureAsRunError } from "./provider-error";
+import { isRunErrorCode } from "./wire-codes";
 
 /** Only provider SDK errors qualify; a harness HTTP 401 is a different credential.
  * A provider 403 can mean missing project/resource permission, not expired credentials.
@@ -53,7 +54,7 @@ export function observeModelConnection(
         // A sign-in that no longer works is not a model the provider withdrew.
         if (
           event.type === "RUN_ERROR" &&
-          event.code !== "OPENBOT_MODEL_AUTH_REQUIRED" &&
+          !isRunErrorCode(event.code, "MODEL_AUTH_REQUIRED") &&
           isModelUnavailableMessage(
             String((event as { message?: unknown }).message ?? ""),
           )

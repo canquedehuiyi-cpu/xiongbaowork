@@ -74,7 +74,7 @@ test("the personal edition names what runs a Bot instead of its address", () => 
   ).toBe("127.0.0.1:8000");
   expect(
     setupSummary(
-      { builtIn: true, endpoint: null, framework: "OpenBot" },
+      { builtIn: true, endpoint: null, framework: "XiongBao" },
       "personal",
     ),
   ).toBe("内置");

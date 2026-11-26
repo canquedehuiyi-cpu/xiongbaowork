@@ -422,7 +422,7 @@ export function createApprovalStore(
             })
             .onConflictDoNothing();
           await tx.execute(
-            sql`select pg_notify('openbot_work_offered', 'approval.resume')`,
+            sql`select pg_notify('xiongbao_work_offered', 'approval.resume')`,
           );
         }
         // The person answered; the parked task runs again or ends denied.
@@ -1049,7 +1049,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
             })
             .onConflictDoNothing();
           await tx.execute(
-            sql`select pg_notify('openbot_work_offered', 'approval.resume')`,
+            sql`select pg_notify('xiongbao_work_offered', 'approval.resume')`,
           );
           return true;
         });

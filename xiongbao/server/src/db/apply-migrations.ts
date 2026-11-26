@@ -87,7 +87,15 @@ export class MigrationsOutOfReachError extends Error {
  * precisely the ones whose folders differ. Advisory locks are scoped to the database, so two
  * databases on one server never wait on each other.
  */
-const MIGRATION_LOCK = "openbot:apply-migrations";
+const MIGRATION_LOCK = "xiongbao:apply-migrations";
+
+/**
+ * The lock's name before v0.2.16, taken as well, and first, so a v0.2.15 migrator (which takes only
+ * this one) and this one still queue behind each other during an upgrade. Two runs of this function
+ * take both in the same order and cannot deadlock.
+ */
+// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+const LEGACY_MIGRATION_LOCK = "openbot:apply-migrations";
 
 /**
  * Check, then migrate, with nothing able to commit in between.
@@ -119,6 +127,7 @@ export async function applyMigrations(
   const folder = await readMigrationFolder(migrationsFolder);
 
   await client.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtextextended(${LEGACY_MIGRATION_LOCK}, 0))`;
     await tx`select pg_advisory_xact_lock(hashtextextended(${MIGRATION_LOCK}, 0))`;
 
     const applied = await appliedMigrations(tx, journal);

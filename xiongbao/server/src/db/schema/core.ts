@@ -280,6 +280,12 @@ export const deploymentPackages = pgTable("deployment_packages", {
   loadedAt: timestamp("loaded_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  /**
+   * SHA-256 (hex) of the name this deployment went by before its package id was renamed (0240), or
+   * null. Only the digest is kept: it is what a thread id carries (channels/thread-identity.ts), and
+   * `deploymentNameOf` hands it on so new threads keep the prefix the old ones have.
+   */
+  formerNameDigest: text("former_name_digest"),
 });
 
 export const agents = pgTable("agents", {

@@ -80,7 +80,7 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
       code: string;
     };
     expect(refusal.type).toBe(EventType.RUN_ERROR);
-    expect(refusal.code).toBe("OPENBOT_PROVIDER_REQUEST_REFUSED");
+    expect(refusal.code).toBe("XIONGBAO_PROVIDER_REQUEST_REFUSED");
     // Chinese, because this sentence is shown to a person using this product in Chinese.
     expect(refusal.message).toContain("HTTP 400");
     expect(refusal.message).toContain("gpt-5.6-terra");
@@ -166,7 +166,7 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
       message: string;
       code: string;
     };
-    expect(refusal.code).toBe("OPENBOT_PROVIDER_REQUEST_REFUSED");
+    expect(refusal.code).toBe("XIONGBAO_PROVIDER_REQUEST_REFUSED");
     expect(refusal.message).toContain("model not found");
   });
 });

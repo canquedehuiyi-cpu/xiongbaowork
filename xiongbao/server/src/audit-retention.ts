@@ -25,8 +25,8 @@ import {
   FRAME_RETENTION_MS,
   type PageFrameStore,
 } from "./computer/page-frames";
-import { runAsTenant } from "./tenant/context";
 import type { ProactiveStore } from "./proactive/store";
+import { runAsTenant } from "./tenant/context";
 
 /**
  * The advisory lock this takes, as an arbitrary but fixed number.
@@ -97,7 +97,7 @@ export async function sweepAuditTrail(
          * makes the setting local to this transaction, so the permission cannot outlive the
          * statement that asked for it.
          */
-        await tx`select set_config('openbot.audit_retention_days', ${String(retentionDays)}, true)`;
+        await tx`select set_config('xiongbao.audit_retention_days', ${String(retentionDays)}, true)`;
 
         /*
          * `ctid` rather than a plain `delete ... where created_at <`.

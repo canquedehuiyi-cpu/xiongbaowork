@@ -60,7 +60,7 @@ function asDeployment<T>(work: () => T): T {
  *
  * The rollback case below forces the publication to fail from INSIDE the database, which is the only
  * honest way to show the two rows commit together — and a trigger needs the TRIGGER privilege, which the
- * application role deliberately does not hold (it is not the table's owner, and `openbot_app` is meant to
+ * application role deliberately does not hold (it is not the table's owner, and `xiongbao_app` is meant to
  * be unable to change the schema it writes through). Asking the database is better than assuming: the
  * suite runs as the owner in some environments and as the app role in the ones that matter.
  *

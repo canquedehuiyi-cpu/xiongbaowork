@@ -8,8 +8,8 @@ import {
 } from "@tanstack/react-router";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { QuotaGuidanceDialog } from "@/components/quota/quota-guidance-dialog";
-import { RequestError } from "@/lib/client";
 import { dispatchToWaker } from "@/lib/channels/dispatch";
+import { RequestError } from "@/lib/client";
 import { runErrorReason } from "@/lib/copilot/stopped-turn";
 import {
   currentQuotaGuidance,
@@ -149,7 +149,7 @@ test("any other run error keeps its own words and opens nothing", () => {
       runErrorReason({
         type: "RUN_ERROR",
         message: "模型供应商那边出了错（HTTP 500）。供应商没有说明原因。",
-        code: "OPENBOT_PROVIDER_REQUEST_REFUSED",
+        code: "XIONGBAO_PROVIDER_REQUEST_REFUSED",
       }),
     ).toBe("模型供应商那边出了错（HTTP 500）。供应商没有说明原因。");
     expect(currentQuotaGuidance()).toBeNull();

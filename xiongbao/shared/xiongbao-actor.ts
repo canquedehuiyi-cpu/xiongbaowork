@@ -10,6 +10,22 @@
 export function isXiongBaoActor(actor: unknown): boolean {
   return (
     typeof actor === "string" &&
-    (actor === "deployment" || actor.startsWith("openbot:"))
+    (actor === "deployment" || isSystemMarker(actor))
+  );
+}
+
+/** The reserved prefix XiongBao writes on an actor, `granted_by` or `updated_by` for its own changes. */
+export const SYSTEM_MARKER_PREFIX = "xiongbao:";
+
+/**
+ * Whether a stored actor or `granted_by` is one of XiongBao's own markers, under either prefix: the
+ * rename migration (0240) rewrote the old one in every table but the audit trail, which is
+ * append-only and keeps it as written.
+ */
+export function isSystemMarker(actor: string): boolean {
+  return (
+    actor.startsWith(SYSTEM_MARKER_PREFIX) ||
+    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+    actor.startsWith("openbot:")
   );
 }

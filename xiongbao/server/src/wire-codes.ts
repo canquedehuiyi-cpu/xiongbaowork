@@ -3,21 +3,18 @@ import { map, type Observable } from "rxjs";
 import { LEGACY_PREFIX, NEW_PREFIX } from "../../shared/env-aliases";
 
 /**
- * The error codes a run's `RUN_ERROR` carries to the browser, by what follows the prefix.
+ * The error codes a run's `RUN_ERROR` carries, by what follows the prefix.
  *
  * Their senders are the peers: the Python harnesses, the toolkit, and the server's own wrappers
- * around a provider and a learning endpoint. They keep sending the old prefix, so a harness synced
- * from upstream never conflicts, and the server's readers (`model-connection.ts`,
- * `agents/plan-model.ts`, `agents/provider-refusal.ts`) keep reading it, because they sit before the
- * rename. The prefix changes only on the way out to the browser, which shows the code in its
- * developer tools and never branches on it.
+ * around a provider and a learning endpoint. From v0.2.16 every one of them sends the new prefix
+ * ({@link runErrorCode}), and the v0.2.16 rename migration (0240) rewrote the codes stored in
+ * `thread_run_events`. The server's readers (`model-connection.ts`, `agents/plan-model.ts`,
+ * `agents/provider-refusal.ts`) still take the old prefix as well ({@link isRunErrorCode}), and the
+ * stream to the browser still renames it on the way out: a v0.2.15 harness image may still be running
+ * during an upgrade.
  *
- * Only these. An approval's version string (`…APPROVAL_EXACT_*_V1`, `…EXACT_INPUT_JSON_V1`) is bound
- * into ciphertext and database constraints and is never renamed, and it is not a `RUN_ERROR` code.
- *
- * `MODEL_AUTH_REQUIRED` is listed too: the model-connection observation (`model-connection.ts`) and
- * the provider wrapper (`agents/provider-refusal.ts`) read the old code before this rename, so what
- * the browser is sent can carry the new one.
+ * Only these. An approval's version string (`…APPROVAL_EXACT_*_V1`, `…EXACT_INPUT_JSON_V1`) is not a
+ * `RUN_ERROR` code.
  */
 export const BROWSER_CODE_SUFFIXES: readonly string[] = [
   "MODEL_REFUSED",
@@ -34,7 +31,27 @@ export const BROWSER_CODE_SUFFIXES: readonly string[] = [
 
 const RENAMED = new Set(BROWSER_CODE_SUFFIXES);
 
-/** A listed code under the new prefix; anything else exactly as it came. */
+/** A listed code as senders write it: `runErrorCode("MODEL_REFUSED")` is `XIONGBAO_MODEL_REFUSED`. */
+export function runErrorCode(suffix: string): string {
+  return `${NEW_PREFIX}${suffix}`;
+}
+
+/**
+ * Whether `code` is the listed code `suffix`, under the new prefix or the old one.
+ *
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，a v0.2.15 harness still sends the old prefix.
+ */
+export function isRunErrorCode(code: unknown, suffix: string): boolean {
+  return (
+    code === `${NEW_PREFIX}${suffix}` || code === `${LEGACY_PREFIX}${suffix}`
+  );
+}
+
+/**
+ * A listed code under the new prefix; anything else exactly as it came.
+ *
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，renames what a v0.2.15 sender still says.
+ */
 export function browserWireCode(code: string): string {
   if (!code.startsWith(LEGACY_PREFIX)) return code;
   const suffix = code.slice(LEGACY_PREFIX.length);

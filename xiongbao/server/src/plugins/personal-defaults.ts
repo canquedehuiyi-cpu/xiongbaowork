@@ -22,6 +22,8 @@
  * - 帧：授予写在个人版那个人自己的帧里（`asPerson`），所以落成他的行；读员工也在那一帧里读，行安全看不见
  *   的员工永远不会被授予。服务器级的事（添加应用、刷新工具）由调用方放在平台帧里做。
  */
+
+import { SYSTEM_MARKER_PREFIX } from "@xiongbao/shared/xiongbao-actor";
 import {
   and,
   eq,
@@ -31,6 +33,7 @@ import {
   like,
   ne,
   notLike,
+  or,
   sql,
 } from "drizzle-orm";
 import {
@@ -128,7 +131,7 @@ const inPersonsFrame = <T>(
 ): Promise<T> => (deps.asPerson ? deps.asPerson(work) : work());
 
 /** 没有人按按钮的授予，轨迹上写的是谁。 */
-const GRANTED_BY = "openbot:personal-defaults";
+const GRANTED_BY = `${SYSTEM_MARKER_PREFIX}personal-defaults`;
 
 /**
  * 每个版本里都在、在个人版里一开始就打开、全部工具给每位员工、关不掉也收不回的那个应用：一个不能给自己
@@ -137,7 +140,7 @@ const GRANTED_BY = "openbot:personal-defaults";
 export const ALWAYS_ON_APP = "routines";
 
 /** 常开授予在轨迹上写的是谁。 */
-const ALWAYS_ON_BY = "openbot:always-on";
+const ALWAYS_ON_BY = `${SYSTEM_MARKER_PREFIX}always-on`;
 
 /** 一个应用或它的一个动作（`app/tool`）是不是那个常开的应用。按名字判断，与版本无关。 */
 export function isAlwaysOn(ref: string): boolean {
@@ -942,7 +945,7 @@ export function personalDefaultAppsMemory(
 }
 
 /**
- * 团队版里还在生效的、由个人默认写下的授予有没有（`granted_by` 以 `openbot:` 开头）。同一个库从个人版换成
+ * 团队版里还在生效的、由个人默认写下的授予有没有（`granted_by` 以系统前缀 `xiongbao:` 开头，升级前写下的是旧前缀）。同一个库从个人版换成
  * 团队版时，这些宽授予原样生效，「管理员逐个授予」的前提不再成立；`index.ts` 在团队版启动时据此提醒运维。
  * 调用方在平台帧里问，数的是整个部署。
  */
@@ -955,7 +958,11 @@ export async function personalGrantsLeftInTeam(
     .from(pluginGrants)
     .where(
       and(
-        like(pluginGrants.grantedBy, "openbot:%"),
+        or(
+          like(pluginGrants.grantedBy, `${SYSTEM_MARKER_PREFIX}%`),
+          // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，written before 0240 rewrote it.
+          like(pluginGrants.grantedBy, "openbot:%"),
+        ),
         // 小管家默认的招聘能力两个版本都给，团队版里它是正常的，不是个人版留下的宽授予。
         ne(pluginGrants.grantedBy, STAFFING_DEFAULT_BY),
       ),

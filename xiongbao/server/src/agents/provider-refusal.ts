@@ -28,6 +28,7 @@ import {
   chain,
 } from "../model-billing";
 import { isModelUnavailableMessage } from "../model-rejection";
+import { isRunErrorCode, runErrorCode } from "../wire-codes";
 
 /** What went wrong, as far as a person needs to know. */
 export type RefusalKind =
@@ -57,11 +58,9 @@ export type RefusingProvider = {
 };
 
 /** A harness saying the provider refused, in the provider's words. See agent-claude-sdk/src/adapter.py. */
-export const MODEL_REFUSED = "OPENBOT_MODEL_REFUSED";
+export const MODEL_REFUSED = runErrorCode("MODEL_REFUSED");
 /** A harness saying the provider refused the credential. Both Python harnesses send it. */
-export const MODEL_AUTH_REQUIRED = "OPENBOT_MODEL_AUTH_REQUIRED";
-/** A harness saying the account is out of credit, already in words. See agent-langgraph-agui. */
-const MODEL_BILLING = "OPENBOT_MODEL_BILLING";
+export const MODEL_AUTH_REQUIRED = runErrorCode("MODEL_AUTH_REQUIRED");
 
 /** The status a harness's text carries, in each SDK's spelling. */
 const STATUS = [
@@ -143,11 +142,16 @@ export function readRefusalText(
   text: string,
   code?: string,
 ): Refusal | undefined {
-  if (code === MODEL_BILLING) return undefined;
+  // A harness saying the account is out of credit, already in words. See agent-langgraph-agui.
+  if (isRunErrorCode(code, "MODEL_BILLING")) return undefined;
   const status = statusIn(text);
-  if (code === MODEL_AUTH_REQUIRED)
+  if (isRunErrorCode(code, "MODEL_AUTH_REQUIRED"))
     return { kind: "key", ...(status ? { status } : {}), said: text };
-  if (status === undefined && code !== MODEL_REFUSED && !SIGNATURE.test(text))
+  if (
+    status === undefined &&
+    !isRunErrorCode(code, "MODEL_REFUSED") &&
+    !SIGNATURE.test(text)
+  )
     return undefined;
   return {
     kind: kindOf(text, status),

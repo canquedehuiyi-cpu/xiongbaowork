@@ -394,7 +394,7 @@ test("the DeepSeek defaults pass the harness gate", () => {
     MODEL_E2E: "1",
     GITHUB_ACTIONS: "true",
     MODEL_E2E_API_KEY: "test-key-not-real",
-    DATABASE_URL: "postgres://openbot_app:x@127.0.0.1:5432/e2e",
+    DATABASE_URL: "postgres://xiongbao_app:x@127.0.0.1:5432/e2e",
     MODEL_E2E_PROVIDER: "deepseek",
     MODEL_E2E_MODEL: "deepseek-chat",
     MODEL_E2E_BASE_URL: "https://api.deepseek.com/v1",
@@ -433,7 +433,7 @@ test("the harness refuses to spend a key outside the armed GitHub job", () => {
     MODEL_E2E: "1",
     GITHUB_ACTIONS: "true",
     MODEL_E2E_API_KEY: "test-key-not-real",
-    DATABASE_URL: "postgres://openbot_app:x@127.0.0.1:5432/e2e",
+    DATABASE_URL: "postgres://xiongbao_app:x@127.0.0.1:5432/e2e",
     MODEL_E2E_PROVIDER: "openai",
     MODEL_E2E_MODEL: "gpt-test",
   };

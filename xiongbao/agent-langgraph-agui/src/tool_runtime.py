@@ -281,7 +281,7 @@ class ToolAwareAgent(WholeThreadAgent):
                         "authentication_failed"
                     ):
                         event = event.model_copy(
-                            update={"code": "OPENBOT_MODEL_AUTH_REQUIRED"}
+                            update={"code": "XIONGBAO_MODEL_AUTH_REQUIRED"}
                         )
                     if event.type in (EventType.RUN_FINISHED, EventType.RUN_ERROR):
                         ended = True
@@ -300,7 +300,7 @@ class ToolAwareAgent(WholeThreadAgent):
                 yield RunErrorEvent(
                     type=EventType.RUN_ERROR,
                     message=billing,
-                    code="OPENBOT_MODEL_BILLING",
+                    code="XIONGBAO_MODEL_BILLING",
                 )
             elif context.connection.get("authentication_failed"):
                 # The provider's own words stay here, in the log: the sentence below replaces them.
@@ -310,7 +310,7 @@ class ToolAwareAgent(WholeThreadAgent):
                 yield RunErrorEvent(
                     type=EventType.RUN_ERROR,
                     message="Sign in to your model provider again.",
-                    code="OPENBOT_MODEL_AUTH_REQUIRED",
+                    code="XIONGBAO_MODEL_AUTH_REQUIRED",
                 )
             elif provider_refusal(error):
                 # Raised, it ended the response stream after RUN_STARTED with no terminal event,
@@ -319,7 +319,7 @@ class ToolAwareAgent(WholeThreadAgent):
                 message = provider_message(error)
                 logger.warning("The model provider refused the run: %s", message)
                 yield RunErrorEvent(
-                    type=EventType.RUN_ERROR, message=message, code="OPENBOT_MODEL_REFUSED"
+                    type=EventType.RUN_ERROR, message=message, code="XIONGBAO_MODEL_REFUSED"
                 )
             elif ended:
                 raise

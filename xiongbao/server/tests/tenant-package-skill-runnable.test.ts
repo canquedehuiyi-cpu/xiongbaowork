@@ -11,7 +11,7 @@ import { validateTenantPackage } from "../src/tenant-package";
  */
 function packageWithSkills(skillsYaml: string) {
   return validateTenantPackage({
-    brand: "tenant: { id: openbot, product_name: P }",
+    brand: "tenant: { id: xiongbao, product_name: P }",
     agents: "agents: []",
     channels: "channels: []",
     model:

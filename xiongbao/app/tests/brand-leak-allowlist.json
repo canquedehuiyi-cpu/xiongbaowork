@@ -14,27 +14,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/components/routes.ts",
-    "text": "\"openbot:personal-defaults\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/tenant/provisioning.ts",
-    "text": "\"openbot:staffing-default\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/index.ts",
-    "text": "granted_by 以 openbot: 开头",
-    "reason": "persisted-identifier: names the stored granted_by marker prefix an operator would find in the database",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/agents/connection-test.ts",
     "text": "`openbot-connection-test-",
     "reason": "persisted-identifier: thread/run id of a throwaway probe; never shown",
@@ -52,13 +31,6 @@
     "file": "server/src/agents/harness-model.ts",
     "text": "(?:openbot-)?agent-",
     "reason": "persisted-identifier: matches published container image names",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/tool-limit.ts",
-    "text": "OPENBOT_TOOL_LIMIT = \"OpenBot\"",
-    "reason": "persisted-identifier: provider value written into audit rows",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -101,13 +73,6 @@
     "file": "server/src/auth/dev-actor-email.ts",
     "text": "\"dev@openbot.local\"",
     "reason": "persisted-identifier: old demo address still recognised in upgraded databases (Task 8)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/auth/roles.ts",
-    "text": "openbot.role-authority:",
-    "reason": "persisted-identifier: advisory lock key",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -168,13 +133,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/audit-retention.ts",
-    "text": "openbot.audit_retention_days",
-    "reason": "persisted-identifier: Postgres setting the RLS/retention SQL reads",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/db/apply-migrations.ts",
     "text": "\"openbot:apply-migrations\"",
     "reason": "persisted-identifier: advisory lock key",
@@ -190,29 +148,8 @@
   },
   {
     "file": "server/src/plugins/personal-defaults.ts",
-    "text": "\"openbot:personal-defaults\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/plugins/personal-defaults.ts",
-    "text": "\"openbot:always-on\"",
-    "reason": "persisted-identifier: granted_by marker stored on grants",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/plugins/personal-defaults.ts",
     "text": "\"openbot:%\"",
     "reason": "persisted-identifier: LIKE pattern over stored granted_by markers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/plugins/store.ts",
-    "text": "by.startsWith(\"openbot:\")",
-    "reason": "persisted-identifier: stored granted_by marker prefix",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -220,13 +157,6 @@
     "file": "server/src/plugins/shared-accounts.ts",
     "text": "\"openbot-deployment:\"",
     "reason": "persisted-identifier: vendor-side account prefix already stored at the broker",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/memory/defaults.ts",
-    "text": "`openbot:defaults:",
-    "reason": "persisted-identifier: advisory lock key",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -316,13 +246,6 @@
   },
   {
     "file": "shared/harnesses.ts",
-    "text": "OPENBOT_HARNESS_NAME = \"OpenBot\"",
-    "reason": "persisted-identifier: AgentProfile.framework value the app compares; readers see englishName() (Task 9)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "shared/harnesses.ts",
     "text": "(?:openbot-)?(agent-",
     "reason": "persisted-identifier: matches published container image names",
     "category": "persisted-data",
@@ -360,62 +283,6 @@
     "file": "server/src/tenant-package-path.ts",
     "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
     "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/provider-refusal.ts",
-    "text": "\"OPENBOT_MODEL_",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/plan-model.ts",
-    "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/model-connection.ts",
-    "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/provider-error.ts",
-    "text": "\"OPENBOT_PROVIDER_REQUEST_REFUSED\"",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/threads/postgres-runner.ts",
-    "text": "\"OPENBOT_AP_LOCAL_",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "toolkit/src/runtime/agents.ts",
-    "text": "\"OPENBOT_TOOL_LIMIT_EXCEEDED\"",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "toolkit/src/headless-tools.ts",
-    "text": "\"OPENBOT_HEADLESS_TOOL_ERROR\"",
-    "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/db/schema/model.ts",
-    "text": "'^OPENBOT_POOL_",
-    "reason": "persisted-identifier: the database CHECK pattern on stored key names",
     "category": "persisted-data",
     "plan": "keep"
   },

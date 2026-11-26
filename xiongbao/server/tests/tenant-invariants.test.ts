@@ -326,7 +326,7 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   /*
    * WF9 (D1, D7): an importer reads, and adds one use to, the one share link whose token they hold,
    * in their OWN frame: `SET LOCAL app.flow_share_token` inside one transaction, never platform. What
-   * that row may become in a frame not its owner's is fixed by `openbot_flow_share_guard` (0141).
+   * that row may become in a frame not its owner's is fixed by `xiongbao_flow_share_guard` (0141).
    */
   "src/wakerflows/sharing.ts": {
     "set_config('app.flow_share_token', local=true": 1,
@@ -499,7 +499,7 @@ describe("the catalogue (I1–I4, I8)", () => {
       expect(check?.definition).toContain(reserved);
   });
 
-  test("(f) every openbot_team_* function pins its search_path and grants PUBLIC nothing", async () => {
+  test("(f) every xiongbao_team_* function pins its search_path and grants PUBLIC nothing", async () => {
     const functions = await catalogue<{
       name: string;
       definer: boolean;
@@ -512,9 +512,9 @@ describe("the catalogue (I1–I4, I8)", () => {
              p.prorettype::regtype::text as "returns"
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public'
-        and (p.proname like 'openbot\\_team\\_%' or p.proname like 'openbot\\_flow\\_share\\_%'
+        and (p.proname like 'xiongbao\\_team\\_%' or p.proname like 'xiongbao\\_flow\\_share\\_%'
              -- 0206: the crew link's two functions sit beside the shared-group guard.
-             or p.proname in ('openbot_waker_group_absent', 'openbot_channel_waker_group_link')
+             or p.proname in ('xiongbao_waker_group_absent', 'xiongbao_channel_waker_group_link')
              -- 0207: the shared-group hand-over the app calls, under the new name.
              or p.proname = 'xiongbao_team_channel_hand_over')
       order by 1
@@ -542,16 +542,16 @@ describe("the catalogue (I1–I4, I8)", () => {
     // The ones the policies and the secret broker depend on exist under these names.
     expect(functions.map((fn) => fn.name)).toEqual(
       expect.arrayContaining([
-        "openbot_team_bot_visible",
-        "openbot_team_channel_member",
-        "openbot_team_channel_seedable",
-        "openbot_team_row_guard",
-        "openbot_team_server_secret",
+        "xiongbao_team_bot_visible",
+        "xiongbao_team_channel_member",
+        "xiongbao_team_channel_seedable",
+        "xiongbao_team_row_guard",
+        "xiongbao_team_server_secret",
         // WF9 (0141): what a share link may become in a frame that is not its owner's.
-        "openbot_flow_share_guard",
+        "xiongbao_flow_share_guard",
         // 0206: whether a linked crew is gone (read past row security), and the link check.
-        "openbot_waker_group_absent",
-        "openbot_channel_waker_group_link",
+        "xiongbao_waker_group_absent",
+        "xiongbao_channel_waker_group_link",
         // 0207: the one hand-over function the app may call.
         "xiongbao_team_channel_hand_over",
       ]),
@@ -563,11 +563,11 @@ describe("the catalogue (I1–I4, I8)", () => {
      */
     const definer = (name: string) =>
       functions.find((fn) => fn.name === name)?.definer;
-    expect(definer("openbot_channel_waker_group_link")).toBe(false);
-    expect(definer("openbot_waker_group_absent")).toBe(true);
+    expect(definer("xiongbao_channel_waker_group_link")).toBe(false);
+    expect(definer("xiongbao_waker_group_absent")).toBe(true);
     /*
      * 0207's hand-over reads and moves rows no caller's frame reaches, so it runs as its owner, and the
-     * app is the only role it is granted to. Its helpers keep the `openbot_team_` prefix, so the
+     * app is the only role it is granted to. Its helpers keep the `xiongbao_team_` prefix, so the
      * checks above cover them by prefix.
      */
     expect(definer("xiongbao_team_channel_hand_over")).toBe(true);
@@ -580,7 +580,7 @@ describe("the catalogue (I1–I4, I8)", () => {
         and a.privilege_type = 'EXECUTE' and a.grantee <> p.proowner
       order by 1
     `);
-    expect(handOverGrants.map((row) => row.role)).toEqual(["openbot_app"]);
+    expect(handOverGrants.map((row) => row.role)).toEqual(["xiongbao_app"]);
   });
 
   test("(f) the share link guard is a BEFORE UPDATE row trigger on flow_share_links, and only there", async () => {
@@ -594,7 +594,7 @@ describe("the catalogue (I1–I4, I8)", () => {
       from pg_trigger t
       join pg_class c on c.oid = t.tgrelid
       join pg_proc p on p.oid = t.tgfoid
-      where p.proname = 'openbot_flow_share_guard' and not t.tgisinternal
+      where p.proname = 'xiongbao_flow_share_guard' and not t.tgisinternal
     `);
     const BEFORE_UPDATE_ROW = 1 | 2 | 16;
     expect(
@@ -608,7 +608,7 @@ describe("the catalogue (I1–I4, I8)", () => {
     ).toEqual([
       {
         table: "flow_share_links",
-        trigger: "openbot_flow_share_guard",
+        trigger: "xiongbao_flow_share_guard",
         enabled: "O",
         beforeUpdateRow: true,
       },
@@ -636,7 +636,7 @@ describe("the catalogue (I1–I4, I8)", () => {
       from pg_trigger t
       join pg_class c on c.oid = t.tgrelid
       join pg_proc p on p.oid = t.tgfoid
-      where p.proname like 'openbot\\_team\\_%' and not t.tgisinternal
+      where p.proname like 'xiongbao\\_team\\_%' and not t.tgisinternal
     `);
     const columns = new Set(
       (
@@ -655,7 +655,7 @@ describe("the catalogue (I1–I4, I8)", () => {
         !triggers.some(
           (row) =>
             row.table === table &&
-            row.trigger === "openbot_team_row_guard" &&
+            row.trigger === "xiongbao_team_row_guard" &&
             row.enabled === "O" &&
             (Number(row.type) & BEFORE_UPDATE_ROW) === BEFORE_UPDATE_ROW,
         ),

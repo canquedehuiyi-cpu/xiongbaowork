@@ -2314,7 +2314,7 @@ const MANUAL = await Bun.file(
 ).text();
 const RUNBOOK_START = "<!-- group-upgrade-rollback:start -->";
 const RUNBOOK_END = "<!-- group-upgrade-rollback:end -->";
-const HAND_OVER_TRIGGER = "openbot_team_revoked_leaves";
+const HAND_OVER_TRIGGER = "xiongbao_team_revoked_leaves";
 
 /** The runbook's SQL between its two markers, as the operator pastes it. */
 function runbookSql() {

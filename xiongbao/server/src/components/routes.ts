@@ -1,3 +1,4 @@
+import { SYSTEM_MARKER_PREFIX } from "@xiongbao/shared/xiongbao-actor";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { BotAccessCheck } from "../agents/profile-policy";
@@ -22,7 +23,7 @@ import {
 } from "./store";
 
 /** Who a component's data grant names when XiongBao Personal gave it, not a person. */
-export const PERSONAL_GRANTED_BY = "openbot:personal-defaults";
+export const PERSONAL_GRANTED_BY = `${SYSTEM_MARKER_PREFIX}personal-defaults`;
 
 /**
  * Granting, publishing and asking whether a Bot may use a component.

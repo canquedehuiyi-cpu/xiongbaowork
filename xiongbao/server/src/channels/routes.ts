@@ -1089,7 +1089,7 @@ export function createChannelStore(
               deletedAt: channels.deletedAt,
               // `created_by` is read by the database's own function rather than declared in the
               // schema (0122): the creator of a shared group who is still in it.
-              creator: sql<boolean>`public.openbot_team_channel_creator(${channels.id})`,
+              creator: sql<boolean>`public.xiongbao_team_channel_creator(${channels.id})`,
             })
             .from(channels)
             .innerJoin(

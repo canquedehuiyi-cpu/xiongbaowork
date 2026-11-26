@@ -38,7 +38,7 @@
  * seconds is shortened to keep the job short; the code path is the same).
  *
  * Environment (all required unless a default is given):
- *   E2E_DATABASE_URL              the API's role (openbot_app, NOSUPERUSER NOBYPASSRLS)
+ *   E2E_DATABASE_URL              the API's role (xiongbao_app, NOSUPERUSER NOBYPASSRLS)
  *   E2E_ROLE_WRITER_DATABASE_URL  the restricted role writer (migration 0109)
  *   E2E_OWNER_DATABASE_URL        the migration owner; used ONLY for the fresh-database check and to
  *                                 read the turn's rows back

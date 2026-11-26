@@ -79,7 +79,7 @@ const ROUTINES_APP = "routines";
 async function giveRoutines(bot: string) {
   await runAsTenant("platform", async () => {
     if (!(await pluginStore.serverAddress(ROUTINES_APP)))
-      await pluginStore.addServer({ key: ROUTINES_APP, by: "openbot:test" });
+      await pluginStore.addServer({ key: ROUTINES_APP, by: "xiongbao:test" });
   });
   // The app's tools as it lists them: its catalogue row is `team:routines` in the fork (G01-E), and
   // the grants name the app by its catalogue key.
@@ -91,7 +91,7 @@ async function giveRoutines(bot: string) {
         "mcp",
         `${ROUTINES_APP}/${name}`,
         bot,
-        "openbot:test",
+        "xiongbao:test",
       );
   });
 }

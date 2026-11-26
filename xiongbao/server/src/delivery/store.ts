@@ -39,7 +39,7 @@ export function createDeliveryStore(database: Database) {
       .insert(workItems)
       .values({ kind, key, payload: {}, ...(runAt ? { runAt } : {}) })
       .onConflictDoNothing();
-    await db.execute(sql`select pg_notify('openbot_work_offered', ${kind})`);
+    await db.execute(sql`select pg_notify('xiongbao_work_offered', ${kind})`);
   }
   return {
     async listBindings(owner: string) {

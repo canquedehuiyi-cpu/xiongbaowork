@@ -14,7 +14,7 @@ import { roleWriterPasswordStatement } from "../scripts/role-writer-password";
 describe("the role writer's password statement", () => {
   test("is the chart's own ALTER ROLE, with the password in its literal", () => {
     expect(roleWriterPasswordStatement("xiongbao")).toBe(
-      "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD 'xiongbao'",
+      "ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD 'xiongbao'",
     );
   });
 
@@ -57,7 +57,7 @@ describe("the statement against the real cluster", () => {
         const [row] = await transaction`
           select rolcanlogin as login, rolsuper as super, rolbypassrls as bypass,
                  rolinherit as inherit, rolpassword like 'SCRAM-SHA-256$%' as scram
-          from pg_authid where rolname = 'openbot_role_writer'`;
+          from pg_authid where rolname = 'xiongbao_role_writer'`;
         seen = row;
         throw rolledBack;
       })

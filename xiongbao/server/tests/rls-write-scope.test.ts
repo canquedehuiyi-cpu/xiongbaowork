@@ -315,8 +315,8 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
         .filter(
           (own) =>
             !own.includes("current_setting('app.tenant_id'") &&
-            !own.includes("openbot_team_channel_") &&
-            !own.includes("openbot_team_bot_visible(") &&
+            !own.includes("xiongbao_team_channel_") &&
+            !own.includes("xiongbao_team_bot_visible(") &&
             !own.includes("SUBQUERY_EXISTS"),
         )
         .map(() => `"${row.table}" ${row.name} admits a team row for anybody`),
@@ -339,7 +339,7 @@ test("every write that names a 'team' row also names who is writing it (G01-E, 0
           select c.relname as "table", t.tgnargs as "count",
                  encode(t.tgargs, 'escape') as "args", t.tgenabled as "enabled"
           from pg_trigger t join pg_class c on c.oid = t.tgrelid
-          where t.tgname = 'openbot_team_row_guard' and not t.tgisinternal
+          where t.tgname = 'xiongbao_team_row_guard' and not t.tgisinternal
         `),
       ),
     )) as unknown as ArrayLike<{

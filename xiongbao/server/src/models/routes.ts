@@ -41,7 +41,7 @@ export type OfferedPoolModel = {
 /**
  * The platform pool models this plan may bind, as the model picker lists them: switched on, offered
  * on the plan, and `available` when the deployment holds the key behind the row. Read in the caller's
- * own frame (the pool has no row security; openbot_app may only SELECT it).
+ * own frame (the pool has no row security; xiongbao_app may only SELECT it).
  *
  * One reader for the picker (`GET /api/models`) and for the staffing tools, so an employee drafted in
  * conversation is offered exactly the pool the person would see in the employee's model picker.
@@ -195,7 +195,7 @@ export function createModelRoutes(
      *
      * The plan is this tenant's own, and a workspace with no subscription is Free (audit #7) — also
      * when this deployment counts no quota, so the shelf never offers Pro rows by omission. The pool
-     * is platform-owned with no row security (openbot_app may only SELECT it), so it is read in the
+     * is platform-owned with no row security (xiongbao_app may only SELECT it), so it is read in the
      * member's own frame: a member request never opens `platform` (G01-E). Only the fields a
      * screen needs leave this handler: never `api_key_env`, never a key. `available` says whether
      * the deployment holds the key behind the row, so a screen can grey out a row that would fall

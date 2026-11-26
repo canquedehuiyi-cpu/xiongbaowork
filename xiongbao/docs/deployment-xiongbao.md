@@ -197,12 +197,15 @@ server {
 
 ```dotenv
 EMBEDDED_POSTGRES=off
-DATABASE_URL=postgres://openbot_app:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
-ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
+DATABASE_URL=postgres://xiongbao_app:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
+ROLE_WRITER_DATABASE_URL=postgres://xiongbao_role_writer:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
 ```
 
 **API 运行期必须是非超级用户、无 BYPASSRLS 的角色。owner 串只用于迁移。**
-`ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `openbot_role_writer`，唯一可以写入身份角色的登录；
+
+从 v0.2.15 升级的外接库：v0.2.16 的迁移（`0240`）把两个角色改名为 `xiongbao_app` 与 `xiongbao_role_writer`（口令不变）。
+迁移完成后旧用户名登录不上，要把这两条连接串里的用户名改成新名再启动 API。
+`ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `xiongbao_role_writer`，唯一可以写入身份角色的登录；
 缺少它 API 拒绝启动（`ROLE_WRITER_DATABASE_URL is required`）。内嵌模式自动生成这两条连接串，外接模式需要自己配置。
 嵌入模式会自动导出 `MIGRATION_DATABASE_URL`，外接模式不会自动迁移，运维在发布流程中单独执行。
 创建临时的私密 `.env.migration`，其中 `DATABASE_URL` 是 owner 串；不要把该文件交给 API 容器。
@@ -222,11 +225,11 @@ docker run --rm --env-file .env.migration --entrypoint /bin/sh \
 
 <!-- g7:external-roles:begin -->
 ```sql
-ALTER ROLE openbot_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<app随机口令>';
-ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<role_writer随机口令>';
+ALTER ROLE xiongbao_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<app随机口令>';
+ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '<role_writer随机口令>';
 SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
-  WHERE rolname IN ('openbot_app', 'openbot_role_writer') ORDER BY rolname;
--- 期望 openbot_app | f | f 与 openbot_role_writer | f | f
+  WHERE rolname IN ('xiongbao_app', 'xiongbao_role_writer') ORDER BY rolname;
+-- 期望 xiongbao_app | f | f 与 xiongbao_role_writer | f | f
 ```
 <!-- g7:external-roles:end -->
 
@@ -578,8 +581,8 @@ COMMIT;
    不能靠写一个空的新名。
 3. **Compose 的镜像与端口变量**：v0.2.16 起的 `docker/compose.delivery.yml` 新名优先、旧名其次：`XIONGBAO_IMAGE` 没设时读
    `OPENBOT_IMAGE`，端口写成 `${XIONGBAO_PORT:-${OPENBOT_PORT:-3772}}`，`.env.delivery` 里的旧名照样生效。更早的 Compose 文件只认旧名，所以**先按第 2 节换上新标签的 `compose.delivery.yml`，再改 env 文件**。
-4. **平台模型的密钥变量不改名**（用 `server/scripts/platform-models.ts add --api-key-env` 登记的那些）：模型池在数据库里记着变量名，
-   随数据库迁移一起改，在那之前不要手改。
+4. **平台模型的密钥变量同样改名**（用 `server/scripts/platform-models.ts add --api-key-env` 登记的那些）：v0.2.16 的数据库迁移把模型池里
+   记着的变量名一起改成 `XIONGBAO_POOL_<X>`。env 文件里旧前缀的写法照样生效（启动时按第 1 条复制到新名），改写脚本也会把它改名。
 5. **一次改完**（可选）：在放 `.env.delivery` 的目录，下载与新版本同标签的改写脚本并执行一次：
 
    ```bash
@@ -591,7 +594,7 @@ COMMIT;
    脚本先把原文件复制成 `.env.delivery.bak-<UTC 时间>`（权限 0600），再把每个旧名的行改成新名，例如
    `OPENBOT_PUBLIC_URL=` 改成 `XIONGBAO_PUBLIC_URL=`。改写前后生效的值完全一样：文件里已经有同名新行且有值时，旧行加 `# ` 注释掉
    （运行时本来就以新名为准）；同名新行只有空值时，运行时生效的是旧值，所以注释掉的是空的新行，旧行照常改名。
-   平台模型的密钥变量保持原样。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
+   平台模型的密钥变量同样改名（见第 4 条）。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
    改完照常 `up -d`。要退回，把备份文件改回原名即可。源码目录的 `.env` 也可以这样改，`scripts/start.sh` 同样新名优先、旧名其次。
 6. **用开发 Compose（`xiongbao/docker-compose.yml`，本机更新器的 image 拓扑）安装的 v0.2.15 不能原地升级到 v0.2.16，v0.2.16 也不会接管旧卷和旧库。**
    这一版里该文件的 Compose 项目名、卷名、数据库名和 server 的挂载目录都改了。v0.2.15 的本机更新器会在停服务之前发现库名和挂载的变化并拒绝更新，
@@ -608,10 +611,13 @@ COMMIT;
    # 2. 把源码换到 v0.2.16，起新项目的数据库，跑一次迁移：在新卷上建好表、应用角色和 role writer 的口令
    docker compose up -d postgres
    docker compose run --rm migrate
-   # 3. 换成空库再灌回。必须是空库：迁移建的默认权限会让灌回时重建的表多出写权限，空库里没有它，表的权限与备份时逐条一致
+   # 3. 换成空库再灌回。必须是空库：迁移建的默认权限会让灌回时重建的表多出写权限，空库里没有它，表的权限与备份时逐条一致。
+   #    备份里的授权写的是 v0.2.15 的应用角色名，第 2 步的迁移已把角色改成新名，所以先建两个同名的空角色（不能登录）接住授权。
+   #    开发 Compose 的超级用户这一版仍是旧名，v0.2.15 的两个应用角色名就是它加 `_app`、`_role_writer`
    docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE \"$POSTGRES_DB\"" -c "CREATE DATABASE \"$POSTGRES_DB\" OWNER \"$POSTGRES_USER\""'
+   docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE ${POSTGRES_USER}_app NOLOGIN" -c "CREATE ROLE ${POSTGRES_USER}_role_writer NOLOGIN"'
    docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --single-transaction --exit-on-error' < xiongbao-v0215.dump
-   # 4. 再跑一次迁移（补上备份之后才有的迁移），然后照常启动服务
+   # 4. 再跑一次迁移（补上备份之后才有的迁移；其中 0240 把授权从两个旧名角色转给新名角色，再删掉这两个空角色），然后照常启动服务
    docker compose run --rm migrate
    ```
 
@@ -688,7 +694,7 @@ docker logs xiongbao-local
 runner 上、不登录 GHCR，原样执行 README 的 Linux 命令块，核对运行的镜像 digest 与 `container-images.json`
 一致，并运行同一组接口断言（Gate 7 Linux）。同一任务另有外接库一半：独立的 pgvector/pg17 容器，
 原样执行第 4 节的迁移与角色命令，再用同一 README 命令启动 `EMBEDDED_POSTGRES=off` 的 API，
-确认内嵌库未初始化、API 以 `openbot_app` 连接外接库。也可以在 Actions 中手动运行该 workflow 并填写标签。
+确认内嵌库未初始化、API 以 `xiongbao_app` 连接外接库。也可以在 Actions 中手动运行该 workflow 并填写标签。
 
 全套测试绿色必须读取日志的 `0 fail`，不能只读退出码。
 阶段 0–2 的测试 continue-on-error、构建成功、健康成功和完整验收是不同结果。

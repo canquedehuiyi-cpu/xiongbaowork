@@ -126,7 +126,7 @@ function loopbackPostgresUrl(raw: string | undefined, name: string): URL {
  *
  * It is cloned from `TEST_DATABASE_TEMPLATE` (migrated by the owner and never connected to) through
  * `TEST_DATABASE_ADMIN_URL`, so the test itself applies no migration and no grant. The suite connects
- * as `openbot_app` (from `TEST_DATABASE_URL`, via `testDatabaseUrl`) or, for `role: "bypass"`, with
+ * as `xiongbao_app` (from `TEST_DATABASE_URL`, via `testDatabaseUrl`) or, for `role: "bypass"`, with
  * the credentials of `TEST_DATABASE_BYPASS_URL`: a NOSUPERUSER BYPASSRLS fixture role needed to read
  * and write the closed (FORCE RLS, zero-policy) approval continuation ledger. Every URL must be
  * loopback; the name is generated here, which is the disposable acknowledgment.

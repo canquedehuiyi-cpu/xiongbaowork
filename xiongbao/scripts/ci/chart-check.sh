@@ -33,7 +33,7 @@ writer_env() { env_after ROLE_WRITER_DATABASE_URL "$1" "$2"; }
 
 inline=(
   --set-string database.existingSecret=
-  --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao
+  --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao
 )
 owner=(--set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao)
 
@@ -55,11 +55,11 @@ echo "ok: external database via Secret gives the migrations Job the owner's URL 
 
 # External database given inline: an inline role-writer URL reaches the API.
 out="$(render --values "$external" "${inline[@]}" "${owner[@]}" \
-  --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao)"
-[[ "$(writer_env 1 "$out")" == *"openbot_role_writer:y@db.internal"* ]] ||
+  --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao)"
+[[ "$(writer_env 1 "$out")" == *"xiongbao_role_writer:y@db.internal"* ]] ||
   fail "External database inline: database.roleWriterUrl did not reach the API."
 echo "ok: external database inline carries the role-writer URL"
-# The migrations Job migrates as the owner, never as the API's openbot_app.
+# The migrations Job migrates as the owner, never as the API's xiongbao_app.
 [[ "$out" == *'value: "postgres://openbot:o@db.internal:5432/xiongbao"'* ]] ||
   fail "External database inline: the migrations Job is not given database.migrationUrl."
 echo "ok: external database inline migrates with the owner's URL"
@@ -74,7 +74,7 @@ echo "ok: inline external database without a role writer is refused"
 
 # Inline without the owner's URL: refused at render, by the migration rule.
 if refusal="$(render --values "$external" "${inline[@]}" \
-  --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao 2>&1)"; then
+  --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao 2>&1)"; then
   fail "An inline external database with no migration URL rendered; it must be refused."
 fi
 [[ "$refusal" == *"database.migrationUrl"* ]] ||
@@ -86,9 +86,9 @@ echo "ok: inline external database without an owner URL for migrations is refuse
 out="$(render --values "$bundled")"
 [[ "$out" == *"-database-roles"*"role-writer-password: "* ]] ||
   fail "Bundled database: no role-writer password Secret was rendered."
-[[ "$(writer_env 1 "$out")" == *'postgres://openbot_role_writer:$(ROLE_WRITER_PASSWORD)@'* ]] ||
+[[ "$(writer_env 1 "$out")" == *'postgres://xiongbao_role_writer:$(ROLE_WRITER_PASSWORD)@'* ]] ||
   fail "Bundled database: the API is not given ROLE_WRITER_DATABASE_URL from the role-writer password."
-[[ "$out" == *"ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD"* ]] ||
+[[ "$out" == *"ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD"* ]] ||
   fail "Bundled database: the migrations Job does not set the role writer's password."
 echo "ok: bundled database makes, wires and sets the role writer's password"
 
@@ -130,8 +130,8 @@ echo "ok: a role-writer password that is not letters and digits is refused"
 # External with a separate owner URL: the Job is given the API's URL as well, and checks both reach
 # the same database before migrating.
 out="$(render --values "$external" "${inline[@]}" "${owner[@]}" \
-  --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao)"
-[[ "$(env_after APP_DATABASE_URL 1 "$out")" == *'postgres://openbot_app:x@db.internal'* ]] ||
+  --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao)"
+[[ "$(env_after APP_DATABASE_URL 1 "$out")" == *'postgres://xiongbao_app:x@db.internal'* ]] ||
   fail "External database inline: the migrations Job is not given the API's URL to compare with."
 [[ "$out" == *"pg_postmaster_start_time()"*"refusing to migrate"* ]] ||
   fail "External database inline: the migrations Job does not check the two URLs reach one database."
@@ -139,7 +139,7 @@ echo "ok: the migrations Job checks the owner's and the API's URLs reach the sam
 
 # With migrations off the chart migrates nothing, so it asks for no owner URL.
 render --values "$external" "${inline[@]}" --set migrations.enabled=false \
-  --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao >/dev/null ||
+  --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao >/dev/null ||
   fail "With migrations.enabled=false an inline database without database.migrationUrl was refused."
 echo "ok: migrations.enabled=false needs no owner URL"
 

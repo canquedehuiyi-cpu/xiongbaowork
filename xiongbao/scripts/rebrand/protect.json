@@ -70,40 +70,10 @@
     "reason": "品牌白名单：xiongbao/server/src/routing/model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"openbot:%\"",
-    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/plugins/personal-defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:always-on\"",
-    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/plugins/personal-defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:apply-migrations\"",
     "file": "xiongbao/server/src/db/apply-migrations.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/db/apply-migrations.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:personal-defaults\"",
-    "file": "xiongbao/server/src/components/routes.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/components/routes.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:personal-defaults\"",
-    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/plugins/personal-defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:staffing-default\"",
-    "file": "xiongbao/server/src/tenant/provisioning.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/tenant/provisioning.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "text": "\"openbot:apply-migrations\"",
+    "until": "R4",
+    "reason": "旧迁移锁名：v0.2.16 的迁移器先取旧锁再取新锁，升级期间与 v0.2.15 的迁移器互相排队（server/src/db/apply-migrations.ts LEGACY_MIGRATION_LOCK）；legacy-compat 到 R4 删除"
   },
   {
     "text": "\"openbot.carry-over\"",
@@ -122,18 +92,6 @@
     "file": "xiongbao/server/src/delivery/opentag.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"OpenBot\"",
-    "file": "xiongbao/server/src/agents/tool-limit.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/agents/tool-limit.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"OpenBot\"",
-    "file": "xiongbao/shared/harnesses.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/harnesses.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot/share_private_information\"",
@@ -194,11 +152,6 @@
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
   },
   {
-    "pattern": "\\bid: openbot\\b",
-    "until": "R3",
-    "reason": "租户 id（examples/xiongbao/brand.yaml 的 id: openbot），已落在库里"
-  },
-  {
     "text": "`openbot-${config.provider}-plan`",
     "file": "xiongbao/server/src/agents/plan-model.ts",
     "until": "R3",
@@ -211,12 +164,6 @@
     "reason": "品牌白名单：xiongbao/server/src/agents/connection-test.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "`openbot:defaults:",
-    "file": "xiongbao/server/src/memory/defaults.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/memory/defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "<<openbot:app-access-request>>",
     "until": "R3",
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
@@ -226,18 +173,6 @@
     "file": "xiongbao/supervisor/src/names.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "actor.startsWith(\"openbot:\")",
-    "file": "xiongbao/shared/openbot-actor.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/openbot-actor.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "by.startsWith(\"openbot:\")",
-    "file": "xiongbao/server/src/plugins/store.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/plugins/store.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "client_id:'openbot-desktop'",
@@ -264,12 +199,6 @@
     "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "granted_by 以 openbot: 开头",
-    "file": "xiongbao/server/src/index.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "images.openbot",
     "until": "R3",
     "reason": "发行记录里的镜像键（工作流里读取）"
@@ -289,126 +218,6 @@
     "text": "openbot web-bot-auth ed25519 v1",
     "until": "R3",
     "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
-  },
-  {
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名",
-    "pattern": "openbot_app(?!\\w)"
-  },
-  {
-    "text": "OPENBOT_APPROVAL_EXACT_AEAD_V1",
-    "until": "R3",
-    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
-  },
-  {
-    "text": "OPENBOT_APPROVAL_EXACT_HEADER_V1",
-    "until": "R3",
-    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
-  },
-  {
-    "text": "OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1",
-    "until": "R3",
-    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
-  },
-  {
-    "text": "OPENBOT_APPROVAL_EXACT_WIRE_V1",
-    "until": "R3",
-    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
-  },
-  {
-    "text": "openbot_channel_waker_group_link",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "OPENBOT_EXACT_INPUT_JSON_V1",
-    "until": "R3",
-    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
-  },
-  {
-    "text": "openbot_flow_share_guard",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_grant_stamp_guard",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_mcp_tool_stamp_guard",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_role_writer",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_bot_visible",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_channel_creator",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_channel_guard",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_channel_hand_over_core",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_channel_hand_over_write",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_channel_member",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_channel_seedable",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_person_leaves_groups",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_revoked_leaves",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_row_guard",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_server_secret",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_waker_group_absent",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_work_offered",
-    "until": "R3",
-    "reason": "pg_notify 通道名"
   },
   {
     "text": "openbot-agent-computer:latest",
@@ -437,34 +246,9 @@
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
   },
   {
-    "text": "openbot:always-on",
-    "until": "R3",
-    "reason": "plugin_grants 授权来源标记，随迁移改名"
-  },
-  {
-    "text": "openbot:apply-migrations",
-    "until": "R3",
-    "reason": "迁移锁名"
-  },
-  {
-    "text": "openbot:defaults:",
-    "until": "R3",
-    "reason": "记忆默认值键前缀"
-  },
-  {
-    "text": "openbot:personal-defaults",
-    "until": "R3",
-    "reason": "plugin_grants 授权来源标记，随迁移改名"
-  },
-  {
     "text": "openbot:personal-memory",
     "until": "R3",
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
-  },
-  {
-    "text": "openbot:staffing-default",
-    "until": "R3",
-    "reason": "plugin_grants 授权来源标记，随迁移改名"
   },
   {
     "text": "openbot.ap.local-terminal.v1",
@@ -472,26 +256,9 @@
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
   },
   {
-    "text": "openbot.audit_retention_days",
-    "file": "xiongbao/server/src/audit-retention.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/audit-retention.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "openbot.audit_retention_days",
-    "until": "R3",
-    "reason": "数据库会话设置名：迁移 SQL 里读取"
-  },
-  {
     "text": "openbot.headless.waiting",
     "until": "R3",
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
-  },
-  {
-    "text": "openbot.role-authority:",
-    "file": "xiongbao/server/src/auth/roles.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/auth/roles.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "openbot.vault.credential.v2",
@@ -909,12 +676,6 @@
     "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
   },
   {
-    "file": "xiongbao/server/tests/roles.test.ts",
-    "pattern": "openbot\\.role-authority:",
-    "until": "R3",
-    "reason": "测试引用 auth/roles.ts 已保护的咨询锁键"
-  },
-  {
     "file": "xiongbao/server/tests/thread-identity.test.ts",
     "pattern": "openbot-connection-test-|openbot-model-call",
     "until": "R3",
@@ -923,55 +684,20 @@
   {
     "file": "xiongbao/server/tests/plugins-mcp-admin.integration.test.ts",
     "pattern": "openbot_grant_stamp_admissible",
-    "until": "R3",
-    "reason": "测试检查迁移里已删除的数据库函数旧名（迁移 SQL 名，R3 随迁移改名）"
-  },
-  {
-    "pattern": "openbot(?=(?:\\\\)*_(?:team(?:\\\\)*_|flow(?:\\\\)*_share))",
-    "until": "R3",
-    "reason": "数据库函数名前缀 openbot_team_* / openbot_flow_share_*（迁移 SQL 已创建，测试按前缀查 pg_proc），R3 随迁移改名"
-  },
-  {
-    "file": "xiongbao/server/tests/goal-conversation.integration.test.ts",
-    "pattern": "\\\"openbot:test\\\"",
-    "until": "R3",
-    "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
-  },
-  {
-    "file": "xiongbao/server/tests/routine-conversation.integration.test.ts",
-    "pattern": "\\\"openbot:test\\\"",
-    "until": "R3",
-    "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
-  },
-  {
-    "file": "xiongbao/server/tests/staffing-gates.integration.test.ts",
-    "pattern": "\\\"openbot:test\\\"",
-    "until": "R3",
-    "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
-  },
-  {
-    "file": "xiongbao/server/tests/tenant-package-brand-fields.test.ts",
-    "pattern": "tenantId: \\\"openbot\\\"|toBe\\(\\\"openbot\\\"\\)|former_ids: \\[openbot\\]|former_ids names \\\"openbot\\\"",
-    "until": "R3",
-    "reason": "测试引用已保护的租户 id openbot（examples/xiongbao/brand.yaml 的 id: openbot）"
-  },
-  {
-    "file": "xiongbao/server/tests/tenant-package.test.ts",
-    "pattern": "tenantId: \\\"openbot\\\"|toBe\\(\\\"openbot\\\"\\)|former_ids: \\[openbot\\]|former_ids names \\\"openbot\\\"",
-    "until": "R3",
-    "reason": "测试引用已保护的租户 id openbot（examples/xiongbao/brand.yaml 的 id: openbot）"
+    "until": "R4",
+    "reason": "测试确认迁移早已删掉的旧名函数 openbot_grant_stamp_admissible 仍不存在：那个函数是以旧名删除的，旧名就是被测对象；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/user-preferences-routes.test.ts",
     "pattern": "skin: \\\"openbot\\\"|\\\"skin\\\":\\\"openbot\\\"",
-    "until": "R3",
-    "reason": "测试里库中旧皮肤值 openbot（旧默认皮肤名，读取时归一为默认皮肤；Task 20 迁数据）"
+    "until": "R4",
+    "reason": "兼容读取的测试：库里或旧页面送来的旧默认皮肤值（0240 已把库里的改成 xiongbao），读取时归一为默认皮肤；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/user-preferences.integration.test.ts",
     "pattern": "skin: \\\"openbot\\\"|\\\"skin\\\":\\\"openbot\\\"",
-    "until": "R3",
-    "reason": "测试里库中旧皮肤值 openbot（旧默认皮肤名，读取时归一为默认皮肤；Task 20 迁数据）"
+    "until": "R4",
+    "reason": "兼容读取的测试：库里或旧页面送来的旧默认皮肤值（0240 已把库里的改成 xiongbao），读取时归一为默认皮肤；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/src/approvals/rule-vocabulary.ts",
@@ -1016,18 +742,6 @@
     "reason": "证明电脑端（agent-computer 云端容器，不是设备端）已不认这些旧头：带旧头的请求没有令牌、Bot、人员（旧名就是被测对象）；到 R4 删除"
   },
   {
-    "file": "xiongbao/server/tests/brand-third-party.test.ts",
-    "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
-    "until": "R3",
-    "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
-  },
-  {
-    "file": "xiongbao/server/tests/copilot.test.ts",
-    "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
-    "until": "R3",
-    "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
-  },
-  {
     "file": "xiongbao/server/tests/dev-actor-email.test.ts",
     "pattern": "admin@openbot\\.local",
     "until": "R4",
@@ -1050,24 +764,6 @@
     "pattern": "/openbot\\|acp",
     "until": "R3",
     "reason": "断言卡片文字不泄露内部 ref（含已保护的 openbot/share_private_information）"
-  },
-  {
-    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
-    "pattern": "(?<=`)openbot:(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 granted_by 标记前缀 openbot: 原值"
-  },
-  {
-    "file": "xiongbao/server/src/plugins/store.ts",
-    "pattern": "(?<=`)openbot:(?=`)",
-    "until": "R3",
-    "reason": "注释里写的是已保护的 granted_by 标记前缀 openbot: 原值"
-  },
-  {
-    "file": "xiongbao/server/src/agents/profile-types.ts",
-    "text": "(\"LangChain\", \"OpenBot\")",
-    "until": "R3",
-    "reason": "注释里举的是 shared/harnesses.ts 已保护的框架名 OpenBot"
   },
   {
     "file": "xiongbao/server/src/plugins/composio-adapter.ts",
@@ -1140,18 +836,6 @@
     "pattern": "(?<=before: \")openbot-[a-z-]+(?=\")|OpenBot couldn't reach",
     "until": "R4",
     "reason": "护栏测试断言源码里不再出现这些旧名，旧名就是被测对象"
-  },
-  {
-    "file": "xiongbao/app/tests/employee-detail-merged.test.tsx",
-    "text": "framework: \"OpenBot\"",
-    "until": "R3",
-    "reason": "服务器给内置员工的框架名 OpenBot（shared/harnesses.ts 已保护的 OPENBOT_HARNESS_NAME，bot-profile/setup.tsx 按它显示「<品牌>内置」），测试夹具与之同值"
-  },
-  {
-    "file": "xiongbao/app/tests/bot-summaries.test.ts",
-    "text": "framework: \"OpenBot\"",
-    "until": "R3",
-    "reason": "服务器给内置员工的框架名 OpenBot（shared/harnesses.ts 已保护的 OPENBOT_HARNESS_NAME，bot-profile/setup.tsx 按它显示「<品牌>内置」），测试夹具与之同值"
   },
   {
     "file": "xiongbao/agent-computer/tests/session-cookies-rename.test.ts",
@@ -1596,12 +1280,6 @@
     "reason": "supervisor/src/docker.ts 在电脑卷里写的搬迁标记目录名，已有卷里就是这个名字，改名需迁移"
   },
   {
-    "file": "xiongbao/docs/personal-edition.md",
-    "text": "`openbot` tenant id",
-    "until": "R3",
-    "reason": "文档引用已保护的租户 id openbot（examples/personal/brand.yaml 的 id: openbot），已落在库里"
-  },
-  {
     "file": "xiongbao/docs/development-environment-xiongbao.md",
     "pattern": "(?<=:5433/)openbot(?:_test)?\\b|openbot-postgres-1|`openbot_test`|`openbot`(?= 是开发库)|(?<=for DB in )openbot openbot_test|(?<![\\w-])openbot-dev(?![\\w-])",
     "until": "R4",
@@ -1644,25 +1322,10 @@
     "reason": "recovery-flow-customization-turns 测试钉死了这个文件的字节数与 sha256（基线 9eb7436d8 原样），R1 不能改它的注释；R4 基线化时随钉死值一起改"
   },
   {
-    "pattern": "OPENBOT_(?:MODEL_(?:REFUSED|AUTH_REQUIRED|BILLING)|PROVIDER_REQUEST_REFUSED|AP_LOCAL_(?:STREAM_ERROR|TERMINAL_MISSING)|HARNESS_START_FAILED|HEADLESS_TOOL_ERROR|TOOL_LIMIT_EXCEEDED|LEARNED_SKILLS_ERROR)(?![A-Z0-9_])",
-    "until": "R3",
-    "reason": "RUN_ERROR 错误码（不是环境变量）：Python 框架、toolkit 与服务器包装层发出，原样存进 thread_run_events 并在回放时由 server/src/wire-codes.ts 改成新前缀给浏览器；服务器读取方按旧码判断。改名会让已存的运行事件对不上，随 R3 数据迁移一起改"
-  },
-  {
-    "pattern": "OPENBOT_POOL_[A-Z0-9_]*",
-    "until": "R3",
-    "reason": "平台模型密钥的环境变量名：platform_model_pool.api_key_env 存着这个名字，表上 CHECK 约束 '^OPENBOT_POOL_…'（server/src/db/schema/model.ts、recovery 0120）；env-aliases 与 rewrite-env.sh 都不改它，随 R3 数据迁移一起改"
-  },
-  {
-    "pattern": "OPENBOT_HARNESS_NAME|OPENBOT_TOOL_LIMIT(?![A-Z0-9_])",
-    "until": "R3",
-    "reason": "常量名本身写在品牌白名单条目的 text 里（shared/harnesses.ts、server/src/agents/tool-limit.ts，值 \"OpenBot\" 已落库），护栏只许白名单缩小、不许改写条目文本；随 R3 值改名时一起改"
-  },
-  {
     "file": "xiongbao/server/tests/recovery-approval-exact-input-objects.test.ts",
-    "text": "OPENBOT_EXACT_INPUT_JSON_V2",
-    "until": "R3",
-    "reason": "把 CRYPTO_NAMES 的 OPENBOT_EXACT_INPUT_JSON_V1 改一位后断言约束拒绝它的变异值，随加密版本名一起改"
+    "pattern": "OPENBOT_(?:APPROVAL_EXACT_(?:AEAD|HEADER|SOURCE_BINDING|WIRE)_V1|EXACT_INPUT_JSON_V[12])",
+    "until": "R4",
+    "reason": "把 0102 原文里的加密版本名改一位后断言约束拒绝它的变异值（0102 与其快照按字节冻结、保持旧名）；legacy-compat 到 R4 删除"
   },
   {
     "pattern": "OPENBOT_(?:UPSTREAM_(?:COMMIT|REPOSITORY|UPGRADES)|UPGRADE_(?:CHECKS|APP_CLIENT_ID|APP_PRIVATE_KEY))(?![A-Z0-9_])",
@@ -1736,8 +1399,8 @@
   {
     "file": "xiongbao/server/tests/wire-codes.test.ts",
     "text": "const OLD = \"OPENBOT_\"",
-    "until": "R3",
-    "reason": "RUN_ERROR 错误码的旧前缀（发送方仍发旧码、存进 thread_run_events，出口改新前缀），随错误码一起在 R3 改"
+    "until": "R4",
+    "reason": "RUN_ERROR 错误码的旧前缀：v0.2.16 发送方改发新码、0240 改写了库里存的码，出口仍把 v0.2.15 发送方的旧码改成新前缀，测试证明这一点；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/app/tests/web-visible-names.test.ts",
@@ -1876,5 +1539,95 @@
     "text": "OPENBOT_LOCAL_COMPUTER_DIR",
     "until": "R4",
     "reason": "证明本机 Chrome 电脑脚本认旧名数据目录；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "pattern": "openbot_app|openbot_role_writer",
+    "until": "R4",
+    "reason": "server-test 的冻结基线早于迁移 0240：基线库的应用角色仍是旧名，基线测试用旧名连接、准备步骤给旧名角色设口令；基线钉到 0240 之后随之改新名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/src/work/queue.ts",
+    "text": "openbot_work_offered",
+    "until": "R4",
+    "reason": "NOTIFY 通道旧名：v0.2.16 同时监听新旧两个通道、只往新通道发，滚动升级期间 v0.2.15 实例的唤醒仍能收到；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/shared/xiongbao-actor.ts",
+    "text": "actor.startsWith(\"openbot:\")",
+    "until": "R4",
+    "reason": "系统来源标记旧前缀：0240 改写了除审计外各表里的标记，审计记录只追加、保留旧前缀，读取端认新旧两种；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/rebrand-migration.test.ts",
+    "pattern": "openbot|OPENBOT|OpenBot",
+    "until": "R4",
+    "reason": "v0.2.16 改名迁移（0240）的测试：往 v0.2.15 形状的库里写带旧名的行，断言迁移后改成新名、审计不动，旧名就是被测对象；随迁移在 R4 基线化时删除；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/waker-group-hand-over.integration.test.ts",
+    "pattern": "openbot(?=_team_)",
+    "until": "R4",
+    "reason": "0207 的回填 SQL 原文（按字节冻结）按旧名调用团队函数：测试断言原文、执行前把旧名换成 0240 之后的新名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/automation-tenant-policies.test.ts",
+    "text": "TO openbot_app;",
+    "until": "R4",
+    "reason": "断言历史迁移 SQL 原文（按字节冻结）里的授权语句，原文写的是 0240 改名前的角色名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/autonomy-tables-grants.integration.test.ts",
+    "text": "TO openbot_app;",
+    "until": "R4",
+    "reason": "断言历史迁移 SQL 原文（按字节冻结）里的授权语句，原文写的是 0240 改名前的角色名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/new-tables-grants.integration.test.ts",
+    "text": "TO openbot_app;",
+    "until": "R4",
+    "reason": "断言历史迁移 SQL 原文（按字节冻结）里的授权语句，原文写的是 0240 改名前的角色名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/rls-role.test.ts",
+    "text": "FROM openbot_app;",
+    "until": "R4",
+    "reason": "断言迁移 0112 原文（按字节冻结）的两条 REVOKE，原文写的是 0240 改名前的角色名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/provider-refusal.test.ts",
+    "text": "OPENBOT_MODEL_AUTH_REQUIRED",
+    "until": "R4",
+    "reason": "兼容读取的测试：v0.2.15 的框架镜像仍发旧前缀的错误码，服务器照样认出并对浏览器改成新前缀；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker/s6/scripts/env-aliases.sh",
+    "text": "(OPENBOT_POOL_<X>)",
+    "until": "R4",
+    "reason": "注释说明平台模型密钥变量的旧名也照常复制到新名（0240 改了模型池里存的变量名）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/tests/audit-grant-rows.test.tsx",
+    "pattern": "\"openbot:(?:always-on|personal-defaults)\"",
+    "until": "R4",
+    "reason": "审计记录只追加、保留 0240 之前写下的旧前缀来源标记，测试证明活动页仍把它们读成系统发起；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/tests/audit-xiongbao-setup-rows.test.tsx",
+    "pattern": "\"openbot:(?:always-on|personal-defaults)\"",
+    "until": "R4",
+    "reason": "审计记录只追加、保留 0240 之前写下的旧前缀来源标记，测试证明活动页仍把它们读成系统发起；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/tests/personal-says-xiongbao.test.tsx",
+    "pattern": "\"openbot:(?:always-on|personal-defaults)\"",
+    "until": "R4",
+    "reason": "审计记录只追加、保留 0240 之前写下的旧前缀来源标记，测试证明活动页仍把它们读成系统发起；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
+    "text": "\"openbot:%\"",
+    "until": "R4",
+    "reason": "团队版启动提醒里认旧前缀的授予：0240 已把库里的改成新前缀，读取端到 R4 仍认旧前缀；legacy-compat 到 R4 删除"
   }
 ]

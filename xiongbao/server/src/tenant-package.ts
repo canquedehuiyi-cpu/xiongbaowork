@@ -18,6 +18,7 @@ import {
 import { parse } from "yaml";
 import { emptyPersona, type Persona } from "../../shared/persona";
 import { englishName } from "./brand";
+import { deploymentDigestOf } from "./channels/thread-identity";
 import { DEPLOYMENT_ROUTES } from "./computer/deployment-routes";
 import type { Database } from "./db/client";
 import {
@@ -2957,12 +2958,16 @@ export async function synchronizeTenantPackage(
  * The name goes into every thread id the deployment mints (channels/thread-identity.ts) and into the
  * vendor identity of an account made Shared, so it has to outlive a package rename. Read from the
  * former package rows the synchronise keeps, in the order the package lists them.
+ *
+ * `digest` is what a thread id's fingerprint is cut from. It is the SHA-256 of `name`, except where
+ * the package row itself was renamed in the database (0240 renamed the bundled package's id): that row
+ * keeps the digest of the name the deployment had before, and new threads go on carrying the prefix
+ * the old ones have. A former row named in `formerTenantIds` still wins, as it did before.
  */
 export async function deploymentNameOf(
   database: Database,
   tenantPackage: Pick<TenantPackage, "tenantId" | "formerTenantIds">,
-): Promise<string> {
-  if (tenantPackage.formerTenantIds.length === 0) return tenantPackage.tenantId;
+): Promise<{ name: string; digest: Buffer }> {
   /*
    * In the catalogue's own `system` frame, as the synchronise writes these rows: asked once at boot,
    * where there is no frame, and every statement needs one (G01-E). `deployment_packages` is exempt
@@ -2971,15 +2976,32 @@ export async function deploymentNameOf(
   const formerIds = tenantPackage.formerTenantIds;
   const rows = await runAsTenant(SYSTEM_TENANT, () =>
     database
-      .select({ tenantId: deploymentPackages.tenantId })
+      .select({
+        tenantId: deploymentPackages.tenantId,
+        formerNameDigest: deploymentPackages.formerNameDigest,
+      })
       .from(deploymentPackages)
-      .where(inArray(deploymentPackages.tenantId, formerIds)),
+      .where(
+        inArray(deploymentPackages.tenantId, [
+          tenantPackage.tenantId,
+          ...formerIds,
+        ]),
+      ),
   );
   const present = new Set(rows.map((row) => row.tenantId));
-  return (
-    tenantPackage.formerTenantIds.find((id) => present.has(id)) ??
-    tenantPackage.tenantId
-  );
+  const former = formerIds.find((id) => present.has(id));
+  if (former !== undefined)
+    return { name: former, digest: deploymentDigestOf(former) };
+  const stored = rows.find(
+    (row) => row.tenantId === tenantPackage.tenantId,
+  )?.formerNameDigest;
+  return {
+    name: tenantPackage.tenantId,
+    digest:
+      stored && /^[0-9a-f]{64}$/.test(stored)
+        ? Buffer.from(stored, "hex")
+        : deploymentDigestOf(tenantPackage.tenantId),
+  };
 }
 
 export function createPackageStatusReader(

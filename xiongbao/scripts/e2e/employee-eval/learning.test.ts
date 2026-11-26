@@ -515,12 +515,12 @@ test("retroLogLines and retroLinesOf carry the failed-turn diagnosis, without an
     outcome: "saved",
     steps: 9,
     failedButDelivered: true,
-    runError: "OPENBOT_HEADLESS_TOOL_ERROR",
+    runError: "XIONGBAO_HEADLESS_TOOL_ERROR",
     runErrorKind: "ended_early",
     runErrorAfterDelivery: true,
   });
   expect(retroLogLines(kind, ["abcdef0123456789"])[0]).toContain(
-    "runError=OPENBOT_HEADLESS_TOOL_ERROR runErrorKind=ended_early runErrorAfterDelivery=true",
+    "runError=XIONGBAO_HEADLESS_TOOL_ERROR runErrorKind=ended_early runErrorAfterDelivery=true",
   );
   expect(retroLinesOf(kind, ["abcdef0123456789"])[0]).toMatchObject({
     runErrorKind: "ended_early",

@@ -490,7 +490,7 @@ const TEAM_CREDENTIAL_KINDS = [
 /**
  * Whether a credential of this kind is a shared MCP server's secret, which is always sealed to
  * `team` (G01-E P10, Q3): the server it belongs to is `team`, and a member reaches it only through
- * the `openbot_team_server_secret` broker, which returns `team` rows alone.
+ * the `xiongbao_team_server_secret` broker, which returns `team` rows alone.
  */
 export function isTeamServerSecretKind(kind: CredentialKind): boolean {
   return (TEAM_CREDENTIAL_KINDS as readonly CredentialKind[]).includes(kind);

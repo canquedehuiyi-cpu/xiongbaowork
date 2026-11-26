@@ -90,15 +90,15 @@ describe("applyEnvironmentAliases", () => {
     expect(env.XIONGBAO_UNSET).toBeUndefined();
   });
 
-  test("a platform model key keeps its old name, because the database row names it", () => {
+  test("a platform model key is copied like any other: v0.2.16 renames the pool row that names it", () => {
     const env: Record<string, string | undefined> = {
       OPENBOT_POOL_OPENAI: "sk-test",
     };
     expect(applyEnvironmentAliases(env)).toEqual({
       conflicts: [],
-      legacy: [],
+      legacy: ["OPENBOT_POOL_OPENAI"],
     });
-    expect(env.XIONGBAO_POOL_OPENAI).toBeUndefined();
+    expect(env.XIONGBAO_POOL_OPENAI).toBe("sk-test");
   });
 
   test("names come back sorted, so the warning reads the same on every start", () => {

@@ -1,6 +1,7 @@
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { catchError, type Observable, of, throwError } from "rxjs";
 import { BILLING } from "./model-billing";
+import { runErrorCode } from "./wire-codes";
 
 /**
  * A provider's refusal, turned into something a person can read.
@@ -126,7 +127,7 @@ function runError(failure: ProviderFailure): BaseEvent {
     message: `${billing ? BILLING_REFUSAL : refusalOf(failure.status)}（HTTP ${failure.status}）。${
       words ? `供应商原话：「${words}」` : "供应商没有说明原因。"
     }`,
-    code: "OPENBOT_PROVIDER_REQUEST_REFUSED",
+    code: runErrorCode("PROVIDER_REQUEST_REFUSED"),
   } as unknown as BaseEvent;
 }
 

@@ -102,7 +102,7 @@ export async function initializeRoleWriter(
     if (
       !appFacts ||
       !writerFacts ||
-      appFacts.role === "openbot_role_writer" ||
+      appFacts.role === "xiongbao_role_writer" ||
       appFacts.session_role !== appFacts.role ||
       appFacts.login_role !== appFacts.role ||
       appFacts.can_login !== true ||
@@ -127,9 +127,9 @@ export async function initializeRoleWriter(
       appFacts.database_grant_options !== false ||
       appFacts.other_public_grant_options !== false ||
       appFacts.reads_roles !== true ||
-      writerFacts.role !== "openbot_role_writer" ||
-      writerFacts.session_role !== "openbot_role_writer" ||
-      writerFacts.login_role !== "openbot_role_writer" ||
+      writerFacts.role !== "xiongbao_role_writer" ||
+      writerFacts.session_role !== "xiongbao_role_writer" ||
+      writerFacts.login_role !== "xiongbao_role_writer" ||
       writerFacts.can_login !== true ||
       writerFacts.super !== false ||
       writerFacts.bypass !== false ||
@@ -169,7 +169,7 @@ export async function initializeRoleWriter(
       );
     }
     const [membership] = await application.execute(sql`
-    SELECT pg_has_role(current_user, 'openbot_role_writer', 'MEMBER') AS writer_member
+    SELECT pg_has_role(current_user, 'xiongbao_role_writer', 'MEMBER') AS writer_member
   `);
     if (membership?.writer_member !== false) {
       throw new Error(
@@ -216,7 +216,7 @@ export async function lockRoleAuthority(
   userId: string,
 ): Promise<void> {
   await transaction.execute(sql`
-    SELECT pg_advisory_xact_lock(hashtextextended(${`openbot.role-authority:${userId}`}, 0))
+    SELECT pg_advisory_xact_lock(hashtextextended(${`xiongbao.role-authority:${userId}`}, 0))
   `);
 }
 

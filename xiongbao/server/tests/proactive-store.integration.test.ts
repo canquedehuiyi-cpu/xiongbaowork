@@ -283,7 +283,7 @@ test("a next check-in is counted on this server's clock, which the sweep decides
     // `now()` before Postgres's own.
     const clock = `clock_ahead_${randomUUID().replaceAll("-", "")}`;
     /*
-     * The fork's suite connects as `openbot_app`, which may not create a schema: the database's owner
+     * The fork's suite connects as `xiongbao_app`, which may not create a schema: the database's owner
      * (`TEST_DATABASE_ADMIN_URL`, on this same database) makes the stand-in clock and lets the
      * application role use it.
      */

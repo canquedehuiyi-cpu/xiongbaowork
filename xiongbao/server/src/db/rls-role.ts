@@ -44,7 +44,7 @@ export function judgeRlsEnforcement(facts: RoleFacts): RlsVerdict {
   return {
     enforced: false,
     reason: `row level security does not apply to this connection: ${because}`,
-    fix: "run the server as the application role (openbot_app). The owner role is for migrations and the test-database reset, which are the only places that legitimately need it.",
+    fix: "run the server as the application role (xiongbao_app). The owner role is for migrations and the test-database reset, which are the only places that legitimately need it.",
   };
 }
 

@@ -826,7 +826,7 @@ test("gives the server container addresses, not the host's loopback", () => {
   expect(environment).toMatchObject({
     PORT: "3001",
     SERVER_PORT: "3001",
-    DATABASE_URL: "postgres://openbot_app:openbot@postgres:5432/xiongbao",
+    DATABASE_URL: "postgres://xiongbao_app:openbot@postgres:5432/xiongbao",
     AGENT_COMPUTER_URL: "http://agent-computer:4100",
   });
   for (const [name, value] of Object.entries(environment)) {
@@ -871,7 +871,7 @@ test("puts the server beside the database and the Bots, and the worker beside th
  * The whole start-up chain, as the server checks it (audit #633 M1, C1).
  *
  * Only `migrate` holds the owner: it creates the roles and sets the role writer's password, which a
- * data privilege cannot. The server and the worker connect as `openbot_app`, which row-level security
+ * data privilege cannot. The server and the worker connect as `xiongbao_app`, which row-level security
  * binds, so the server's tenant isolation preflight (and the worker's, the same gate) passes; the
  * owner is a superuser and would be refused. The server is also given the role writer, which it
  * refuses to start without, with the password `migrate` installs, whatever that is set to.
@@ -879,7 +879,7 @@ test("puts the server beside the database and the Bots, and the worker beside th
 test("connects the server and the worker as the application role, and only migrate as the owner", () => {
   const services = runComposeConfig({}).services;
   const owner = "postgres://openbot:openbot@postgres:5432/xiongbao";
-  const application = "postgres://openbot_app:openbot@postgres:5432/xiongbao";
+  const application = "postgres://xiongbao_app:openbot@postgres:5432/xiongbao";
 
   expect(services.migrate.environment.DATABASE_URL).toBe(owner);
   expect(services.server.environment.DATABASE_URL).toBe(application);
@@ -898,14 +898,14 @@ test("gives the server the role writer, with the password migrate installs", () 
   const unset = runComposeConfig({}).services;
   expect(unset.migrate.environment.ROLE_WRITER_PASSWORD).toBe("openbot");
   expect(unset.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
-    "postgres://openbot_role_writer:openbot@postgres:5432/xiongbao",
+    "postgres://xiongbao_role_writer:openbot@postgres:5432/xiongbao",
   );
   const chosen = runComposeConfig({
     ROLE_WRITER_PASSWORD: "f00dCafe1234",
   }).services;
   expect(chosen.migrate.environment.ROLE_WRITER_PASSWORD).toBe("f00dCafe1234");
   expect(chosen.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
-    "postgres://openbot_role_writer:f00dCafe1234@postgres:5432/xiongbao",
+    "postgres://xiongbao_role_writer:f00dCafe1234@postgres:5432/xiongbao",
   );
   // The worker writes no identity role and is not given the writer.
   expect(Object.keys(chosen.worker.environment).sort()).toEqual([

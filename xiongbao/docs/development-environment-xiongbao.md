@@ -24,12 +24,12 @@ docker start openbot-postgres-1        # 已存在则直接起；别新建
 
 | 用途 | 连接串 |
 | --- | --- |
-| 运行期（服务端、测试用） | `postgres://openbot_app:openbot@127.0.0.1:5433/openbot` |
+| 运行期（服务端、测试用） | `postgres://xiongbao_app:<口令>@127.0.0.1:5433/<库名>`（口令与库名同下一行；迁移 `0240` 把应用角色改名为 `xiongbao_app`，口令不变） |
 | 迁移/清库（需要 owner 权限） | `postgres://openbot:openbot@127.0.0.1:5433/openbot` |
 
-`openbot_app` 能读写数据、能在 `public` schema 里建表（迁移 `0054` 给了 `CREATE`），但**不能 `TRUNCATE`**——清库脚本因此必须用 owner 串跑。RLS 对所有带 `tenant_id` 的表开启 `FORCE`，并且**读和写各自一条策略**（迁移 `0072`）：`FOR SELECT` 允许"本租户 / `system` / `platform`"，所以平台内置目录人人可读；`FOR INSERT`/`UPDATE`/`DELETE` 只认"本租户，或当前处于 `platform` 作用域"，所以拿着别人的 id 也改不动、删不掉平台行。应用层仍然比对 `currentTenant()`（`src/waker-groups/store.ts` 是范例），但那是副防线而不是唯一的防线。
+`xiongbao_app` 能读写数据、能在 `public` schema 里建表（迁移 `0054` 给了 `CREATE`），但**不能 `TRUNCATE`**——清库脚本因此必须用 owner 串跑。RLS 对所有带 `tenant_id` 的表开启 `FORCE`，并且**读和写各自一条策略**（迁移 `0072`）：`FOR SELECT` 允许"本租户 / `system` / `platform`"，所以平台内置目录人人可读；`FOR INSERT`/`UPDATE`/`DELETE` 只认"本租户，或当前处于 `platform` 作用域"，所以拿着别人的 id 也改不动、删不掉平台行。应用层仍然比对 `currentTenant()`（`src/waker-groups/store.ts` 是范例），但那是副防线而不是唯一的防线。
 
-> **两个坑（本仓库当前实况）**：① 角色决定主防线是否存在——`openbot` 是超级用户，**RLS 不约束超级用户**（`FORCE` 只管表 owner），照 owner 串起服务端就只剩应用层一道，且静默。`.env.example` 现已默认 `openbot_app`；`docker-compose.yml` 里只有一次性的 `migrate` 服务用 owner 串（建角色必须它）。服务端启动时会查 `pg_roles`，发现自己是超级用户或 `BYPASSRLS` 就 `console.error` 一条 `rls-not-enforced`，设 `XIONGBAO_RLS_ENFORCE=refuse` 则直接拒绝启动（判定函数与绊线测试在 `src/db/rls-role.ts` / `tests/rls-role.test.ts`）。② `deployment_packages` 被豁免于 FORCE 策略（`0062`：部署包目录是平台发给所有租户的内容，不是租户数据）。
+> **两个坑（本仓库当前实况）**：① 角色决定主防线是否存在——`openbot` 是超级用户，**RLS 不约束超级用户**（`FORCE` 只管表 owner），照 owner 串起服务端就只剩应用层一道，且静默。`.env.example` 现已默认 `xiongbao_app`；`docker-compose.yml` 里只有一次性的 `migrate` 服务用 owner 串（建角色必须它）。服务端启动时会查 `pg_roles`，发现自己是超级用户或 `BYPASSRLS` 就 `console.error` 一条 `rls-not-enforced`，设 `XIONGBAO_RLS_ENFORCE=refuse` 则直接拒绝启动（判定函数与绊线测试在 `src/db/rls-role.ts` / `tests/rls-role.test.ts`）。② `deployment_packages` 被豁免于 FORCE 策略（`0062`：部署包目录是平台发给所有租户的内容，不是租户数据）。
 
 集成测试用**另一个库** `openbot_test`：跑测试时 `DATABASE_URL` 与 `TEST_DATABASE_URL` 都指它。`openbot` 是开发库，不要拿它当测试库。
 
@@ -47,7 +47,7 @@ for DB in openbot openbot_test; do
 done
 ```
 
-新生成的迁移只有 DDL。**租户隔离要手工补，形状照 `0072`（不是 `0067`）**：`0067` 及之前那批循环建的是**一条 `FOR ALL` 策略**，读写共用一个表达式——那正是"任何租户可写平台内置行"的来源，别再抄它。`0072` 的循环对每张有 `tenant_id` 的表建**四条**：`FOR SELECT`（本租户 / `system` / `platform`）、`FOR INSERT`（WITH CHECK：本租户或 platform 作用域）、`FOR UPDATE`（USING 与 WITH CHECK 都用写作用域）、`FOR DELETE`（USING 用写作用域）。**没有 `tenant_id` 的子表**（例如 `waker_group_members` 以组为键）循环看不见，必须单独写 `EXISTS (SELECT 1 FROM 父表 …)` 策略并同样分四条，否则它整个在 RLS 之外。末尾给 `openbot_app` 授权。
+新生成的迁移只有 DDL。**租户隔离要手工补，形状照 `0072`（不是 `0067`）**：`0067` 及之前那批循环建的是**一条 `FOR ALL` 策略**，读写共用一个表达式——那正是"任何租户可写平台内置行"的来源，别再抄它。`0072` 的循环对每张有 `tenant_id` 的表建**四条**：`FOR SELECT`（本租户 / `system` / `platform`）、`FOR INSERT`（WITH CHECK：本租户或 platform 作用域）、`FOR UPDATE`（USING 与 WITH CHECK 都用写作用域）、`FOR DELETE`（USING 用写作用域）。**没有 `tenant_id` 的子表**（例如 `waker_group_members` 以组为键）循环看不见，必须单独写 `EXISTS (SELECT 1 FROM 父表 …)` 策略并同样分四条，否则它整个在 RLS 之外。末尾给 `xiongbao_app` 授权。
 
 补完要登记三件套，否则 `drizzle-kit generate` 与 `tests/migration-journal.test.ts` 会一起骗人：`meta/_journal.json` 条目的 **`tag` 必须带四位数字前缀**（`0072_rls_command_scopes`，只写后半段会同时红"每个迁移有对应条目"和"条目按自己的 idx 命名"两条断言），`meta/0072_snapshot.json` 必须存在——纯策略迁移不动表/列/索引，所以正解是**复制上一号快照、只换 `id` 并把 `prevId` 接到上一号的 `id`**（`.scratch/qoderwake-replica/seed-snapshots.mjs` 与 `register-0072.mjs` 就是这个做法），`when` 用真实当前时间且必须晚于上一条。
 
@@ -88,8 +88,8 @@ xiongbao/tools/bun/bun.exe xiongbao/runner/src/index.ts \
 ```bash
 B=<repo>/xiongbao
 MSYS_NO_PATHCONV=1 docker run --rm \
-  -e DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot_test" \
-  -e TEST_DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot_test" \
+  -e DATABASE_URL="postgres://xiongbao_app:<口令>@host.docker.internal:5433/<库名>_test" \
+  -e TEST_DATABASE_URL="postgres://xiongbao_app:<口令>@host.docker.internal:5433/<库名>_test" \
   -v $B/server/src:/app/server/src -v $B/server/tests:/app/server/tests \
   -v $B/server/drizzle:/app/server/drizzle -v $B/server/scripts:/app/server/scripts \
   -v $B/shared:/app/shared -v $B/examples:/app/examples -v $B/.env:/app/.env \
@@ -160,7 +160,7 @@ done
   ```bash
   B="D:/AI编程库/项目库/进行中的项目/xiongbaoshuziyuangong/xiongbao"
   MSYS_NO_PATHCONV=1 docker run -d --name xiongbao-g2-server \
-    -e DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot" \
+    -e DATABASE_URL="postgres://xiongbao_app:<口令>@host.docker.internal:5433/<库名>" \
     -e BETTER_AUTH_SECRET=<openssl rand -base64 32> -e BETTER_AUTH_URL=http://localhost:3001 \
     -e KEY_ENCRYPTION_KEY=<openssl rand -base64 32> -e INITIAL_ADMIN_EMAILS=admin@example.test \
     -e XIONGBAO_PUBLIC_URL=http://localhost:3001 -e XIONGBAO_SINGLE_USER=true -e INTELLIGENCE_MODE=local \

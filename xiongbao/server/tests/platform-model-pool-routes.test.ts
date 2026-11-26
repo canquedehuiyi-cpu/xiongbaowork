@@ -42,7 +42,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * - The per-row coworker count is the tenant's own, under row-level security.
  * - The operator CLI takes a key variable's NAME and never a key.
  *
- * The suite runs as `openbot_app` (NOBYPASSRLS, FORCE RLS in CI). The pool is platform-owned and
+ * The suite runs as `xiongbao_app` (NOBYPASSRLS, FORCE RLS in CI). The pool is platform-owned and
  * the application may only read it, so its rows are written through the owner connection
  * (`TEST_DATABASE_ADMIN_URL`). No provider is ever called.
  */
@@ -54,7 +54,7 @@ function ownerUrl(): string {
   const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
   if (!raw) {
     throw new Error(
-      "TEST_DATABASE_ADMIN_URL must name the database owner: platform_model_pool is not writable by openbot_app.",
+      "TEST_DATABASE_ADMIN_URL must name the database owner: platform_model_pool is not writable by xiongbao_app.",
     );
   }
   const admin = new URL(raw);
@@ -92,11 +92,11 @@ const marker = randomUUID().replaceAll("-", "").slice(0, 10);
 const MARK = marker.toUpperCase();
 const freeTenant = `poolapi-${marker}-free`;
 const proTenant = `poolapi-${marker}-pro`;
-const FREE_KEY = `OPENBOT_POOL_APIFREE_${MARK}`;
-const PRO_KEY = `OPENBOT_POOL_APIPRO_${MARK}`;
-const UNSET_KEY = `OPENBOT_POOL_APIUNSET_${MARK}`;
-const OFF_KEY = `OPENBOT_POOL_APIOFF_${MARK}`;
-const CLI_KEY = `OPENBOT_POOL_APICLI_${MARK}`;
+const FREE_KEY = `XIONGBAO_POOL_APIFREE_${MARK}`;
+const PRO_KEY = `XIONGBAO_POOL_APIPRO_${MARK}`;
+const UNSET_KEY = `XIONGBAO_POOL_APIUNSET_${MARK}`;
+const OFF_KEY = `XIONGBAO_POOL_APIOFF_${MARK}`;
+const CLI_KEY = `XIONGBAO_POOL_APICLI_${MARK}`;
 const environment: Record<string, string | undefined> = {
   [FREE_KEY]: `pool-api-free-secret-${marker}`,
   [PRO_KEY]: `pool-api-pro-secret-${marker}`,
@@ -313,7 +313,7 @@ describe("GET /api/models: the platform pool", () => {
       environment[FREE_KEY] as string,
       "apiKeyEnv",
       "api_key_env",
-      "OPENBOT_POOL_",
+      "XIONGBAO_POOL_",
     ]) {
       expect(response.text).not.toContain(leak);
     }

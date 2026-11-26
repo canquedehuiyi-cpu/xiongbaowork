@@ -329,7 +329,7 @@ export class ModelBindingConflictError extends Error {
  * A Bot nobody owns any more may not be made private (G01-E P9).
  *
  * When a person's account is deleted, their Bots keep living with `owner_user_id` set null. A public
- * or published one is stamped `team`, and `team` rows are read only where `openbot_team_bot_visible`
+ * or published one is stamped `team`, and `team` rows are read only where `xiongbao_team_bot_visible`
  * says so: public, the owner, or a published audience. Private and unpublished, with no owner, that
  * is nobody: the Bot would stay in the database, unreachable from every chat, and no person's frame
  * could ever change it back. So the change is refused. An administrator takes such a Bot down by

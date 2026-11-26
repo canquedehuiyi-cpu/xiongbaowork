@@ -106,7 +106,7 @@ export function summaryFor(harness: Harness): string {
  * name, substituted where the text is made (`frameworkLabel` in server/src/agents/framework.ts, the
  * starter seed in tenant-package.ts, `poweredBy` in the app's new-bot sheet).
  */
-export const OPENBOT_HARNESS_NAME = "OpenBot";
+export const XIONGBAO_HARNESS_NAME = "XiongBao";
 
 /**
  * A framework a person may declare for an agent they run themselves, by id: any named harness, never

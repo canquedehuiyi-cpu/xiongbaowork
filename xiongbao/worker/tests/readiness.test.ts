@@ -37,7 +37,7 @@ describe("the worker's readiness gate", () => {
   test("the application role passes under refuse, having asked the database once", async () => {
     const diagnostics: ReadinessDiagnostic[] = [];
     const { database: db, queries } = database(
-      facts("openbot_app", false, false),
+      facts("xiongbao_app", false, false),
     );
     await checkRlsReadiness({
       database: db,
@@ -107,7 +107,7 @@ describe("the worker's readiness gate", () => {
 
   test("a mode that is neither word stops the worker before it asks anything", async () => {
     const { database: db, queries } = database(
-      facts("openbot_app", false, false),
+      facts("xiongbao_app", false, false),
     );
     await expect(
       checkRlsReadiness({

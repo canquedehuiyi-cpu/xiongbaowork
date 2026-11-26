@@ -606,7 +606,7 @@ describe("ROLE1-1: migration 0133 copies the old persona templates", () => {
           (${tenant}, ${`${tenant}@role1.test`}, 'm'),
           (${other}, ${`${other}@role1.test`}, 'o')`;
         // Bound by row security like the application, which FORCE also does to a non-superuser owner.
-        await tx`set local role openbot_app`;
+        await tx`set local role xiongbao_app`;
         for (const [owning, name, tone] of [
           [tenant, "细心的审核员", "直接"],
           [tenant, "耐心的导师", "温和"],

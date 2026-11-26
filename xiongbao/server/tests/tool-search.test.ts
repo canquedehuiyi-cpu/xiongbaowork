@@ -18,10 +18,10 @@ import {
 import { lastValueFrom, toArray } from "rxjs";
 import { z } from "zod";
 import {
-  OPENBOT_TOOL_LIMIT,
   toolLimitFor,
   toolLimitRecorder,
   toolLimitRefusal,
+  XIONGBAO_TOOL_LIMIT,
 } from "../src/agents/tool-limit";
 import {
   loadedBySearch,
@@ -465,7 +465,7 @@ describe.each(PROVIDERS)("a Bot holding 279 tools, on $name", (current) => {
       expect(recorded).toHaveLength(1);
       // Chat Completions' limit is the provider's; anywhere else 128 is XiongBao's own.
       expect(recorded[0]?.[1].provider).toBe(
-        current.wire === "chat" ? "OpenAI" : OPENBOT_TOOL_LIMIT,
+        current.wire === "chat" ? "OpenAI" : XIONGBAO_TOOL_LIMIT,
       );
     } finally {
       await llm.restore();
@@ -766,7 +766,7 @@ describe("the pre-flight count", () => {
     );
     expect(
       toolLimitRefusal("General Assistant", 131, {
-        provider: OPENBOT_TOOL_LIMIT,
+        provider: XIONGBAO_TOOL_LIMIT,
         limit: 128,
       }),
     ).toBe(

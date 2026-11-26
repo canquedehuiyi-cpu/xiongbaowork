@@ -25,24 +25,14 @@
     "lines": 4
   },
   {
-    "rule": "crypto-name",
-    "scope": "server/src",
-    "lines": 14
-  },
-  {
     "rule": "env-name",
     "scope": "desktop-device/src-tauri",
     "lines": 5
   },
   {
-    "rule": "env-name",
-    "scope": "server/src",
-    "lines": 1
-  },
-  {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 22
+    "lines": 20
   },
   {
     "rule": "identifier",
@@ -57,17 +47,12 @@
   {
     "rule": "identifier",
     "scope": "docker/s6",
-    "lines": 7
+    "lines": 1
   },
   {
     "rule": "identifier",
     "scope": "server/src",
-    "lines": 39
-  },
-  {
-    "rule": "identifier",
-    "scope": "shared/harnesses.ts",
-    "lines": 1
+    "lines": 19
   },
   {
     "rule": "identifier",

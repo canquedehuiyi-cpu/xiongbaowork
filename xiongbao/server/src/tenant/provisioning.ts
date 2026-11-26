@@ -1,3 +1,4 @@
+import { SYSTEM_MARKER_PREFIX } from "@xiongbao/shared/xiongbao-actor";
 import { eq } from "drizzle-orm";
 import { STAFFING_TOOL_NAMES } from "../../../shared/staffing-proposal";
 import type { Database } from "../db/client";
@@ -22,7 +23,7 @@ export function avatarAgentId(tenantId: string): string {
 }
 
 /** 小管家默认「招聘与组群」的授予记在 `plugin_grants.granted_by` 的标记。 */
-export const STAFFING_DEFAULT_BY = "openbot:staffing-default";
+export const STAFFING_DEFAULT_BY = `${SYSTEM_MARKER_PREFIX}staffing-default`;
 
 /**
  * 「招聘与组群」六个工具的授予 ref，如 `staffing/propose_employee`；与 `staffing/executor.ts` 给新员工授予时

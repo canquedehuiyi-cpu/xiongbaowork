@@ -229,7 +229,7 @@ jobs:
         run: |
           set -euo pipefail
           if grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/xiongbao/ci/${{ matrix.target }}-values.yaml); then
-            grep -A1 'name: ROLE_WRITER_DATABASE_URL$' rendered.yaml | grep -q 'openbot_role_writer:$(ROLE_WRITER_PASSWORD)@' || {
+            grep -A1 'name: ROLE_WRITER_DATABASE_URL$' rendered.yaml | grep -q 'xiongbao_role_writer:$(ROLE_WRITER_PASSWORD)@' || {
               echo "::error::The bundled database render does not give the API the role writer from the chart's password Secret."
               exit 1
             }
@@ -246,10 +246,10 @@ jobs:
               --api-versions agents.x-k8s.io/v1beta1/Sandbox \
               --api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao \
-              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao \
+              --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao \
+              --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao \
               --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao \
-              | grep -A1 'name: ROLE_WRITER_DATABASE_URL' | grep -q 'openbot_role_writer:y@db.internal' || {
+              | grep -A1 'name: ROLE_WRITER_DATABASE_URL' | grep -q 'xiongbao_role_writer:y@db.internal' || {
               echo "::error::An inline database.roleWriterUrl did not reach the API."
               exit 1
             }
@@ -336,12 +336,12 @@ jobs:
           if ! grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/xiongbao/ci/${{ matrix.target }}-values.yaml); then
             refuses "an external database URL with no role-writer URL" \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao \
+              --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao \
               --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao
             refuses "an external database URL with no owner URL for migrations" \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao \
-              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao
+              --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao \
+              --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao
           else
             echo "skipped: the role-writer refusal is only armed for an external database"
           fi

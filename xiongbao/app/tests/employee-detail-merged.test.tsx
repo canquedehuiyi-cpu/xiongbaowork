@@ -107,7 +107,7 @@ const profile: AgentProfile = {
   isolated: false,
   isolationActive: false,
   isolationOffReason: null,
-  framework: "OpenBot",
+  framework: "XiongBao",
 };
 
 const duty = (

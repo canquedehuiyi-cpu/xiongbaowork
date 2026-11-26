@@ -67,8 +67,8 @@ check test "$(grep -ac 'rls-not-enforced\|rls-role-check-unavailable' "$evidence
 if [ "$healthy" = true ]; then
   check bun scripts/ci/assert-image.mjs http://127.0.0.1:3772 "$evidence_native"
   check docker exec "$name" sh -c 'test "$(stat -c %a /var/lib/postgresql/pgpassword)" = 600 && test "$(stat -c %a /var/lib/postgresql/pgpassword-app)" = 600'
-  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'openbot_app|f|f'
-  check docker exec "$name" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U openbot_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'xiongbao_app|f|f'
+  check docker exec "$name" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
   check docker exec -u apiuser "$name" sh -c 'test ! -r /run/s6/container_environment/MIGRATION_DATABASE_URL'
   # A new volume migrates under the old superuser (migration 0054 needs it) and is renamed on that same
   # first boot: the owner URL names the new superuser and database, and so does the cluster.
@@ -101,6 +101,10 @@ if [ "$healthy" = true ]; then
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "SELECT marker FROM public.track_b_delivery_probe"')" = preserved
   # The second boot of a renamed volume finds it renamed and keeps it so.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, current_database()"')" = 'xiongbao|xiongbao'
+  # All four names are new after the first boot (the application roles by migration 0240, the superuser
+  # and database by the rename step), so the second boot has nothing to rename and backs nothing up.
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_roles where rolname in ('"'"'xiongbao_app'"'"', '"'"'xiongbao_role_writer'"'"')"')" = 2
+  check docker exec "$name" sh -c 'test -z "$(ls /var/lib/postgresql/backup 2>/dev/null | grep "^pre-rebrand-")"'
   docker logs "$name" > "$evidence/recreated.log" 2>&1
   check test "$(grep -ac 'rls-not-enforced\|rls-role-check-unavailable' "$evidence/recreated.log" || true)" = 0
   # Model the upgrade from an older embedded volume which has only an owner secret.
@@ -116,8 +120,8 @@ if [ "$healthy" = true ]; then
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
   if wait_health "$auth"; then
     check docker exec "$auth" sh -c 'sha256sum -c /var/lib/postgresql/.trackb-owner-hash >/dev/null && test "$(stat -c %a /var/lib/postgresql/pgpassword-app)" = 600'
-    check test "$(docker exec "$auth" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'openbot_app|f|f'
-    check docker exec "$auth" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U openbot_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
+    check test "$(docker exec "$auth" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'xiongbao_app|f|f'
+    check docker exec "$auth" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
     check bun scripts/ci/assert-tenants.mjs http://127.0.0.1:3772
   else
     echo 'FAIL upgraded/auth container healthy within 60 seconds'

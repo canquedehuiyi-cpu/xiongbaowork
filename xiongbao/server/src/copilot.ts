@@ -120,9 +120,9 @@ import {
 } from "./agents/slim-guidance";
 import { deliveryDueFor } from "./agents/step-hints";
 import {
-  OPENBOT_TOOL_LIMIT,
   toolLimitFor,
   toolLimitRefusal,
+  XIONGBAO_TOOL_LIMIT,
 } from "./agents/tool-limit";
 import {
   fitToolLimit,
@@ -2576,7 +2576,7 @@ async function buildAgent(
     const capacity =
       limitFor(runModel) ??
       (waiting.size > 0
-        ? { provider: OPENBOT_TOOL_LIMIT, limit: MODEL_TOOL_LIMIT }
+        ? { provider: XIONGBAO_TOOL_LIMIT, limit: MODEL_TOOL_LIMIT }
         : null);
     if (!capacity) return undefined;
     const reserved = Math.min(waiting.size, SEARCH_RESULTS_LIMIT);
@@ -4257,7 +4257,7 @@ const NOBODY = "";
  * Nobody signed in is read in the deployment's catalogue frame, `system`, and only for `/info` (see
  * {@link mountCopilotRuntime}). That is exactly what the empty frame it was given before read: row
  * security shows a frame of `''` its own rows (there are none) and `system`'s, and
- * `openbot_team_bot_visible` refuses both `''` and `system`, so no person's row and no team row is in
+ * `xiongbao_team_bot_visible` refuses both `''` and `system`, so no person's row and no team row is in
  * that roster. Anything else is not a person and is refused rather than given a frame.
  */
 function runAsRuntimeActor<T>(actor: AgentActor, work: () => T): T {

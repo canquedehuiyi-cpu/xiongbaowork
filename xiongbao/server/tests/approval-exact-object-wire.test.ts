@@ -5,9 +5,9 @@ import { decodeExactObjectWireV1, encodeExactObjectWireV1, EXACT_OBJECT_WIRE_HEA
 // Definitions only, no crypto. Fixtures are not a production materializer.
 // Caller must bound ALL envelope own keys<=5 before construction growth;
 // Reflect's complete snapshot is not dynamically pre-capped by this module.
-// Independent complete wire literal: ASCII OPENBOT_APPROVAL_EXACT_WIRE_V1,
-// NUL at byte30; nonce bytes31..42; u32BE(17) bytes43..46; C||T bytes47..63.
-const EXPECTED_HEX = "4f50454e424f545f415050524f56414c5f45584143545f574952455f563100000102030405060708090a0b00000011101112131415161718191a1b1c1d1e1f20";
+// Independent complete wire literal: ASCII XIONGBAO_APPROVAL_EXACT_WIRE_V1,
+// NUL at byte31; nonce bytes32..43; u32BE(17) bytes44..47; C||T bytes48..64.
+const EXPECTED_HEX = "58494f4e4742414f5f415050524f56414c5f45584143545f574952455f563100000102030405060708090a0b00000011101112131415161718191a1b1c1d1e1f20";
 function literalWire(): Uint8Array {
 	const result = new Uint8Array(EXPECTED_HEX.length / 2);
 	for (let i = 0; i < result.length; i++) result[i] = Number.parseInt(EXPECTED_HEX.slice(i * 2, i * 2 + 2), 16);
@@ -15,7 +15,7 @@ function literalWire(): Uint8Array {
 }
 function envelope(): Envelope {
 	return {
-		version: "OPENBOT_APPROVAL_EXACT_AEAD_V1",
+		version: "XIONGBAO_APPROVAL_EXACT_AEAD_V1",
 		algorithm: "AES-256-GCM",
 		nonce: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
 		ciphertextAndTag: new Uint8Array([16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]),
@@ -34,8 +34,8 @@ function rejected(operation: () => unknown): void {
 
 describe("exact-object DB wire byte component, not authenticated admission", () => {
 	test("exact version and sizes are independent literal expectations", () => {
-		expect(EXACT_OBJECT_WIRE_VERSION).toBe("OPENBOT_APPROVAL_EXACT_WIRE_V1");
-		expect(EXACT_OBJECT_WIRE_HEADER_BYTES).toBe(47); expect(EXACT_OBJECT_WIRE_MAX_BYTES).toBe(1_048_639);
+		expect(EXACT_OBJECT_WIRE_VERSION).toBe("XIONGBAO_APPROVAL_EXACT_WIRE_V1");
+		expect(EXACT_OBJECT_WIRE_HEADER_BYTES).toBe(48); expect(EXACT_OBJECT_WIRE_MAX_BYTES).toBe(1_048_640);
 	});
 	test("encode equals complete hand-written wire bytes", () => {
 		expect(encodeExactObjectWireV1(envelope())).toEqual(literalWire());
@@ -44,15 +44,15 @@ describe("exact-object DB wire byte component, not authenticated admission", () 
 		const decoded = decodeExactObjectWireV1(literalWire());
 		expect(decoded).toEqual(envelope()); expect(Reflect.ownKeys(decoded)).toEqual(["version", "algorithm", "nonce", "ciphertextAndTag"]);
 	});
-	test("native u32 big-endian field is at literal offset43", () => {
+	test("native u32 big-endian field is at literal offset44", () => {
 		const wire = encodeExactObjectWireV1(envelope());
-		expect(Array.from(wire.slice(43, 47))).toEqual([0, 0, 0, 17]);
-		expect(new DataView(wire.buffer).getUint32(43, false)).toBe(17);
+		expect(Array.from(wire.slice(44, 48))).toEqual([0, 0, 0, 17]);
+		expect(new DataView(wire.buffer).getUint32(44, false)).toBe(17);
 	});
 	test("cipher17 and max1048592 are accepted without claiming GCM authentication", () => {
 		for (const size of [17, 1_048_592]) {
 			const original = { ...envelope(), ciphertextAndTag: new Uint8Array(size) };
-			const wire = encodeExactObjectWireV1(original); expect(wire.byteLength).toBe(47 + size);
+			const wire = encodeExactObjectWireV1(original); expect(wire.byteLength).toBe(48 + size);
 			expect(decodeExactObjectWireV1(wire)).toEqual(original);
 		}
 	});
@@ -69,30 +69,30 @@ describe("exact-object DB wire byte component, not authenticated admission", () 
 	});
 	test("every truncation of header and payload rejects", () => {
 		const wire = literalWire();
-		for (let length = 0; length < 64; length++) rejected(() => decodeExactObjectWireV1(wire.slice(0, length)));
+		for (let length = 0; length < 65; length++) rejected(() => decodeExactObjectWireV1(wire.slice(0, length)));
 	});
 	test("declared lengths zero/short/long/u32overflow-shaped reject", () => {
 		for (const length of [0, 16, 18, 1_048_593, 0xffff_ffff]) {
-			const wire = literalWire(); new DataView(wire.buffer).setUint32(43, length, false); rejected(() => decodeExactObjectWireV1(wire));
+			const wire = literalWire(); new DataView(wire.buffer).setUint32(44, length, false); rejected(() => decodeExactObjectWireV1(wire));
 		}
 	});
 	test("unknown magic and version bytes reject without legacy sniff", () => {
 		const wrongPrefix = literalWire(); wrongPrefix[0] = 0;
-		const wrongVersion = literalWire(); wrongVersion[29] = 50;
+		const wrongVersion = literalWire(); wrongVersion[30] = 50;
 		rejected(() => decodeExactObjectWireV1(wrongPrefix)); rejected(() => decodeExactObjectWireV1(wrongVersion));
 	});
 	test("missing/wrong separator and inserted extra separator reject", () => {
-		const wrong = literalWire(); wrong[30] = 32; rejected(() => decodeExactObjectWireV1(wrong));
-		const original = literalWire(); const missing = new Uint8Array(63); missing.set(original.slice(0, 30)); missing.set(original.slice(31), 30); rejected(() => decodeExactObjectWireV1(missing));
-		const extra = new Uint8Array(65); extra.set(original.slice(0, 31)); extra.set(original.slice(31), 32); rejected(() => decodeExactObjectWireV1(extra));
+		const wrong = literalWire(); wrong[31] = 32; rejected(() => decodeExactObjectWireV1(wrong));
+		const original = literalWire(); const missing = new Uint8Array(64); missing.set(original.slice(0, 31)); missing.set(original.slice(32), 31); rejected(() => decodeExactObjectWireV1(missing));
+		const extra = new Uint8Array(66); extra.set(original.slice(0, 32)); extra.set(original.slice(32), 33); rejected(() => decodeExactObjectWireV1(extra));
 	});
 	test("zero nonce bytes are payload, not extra consumed separators", () => {
 		const original = { ...envelope(), nonce: new Uint8Array(12) };
 		expect(decodeExactObjectWireV1(encodeExactObjectWireV1(original))).toEqual(original);
 	});
 	test("trailing byte and oversized total input reject", () => {
-		const extra = new Uint8Array(65); extra.set(literalWire()); rejected(() => decodeExactObjectWireV1(extra));
-		rejected(() => decodeExactObjectWireV1(new Uint8Array(1_048_640)));
+		const extra = new Uint8Array(66); extra.set(literalWire()); rejected(() => decodeExactObjectWireV1(extra));
+		rejected(() => decodeExactObjectWireV1(new Uint8Array(1_048_641)));
 	});
 	test("encode subarrays capture exact nonzero offsets", () => {
 		const original = envelope(); const n = new Uint8Array(14); n.set(original.nonce, 1); const c = new Uint8Array(19); c.set(original.ciphertextAndTag, 1);
@@ -100,7 +100,7 @@ describe("exact-object DB wire byte component, not authenticated admission", () 
 	});
 	test("decode subarray does not parse backing prefix or suffix", () => {
 		const backing = new Uint8Array(70); backing.fill(99); backing.set(literalWire(), 3);
-		expect(decodeExactObjectWireV1(backing.subarray(3, 67))).toEqual(envelope());
+		expect(decodeExactObjectWireV1(backing.subarray(3, 68))).toEqual(envelope());
 	});
 	test("native metadata getters ignore caller buffer/offset/length shadows", () => {
 		let reads = 0; const original = envelope(); const wire = literalWire();
@@ -124,16 +124,16 @@ describe("exact-object DB wire byte component, not authenticated admission", () 
 	test("SAB view rejects in encode and decode", () => {
 		rejected(() => encodeExactObjectWireV1({ ...envelope(), nonce: new Uint8Array(new SharedArrayBuffer(12)) }));
 		rejected(() => encodeExactObjectWireV1({ ...envelope(), ciphertextAndTag: new Uint8Array(new SharedArrayBuffer(17)) }));
-		rejected(() => decodeExactObjectWireV1(new Uint8Array(new SharedArrayBuffer(64))));
+		rejected(() => decodeExactObjectWireV1(new Uint8Array(new SharedArrayBuffer(65))));
 	});
 	test("detached view rejects in encode and decode", () => {
 		const n = new ArrayBuffer(12); const nonceView = new Uint8Array(n); structuredClone(n, { transfer: [n] }); rejected(() => encodeExactObjectWireV1({ ...envelope(), nonce: nonceView }));
-		const b = new ArrayBuffer(64); const view = new Uint8Array(b); structuredClone(b, { transfer: [b] }); rejected(() => decodeExactObjectWireV1(view));
+		const b = new ArrayBuffer(65); const view = new Uint8Array(b); structuredClone(b, { transfer: [b] }); rejected(() => decodeExactObjectWireV1(view));
 	});
 	test("resizable inputs reject; unavailable fixture is not skipped", () => {
 		const getter = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "resizable")?.get;
 		if (!getter) throw new Error("Resizable ArrayBuffer fixture unavailable");
-		const buffer = Reflect.construct(ArrayBuffer, [64, { maxByteLength: 128 }]); expect(getter.call(buffer)).toBe(true);
+		const buffer = Reflect.construct(ArrayBuffer, [65, { maxByteLength: 128 }]); expect(getter.call(buffer)).toBe(true);
 		const wire = new Uint8Array(buffer); wire.set(literalWire()); rejected(() => decodeExactObjectWireV1(wire));
 		rejected(() => encodeExactObjectWireV1({ ...envelope(), nonce: wire.subarray(0, 12) }));
 	});

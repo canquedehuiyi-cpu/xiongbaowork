@@ -16,7 +16,7 @@ import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
- * `openbot_team_bot_visible` (migration 0122) is a hand-written SQL copy of the Team Bot access rule
+ * `xiongbao_team_bot_visible` (migration 0122) is a hand-written SQL copy of the Team Bot access rule
  * in `src/team-bots/access.ts` — `teamBotAccess` with `describedForTeam` and `PLACEHOLDER_BOT_NAMES`
  * — plus "public" and "the owner", for a live profile. Row security on the Bot and roster tables
  * reads the copy; the profile store and the runtime loader read the TypeScript. If the two ever
@@ -209,7 +209,7 @@ async function visibleBySql(person: string): Promise<Set<string>> {
   for (const bot of bots) {
     const rows = (await runAsTenant(person, () =>
       database.execute(
-        sql`select public.openbot_team_bot_visible(${bot.id}) as visible`,
+        sql`select public.xiongbao_team_bot_visible(${bot.id}) as visible`,
       ),
     )) as unknown as { visible: boolean }[];
     if (rows[0]?.visible === true) visible.add(bot.id);
@@ -267,7 +267,7 @@ test("no frame that is nobody's sees a Team Bot through the SQL copy", async () 
   for (const frame of ["system", "platform"]) {
     const rows = (await runAsTenant(frame, () =>
       database.execute(
-        sql`select public.openbot_team_bot_visible(${bots[0]!.id}) as visible`,
+        sql`select public.xiongbao_team_bot_visible(${bots[0]!.id}) as visible`,
       ),
     )) as unknown as { visible: boolean }[];
     expect(rows[0]?.visible).toBe(false);

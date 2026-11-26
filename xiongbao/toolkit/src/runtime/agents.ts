@@ -71,7 +71,7 @@ import { FOLD_BUDGET_ENV, foldBudgetFrom } from "./turn-folding";
 export const PLAN_RUN_COMPLETED = Symbol("plan-run-completed");
 
 /** The RUN_ERROR code of a built-in run refused before its model call by `admitTools`. */
-export const TOOL_LIMIT_EXCEEDED = "OPENBOT_TOOL_LIMIT_EXCEEDED";
+export const TOOL_LIMIT_EXCEEDED = "XIONGBAO_TOOL_LIMIT_EXCEEDED";
 
 type AgentHeaders = Record<string, string>;
 type HeaderBearingAgent = AbstractAgent & { headers?: AgentHeaders };

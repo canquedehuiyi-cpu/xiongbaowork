@@ -1043,10 +1043,16 @@ await startupLifecycle.run(async (startup) => {
   });
   // The package's id unless DEPLOYMENT_ID says otherwise, and the id the deployment was set up under
   // if the package has since been renamed. See `deploymentNameOf`, which frames its own read.
+  const deployment =
+    config.deploymentId !== undefined
+      ? config.deploymentId
+      : await startup.step(() => deploymentNameOf(database, tenantPackage));
   const deploymentId =
-    config.deploymentId ??
-    (await startup.step(() => deploymentNameOf(database, tenantPackage)));
-  const threadIdentity = createThreadIdentity(deploymentId);
+    typeof deployment === "string" ? deployment : deployment.name;
+  // A renamed package keeps its former name's digest, so new thread ids keep their prefix.
+  const threadIdentity = createThreadIdentity(
+    typeof deployment === "string" ? deployment : { digest: deployment.digest },
+  );
   const wakerGroupLink = createWakerGroupLink({
     database,
     groupStore: createGroupStore(database, () => threadIdentity.mint()),
@@ -1718,7 +1724,7 @@ await startupLifecycle.run(async (startup) => {
          */
         if (await personalGrantsLeftInTeam(database))
           console.warn(
-            "[plugins] 这个库里还有个人版替每位员工写下的授予（granted_by 以 openbot: 开头）。团队版由管理员逐个授予，请在插件页核对并收回不需要的。",
+            "[plugins] 这个库里还有个人版替每位员工写下的授予（granted_by 带系统前缀）。团队版由管理员逐个授予，请在插件页核对并收回不需要的。",
           );
         return;
       }

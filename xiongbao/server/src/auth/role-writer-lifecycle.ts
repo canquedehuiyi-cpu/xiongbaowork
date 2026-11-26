@@ -35,7 +35,7 @@ export function resolveRlsEnforcementMode(
 }
 
 /**
- * The password `0054_app_role.sql` gives `openbot_app`, and the compose owner's; both are public. The
+ * The password `0054_app_role.sql` gives `xiongbao_app`, and the compose owner's; both are public. The
  * compose file's default for the role writer is the same word, so the same check covers it.
  */
 const PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot";

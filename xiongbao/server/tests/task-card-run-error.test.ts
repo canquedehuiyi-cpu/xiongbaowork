@@ -137,7 +137,7 @@ test("a turn whose stream carries RUN_ERROR lands as a failed card", async () =>
     {
       type: EventType.RUN_ERROR,
       message: "Unable to connect. Is the computer able to access the url?",
-      code: "OPENBOT_HEADLESS_TOOL_ERROR",
+      code: "XIONGBAO_HEADLESS_TOOL_ERROR",
     } as unknown as BaseEvent,
   ]);
   expect(status).toBe("failed");

@@ -25,6 +25,7 @@ import {
   WakerFlowVersionNotFoundError,
 } from "../src/wakerflows/store";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { renamedBy0240 } from "./support/renamed-by-0240";
 
 /**
  * WF8-3 (spec 2026-11-04-wf8 §3.6, V-A): every Save keeps the whole plan as a version, and a rollback
@@ -417,7 +418,9 @@ describe("migration 0134 on Flows saved before it", () => {
           insert into public.waker_flows (id, tenant_id, name, revision)
           values (${draft}, ${tenantId}, '草稿', 2)
         `;
-        for (const statement of statements) await tx.unsafe(statement);
+        // 0134 as written grants to the role 0240 later renamed.
+        for (const statement of statements)
+          await tx.unsafe(renamedBy0240(statement));
         const rows = await tx`
           select flow_id, revision, plan, template_id, created_by
             from public.waker_flow_versions
@@ -428,7 +431,7 @@ describe("migration 0134 on Flows saved before it", () => {
         `;
         const grants = await tx`
           select privilege_type from information_schema.role_table_grants
-           where table_name = 'waker_flow_versions' and grantee = 'openbot_app'
+           where table_name = 'waker_flow_versions' and grantee = 'xiongbao_app'
            order by privilege_type
         `;
         seen = {

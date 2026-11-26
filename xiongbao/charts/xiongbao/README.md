@@ -130,18 +130,18 @@ why.
 
 **A database, and the Secret that names it**, unless you are using the bundled one. The chart reads
 three URLs out of a Secret you make; it never writes your database credentials into a values file.
-The migrations Job connects as the database **owner**; the API as `openbot_app`, which cannot
-migrate; and the API also as `openbot_role_writer` (migration 0109), the only login allowed to write
+The migrations Job connects as the database **owner**; the API as `xiongbao_app`, which cannot
+migrate; and the API also as `xiongbao_role_writer` (migration 0109), the only login allowed to write
 identity roles. The API refuses to start without the last (`ROLE_WRITER_DATABASE_URL is required`).
-After the first migration, give `openbot_app` and `openbot_role_writer` their own passwords as the
+After the first migration, give `xiongbao_app` and `xiongbao_role_writer` their own passwords as the
 owner (`ALTER ROLE ... PASSWORD`); the ones the migrations leave are public or absent.
 
 ```sh
 kubectl create namespace xiongbao
 kubectl -n xiongbao create secret generic xiongbao-database \
   --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/openbot?sslmode=require' \
-  --from-literal=database-url='postgresql://openbot_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
-  --from-literal=role-writer-database-url='postgresql://openbot_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
+  --from-literal=database-url='postgresql://xiongbao_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
+  --from-literal=role-writer-database-url='postgresql://xiongbao_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
 ```
 
 Then `--set database.existingSecret=xiongbao-database`. The keys must be `migration-database-url`,
@@ -153,7 +153,7 @@ A Secret without `migration-database-url` still upgrades: the Job logs that it i
 instead of a Secret, `database.migrationUrl` and `database.roleWriterUrl` are required too, and the
 install is refused without them (`migrationUrl` only while `migrations.enabled`). Before migrating,
 the Job checks that the owner's URL and the API's reach the same database (by name and server start
-time) and fails if they do not; on a first install, before `openbot_app` has a password, it says it
+time) and fails if they do not; on a first install, before `xiongbao_app` has a password, it says it
 could not check and migrates. See
 [Your own database](#your-own-database-which-is-what-a-real-deployment-uses) for `sslmode` and the
 `vector` extension, both of which a managed database will otherwise fail on in a way that names the
@@ -271,7 +271,7 @@ For a team rather than one person, configure an identity provider instead of `co
 `config.publicUrl` and `config.initialAdminEmails`.
 
 The bundled database needs no role-writer setup: the chart keeps a random password for
-`openbot_role_writer` in its own `<release>-xiongbao-database-roles` Secret (read back on upgrade, so
+`xiongbao_role_writer` in its own `<release>-xiongbao-database-roles` Secret (read back on upgrade, so
 it stays the same), the migrations Job sets it on the role as the owner after migrating, and the API
 gets `ROLE_WRITER_DATABASE_URL` with it. The API pods carry a `checksum/role-writer` annotation, so a
 changed password rolls them rather than leaving them on the old one.
@@ -822,7 +822,7 @@ either and tenant isolation would rest on the application alone.
 - **Your own database, with a superuser in the URL** (the usual way to make the migrations pass on a
   self-hosted server): the chart renders and the API pods then refuse to start. The migrations Job and
   the API share one `DATABASE_URL`, so the chart has no way yet to migrate as the owner and serve as
-  `openbot_app`. Until it does, either point the URL at a role that owns the schema without being a
+  `xiongbao_app`. Until it does, either point the URL at a role that owns the schema without being a
   superuser or `BYPASSRLS`, or set the same `extraEnv` entry and accept the warning on every boot.
 - **RDS, Cloud SQL, Azure Database**: unaffected. Their administrative roles are neither superuser
   nor `BYPASSRLS`.
