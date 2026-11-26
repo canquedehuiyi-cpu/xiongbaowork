@@ -451,8 +451,12 @@ describe.skipIf(!helm || !databaseUrl)("the wait, against PostgreSQL", () => {
     );
     expect(half.output).toContain(`${newest} is not`);
 
-    await migrateAll(url);
-    const ready = await runWait(url, 30);
+    // A fully migrated database is a fresh one migrated end to end. The half-migrated one above stops
+    // before the v0.2.16 rename migrations, which is the shape of a database v0.2.16 has not upgraded;
+    // the migrator refuses to carry such a database forward (upgrade-gate.ts), so it is not reused here.
+    const migrated = await scratchDatabase();
+    await migrateAll(migrated);
+    const ready = await runWait(migrated, 30);
     expect(ready.output).toContain("XiongBao's database is ready");
     expect(ready.code).toBe(0);
   }, 120_000);
