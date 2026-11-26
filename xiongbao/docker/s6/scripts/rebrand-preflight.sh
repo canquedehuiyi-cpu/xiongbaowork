@@ -188,7 +188,7 @@ cluster_renamed() {
   r=$(ask "SELECT ((SELECT rolname FROM pg_roles WHERE oid = 10) = 'xiongbao' OR current_database() = 'xiongbao')::int;") || r=''
   case $r in 0 | 1) echo "$r" ;; esac
 }
-RESTORE_STEPS='先按 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用备份还原'
+RESTORE_STEPS='先按 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用备份还原（还原回到备份那一刻：备份之后写进去的数据都会丢掉，上面列出的待审批与续跑也在其中，还原后要重新发起）'
 
 # With an in-progress record: has the business database changed since the backup, or the cluster been
 # renamed? Same answers as a failing step gives. Unknown (the database cannot be read, or the record

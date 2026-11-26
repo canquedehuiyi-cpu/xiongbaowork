@@ -377,13 +377,33 @@ data_print() { # port db
   PGPASSWORD=$PW "$PG_BIN/pg_dump" -w --data-only -h 127.0.0.1 -p "$1" -U openbot -d "$2" 2>/dev/null |
     grep -v '^--\|^\\\(un\)\{0,1\}restrict ' | cksum
 }
-restore() { # dump
+# restore <dump> [VAR=value...]: the script as the documented steps run it, from stdin. In CI this runs inside
+# the v0.2.16 image, whose own rebrand-preflight.sh would make the script refuse: the stand-in path for it
+# does not exist unless a case points it somewhere that does. The volume's backup directory likewise.
+restore() {
+  r_dump=$1
+  shift
   env REBRAND_RESTORE_URL_FILE="$T/v15-url" REBRAND_RESTORE_PG_BIN="$PG_BIN" REBRAND_RESTORE_API_SERVICE="$T/no-api" \
-    sh -s "$1" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
+    REBRAND_RESTORE_NEWER_IMAGE_FILE="$T/no-newer-image" REBRAND_RESTORE_BACKUP_DIR="$T/v15-backup" "$@" \
+    sh -s "$r_dump" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
   code=$?
   cat "$T/out" "$T/err" >>"$ALL"
 }
 databases() { sql "$1" openbot postgres "SELECT string_agg(datname, ',' ORDER BY datname) FROM pg_database WHERE NOT datistemplate;"; }
+# refused_untouched <what> <expected words> [VAR=value...]: the restore refuses with those words and leaves
+# the target database, and the list of databases, exactly as they were.
+refused_untouched() {
+  r_what=$1 r_words=$2
+  shift 2
+  r_before=$(security_print "$V15" openbot)$(data_print "$V15" openbot)
+  restore "$T/restore.dump" "$@"
+  if [ "$code" -eq 0 ]; then fail "$r_what: exit 0: $(cat "$T/out")"
+  elif ! grep -q "$r_words" "$T/err"; then fail "$r_what: $(cat "$T/out" "$T/err")"
+  elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$r_before" ]; then fail "$r_what: the database changed"
+  elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$r_what: databases now $(databases "$V15")"
+  elif grep -q "已停掉 api" "$T/out"; then fail "$r_what: stopped the service before refusing"
+  else pass "$r_what"; fi
+}
 # The volume backed up: a v0.2.15 database with a person's rows on top, through the preflight's own backup.
 SRC=$(start_cluster source openbot) || exit 1
 CLUSTERS="$CLUSTERS $T/source/data"
@@ -432,6 +452,30 @@ elif ! grep -q "其它连接" "$T/err"; then fail "$what: $(cat "$T/err")"
 elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$before" ]; then fail "$what: the database changed"
 elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
 else pass "$what"; fi
+# The target must be what the documented steps make: a new volume v0.2.15 has started on. Anything else is
+# refused before the service is stopped or a database touched.
+: >"$T/newer-image"
+refused_untouched "the restore refuses to run in the v0.2.16 image" "v0.2.16 或更新的镜像" \
+  REBRAND_RESTORE_NEWER_IMAGE_FILE="$T/newer-image"
+mkdir -p "$T/upgraded-backup"
+: >"$T/upgraded-backup/pre-rebrand-20261126T000000Z.dump"
+refused_untouched "the restore refuses the volume v0.2.16 upgraded (its backup is on it)" "升级过的原卷" \
+  REBRAND_RESTORE_BACKUP_DIR="$T/upgraded-backup"
+sql "$V15" openbot postgres "CREATE ROLE xiongbao_app NOLOGIN;"
+refused_untouched "the restore refuses a cluster that already carries the new names" "新名字的角色"
+sql "$V15" openbot postgres "DROP ROLE xiongbao_app;"
+sql "$V15" openbot postgres "ALTER ROLE openbot_role_writer RENAME TO restore_probe_writer;"
+refused_untouched "the restore refuses a cluster v0.2.15 has not finished starting on (no app roles)" "还没有应用角色"
+sql "$V15" openbot postgres "ALTER ROLE restore_probe_writer RENAME TO openbot_role_writer;"
+sql "$V15" openbot openbot "SET app.tenant_id = 'platform';
+  INSERT INTO users (id, email) VALUES ('restore-person', 'restore-person@example.test');
+  INSERT INTO agents (id, name, type, configuration, tenant_id) VALUES ('restore-bot', 'Restore Bot', 'built_in', '{}', 'system');
+  INSERT INTO threads (id, tenant_id, agent_id) VALUES ('restore-thread', 'restore-person', 'restore-bot');" >/dev/null || exit 1
+refused_untouched "the restore refuses a database people already use (it has conversations)" "已经有 1 个对话"
+sql "$V15" openbot openbot "SET app.tenant_id = 'platform'; DELETE FROM threads; DELETE FROM agents WHERE id = 'restore-bot'; DELETE FROM users WHERE id = 'restore-person';" >/dev/null || exit 1
+# Not room for the restored copy beside the database: refused before anything, saying how much is needed.
+refused_untouched "the restore refuses when the disk cannot hold the copy" "空间不够" PATH="$FAKEBIN:$PATH" FAKE_AVAIL_KB=1
+grep -q "展开后的大小 × 2" "$T/err" || fail "the space refusal does not say what it needs: $(cat "$T/err")"
 # The restore itself.
 restore "$T/restore.dump"
 what="the backup restores every grant, policy, owner and row over a volume v0.2.15 has started on"
@@ -449,17 +493,57 @@ PGPASSWORD=$PW "$PG_BIN/pg_restore" --clean --if-exists --single-transaction --e
 [ "$(sql "$V15" openbot plain "SELECT has_table_privilege('openbot_app', 'public.user_roles', 'UPDATE');")" = t ] &&
   pass "control: pg_restore --clean over a migrated database gives the app role writes on user_roles" ||
   fail "control: --clean over a migrated database no longer widens grants, so the empty-database restore may no longer be needed"
-# A swap cut off after the old database was dropped: running the script again finishes it, without
-# restoring a second time.
-sql "$V15" openbot postgres "ALTER DATABASE openbot RENAME TO openbot_restoring;"
-restore "$T/restore.dump"
-what="a restore cut off between dropping and renaming is finished by running it again"
-if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
-elif ! grep -q "没有再灌一遍" "$T/out"; then fail "$what: $(cat "$T/out")"
-elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
-elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$src_security$src_data" ]; then fail "$what: the database differs from the backup"
-else pass "$what"; fi
 
+# Running it again, and the states an interrupted run can leave (the two renames are one transaction, so a
+# database always carries the original name). The mark is the backup's checksum and length.
+is_backup() { [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" = "$src_security$src_data" ]; }
+MARK="rebrand-restore:$(cksum <"$T/restore.dump" | awk '{ print $1 "-" $2 }')"
+restore "$T/restore.dump"
+what="running the restore again after it finished does nothing"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif ! grep -q "没有再做一遍" "$T/out"; then fail "$what: $(cat "$T/out")"
+elif grep -q "已停掉 api\|正在把" "$T/out"; then fail "$what: it stopped the service or restored again: $(cat "$T/out")"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ] || ! is_backup; then fail "$what: the databases changed"
+else pass "$what"; fi
+# Cut off after the swap committed, before the replaced database was dropped: only the drop is left to do.
+sql "$V15" openbot postgres "CREATE DATABASE openbot_before_restore OWNER openbot;"
+restore "$T/restore.dump"
+what="a restore cut off after the swap only drops the replaced database when run again"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif ! grep -q "删掉了替换下来的原库" "$T/out"; then fail "$what: $(cat "$T/out")"
+elif grep -q "正在把" "$T/out"; then fail "$what: it restored again"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ] || ! is_backup; then fail "$what: databases now $(databases "$V15")"
+else pass "$what"; fi
+# Cut off after the copy was complete and marked, before the swap: the copy is swapped in, not made again.
+# The target is made to look new again (no mark), with a table telling it apart; the copy gets one too.
+sql "$V15" openbot postgres "COMMENT ON DATABASE openbot IS NULL;"
+sql "$V15" openbot openbot "CREATE TABLE public.restore_target_marker ();"
+sql "$V15" openbot postgres "CREATE DATABASE openbot_restoring OWNER openbot;"
+PGPASSWORD=$PW "$PG_BIN/pg_restore" --single-transaction --exit-on-error -w -h 127.0.0.1 -p "$V15" -U openbot -d openbot_restoring "$T/restore.dump" >/dev/null 2>&1 ||
+  { echo "making the complete copy failed" >&2; exit 1; }
+sql "$V15" openbot openbot_restoring "CREATE TABLE public.restore_copy_marker ();"
+sql "$V15" openbot postgres "COMMENT ON DATABASE openbot_restoring IS '$MARK';"
+restore "$T/restore.dump"
+what="a complete copy left before the swap is swapped in without restoring again"
+tables=$(sql "$V15" openbot openbot "SELECT string_agg(tablename, ',' ORDER BY tablename) FROM pg_tables WHERE tablename LIKE 'restore\_%\_marker';")
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif ! grep -q "不再灌一遍" "$T/out" || grep -q "正在把" "$T/out"; then fail "$what: $(cat "$T/out")"
+elif [ "$tables" != restore_copy_marker ]; then fail "$what: the database under the original name has marker tables '$tables'"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
+else pass "$what"; fi
+sql "$V15" openbot openbot "DROP TABLE public.restore_copy_marker;"
+is_backup || fail "the swapped-in copy is not the backup"
+# A copy without the mark (cut off while restoring) is thrown away and the backup restored afresh.
+sql "$V15" openbot postgres "COMMENT ON DATABASE openbot IS NULL;"
+sql "$V15" openbot openbot "CREATE TABLE public.restore_target_marker ();"
+sql "$V15" openbot postgres "CREATE DATABASE openbot_restoring OWNER openbot;"
+sql "$V15" openbot openbot_restoring "CREATE TABLE public.half_restored (id int);"
+restore "$T/restore.dump"
+what="a copy cut off while restoring is replaced by a fresh restore"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif ! grep -q "正在把" "$T/out"; then fail "$what: $(cat "$T/out")"
+elif [ "$(databases "$V15")" != "openbot,plain,postgres" ] || ! is_backup; then fail "$what: the database under the original name is not the backup"
+else pass "$what"; fi
 # 8. migration failure leaves the backup and prints its path. The stand-in fails without committing
 #    anything (the journal is as it was), so the message says nothing changed and sends nobody to restore.
 preflight "$OLD" openbot openbot
