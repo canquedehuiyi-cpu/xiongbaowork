@@ -303,7 +303,7 @@ tested, and `image.digest` deploys exactly that:
 gh release download v0.2.0 --pattern container-images.json
 helm upgrade --install xiongbao charts/xiongbao ... \
   --set image.tag=v0.2.0 \
-  --set-string image.digest="$(jq -r '.ghcr.reference | split("@")[1]' container-images.json)"
+  --set-string image.digest="$(jq -er '(.ghcr // .images.xiongbao).reference | split("@")[1]' container-images.json)"
 ```
 
 The image becomes `repository:tag@digest`, so the tag stays readable and the digest decides what is

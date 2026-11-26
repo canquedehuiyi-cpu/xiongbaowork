@@ -10,6 +10,7 @@ import {
   NAMESPACE,
   NAMESPACE_LABEL,
   namesFor as namesOf,
+  namespaceForHost,
   networkHostFor,
   OWNER_LABEL,
   PERSON_LABEL,
@@ -105,6 +106,95 @@ describe("the ids a supervisor will accept", () => {
 
   test("the default namespace is the product's", () => {
     expect(DEFAULT_NAMESPACE).toBe("xiongbao");
+  });
+
+  /*
+   * The guard this default once had: changing it orphans every computer a running deployment already owns. A
+   * deployment that sets no COMPUTER_NAMESPACE settles it from what the host holds (docker.ts resolveNamespace), so
+   * a host upgraded from before v0.2.16 keeps its computers and their volumes.
+   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   */
+  describe("a deployment that sets no namespace takes the host's", () => {
+    const earlier = {
+      "openbot.supervisor": "true",
+      "openbot.namespace": "openbot",
+    };
+    const unlabelled = { "openbot.supervisor": "true" };
+    const current = {
+      "xiongbao.supervisor": "true",
+      "xiongbao.namespace": "xiongbao",
+    };
+
+    test("an empty host takes the current default", () => {
+      expect(namespaceForHost([])).toEqual({
+        namespace: "xiongbao",
+        earlier: 0,
+        current: 0,
+      });
+    });
+
+    test("a host with computers only from before v0.2.16 keeps their namespace", () => {
+      expect(namespaceForHost([earlier, earlier]).namespace).toBe("openbot");
+      // Made before the namespace label existed: that day's default.
+      expect(namespaceForHost([unlabelled]).namespace).toBe("openbot");
+      // Labelled under the current prefix with the earlier namespace (a deployment that set it, then unset it).
+      expect(
+        namespaceForHost([
+          { "xiongbao.supervisor": "true", "xiongbao.namespace": "openbot" },
+        ]).namespace,
+      ).toBe("openbot");
+    });
+
+    test("a host with only current computers stays on the current default", () => {
+      expect(namespaceForHost([current]).namespace).toBe("xiongbao");
+    });
+
+    test("a host with both stays on the current default and counts the earlier ones it leaves", () => {
+      expect(namespaceForHost([earlier, current, unlabelled])).toEqual({
+        namespace: "xiongbao",
+        earlier: 2,
+        current: 1,
+      });
+    });
+
+    test("other deployments' computers and things not ours count for neither", () => {
+      expect(
+        namespaceForHost([
+          { "openbot.supervisor": "true", "openbot.namespace": "acme" },
+          { "xiongbao.supervisor": "true", "xiongbao.namespace": "acme" },
+          { "openbot.namespace": "openbot" },
+          { "openbot.supervisor": "false" },
+          undefined,
+        ]).namespace,
+      ).toBe("xiongbao");
+    });
+
+    test("a namespace the deployment sets is used as it is, and the host is not asked", () => {
+      const probe = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          'const n = await import("./src/names.ts"); console.log(JSON.stringify([n.CONFIGURED_NAMESPACE, n.NAMESPACE]));',
+        ],
+        {
+          cwd: `${import.meta.dir}/..`,
+          env: { ...process.env, COMPUTER_NAMESPACE: "acme" },
+        },
+      );
+      expect(JSON.parse(probe.stdout.toString())).toEqual(["acme", "acme"]);
+      const unset = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          'const n = await import("./src/names.ts"); console.log(JSON.stringify([n.CONFIGURED_NAMESPACE ?? null, n.NAMESPACE]));',
+        ],
+        {
+          cwd: `${import.meta.dir}/..`,
+          env: { ...process.env, COMPUTER_NAMESPACE: "" },
+        },
+      );
+      expect(JSON.parse(unset.stdout.toString())).toEqual([null, "xiongbao"]);
+    });
   });
 
   /*

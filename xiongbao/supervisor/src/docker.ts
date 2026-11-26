@@ -2,8 +2,10 @@ import Docker from "dockerode";
 import { type ContainerHealth, healthOf } from "./health";
 import {
   BOT_LABEL,
+  CONFIGURED_NAMESPACE,
   type ComputerKind,
   type ComputerNames,
+  DEFAULT_NAMESPACE,
   isComputerKind,
   KIND_LABEL,
   LEGACY_DEFAULT_NAMESPACE,
@@ -12,9 +14,11 @@ import {
   legacyNamesFor,
   NAMESPACE,
   NAMESPACE_LABEL,
+  namespaceForHost,
   networkHostFor,
   OWNER_LABEL,
   PERSON_LABEL,
+  useNamespace,
 } from "./names";
 
 /**
@@ -240,6 +244,74 @@ async function listOwnerLabelled(options: {
     for (const container of listed) found.set(container.Id, container);
   }
   return [...found.values()];
+}
+
+/** The namespace once settled, so the host is looked at once per process. */
+let settledNamespace: Promise<string> | undefined;
+
+/** Forget the settled namespace, as a restarted supervisor would. For the tests of {@link resolveNamespace}. */
+export function forgetNamespace(): void {
+  settledNamespace = undefined;
+  useNamespace(CONFIGURED_NAMESPACE ?? DEFAULT_NAMESPACE);
+}
+
+/**
+ * The namespace this process works in, settled before any computer is named.
+ *
+ * The configured one when the deployment sets `COMPUTER_NAMESPACE`. Otherwise the host decides (names.ts
+ * namespaceForHost): every container and volume carrying the owner label under either prefix is read once. A host
+ * that cannot be read is not guessed about, because guessing the new default on an upgraded host would start every
+ * computer on new empty volumes: the error goes back to the caller and the next request asks again.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export function resolveNamespace(): Promise<string> {
+  if (CONFIGURED_NAMESPACE) return Promise.resolve(CONFIGURED_NAMESPACE);
+  if (settledNamespace) return settledNamespace;
+  const attempt = (async () => {
+    const labelled: (Record<string, string> | undefined)[] = [];
+    try {
+      for (const owner of [OWNER_LABEL, legacyLabel(OWNER_LABEL)]) {
+        const filters = { label: [`${owner}=true`] };
+        for (const container of await docker.listContainers({
+          all: true,
+          filters,
+        }))
+          labelled.push(container.Labels);
+        const { Volumes } = await docker.listVolumes({ filters });
+        for (const volume of Volumes ?? [])
+          labelled.push(volume.Labels ?? undefined);
+      }
+    } catch (error) {
+      throw new DockerUnavailableError(String(error));
+    }
+    const chosen = namespaceForHost(labelled);
+    useNamespace(chosen.namespace);
+    if (chosen.namespace === LEGACY_DEFAULT_NAMESPACE)
+      console.info(
+        JSON.stringify({
+          type: "computer-namespace-kept",
+          namespace: chosen.namespace,
+          computers: chosen.earlier,
+          note: "COMPUTER_NAMESPACE is not set and this host has computers only under the default from before v0.2.16, so that namespace is kept. Set COMPUTER_NAMESPACE to choose one; the upgrade notes say how to clear the old computers first.",
+        }),
+      );
+    else if (chosen.earlier > 0)
+      console.warn(
+        JSON.stringify({
+          type: "computer-namespace-earlier-left",
+          namespace: chosen.namespace,
+          earlier: LEGACY_DEFAULT_NAMESPACE,
+          left: chosen.earlier,
+          note: "This host also has computers under the default from before v0.2.16. They are left as they are; COMPUTER_NAMESPACE set to that namespace uses them instead.",
+        }),
+      );
+    return chosen.namespace;
+  })();
+  settledNamespace = attempt;
+  attempt.catch(() => {
+    if (settledNamespace === attempt) settledNamespace = undefined;
+  });
+  return attempt;
 }
 
 /** The labels every container and volume this supervisor creates carries. */

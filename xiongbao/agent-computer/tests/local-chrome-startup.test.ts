@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -12,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   adoptLegacyLocalComputer,
+  holdLocalComputerLock,
   localChromeConfiguration,
   requireAvailablePort,
   requireInstalledBrowser,
@@ -306,6 +308,74 @@ describe("the local computer's folder from before v0.2.16", () => {
         readFileSync(join(legacy, "profiles", "bot-1", "Cookies"), "utf8"),
       ).toBe("signed-in");
       expect(existsSync(config.root)).toBe(false);
+    } finally {
+      rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+  test("a move that another start finished meanwhile uses the new place and never recreates the old one", async () => {
+    const { data, config, legacy } = home();
+    try {
+      const adopted = await quiet(() =>
+        adoptLegacyLocalComputer(config, "linux", async (from, to) => {
+          renameSync(from, to);
+          throw new Error("ENOENT: no such file or directory");
+        }),
+      );
+      expect(adopted.root).toBe(config.root);
+      expect(adopted.env.PROFILES_DIR).toBe(join(config.root, "profiles"));
+      expect(existsSync(legacy)).toBe(false);
+      expect(
+        readFileSync(join(config.root, "profiles", "bot-1", "Cookies"), "utf8"),
+      ).toBe("signed-in");
+    } finally {
+      rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+  test("a second helper refuses to start while the first holds the folder, before anything is moved", async () => {
+    const { data, config, legacy } = home();
+    try {
+      const lock = `${config.root}.lock`;
+      const release = await holdLocalComputerLock(
+        lock,
+        "linux",
+        () => true,
+        111,
+      );
+      await expect(
+        holdLocalComputerLock(lock, "linux", (pid) => pid === 111, 222),
+      ).rejects.toThrow("process 111");
+      // The refused start moved nothing.
+      expect(
+        readFileSync(join(legacy, "profiles", "bot-1", "Cookies"), "utf8"),
+      ).toBe("signed-in");
+      expect(existsSync(config.root)).toBe(false);
+      await release();
+      expect(existsSync(lock)).toBe(false);
+      // Released, the next one takes it.
+      const next = await holdLocalComputerLock(lock, "linux", () => true, 222);
+      expect(readFileSync(lock, "utf8").trim()).toBe("222");
+      await next();
+    } finally {
+      rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+  test("a lock left by a helper that is gone is taken over", async () => {
+    const { data, config } = home();
+    try {
+      const lock = `${config.root}.lock`;
+      mkdirSync(join(data, "xiongbao"), { recursive: true });
+      writeFileSync(lock, "999999\n");
+      const release = await holdLocalComputerLock(
+        lock,
+        "linux",
+        () => false,
+        333,
+      );
+      expect(readFileSync(lock, "utf8").trim()).toBe("333");
+      await release();
     } finally {
       rmSync(data, { recursive: true, force: true });
     }

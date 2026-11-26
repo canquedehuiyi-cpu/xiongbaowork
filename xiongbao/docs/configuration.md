@@ -1165,12 +1165,14 @@ symlinks that path to the rootless socket. Rootless Podman on Linux needs
 symlink to the rootful socket, which is not the one running, and the supervisor reports that it
 cannot reach Docker.
 
-`COMPUTER_NAMESPACE` defaults to `xiongbao` and names the deployment a computer belongs to. It is part
-of every container and volume name the supervisor derives, and the supervisor acts only on computers
-carrying it, so two deployments on one Docker host never adopt each other's. The default was another
-name before v0.2.16; computers made then keep their names and labels, and a deployment that wants them
-back sets `COMPUTER_NAMESPACE` to that earlier default (the v0.2.16 upgrade notes give it), which v0.2.16
-still recognises along with the labels of then.
+`COMPUTER_NAMESPACE` names the deployment a computer belongs to. It is part of every container and
+volume name the supervisor derives, and the supervisor acts only on computers carrying it, so two
+deployments on one Docker host never adopt each other's. Left unset, the supervisor settles it from the
+host when it first needs it: `xiongbao`, unless every computer and volume it finds under either default
+is under the default from before v0.2.16, in which case it keeps that one and says so in its log, so an
+upgraded host keeps its people's browser logins and files. A host with computers under both stays on
+`xiongbao` and logs how many earlier ones it left; setting `COMPUTER_NAMESPACE` to the earlier default
+uses those instead. Nothing is removed either way.
 
 Per-Bot computers belong to the supervisor rather than to Compose, so `docker compose down -v` does
 not remove them: their containers keep running and their profile volumes, which hold whatever the
@@ -1231,7 +1233,10 @@ signs with the same key and nothing new is needed to start. `WEB_BOT_AUTH_KEY` n
 Ed25519 private JWK (on Helm, `secrets.webBotAuthKey`). The server hands it to each computer with
 the network policy it already pushes, because the browser is what signs: a Bot's computer can sign as
 this deployment, which is what it is for, and nothing else the deployment holds can be recovered from
-it. Rotate by setting a new `WEB_BOT_AUTH_KEY` and registering again.
+it. Rotate by setting a new `WEB_BOT_AUTH_KEY` and registering again. v0.2.16 changed the label the
+derivation uses, so a deployment that signed with the derived key before it signs with a different key
+after it: its directory publishes the new public key and keyid, and Cloudflare has to be told again (the
+steps below). A deployment that set `WEB_BOT_AUTH_KEY` is unaffected.
 
 **Registering with Cloudflare (manual, once).** Signing earns nothing until Cloudflare knows the key:
 

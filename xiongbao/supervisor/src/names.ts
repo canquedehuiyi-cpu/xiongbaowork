@@ -29,15 +29,16 @@ const ALLOWED = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export const DEFAULT_NAMESPACE = "xiongbao";
 
 /**
- * The default before v0.2.16. A container or volume made before the namespace label existed belongs to it, so
- * a deployment that keeps it (`COMPUTER_NAMESPACE` set to it) keeps those computers too.
+ * The default before v0.2.16. A container or volume made before the namespace label existed belongs to it, and
+ * a host that has only computers under it keeps using it (see {@link namespaceForHost}).
  * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
  */
 export const LEGACY_DEFAULT_NAMESPACE = "openbot";
 
-export const NAMESPACE = (() => {
+/** `COMPUTER_NAMESPACE` when the deployment sets one, checked; undefined when it leaves it to the host. */
+export const CONFIGURED_NAMESPACE = (() => {
   const configured = process.env.COMPUTER_NAMESPACE?.trim();
-  if (!configured) return DEFAULT_NAMESPACE;
+  if (!configured) return undefined;
   if (!ALLOWED.test(configured) || configured.length > MAX_BOT_ID) {
     throw new Error(
       "COMPUTER_NAMESPACE may contain only letters, digits, hyphen and underscore, and must start with a letter or digit.",
@@ -45,6 +46,58 @@ export const NAMESPACE = (() => {
   }
   return configured;
 })();
+
+/**
+ * The namespace every name and label here is derived from. The configured one, or until the supervisor has looked
+ * at the host (docker.ts resolveNamespace, through {@link useNamespace}) the default.
+ */
+export let NAMESPACE: string = CONFIGURED_NAMESPACE ?? DEFAULT_NAMESPACE;
+
+/** Settle the namespace once the host has been looked at. Only for a deployment that configured none. */
+export function useNamespace(namespace: string): void {
+  NAMESPACE = namespace;
+}
+
+/**
+ * Which namespace a deployment that configured none uses, from the labels of the containers and volumes on the
+ * host that carry the owner label.
+ *
+ * Before v0.2.16 the default was {@link LEGACY_DEFAULT_NAMESPACE}, and a host upgraded from then holds its people's
+ * browser logins and files in volumes named for it. Taking the new default there would derive new names, start every
+ * computer on new empty volumes, and leave the old ones unused: nothing deleted, but every login and file gone from
+ * where anybody looks. So:
+ *
+ * - computers only under the earlier default (its label, or no namespace label at all, which was that default): keep
+ *   using it;
+ * - none at all, or only under the new default: the new default;
+ * - both: the new default. Only this version writes the new one, so its computers are the ones used since the
+ *   upgrade, and they stay where they are; the earlier ones stay untouched on the host, and setting
+ *   `COMPUTER_NAMESPACE` to the earlier default brings them back. Either way nothing is removed.
+ *
+ * Containers and volumes of other namespaces (another deployment on the host) count for neither.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export function namespaceForHost(
+  owned: readonly (Record<string, string> | undefined)[],
+): { namespace: string; earlier: number; current: number } {
+  let earlier = 0;
+  let current = 0;
+  for (const labels of owned) {
+    if (labelOf(labels, OWNER_LABEL) !== "true") continue;
+    const namespace =
+      labelOf(labels, NAMESPACE_LABEL) ?? LEGACY_DEFAULT_NAMESPACE;
+    if (namespace === LEGACY_DEFAULT_NAMESPACE) earlier += 1;
+    else if (namespace === DEFAULT_NAMESPACE) current += 1;
+  }
+  return {
+    namespace:
+      earlier > 0 && current === 0
+        ? LEGACY_DEFAULT_NAMESPACE
+        : DEFAULT_NAMESPACE,
+    earlier,
+    current,
+  };
+}
 
 /**
  * Whose computer it is.

@@ -221,7 +221,7 @@ The server pulls by digest, `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>@<platform manif
 ```sh
 gh release download v0.1.0 --pattern container-images.json
 docker run -p 3001:3001 --env-file .env \
-  "$(jq -r .ghcr.reference container-images.json)"
+  "$(jq -er '(.ghcr // .images.xiongbao).reference' container-images.json)"
 ```
 
 The same file is how a machine runs the stack without building any of it. Each key under `images`

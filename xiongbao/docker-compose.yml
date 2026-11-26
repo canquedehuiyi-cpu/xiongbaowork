@@ -549,8 +549,10 @@ services:
       COMPUTER_BROWSER_MODE: ${COMPUTER_BROWSER_MODE:-headed}
       COMPUTER_IMAGE: ${COMPUTER_IMAGE:-xiongbao-agent-computer:latest}
       # Which deployment the computers it creates belong to, so two stacks on one Docker host never
-      # derive the same container and volume names for the same Bot.
-      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-xiongbao}
+      # derive the same container and volume names for the same Bot. Unset, the supervisor settles it
+      # from the host: the product's name, or on a host upgraded from before v0.2.16 whose computers are
+      # all under the default of then, that one (supervisor/src/names.ts namespaceForHost).
+      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-}
       # Empty by default because the API server runs on the host in local development and reaches
       # computers by published loopback ports. Deployments running the server inside this network set
       # the network name so computers publish no host ports.
