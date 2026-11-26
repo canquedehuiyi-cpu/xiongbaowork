@@ -44,5 +44,4 @@ test("the stopped-turn console warning names the product from the app config", (
 test("the responsibilities page names only the new inbound-email settings", () => {
   const source = read("src/routes/_authed/_app/responsibilities.tsx");
   expect(source).toContain("XIONGBAO_INBOUND_EMAIL_SNS_TOPIC_ARNS");
-  expect(source).not.toContain("旧名 OPENBOT_");
 });

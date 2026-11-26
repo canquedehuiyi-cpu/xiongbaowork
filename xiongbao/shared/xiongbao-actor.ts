@@ -19,13 +19,10 @@ export const SYSTEM_MARKER_PREFIX = "xiongbao:";
 
 /**
  * Whether a stored actor or `granted_by` is one of XiongBao's own markers, under either prefix: the
- * rename migration (0240) rewrote the old one in every table but the audit trail, which is
- * append-only and keeps it as written.
+ * rename migration (0240) rewrote the prefix before v0.2.16 in every table but the audit trail, which is
+ * append-only and keeps it as written. Kept for good: the activity page reads those audit rows for as
+ * long as they are kept.
  */
 export function isSystemMarker(actor: string): boolean {
-  return (
-    actor.startsWith(SYSTEM_MARKER_PREFIX) ||
-    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-    actor.startsWith("openbot:")
-  );
+  return actor.startsWith(SYSTEM_MARKER_PREFIX) || actor.startsWith("openbot:");
 }

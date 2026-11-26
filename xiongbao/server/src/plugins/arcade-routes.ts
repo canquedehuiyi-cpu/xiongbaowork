@@ -1,11 +1,11 @@
-import { envName } from "../../../shared/env-aliases";
 import type { Context, Hono, MiddlewareHandler } from "hono";
+import { envName } from "../../../shared/env-name";
 import type { AppVariables } from "../auth/guards";
+import { productName } from "../brand";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { toolkitOfFor } from "./access";
 import { normalizeArcadeError } from "./arcade-adapter";
 import type { PendingAuthorization } from "./arcade-attempts";
-import { isServerWriteRefusal } from "./store";
 import {
   type ArcadeBroker,
   type AuthorizationFlow,
@@ -18,8 +18,8 @@ import {
 import { type ConnectOrigin, connectedAccountsUrlFor } from "./oauth";
 import { type AccountRef, filedUnderPerson } from "./shared-accounts";
 import type { PluginStore } from "./store";
+import { isServerWriteRefusal } from "./store";
 import { withVendorDeadline } from "./vendor-deadline";
-import { productName } from "../brand";
 
 /**
  * Arcade 的连接路由（X5，上游 `route-groups/connections.ts` 的授权尝试与回程验证，按 fork 改写）。

@@ -1,4 +1,4 @@
-import { envName } from "../../../shared/env-aliases";
+import { envName } from "../../../shared/env-name";
 import { BROKERED_PROFILE, type BrokerProvider } from "./access";
 import { type ProviderDecision, providerDecision } from "./broker";
 

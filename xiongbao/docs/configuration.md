@@ -16,20 +16,13 @@ bash scripts/start.sh
 
 ### Setting names before the rename
 
-Every setting is read under its `XIONGBAO_` name. A deployment written before the rename may still
-spell it with the old `OPENBOT_` prefix. At startup the API server, the worker, the supervisor, the
-computer, the runner, the container's own environment step, the app's dev server, `app/serve.ts` and
-`scripts/start-local-chrome-computer.ts` copy each old name onto its new one when the new one is unset
-or empty. The Compose files, `scripts/start.sh`, `scripts/update.ts` and the callback address of the
-Python harness and of `agent-langgraph` fall back to the old name the same way. The server logs one
-line listing the old names in use (names only, never values). When both are set and differ, the
-`XIONGBAO_` value wins and the server names the old one. An empty `XIONGBAO_` value counts as unset,
-so it does not hide the old one: to drop an old setting, delete its line rather than writing the new
-name empty. A platform model key's variable is renamed the same way (`XIONGBAO_POOL_*`): the v0.2.16
-upgrade renames the variable names the model pool stores. The old names stop working in v0.2.17; `scripts/rebrand/rewrite-env.sh <file>` renames them
-in an env file and keeps a backup (see docs/deployment-xiongbao.md, section 6.3). An installation from
-v0.2.15 that runs the development Compose file cannot update in place, and v0.2.16 does not take its
-volumes over: its data moves by a manual backup and restore, see docs/local-updates.md.
+Every setting is read under its `XIONGBAO_` name, and only under it. v0.2.16 still read the names a
+deployment wrote before the rename and its upgrade renamed them; this release is reached only from
+v0.2.16, so a setting still spelled only under its name before v0.2.16 is refused rather than read: the
+container's own environment step, the API server, the worker, the supervisor, the computer, the runner,
+the app's dev server, `app/serve.ts` and `scripts/start-local-chrome-computer.ts` stop at start and name
+each such setting (names only, never values). One set under both names is not refused: the `XIONGBAO_`
+value is the one in effect. See docs/deployment-xiongbao.md, section 6.3.
 
 ## Required API server variables
 
@@ -1167,12 +1160,12 @@ cannot reach Docker.
 
 `COMPUTER_NAMESPACE` names the deployment a computer belongs to. It is part of every container and
 volume name the supervisor derives, and the supervisor acts only on computers carrying it, so two
-deployments on one Docker host never adopt each other's. Left unset, the supervisor settles it from the
-host when it first needs it: `xiongbao`, unless every computer and volume it finds under either default
-is under the default from before v0.2.16, in which case it keeps that one and says so in its log, so an
-upgraded host keeps its people's browser logins and files. A host with computers under both stays on
-`xiongbao` and logs how many earlier ones it left; setting `COMPUTER_NAMESPACE` to the earlier default
-uses those instead. Nothing is removed either way.
+deployments on one Docker host never adopt each other's. Left unset, it is `xiongbao`. A host that ran
+v0.2.16 with only computers from before it kept using the namespace those computers were made under
+(the product's earlier name), and its computers since carry that namespace: this release no longer
+looks at the host, so set `COMPUTER_NAMESPACE` to that earlier name to keep using them and their
+browser logins and files. Computers made before v0.2.16 carry their labels under the earlier prefix,
+which this release does not read; they and their volumes stay on the host untouched.
 
 Per-Bot computers belong to the supervisor rather than to Compose, so `docker compose down -v` does
 not remove them: their containers keep running and their profile volumes, which hold whatever the

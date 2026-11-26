@@ -48,12 +48,10 @@ function resultText(result: unknown): string {
 }
 
 /**
- * What the desktop answers when the person presses Deny on its own dialog (`DECLINED` in
- * `desktop_host_access.rs`). The sentence it used before is kept, for a desktop older than this
- * server. Exported for the test that holds the two sides together.
+ * What the desktop answers when the person presses Deny on its own dialog. Exported for the test
+ * that holds the two sides together.
  */
 export const DENIED_ON_DESKTOP: ReadonlySet<string> = new Set([
-  "Declined in OpenBot Desktop.",
   "The local owner denied this operation.",
 ]);
 

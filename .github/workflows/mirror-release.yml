@@ -72,9 +72,7 @@ jobs:
           gh api -H "Accept: application/octet-stream" "repos/$GH_REPO/releases/assets/$asset_id" \
             > "$RUNNER_TEMP/container-images.json"
           # `ghcr` is the GHCR image in every release from v0.2.16, whether or not a registry was set then.
-          # A record from before names it under the image key it had then, read here only for those.
-          # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-          ghcr='(.ghcr // .images.openbot)'
+          ghcr='.ghcr'
           repository="$(jq -er "$ghcr.repository" "$RUNNER_TEMP/container-images.json")"
           digest="$(jq -er "$ghcr.digest" "$RUNNER_TEMP/container-images.json")"
           # Only this repository's own image: the same name release.yml's image job pushes to.

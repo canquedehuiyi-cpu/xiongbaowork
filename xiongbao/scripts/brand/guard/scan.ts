@@ -51,20 +51,6 @@ export const SIGNING_DOMAINS = [
   "xiongbao computer token v1",
 ];
 
-/**
- * The spellings before v0.2.16, still read (never written) by the compatibility code that carries data
- * stored under them across the upgrade. Masked like the ones above, but not required to survive: they go
- * with that code.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export const LEGACY_NEVER_CHANGE = [
-  "openbot.vault.credential.v2",
-  "openbot.headless.waiting",
-  "openbot.ap.local-terminal.v1",
-  "<<openbot:app-access-request>>",
-  "openbot:personal-memory",
-];
-
 // Wire headers peers send and read: the server and every managed Bot image must spell them the same.
 export const WIRE_HEADERS = ["x-xiongbao-agent-token"];
 
@@ -188,9 +174,7 @@ export const RULES: Rule[] = [
   {
     id: "never-change",
     pattern: new RegExp(
-      [...NEVER_CHANGE, ...SIGNING_DOMAINS, ...LEGACY_NEVER_CHANGE]
-        .map(escapeRegExp)
-        .join("|"),
+      [...NEVER_CHANGE, ...SIGNING_DOMAINS].map(escapeRegExp).join("|"),
       "g",
     ),
     reason:

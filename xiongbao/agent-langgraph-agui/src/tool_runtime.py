@@ -55,10 +55,6 @@ XIONGBAO_PROPS = {
     "xiongbao_run",
     "xiongbao_deployment_tools",
     "xiongbao_model",
-    # The run assertion's names before v0.2.16, from a server not yet upgraded: read, and never passed
-    # on either. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-    "openbotRun",
-    "openbot_run",
 }
 
 
@@ -255,8 +251,7 @@ class ToolAwareAgent(WholeThreadAgent):
     async def run(self, input: RunAgentInput):
         props = input.forwarded_props if isinstance(input.forwarded_props, dict) else {}
         names = props.get("xiongbaoDeploymentTools", [])
-        # The name before v0.2.16. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-        assertion = props.get("xiongbaoRun", props.get("openbotRun", ""))
+        assertion = props.get("xiongbaoRun", "")
         model, effort = run_model(props)
         context = RunTools(
             tools=tuple(input.tools or []),
@@ -451,8 +446,6 @@ async def _call_tool(call, context):
             )
         url = (
             os.environ.get("XIONGBAO_TOOL_URL")
-            # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the name before the rename
-            or os.environ.get("OPENBOT_TOOL_URL")
             or "http://127.0.0.1:3001/api/agent-tools/call"
         )
         try:

@@ -301,8 +301,8 @@ ENV APP_DIST_DIR=/app/app/dist
 ENV TENANT_PACKAGE_DIR=../examples/xiongbao
 
 # The image's defaults (RLS_ENFORCE=refuse, SELF_HOST_BANNER=false, IN_CONTAINER=true) are not ENV. The
-# env-aliases oneshot writes each under its XIONGBAO_ name only when the deployment sets neither that
-# nor the legacy name, so whatever a customer sets, under either name, wins over the image.
+# env-defaults oneshot writes each under its XIONGBAO_ name only when the deployment does not set that
+# name, so whatever a customer sets wins over the image.
 COPY docker/defaults.env /etc/xiongbao/defaults.env
 
 COPY docker/s6 /etc/s6-overlay
@@ -487,8 +487,8 @@ ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 # NOT ENV: A LINE OF THE DEFAULTS FILE, AND ONLY WHEN SET. An unset argument still becomes an EMPTY
 # variable, and baked into ENV under either name it would stand in for, or be copied over, the
 # identity a deployment supplies at run time. So each argument that is set becomes `BUILD_<X>=<value>`
-# in /etc/xiongbao/defaults.env, which the env-aliases oneshot writes under the new name only when the
-# deployment sets the identity under neither name; an unset one writes nothing. A value is one line:
+# in /etc/xiongbao/defaults.env, which the env-defaults oneshot writes under its XIONGBAO_ name only when
+# the deployment does not set the identity itself; an unset one writes nothing. A value is one line:
 # one holding a line break could add a key of its own to the file, so it fails the build instead.
 # The image's last RUN, so a new commit's arguments rebuild this layer and nothing before it.
 #
@@ -514,7 +514,7 @@ RUN set -eu; \
     add CHANNEL "${XIONGBAO_BUILD_CHANNEL:-}"
 
 # The usage-reporting switch of the agent runtime library is not an ENV here: it is in docker/defaults.env,
-# which the env-aliases step reads and writes under its own name, only when the deployment has not set it.
+# which the env-defaults step reads and writes under its own name, only when the deployment has not set it.
 # So it reaches the s6 services (the server among them, which also silences it itself), not a process
 # started by hand with `docker exec`.
 

@@ -1,10 +1,9 @@
 # Run from xiongbao/: docker compose --project-name xiongbao-local
 # --env-file .env.delivery -f docker/compose.delivery.yml up -d
-# 镜像与端口变量也认旧名（.env.delivery 里还写着 OPENBOT_IMAGE / OPENBOT_PORT 的部署照常起），两个都设时新名为准。
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+# .env.delivery 里的设置只认 XIONGBAO_ 开头的名字；还写着 v0.2.16 之前旧名的文件，容器启动时会点名拒绝。
 services:
   app:
-    image: ${XIONGBAO_IMAGE:-${OPENBOT_IMAGE:-xiongbao-digital-employee:local}}
+    image: ${XIONGBAO_IMAGE:-xiongbao-digital-employee:local}
     restart: unless-stopped
     env_file:
       - ../.env.delivery
@@ -13,7 +12,7 @@ services:
       XIONGBAO_SEARCH_URL: ${XIONGBAO_SEARCH_URL:-http://searxng:8080}
       XIONGBAO_CRAWL_URL: ${XIONGBAO_CRAWL_URL:-http://crawl4ai:11235}
     ports:
-      - "127.0.0.1:${XIONGBAO_PORT:-${OPENBOT_PORT:-3772}}:3001"
+      - "127.0.0.1:${XIONGBAO_PORT:-3772}:3001"
       # 内容源端口（.env.delivery 里设 XIONGBAO_CONTENT_PORT=3773 才会监听）。默认只绑本机；
       # 要让别的机器上的浏览器打开员工做的网页，把 XIONGBAO_CONTENT_BIND 设成 0.0.0.0，
       # 并在云安全组放行 3773/TCP，见部署手册「内容源端口」。

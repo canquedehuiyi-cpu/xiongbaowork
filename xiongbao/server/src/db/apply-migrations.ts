@@ -14,6 +14,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import type { Sql, TransactionSql } from "postgres";
 import {
   type AppliedMigration,
+  type FolderMigration,
   type MigrationsJournal,
   migrationsOutOfReach,
   outOfReachRefusal,
@@ -90,14 +91,6 @@ export class MigrationsOutOfReachError extends Error {
 const MIGRATION_LOCK = "xiongbao:apply-migrations";
 
 /**
- * The lock's name before v0.2.16, taken as well, and first, so a v0.2.15 migrator (which takes only
- * this one) and this one still queue behind each other during an upgrade. Two runs of this function
- * take both in the same order and cannot deadlock.
- */
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-const LEGACY_MIGRATION_LOCK = "openbot:apply-migrations";
-
-/**
  * Check, then migrate, with nothing able to commit in between.
  *
  * THE GAP THIS CLOSES. The reach check reads the journal table; the migrator then reads it AGAIN to
@@ -124,19 +117,24 @@ export async function applyMigrations(
   migrationsFolder: string,
   journal: MigrationsJournal = MIGRATIONS_JOURNAL,
   /**
-   * Work that belongs to the same release as the migrations and cannot be written in SQL, run in the
-   * same transaction after them, so it commits with their journal rows or not at all. `scripts/migrate.ts`
-   * passes the v0.2.16 credential rekey.
+   * A check that may refuse this database before anything is migrated, run in the same transaction once
+   * the lock is held, with the folder and what the journal already holds; throwing rolls the transaction
+   * back untouched. `scripts/migrate.ts` passes the check that this database has been through v0.2.16
+   * (`./upgrade-gate`).
    */
-  afterMigrations?: (tx: TransactionSql) => Promise<void>,
+  beforeMigrations?: (
+    tx: TransactionSql,
+    folder: readonly FolderMigration[],
+    applied: readonly AppliedMigration[],
+  ) => Promise<void>,
 ): Promise<void> {
   const folder = await readMigrationFolder(migrationsFolder);
 
   await client.begin(async (tx) => {
-    await tx`select pg_advisory_xact_lock(hashtextextended(${LEGACY_MIGRATION_LOCK}, 0))`;
     await tx`select pg_advisory_xact_lock(hashtextextended(${MIGRATION_LOCK}, 0))`;
 
     const applied = await appliedMigrations(tx, journal);
+    await beforeMigrations?.(tx, folder, applied);
     const outOfReach = migrationsOutOfReach(folder, applied);
     if (outOfReach.length > 0) {
       throw new MigrationsOutOfReachError(
@@ -148,7 +146,6 @@ export async function applyMigrations(
       migrationsFolder,
       ...journal,
     });
-    await afterMigrations?.(tx);
   });
 }
 

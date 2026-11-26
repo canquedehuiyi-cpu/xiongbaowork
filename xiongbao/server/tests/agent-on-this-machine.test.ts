@@ -163,15 +163,12 @@ afterAll(async () => {
 });
 
 /** The deployment's configuration, with or without the Desktop's setting. */
-function configWith(
-  thisMachineHost: string | undefined,
-  setting: string = SETTING,
-) {
+function configWith(thisMachineHost: string | undefined) {
   return loadConfig(
     testEnvironment({
       INTELLIGENCE_API_URL: `http://127.0.0.1:${platform.port}`,
       INTELLIGENCE_GATEWAY_WS_URL: `ws://127.0.0.1:${platform.port}`,
-      ...(thisMachineHost ? { [setting]: thisMachineHost } : {}),
+      ...(thisMachineHost ? { [SETTING]: thisMachineHost } : {}),
     }),
   );
 }
@@ -389,13 +386,4 @@ test("the setting is a host name and nothing else", () => {
     "host.docker.internal",
   );
   expect(configWith(undefined).thisMachineHost).toBeUndefined();
-});
-
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the setting's name before the rename
-test("the old spelling OPENBOT_THIS_MACHINE_HOST is still read, and a bad value is refused by the new name", () => {
-  const legacy = "OPENBOT_THIS_MACHINE_HOST";
-  expect(configWith(" Host.Docker.Internal ", legacy).thisMachineHost).toBe(
-    "host.docker.internal",
-  );
-  expect(() => configWith("a/b", legacy)).toThrow(SETTING);
 });

@@ -62,7 +62,7 @@ const sockets = new Set<ServerWebSocket<RunnerSocketData>>();
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "xiongbao-runner-package-"));
-  binary = join(root, "openbot-runner");
+  binary = join(root, "xiongbao-runner");
   const build = Bun.spawn(
     [
       process.execPath,

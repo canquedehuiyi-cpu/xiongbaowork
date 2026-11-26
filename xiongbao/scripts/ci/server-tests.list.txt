@@ -346,7 +346,6 @@ tests/conversation-title.integration.test.ts
 tests/copilot-forwarded-headers.test.ts
 tests/copilot-runtime-frames.integration.test.ts
 tests/copilot.test.ts
-tests/credential-rekey.test.ts
 tests/credential-rotation-leak.integration.test.ts
 tests/credentials-reseal.test.ts
 tests/credentials.test.ts
@@ -433,8 +432,7 @@ tests/entra-obo-config.test.ts
 tests/entra-obo-servers.integration.test.ts
 tests/entra-obo.integration.test.ts
 tests/entra-profile.test.ts
-tests/env-alias-dockerfiles.test.ts
-tests/env-aliases.test.ts
+tests/env-name-dockerfiles.test.ts
 tests/env-name.test.ts
 tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
@@ -941,6 +939,7 @@ tests/unreachable-bot.test.ts
 tests/untrusted-content.test.ts
 tests/update-plan.test.ts
 tests/update-route-wechat-opt-in.test.ts
+tests/upgrade-gate.test.ts
 tests/user-instructions.integration.test.ts
 tests/user-preferences-routes.test.ts
 tests/user-preferences.integration.test.ts
@@ -994,7 +993,6 @@ tests/what-if-boundary-words.test.ts
 tests/what-if.integration.test.ts
 tests/who-can-check.test.ts
 tests/who-can.integration.test.ts
-tests/wire-codes.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
 tests/workspace-files-written.test.ts

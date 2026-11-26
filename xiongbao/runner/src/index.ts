@@ -12,8 +12,8 @@
  * bought — kept here, on disk, in a file this process creates for itself. There is no password to
  * enter, no login to keep alive, and nothing a screenshot could give away.
  */
-// Must stay the first import: it copies settings written with the old prefix onto their XIONGBAO_* names before any module reads config.
-import "../../shared/apply-env-aliases";
+// Must stay the first import: it refuses settings still under their names before v0.2.16 before any module reads config.
+import "../../shared/refuse-old-settings";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { hostname, platform, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";

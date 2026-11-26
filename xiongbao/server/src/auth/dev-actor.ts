@@ -1,21 +1,16 @@
-import { sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import { envName } from "../../../shared/env-aliases";
+import { envName } from "../../../shared/env-name";
 import type { SingleUserAccess } from "../config";
 import type { Database } from "../db/client";
-import { callerOf, singleUserRefusal } from "../request-trust";
 import { users } from "../db/schema";
+import { callerOf, singleUserRefusal } from "../request-trust";
 import { runAsTenant } from "../tenant/context";
 import { provisionTenant } from "../tenant/provisioning";
+import { DEV_ACTOR_EMAIL } from "./dev-actor-email";
 import type { AppVariables, AuthenticatedActor } from "./guards";
-import { DEV_ACTOR_EMAIL, LEGACY_DEV_ACTOR_EMAILS } from "./dev-actor-email";
 import { setRole } from "./roles";
 
-export {
-  DEV_ACTOR_EMAIL,
-  LEGACY_DEV_ACTOR_EMAILS,
-  isDevActorEmail,
-} from "./dev-actor-email";
+export { DEV_ACTOR_EMAIL, isDevActorEmail } from "./dev-actor-email";
 
 /**
  * A signed-in person, without signing in.
@@ -65,14 +60,7 @@ export async function initializeDevActorUser(
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          // A name the person changed in their profile survives the next start. The one name that does
-          // not is the old default: the row was first written with name = email, so after the address
-          // is renamed an upgraded database would keep showing the old address as the person's name
-          // (and `needsName` would stop asking for a real one).
-          name: sql`CASE WHEN lower(${users.name}) IN (${sql.join(
-            LEGACY_DEV_ACTOR_EMAILS.map((legacy) => sql`${legacy}`),
-            sql`, `,
-          )}) THEN ${name} ELSE ${users.name} END`,
+          // A name the person changed in their profile survives the next start.
           email: DEV_ACTOR.email,
           updatedAt: new Date(),
         },

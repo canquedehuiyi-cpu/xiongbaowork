@@ -1,4 +1,4 @@
-import { envName } from "../../../shared/env-aliases";
+import { envName } from "../../../shared/env-name";
 import type { BrokerProvider } from "./access";
 import type { DeploymentClient } from "./deployment-clients";
 import type { AccountRef } from "./shared-accounts";

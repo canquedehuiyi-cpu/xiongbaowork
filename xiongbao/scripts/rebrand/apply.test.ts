@@ -329,22 +329,23 @@ describe("apply CLI", () => {
   });
 
   test("带作用域的保护只在自己的文件里生效，别处同样的文字照改", () => {
+    // 真实清单里限定到 shared/xiongbao-actor.ts 的 forever 条目：审计记录里的旧来源标记前缀。
     put(
-      "xiongbao/shared/staffing-proposal.ts",
-      'export const MARK = "<<openbot:staffing-proposal>>";\n',
+      "xiongbao/shared/xiongbao-actor.ts",
+      'export const old = (actor: string) => actor.startsWith("openbot:");\n',
     );
     put(
       "xiongbao/shared/elsewhere.ts",
-      'export const MARK = "<<openbot:staffing-proposal>>";\n',
+      'export const old = (actor: string) => actor.startsWith("openbot:");\n',
     );
     git("add", "-A");
     git("commit", "-q", "-m", "scoped");
     run(["--phase", "R1", "xiongbao/shared/"]);
-    expect(read("xiongbao/shared/staffing-proposal.ts")).toContain(
-      '"<<openbot:staffing-proposal>>"',
+    expect(read("xiongbao/shared/xiongbao-actor.ts")).toContain(
+      'actor.startsWith("openbot:")',
     );
     expect(read("xiongbao/shared/elsewhere.ts")).toContain(
-      '"<<xiongbao:staffing-proposal>>"',
+      'actor.startsWith("xiongbao:")',
     );
   });
 

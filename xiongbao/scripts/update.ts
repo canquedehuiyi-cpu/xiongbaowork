@@ -15,7 +15,6 @@ import {
 } from "./promote-kubernetes";
 import {
   acceptedBuildEnvironment,
-  adoptLegacyLocalState,
   applyLocalUpdate,
   assertLocalStartAllowed,
   type LocalUpdateOptions,
@@ -25,7 +24,6 @@ import {
 const HELP = `Usage:
   bun scripts/update.ts local check|plan|apply [options]
   bun scripts/update.ts local status --root /installation
-  bun scripts/update.ts local adopt-state --root /installation
   bun scripts/update.ts kubernetes check|plan|apply|gitops [options]
 
 Common:
@@ -43,8 +41,6 @@ The policy JSON contains distributionId, repository and channel. The candidate c
 come from independently approved metadata, not a checksum computed solely from an untrusted
 download. This command does not establish publisher authenticity from a checksum alone.
 Local updates require a known accepted .xiongbao-release.json and a fetched clean Git baseline.
-Every local action first renames this installation's state files from their names before v0.2.16
-(adopt-state does only that; scripts/start.sh runs it on every start).
 Host updates require this installation's host services already stopped; unrelated processes
 are never killed. Kubernetes apply changes an existing Helm release; gitops only writes review
 artifacts and ordering instructions. No mode deletes database/profile/workspace volumes.
@@ -124,7 +120,6 @@ export async function main(args: string[]) {
       "status",
       "assert-start",
       "build-environment",
-      "adopt-state",
     ].includes(action ?? "")
   )
     throw new Error(HELP);
@@ -133,31 +128,13 @@ export async function main(args: string[]) {
     return value;
   };
   const root = resolve(values.root ?? process.cwd());
-  if (mode === "local") {
-    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-    const adopted = adoptLegacyLocalState(root);
-    for (const change of adopted.renamed)
-      console.error(`Renamed ${change} (the name before v0.2.16).`);
-    for (const legacy of adopted.kept)
-      console.error(
-        `${legacy} is the name before v0.2.16 of a file that also exists under its current name; the current one is used and ${legacy} is left as it is.`,
-      );
-    if (action === "adopt-state") return 0;
-  } else if (action === "adopt-state")
-    throw new Error("That action is not supported for this deployment mode");
   if (mode === "local" && action === "build-environment") {
     for (const [key, value] of Object.entries(acceptedBuildEnvironment(root)))
       console.log(`${key}=${value}`);
     return 0;
   }
   if (mode === "local" && action === "assert-start") {
-    assertLocalStartAllowed(
-      root,
-      process.env.XIONGBAO_UPDATE_OPERATION ||
-        // The v0.2.15 local updater, already installed, starts the new source with the old name.
-        // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-        process.env.OPENBOT_UPDATE_OPERATION,
-    );
+    assertLocalStartAllowed(root, process.env.XIONGBAO_UPDATE_OPERATION);
     return 0;
   }
   if (mode === "local" && action === "status") {

@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TOOL_PATH } from "./apply";
 import {
+  buildLasting,
   buildProtect,
   isBinary,
   isGuardPath,
@@ -17,6 +18,8 @@ import {
  *   bun xiongbao/scripts/rebrand/report.ts --phase <R1..R4> [--scope <路径>]...
  *     [--exclude <路径>]... [--families openbot|copilotkit|openbot,copilotkit] [--fail-on-unprotected] [--fail-on-any]
  *
+ * `--fail-on-any` 连已保护的命中也算失败，只放行挺过 R4 的条目（`forever` 与 `until: "R5"`）保护的命中。
+ *
  * `--scope` 与 `--exclude` 后都可跟多个路径；`--exclude` 去掉落在这些路径（文件或目录）下的文件。
  *
  * 路径一律相对仓库根（`git rev-parse --show-toplevel`），与当前目录无关。
@@ -30,6 +33,11 @@ export type Leftover = {
   word: string;
   family: Family;
   protected: boolean;
+  /**
+   * 落在挺过 R4 的条目（`forever` 或 `until: "R5"`）里：`--fail-on-any` 放行它。只在 `findLeftovers` 被要求时才有
+   * （`{ lasting: true }`）。
+   */
+  lasting?: boolean;
 };
 
 const FAMILIES: readonly Family[] = ["openbot", "copilotkit"];
@@ -288,27 +296,33 @@ export function gitRoot(): string {
  * 按验收搜索词扫文件，返回每一处命中。`files` 是相对仓库根的路径；跳过路径、工具目录、品牌护栏
  * （GUARD_PATHS）、不存在的、符号链接与二进制文件（与 apply 同一个 isBinary）不计入。依赖声明（package.json 的依赖与 overrides 键）、
  * 源码导入路径里的 `@copilotkit/`、许可证文件里版权行到 MIT 原文结尾（`SOFTWARE.` 行）的一段只对 copilotkit 族放行。
- * 命中是否受保护按命中所在文件取保护正则，且要整处落在保护片段里。
+ * 命中是否受保护按命中所在文件取保护正则，且要整处落在保护片段里。`options.lasting` 时每处命中另标
+ * `lasting`：是否整处落在挺过 R4 的条目（`forever` 与 `until: "R5"`）里。
  */
 export function findLeftovers(
   files: string[],
   phase: Phase,
   root: string = gitRoot(),
+  options: { lasting?: boolean } = {},
 ): Leftover[] {
   const entries = readProtectEntries();
-  const baseProtect = buildProtect(entries, phase);
   const scoped = scopedFiles();
   // 保护正则只按文件建一次：重复读 protect.json 会让全仓扫描慢到几十秒。
-  const perFile = new Map<string, RegExp>();
-  const protectFor = (file: string) => {
-    if (!scoped.has(file)) return baseProtect;
-    let regex = perFile.get(file);
-    if (!regex) {
-      regex = buildProtect(entries, phase, file);
-      perFile.set(file, regex);
-    }
-    return regex;
+  const cached = (build: (file?: string) => RegExp) => {
+    const base = build();
+    const perFile = new Map<string, RegExp>();
+    return (file: string) => {
+      if (!scoped.has(file)) return base;
+      let regex = perFile.get(file);
+      if (!regex) {
+        regex = build(file);
+        perFile.set(file, regex);
+      }
+      return regex;
+    };
   };
+  const protectFor = cached((file) => buildProtect(entries, phase, file));
+  const lastingFor = cached((file) => buildLasting(entries, file));
   const found: Leftover[] = [];
   for (const file of files) {
     if (isSkipped(file) || file.startsWith(TOOL_PATH) || isGuardPath(file))
@@ -334,6 +348,7 @@ export function findLeftovers(
       // 绝大多数行没有任何旧词：先一次判断，省掉逐行的正则构造。
       if (!ANY_WORD.test(line)) return;
       const kept = spansOf(protect, line);
+      const lasting = options.lasting ? spansOf(lastingFor(file), line) : [];
       const exempt = exemptSpans(
         file,
         line,
@@ -352,6 +367,7 @@ export function findLeftovers(
             word: match[0],
             family,
             protected: within(span, kept),
+            ...(options.lasting ? { lasting: within(span, lasting) } : {}),
           });
         }
       }
@@ -475,8 +491,8 @@ function main() {
     .split("\0")
     .filter(Boolean)
     .filter((file) => !isExcluded(file, excludes));
-  const found = findLeftovers(listed, phase, root).filter((hit) =>
-    families.includes(hit.family),
+  const found = findLeftovers(listed, phase, root, { lasting: true }).filter(
+    (hit) => families.includes(hit.family),
   );
   process.stdout.write(
     `阶段 ${phase}，词族 ${families.join(",")}${scopes.length ? `，范围 ${scopes.join(" ")}` : ""}${excludes.length ? `，排除 ${excludes.join(" ")}` : ""}\n${formatTable(found)}\n`,
@@ -493,8 +509,22 @@ function main() {
     );
     process.exit(1);
   }
-  if (failOnAny && found.length > 0) {
-    process.stderr.write(`仍有 ${found.length} 处旧词（含已保护的）\n`);
+  // `--fail-on-any` 放行挺过 R4 的条目（`forever` 与 `until: "R5"`）：它们不是改名能清掉的，留着有登记的理由。
+  const lasting = found.filter((hit) => hit.lasting);
+  const due = found.filter((hit) => !hit.lasting);
+  if (failOnAny && lasting.length > 0)
+    process.stdout.write(
+      `另有 ${lasting.length} 处由 forever 或 until R5 条目保护，--fail-on-any 放行\n`,
+    );
+  if (failOnAny && due.length > 0) {
+    const shown = due.slice(0, 50);
+    process.stderr.write(
+      `仍有 ${due.length} 处旧词（含已保护的，不含 forever 与 until R5 条目保护的）：\n${shown
+        .map((hit) => `${hit.file}:${hit.line}: ${hit.word}`)
+        .join(
+          "\n",
+        )}\n${due.length > shown.length ? `…另有 ${due.length - shown.length} 处\n` : ""}`,
+    );
     process.exit(1);
   }
 }

@@ -15,10 +15,7 @@
  * instruction; a command only chooses among what the Bot already holds, as typing it does.
  */
 import type { RunAgentInput } from "@ag-ui/client";
-import {
-  LEGACY_PICKED_SKILL_PROP,
-  PICKED_SKILL_PROP,
-} from "@xiongbao/toolkit/run-turn";
+import { PICKED_SKILL_PROP } from "@xiongbao/toolkit/run-turn";
 import {
   FAST_PATH_CHECK_LABEL,
   FAST_PATH_HEADING,
@@ -90,8 +87,7 @@ export function pickedSkillCommand(
   input: Pick<RunAgentInput, "messages" | "forwardedProps">,
 ): string | undefined {
   const props = input.forwardedProps as Record<string, unknown> | undefined;
-  const stated =
-    props?.[PICKED_SKILL_PROP] ?? props?.[LEGACY_PICKED_SKILL_PROP];
+  const stated = props?.[PICKED_SKILL_PROP];
   if (typeof stated === "string") return stated;
   return leadingSkillCommand(latestUserText(input.messages));
 }

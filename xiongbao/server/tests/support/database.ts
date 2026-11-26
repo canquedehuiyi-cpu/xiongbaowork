@@ -11,11 +11,11 @@ import { SQL } from "bun";
 let cachedTestDatabaseUrl: string | undefined;
 
 /**
- * The names the live development database goes by, both refused: installs made so far carry the
- * first, and the compose file and the production rename move to the second at different times, so
- * either one can be somebody's real data while the move is under way.
+ * The names a live database goes by, both refused: the first is the name a new volume, a development
+ * Compose install from before v0.2.16 and CI's own superuser still carry until the migrations are squashed
+ * into a baseline (R4 Task 26, which drops it from here), the second the name since; either can be
+ * somebody's real data.
  */
-// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
 const LIVE_DATABASE_NAMES: ReadonlySet<string> = new Set([
   "openbot",
   "xiongbao",

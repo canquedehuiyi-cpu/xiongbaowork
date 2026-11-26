@@ -24,21 +24,9 @@
     "note": "环境变量名前缀，随报错文字出现；Task 13"
   },
   {
-    "word": "OPENBOT_DESKTOP_ENGINE",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "设备端环境变量名，随报错文字出现；Task 13"
-  },
-  {
     "word": "OpenBot",
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "界面与控制台文字、关于页 MIT 署名；Task 8"
-  },
-  {
-    "word": "openbot-runner",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "旧版 sidecar 的文件名（sidecar.rs LEGACY_SIDECAR），启动时据此停掉旧版残留进程；兼容已安装的旧版，随 N+2 到期清理（Task 21）"
   }
 ]

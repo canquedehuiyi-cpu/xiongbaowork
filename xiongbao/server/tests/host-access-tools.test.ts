@@ -236,14 +236,14 @@ describe("host access tools", () => {
     });
   });
   /*
-   * The folder worker's Deny says "Declined in OpenBot Desktop." where it once said "The local owner
-   * denied this operation.", which the person read about themselves. The server reads that sentence
-   * to record the refusal as the person's own, so Activity says they declined it; a sentence it did
-   * not know would have recorded an ordinary refusal. The sentence is the worker's answer as it
-   * arrives on the wire, written out here because the worker's source is no longer in this tree.
+   * The folder worker's Deny says "The local owner denied this operation.", which the person read about
+   * themselves. The server reads that sentence to record the refusal as the person's own, so Activity
+   * says they declined it; a sentence it did not know would have recorded an ordinary refusal. The
+   * sentence is the worker's answer as it arrives on the wire, written out here because the worker's
+   * source is no longer in this tree.
    */
   test("a Deny on the desktop is recorded as the person declining, in the desktop's words", async () => {
-    const declined = "Declined in OpenBot Desktop.";
+    const declined = "The local owner denied this operation.";
     expect(DENIED_ON_DESKTOP.has(declined)).toBe(true);
 
     const broker = createHostAccessBroker();

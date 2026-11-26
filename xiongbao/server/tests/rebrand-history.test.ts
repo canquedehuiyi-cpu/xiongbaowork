@@ -4,42 +4,27 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   APP_ACCESS_REQUEST_MARKER,
-  LEGACY_APP_ACCESS_REQUEST_MARKER,
   readAppAccessRequestAnswer,
   writeAppAccessRequestAnswer,
 } from "@xiongbao/shared/app-access-request";
-import { runTimeZone } from "@xiongbao/shared/person-time-zone";
 import {
-  LEGACY_STAFFING_PROPOSAL_MARKER,
   readStaffingProposalAnswer,
   STAFFING_PROPOSAL_MARKER,
   writeStaffingProposalAnswer,
 } from "@xiongbao/shared/staffing-proposal";
-import { waitingIn, XIONGBAO_WAITING_METADATA } from "@xiongbao/shared/waiting";
-import {
-  HEADLESS_WAITING_EVENT,
-  isHeadlessWaitingEvent,
-} from "@xiongbao/toolkit/headless-tools";
+import { XIONGBAO_WAITING_METADATA } from "@xiongbao/shared/waiting";
+import { HEADLESS_WAITING_EVENT } from "@xiongbao/toolkit/headless-tools";
 import { PICKED_SKILL_PROP } from "@xiongbao/toolkit/run-turn";
 import postgres from "postgres";
 import { mergedMigrationsFolder } from "../scripts/migrate";
-import {
-  RUN_ASSERTION_PROP,
-  runAssertionIn,
-  withoutRunAssertion,
-} from "../src/agents/callback-token";
+import { RUN_ASSERTION_PROP } from "../src/agents/callback-token";
 import { LOCAL_TERMINAL_MARKER } from "../src/approvals/continuation-target-store";
 import { applyMigrations } from "../src/db/apply-migrations";
 import {
-  isPersonalMemoryContext,
   PERSONAL_MEMORY_CONTEXT,
   PERSONAL_MEMORY_ROW_ID,
 } from "../src/memory/tools";
-import { pickedSkillCommand } from "../src/plugins/picked-skill";
-import {
-  LEGACY_PRIVATE_SHARE_TOOL_REF,
-  PRIVATE_SHARE_TOOL_REF,
-} from "../src/proactive/private-share";
+import { PRIVATE_SHARE_TOOL_REF } from "../src/proactive/private-share";
 import { markUntrusted } from "../src/untrusted-content";
 
 /**
@@ -50,7 +35,8 @@ import { markUntrusted } from "../src/untrusted-content";
  * forward.
  *
  * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，this file spells the old names on purpose: they are
- * the data the migration exists to find and the readers still accept. It goes with the migration (R4).
+ * the data the migration exists to find (the readers no longer accept them). It goes with the migration
+ * (R4 baseline).
  *
  * Creating a database takes the owner (`TEST_DATABASE_ADMIN_URL`); without it the database half is
  * skipped and only the readers are checked.
@@ -148,10 +134,18 @@ const ACCESS =
  * The reader takes the text out of JSON, then out of the envelope, and looks at the start
  * (staffing-proposal-card.tsx, app-access-card.tsx).
  */
+const V0215_STAFFING_PROPOSAL_MARKER = "<<openbot:staffing-proposal>>";
+const V0215_APP_ACCESS_REQUEST_MARKER = "<<openbot:app-access-request>>";
 function asV0215(answer: string): string {
   return answer
-    .replace(STAFFING_PROPOSAL_MARKER, LEGACY_STAFFING_PROPOSAL_MARKER)
-    .replace(APP_ACCESS_REQUEST_MARKER, LEGACY_APP_ACCESS_REQUEST_MARKER);
+    .replace(STAFFING_PROPOSAL_MARKER, V0215_STAFFING_PROPOSAL_MARKER)
+    .replace(APP_ACCESS_REQUEST_MARKER, V0215_APP_ACCESS_REQUEST_MARKER);
+}
+/** The answer as today's writers write it: what the readers take. */
+function asV0216(answer: string): string {
+  return answer
+    .replace(V0215_STAFFING_PROPOSAL_MARKER, STAFFING_PROPOSAL_MARKER)
+    .replace(V0215_APP_ACCESS_REQUEST_MARKER, APP_ACCESS_REQUEST_MARKER);
 }
 const STAFFING_ANSWER = asV0215(
   writeStaffingProposalAnswer(JSON.parse(CARD), "已起草，等你确认。"),
@@ -933,47 +927,7 @@ describe.skipIf(!owner)("a failed history rewrite", () => {
   }, 300_000);
 });
 
-describe("readers accept both names", () => {
-  test("run properties", () => {
-    expect(runTimeZone({ openbotTimeZone: "Asia/Shanghai" })).toBe(
-      "Asia/Shanghai",
-    );
-    expect(
-      runTimeZone({ xiongbaoTimeZone: "Europe/Paris", openbotTimeZone: "UTC" }),
-    ).toBe("Europe/Paris");
-    expect(
-      pickedSkillCommand({
-        messages: [],
-        forwardedProps: { openbotSkill: "refunds" },
-      }),
-    ).toBe("refunds");
-    expect(
-      pickedSkillCommand({
-        messages: [],
-        forwardedProps: { [PICKED_SKILL_PROP]: "new", openbotSkill: "old" },
-      }),
-    ).toBe("new");
-    expect(PICKED_SKILL_PROP).toBe("xiongbaoSkill");
-    expect(runAssertionIn({ openbotRun: "old" })).toBe("old");
-    expect(
-      runAssertionIn({ [RUN_ASSERTION_PROP]: "new", openbotRun: "old" }),
-    ).toBe("new");
-    expect(
-      withoutRunAssertion({ openbotRun: "a", xiongbaoRun: "b", keep: 1 }),
-    ).toEqual({ keep: 1 });
-  });
-
-  test("waiting details and the waiting event", () => {
-    const waiting = { kind: "approval" };
-    expect(waitingIn({ openbotWaiting: waiting })).toBe(waiting);
-    expect(waitingIn({ [XIONGBAO_WAITING_METADATA]: waiting })).toBe(waiting);
-    expect(waitingIn({})).toBeUndefined();
-    expect(isHeadlessWaitingEvent("openbot.headless.waiting")).toBe(true);
-    expect(isHeadlessWaitingEvent(HEADLESS_WAITING_EVENT)).toBe(true);
-    expect(isHeadlessWaitingEvent("something.else")).toBe(false);
-    expect(XIONGBAO_WAITING_METADATA).toBe("xiongbaoWaiting");
-  });
-
+describe("the fixtures and the names", () => {
   test("the stored tool answers above are in the shapes the writers really store", () => {
     // Built-in agent: one JSON string around the whole envelope, newlines escaped.
     expect(BUILT_IN_STAFFING).toStartWith(
@@ -986,49 +940,23 @@ describe("readers accept both names", () => {
     const inner =
       (JSON.parse(BUILT_IN_STAFFING) as string).split("\n")[2] ?? "";
     expect(
-      readStaffingProposalAnswer(`${inner}\n已起草，等你确认。`)?.card,
+      readStaffingProposalAnswer(asV0216(`${inner}\n已起草，等你确认。`))?.card,
     ).toEqual(JSON.parse(CARD));
     expect(HEADLESS_STAFFING).toStartWith("CRITICAL: ");
     expect(BUILT_IN_ACCESS).toStartWith('"<<openbot:app-access-request>>{');
     expect(
-      readAppAccessRequestAnswer(JSON.parse(BUILT_IN_ACCESS))?.card,
+      readAppAccessRequestAnswer(asV0216(JSON.parse(BUILT_IN_ACCESS)))?.card,
     ).toEqual(JSON.parse(ACCESS));
   });
 
-  test("card markers in tool answers", () => {
-    const card = {
-      proposalId: "p-1",
-      kind: "employee" as const,
-      title: "Ada",
-    };
-    expect(writeStaffingProposalAnswer(card, "s")).toStartWith(
-      "<<xiongbao:staffing-proposal>>",
-    );
-    expect(
-      readStaffingProposalAnswer(
-        `<<openbot:staffing-proposal>>${CARD}\n已起草`,
-      ),
-    ).toEqual({ card, sentence: "已起草" });
-    const access = JSON.parse(ACCESS);
-    expect(writeAppAccessRequestAnswer(access, "s")).toStartWith(
-      "<<xiongbao:app-access-request>>",
-    );
-    expect(
-      readAppAccessRequestAnswer(
-        `<<openbot:app-access-request>>${ACCESS}\nAsked.`,
-      ),
-    ).toEqual({ card: access, sentence: "Asked." });
-  });
-
-  test("context titles, row ids and tool refs", () => {
-    expect(isPersonalMemoryContext("OpenBot personal memory")).toBe(true);
-    expect(isPersonalMemoryContext(PERSONAL_MEMORY_CONTEXT)).toBe(true);
+  test("context titles, row ids, tool refs and keys the migration writes", () => {
     expect(PERSONAL_MEMORY_CONTEXT).toBe("XiongBao personal memory");
     expect(PERSONAL_MEMORY_ROW_ID).toBe("xiongbao:personal-memory");
     expect(PRIVATE_SHARE_TOOL_REF).toBe("xiongbao/share_private_information");
-    expect(LEGACY_PRIVATE_SHARE_TOOL_REF).toBe(
-      "openbot/share_private_information",
-    );
     expect(LOCAL_TERMINAL_MARKER).toBe("xiongbao.ap.local-terminal.v1");
+    expect(PICKED_SKILL_PROP).toBe("xiongbaoSkill");
+    expect(RUN_ASSERTION_PROP).toBe("xiongbaoRun");
+    expect(XIONGBAO_WAITING_METADATA).toBe("xiongbaoWaiting");
+    expect(HEADLESS_WAITING_EVENT).toBe("xiongbao.headless.waiting");
   });
 });

@@ -15,13 +15,6 @@
 /** The `forwardedProps` key a browser run carries the person's IANA time zone under. */
 export const PERSON_TIME_ZONE_PROP = "xiongbaoTimeZone";
 
-/**
- * The key before v0.2.16. An approval's stored continuation from before the upgrade, or a browser tab
- * still running the old page, carries the zone under it; read, never written.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export const LEGACY_PERSON_TIME_ZONE_PROP = "openbotTimeZone";
-
 /** Longer than any zone the IANA database names; anything past it is not one. */
 const MAX_TIME_ZONE_LENGTH = 64;
 
@@ -64,9 +57,8 @@ export function runTimeZone(forwardedProps: unknown): string | undefined {
     Array.isArray(forwardedProps)
   )
     return undefined;
-  const props = forwardedProps as Record<string, unknown>;
   return personTimeZone(
-    props[PERSON_TIME_ZONE_PROP] ?? props[LEGACY_PERSON_TIME_ZONE_PROP],
+    (forwardedProps as Record<string, unknown>)[PERSON_TIME_ZONE_PROP],
   );
 }
 

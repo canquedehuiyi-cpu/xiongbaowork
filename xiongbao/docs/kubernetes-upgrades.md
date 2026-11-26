@@ -1,6 +1,6 @@
 # Kubernetes release promotion
 
-`bun scripts/update.ts kubernetes plan|apply|gitops` is operator tooling around the existing Helm chart. The running application receives no cluster deployment permission. Promotion uses the manifest's exact monolithic image digest as GHCR holds it (`images.ghcr`, from the release record's `ghcr`; a manifest accepted before v0.2.16 names it under its former key, still read for that one), chart archive checksum, independent distribution policy and explicit customer values files.
+`bun scripts/update.ts kubernetes plan|apply|gitops` is operator tooling around the existing Helm chart. The running application receives no cluster deployment permission. Promotion uses the manifest's exact monolithic image digest as GHCR holds it (`images.ghcr`, from the release record's `ghcr`), chart archive checksum, independent distribution policy and explicit customer values files.
 
 The release pipeline packages the existing chart and records its version, release-asset URL and SHA-256 in `release-manifest.json`. Download the approved package; this command checks its checksum before invoking Helm. The separate desktop `server` image cannot substitute for the monolithic image used by chart server/computer workloads.
 
@@ -24,11 +24,9 @@ Apply also keeps what the release already has. It reads the release's user-suppl
 
 For a declared database schema transition, preflight locally renders the checksum-validated target chart with the exact customer values and pinned release values. The effective render must include the target image's guarded `scripts/migrate.ts` Job as a `pre-upgrade` hook. Disabling migrations, omitting the Job or replacing it with a different image/runner refuses promotion before any cluster operation.
 
-## From v0.2.15 to v0.2.16
+## From v0.2.15 or earlier
 
-The chart was renamed (`charts/openbot` to `charts/xiongbao`, chart name `xiongbao`). Resource names, the `app.kubernetes.io/name` selector label and the computers' volume claims derive from the chart name unless `fullnameOverride` is set, and so do the Secrets the chart generates and reads back (`<fullname>-secrets` with a generated `KEY_ENCRYPTION_KEY`, `<fullname>-database-roles`). An existing release upgraded without more would get a second set of resources: computers on new empty volumes, a new encryption key the stored credentials do not open (the migration then refuses), new role passwords. Add `nameOverride: openbot` to a values file of a release installed from the v0.2.15 chart, and compare `helm template` of the old and the new chart before applying. New installs need nothing. The bundled PostgreSQL subchart is named after the release and is not affected.
-
-The v0.2.16 migration renames the database roles to `xiongbao_app` and `xiongbao_role_writer` and re-encrypts stored credentials with `KEY_ENCRYPTION_KEY`: the migration Job needs the API's key, and connection strings that name the roles must use the new names afterwards. Scale the v0.2.15 server and worker to zero before the migration runs (it holds exclusive locks on about twenty tables until it commits), and take a database snapshot first: a logical dump cannot roll back a role rename. If a v0.2.15 replica did keep running past the migration, run the migration once more after it is gone: each run re-encrypts the `k1` credentials such a replica wrote, and changes nothing otherwise. Before v0.2.17, which stops reading `k1` credentials and the former names in stored history, a read-only check that none are left will ship with that release. The deployment manual (`deployment-xiongbao.md`, section 4) has the details.
+This release is reached only from v0.2.16. A release still on the v0.2.15 chart upgrades to v0.2.16 first, as the v0.2.16 tag of this document describes (the chart rename and the database role rename are done there). Against a database v0.2.16 has not migrated, this release's migration Job refuses before it changes anything, naming what it found: no v0.2.16 rename migrations in the journal, application roles under their former names, or credentials still sealed under kid `k1` (`deployment-xiongbao.md`, section 4).
 
 ## Live Helm execution
 

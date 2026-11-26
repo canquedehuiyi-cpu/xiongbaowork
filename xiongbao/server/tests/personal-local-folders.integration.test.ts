@@ -48,7 +48,7 @@ const auditStore = createAuditStore(database);
 const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 const person = {
   id: `personal-folders-${randomUUID().slice(0, 8)}`,
-  email: "dev@openbot.local",
+  email: "admin@xiongbao.local",
   role: "admin" as const,
 };
 const bot = "personal-assistant";

@@ -54,7 +54,7 @@ beforeEach(() => {
   put("THIRD-PARTY-NOTICES.md", NOTICES);
   put(
     "xiongbao/server/src/a.ts",
-    'export const openbotRoot = "x";\nconst accepted = ".openbot-release.json";\n',
+    'export const openbotRoot = "x";\nconst accepted = "OPENBOT_RELEASE";\n',
   );
 });
 
@@ -71,7 +71,7 @@ const files = [
 ];
 
 describe("findLeftovers", () => {
-  test("依赖声明与许可证段放行，只剩两处 openbot，其中本机状态文件名在 R1 受保护", () => {
+  test("依赖声明与许可证段放行，只剩两处旧词，其中环境变量名在 R1 受保护", () => {
     const found = findLeftovers(files, "R1", root);
     expect(found).toEqual([
       {
@@ -84,7 +84,7 @@ describe("findLeftovers", () => {
       {
         file: "xiongbao/server/src/a.ts",
         line: 2,
-        word: "openbot",
+        word: "OPENBOT",
         family: "openbot",
         protected: true,
       },
@@ -99,7 +99,7 @@ describe("findLeftovers", () => {
   test("同一行的两处命中各自判断：只有落在保护片段里的那处受保护", () => {
     put(
       "xiongbao/server/src/b.ts",
-      'const a = ".openbot-release.json"; const openbotX = 1;\n',
+      'const a = "OPENBOT_RELEASE"; const openbotX = 1;\n',
     );
     const found = findLeftovers(["xiongbao/server/src/b.ts"], "R1", root);
     expect(found.map((hit) => hit.protected)).toEqual([true, false]);
@@ -435,7 +435,7 @@ describe("report.ts 命令行", () => {
   test("--scope 限定到只有已保护命中的文件时，--fail-on-unprotected 退出 0", () => {
     put(
       "xiongbao/server/src/only-protected.ts",
-      'const a = ".openbot-release.json";\n',
+      'const a = "OPENBOT_RELEASE";\n',
     );
     gitAdd();
     const result = run([
@@ -451,7 +451,7 @@ describe("report.ts 命令行", () => {
   test("--fail-on-any 有已保护的命中也退出 1", () => {
     put(
       "xiongbao/server/src/only-protected.ts",
-      'const a = ".openbot-release.json";\n',
+      'const a = "OPENBOT_RELEASE";\n',
     );
     gitAdd();
     const result = run([
@@ -462,6 +462,37 @@ describe("report.ts 命令行", () => {
       "--fail-on-any",
     ]);
     expect(result.code).toBe(1);
+  });
+
+  test("--fail-on-any 放行 forever 与 until R5 条目保护的命中，别的命中照样退出 1", () => {
+    // 真实清单里限定到这两个文件的条目：已装旧版移动端的回调 scheme（forever）与 v0.2.17 拒绝旧前缀的判定（R5）。
+    put(
+      "xiongbao/server/src/auth/index.ts",
+      'const scheme = "openbotmobile://";\n',
+    );
+    put(
+      "xiongbao/shared/env-name.ts",
+      'export const OLD_PREFIX = "OPENBOT_";\n',
+    );
+    gitAdd();
+    const lasting = [
+      "--scope",
+      "xiongbao/server/src/auth/index.ts",
+      "xiongbao/shared/env-name.ts",
+    ];
+    const passed = run(["--phase", "R4", ...lasting, "--fail-on-any"]);
+    expect(passed.code).toBe(0);
+    expect(passed.out).toContain("另有 2 处由 forever 或 until R5 条目保护");
+    const failed = run([
+      "--phase",
+      "R4",
+      ...lasting,
+      "xiongbao/server/src/a.ts",
+      "--fail-on-any",
+    ]);
+    expect(failed.code).toBe(1);
+    expect(failed.err).toContain("xiongbao/server/src/a.ts:1");
+    expect(failed.err).not.toContain("env-name.ts");
   });
 
   test("--families openbot 时 copilotkit 族的命中不计入失败判定", () => {

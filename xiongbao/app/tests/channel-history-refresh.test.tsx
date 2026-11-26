@@ -301,17 +301,6 @@ function tripForm(version: string, catalogId: string = XIONGBAO_UI.id) {
   } satisfies Message;
 }
 
-test("an interface the stored transcript holds under the catalog's old id still shows", async () => {
-  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the id before v0.2.16 (see withCurrentCatalogId).
-  // Read from the store: the v0.2.16 migration rewrote the ones the gateway replays (recovery 0241).
-  const activity = tripForm("1.0", "openbot/ui@1");
-  const view = mounting(async () => stored([activity]), [], null, true);
-  expect(
-    await view.findByRole("textbox", { name: "Destination" }),
-  ).toBeTruthy();
-  expect(view.getByRole("button", { name: "Confirm trip" })).toBeTruthy();
-});
-
 test("generated UI actions run the actual channel agent and thread with edited values", async () => {
   const activity = tripForm("1.0");
   const view = mounting(async () => stored([activity]), [activity], null, true);

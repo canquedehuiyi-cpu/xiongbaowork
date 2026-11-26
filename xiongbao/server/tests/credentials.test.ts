@@ -24,7 +24,6 @@ import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { credentialDouble } from "./support/credential-double";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
-import { sealAsV0215 } from "./support/sealed-before-v0216";
 
 const key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 const config = loadConfig(testEnvironment({ KEY_ENCRYPTION_KEY: key }));
@@ -1163,36 +1162,11 @@ describe("credential envelopes bound to their row", () => {
     );
   });
 
-  test("an envelope sealed before v0.2.16 (kid k1) still opens with its own row and with no other", async () => {
-    const sealed = await sealAsV0215(key, binding, "sealed-by-v0.2.15");
-    await expect(
-      openCredential(key, { ...binding, encryptedValue: sealed }),
-    ).resolves.toBe("sealed-by-v0.2.15");
-    await expect(
-      openCredential(key, {
-        ...binding,
-        id: "22222222-2222-4222-8222-222222222222",
-        encryptedValue: sealed,
-      }),
-    ).rejects.toThrow();
-  });
-
   test("a kid names the label: relabelled envelopes and unknown kids do not open", async () => {
     const k2 = JSON.parse(await sealCredential(key, binding, "k2-secret"));
-    const k1 = JSON.parse(await sealAsV0215(key, binding, "k1-secret"));
-    // The kid is not decoration: swapping it makes the reader rebuild the other label and fail.
-    for (const relabelled of [
-      { ...k2, kid: "k1" },
-      { ...k1, kid: "k2" },
-    ]) {
-      await expect(
-        openCredential(key, {
-          ...binding,
-          encryptedValue: JSON.stringify(relabelled),
-        }),
-      ).rejects.toThrow();
-    }
-    for (const kid of ["k3", "", "constructor", "__proto__"]) {
+    // Only `k2` has a label: the pre-v0.2.16 kid `k1` is refused like any other (v0.2.16 resealed every
+    // k1 row, and a database that still holds one is refused before migrating: db/upgrade-gate.ts).
+    for (const kid of ["k1", "k3", "", "constructor", "__proto__"]) {
       await expect(
         openCredential(key, {
           ...binding,

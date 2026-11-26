@@ -476,36 +476,3 @@ test("no gitee.com in the README, deployment manuals or docker files", () => {
     }).toEqual({ file, gitee: false });
   }
 });
-
-// The v0.2.16 upgrade sheet (docs/acceptance/HUMAN-STEPS.md, section 21) is what the JD Cloud server
-// runs, and .github/workflows/rebrand-rehearsal.yml runs the same blocks through
-// scripts/ci/rebrand-rehearsal.sh. That workflow only runs when the upgrade's files change, so every
-// pull request checks here that each block it runs is in the sheet, extracts, and parses as bash.
-test("every upgrade-sheet block the rename rehearsal runs is in the sheet and parses", () => {
-  const sheet = readFileSync(
-    join(root, "docs", "acceptance", "HUMAN-STEPS.md"),
-    "utf8",
-  );
-  const rehearsal = readFileSync(
-    join(import.meta.dir, "rebrand-rehearsal.sh"),
-    "utf8",
-  );
-  const names = [
-    ...new Set(
-      [...rehearsal.matchAll(/^\s*sheet (v0216:[a-z0-9-]+)$/gm)].map(
-        (match) => match[1],
-      ),
-    ),
-  ];
-  expect(names.length).toBeGreaterThan(10);
-  for (const name of names) {
-    const { lang, body } = extractBlock(sheet, name);
-    expect({ name, lang }).toEqual({ name, lang: "bash" });
-    const parsed = spawnSync("bash", ["-n"], { input: body, encoding: "utf8" });
-    expect({ name, status: parsed.status, stderr: parsed.stderr }).toEqual({
-      name,
-      status: 0,
-      stderr: "",
-    });
-  }
-});

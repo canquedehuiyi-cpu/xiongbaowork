@@ -357,17 +357,6 @@ describe("start.sh one computer each", () => {
     expect(result.dockerLog).not.toContain("supervisor");
   });
 
-  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，a .env written before the rename
-  test("the old name in .env is still read when the new one is absent", async () => {
-    const result = await runStartWithStaleServerProbe(401, {
-      omitFromEnv: ["XIONGBAO_ONE_COMPUTER_EACH"],
-      settings: { OPENBOT_ONE_COMPUTER_EACH: "false" },
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(result.dockerLog).not.toContain("supervisor");
-  });
-
   test("true, or absent, still starts it", async () => {
     for (const omitFromEnv of [[], ["XIONGBAO_ONE_COMPUTER_EACH"]] as const) {
       const result = await runStartWithStaleServerProbe(401, { omitFromEnv });
@@ -383,11 +372,9 @@ describe("start.sh one computer each", () => {
 describe("start.sh during an update", () => {
   /*
    * An ordinary restart of an accepted installation takes the accepted build identity; the start an
-   * update runs must not, or the candidate reports the old release and is never accepted. The v0.2.15
-   * local updater, already installed, names its operation under the old prefix.
-   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   * update runs must not, or the candidate reports the old release and is never accepted.
    */
-  test("an update operation under either name skips the accepted identity, and a plain restart takes it", async () => {
+  test("an update operation skips the accepted identity, and a plain restart takes it", async () => {
     const takesAccepted = async (
       processEnvironment: Record<string, string>,
     ) => {
@@ -402,7 +389,6 @@ describe("start.sh during an update", () => {
     expect(await takesAccepted({ XIONGBAO_UPDATE_OPERATION: "op" })).toBe(
       false,
     );
-    expect(await takesAccepted({ OPENBOT_UPDATE_OPERATION: "op" })).toBe(false);
   });
 });
 

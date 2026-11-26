@@ -1,9 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  applyEnvironmentAliases,
-  envName,
-  reportEnvironmentAliases,
-} from "@xiongbao/shared/env-aliases";
+import { envName, refuseOldSettingNames } from "@xiongbao/shared/env-name";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import {
   addressesBeyondThisMachine,
@@ -795,7 +791,7 @@ function singleUserAllowed(
  * WHERE THE SERVER RUNS IS SAID BY THE IMAGE, NOT GUESSED. `XIONGBAO_IN_CONTAINER=true` is set by both
  * images that run this server: `server/Dockerfile` (Compose and the chart) as an ENV, and the
  * one-container `Dockerfile` through its defaults file (`docker/defaults.env`, which the s6
- * env-aliases oneshot writes into every service's environment unless the deployment set the name
+ * env-defaults oneshot writes into every service's environment unless the deployment set the name
  * itself). So every container gets it without anybody writing it down, and every
  * other way of starting the server (XiongBao Desktop, `scripts/start.sh`, `bun run dev`) does not.
  * The default is the strict one: a server nobody said is in a container admits only this machine.
@@ -1870,14 +1866,15 @@ function serverPort(environment: Environment): number {
   return port ?? serverPort ?? DEFAULT_PORT;
 }
 
-export function loadConfig(given: Environment = process.env): DeploymentConfig {
+export function loadConfig(
+  environment: Environment = process.env,
+): DeploymentConfig {
   /*
-   * Scripts call this without the server's entry, which is where the old-prefix names are otherwise copied onto the
-   * new ones. The process environment is aliased in place so a script's own later reads see the same values; any
-   * other environment is aliased into a copy, so a caller's object is never written to.
+   * Scripts call this without the server's entry, which is where settings still under the names before
+   * v0.2.16 are otherwise refused (`shared/refuse-old-settings.ts`): refused here too, rather than read
+   * as if they were not set.
    */
-  const environment = given === process.env ? given : { ...given };
-  reportEnvironmentAliases(applyEnvironmentAliases(environment));
+  refuseOldSettingNames(environment);
   const google = oauthClient(environment, "GOOGLE");
   const auth = authConfig(environment, google);
   const organizationAuthValue = optional(

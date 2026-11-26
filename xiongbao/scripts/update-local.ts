@@ -151,69 +151,9 @@ const LOCK = ".xiongbao-update.lock";
 /** The folder the development Compose file mounts into the server for a model sign-in (docker-compose.yml). */
 const MODEL_SIGN_IN = ".xiongbao";
 
-/**
- * This installation's own state under the names it had before v0.2.16, beside the names it has now. Renamed once
- * by {@link adoptLegacyLocalState}; until then, and where both exist, the old names are still read where they
- * decide whether starting or updating is safe.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-const LEGACY_JOURNAL = ".openbot-update-journal.json";
-const LEGACY_LOCAL_STATE: readonly (readonly [string, string])[] = [
-  [".openbot-release.json", ACCEPTED],
-  [LEGACY_JOURNAL, JOURNAL],
-  [".openbot-update-policy.json", ".xiongbao-update-policy.json"],
-  [".openbot-deployment", ".xiongbao-deployment"],
-  [".openbot", MODEL_SIGN_IN],
-];
-/**
- * The lock an updater from before v0.2.16 takes. Never renamed: it belongs to that updater, which removes it by
- * this name. While it is there an update is (or was left) in progress, and nothing here is touched.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-const LEGACY_LOCK = ".openbot-update.lock";
-
-/**
- * Rename this installation's state files, and the model sign-in folder, from their names before v0.2.16.
- *
- * Once: an old name is renamed only when nothing has the new one, so a second run finds nothing to do. Where both
- * exist the new one is kept, the old one is left as it is and reported. Nothing is renamed while either update
- * lock is there, because an updater is then working on these files. A rename is all or nothing; one that fails
- * stops here with the file where it was, and the caller stops too.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-export function adoptLegacyLocalState(root: string): {
-  renamed: string[];
-  kept: string[];
-  locked: boolean;
-} {
-  const there = (name: string) => {
-    try {
-      lstatSync(join(root, name));
-      return true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-      throw error;
-    }
-  };
-  if (there(LOCK) || there(LEGACY_LOCK))
-    return { renamed: [], kept: [], locked: true };
-  const renamed: string[] = [];
-  const kept: string[] = [];
-  for (const [legacy, current] of LEGACY_LOCAL_STATE) {
-    if (!there(legacy)) continue;
-    if (there(current)) {
-      kept.push(legacy);
-      continue;
-    }
-    renameSync(join(root, legacy), join(root, current));
-    renamed.push(`${legacy} -> ${current}`);
-  }
-  return { renamed, kept, locked: false };
-}
-
-/** The update journals there are, new name first: an interrupted update from before v0.2.16 left the old one. */
+/** The update journal, when there is one. */
 function journalsIn(root: string): { name: string; path: string }[] {
-  return [JOURNAL, LEGACY_JOURNAL]
+  return [JOURNAL]
     .map((name) => ({ name, path: join(root, name) }))
     .filter(({ path }) => existsSync(path));
 }
@@ -401,10 +341,6 @@ function protectedPaths(root: string, env: NodeJS.ProcessEnv, extra: string[]) {
     JOURNAL,
     LOCK,
     ".xiongbao-update-policy.json",
-    // Still there under an old name where the new one already existed (adoptLegacyLocalState keeps both).
-    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-    ...LEGACY_LOCAL_STATE.map(([legacy]) => legacy),
-    LEGACY_LOCK,
     "docker-compose.override.yml",
     "compose.override.yaml",
     ".logs",
@@ -876,10 +812,7 @@ async function inspect(
     protectedPaths: protectedPaths(root, env, options.customerPaths ?? []),
   };
   try {
-    if (
-      (!lockHeld && existsSync(join(root, LOCK))) ||
-      existsSync(join(root, LEGACY_LOCK))
-    )
+    if (!lockHeld && existsSync(join(root, LOCK)))
       throw new Error(
         "An update lock exists; inspect the interrupted operation before removing it",
       );

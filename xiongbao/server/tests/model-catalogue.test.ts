@@ -464,7 +464,7 @@ describe("the default and the thinking levels, from the providers' own data", ()
   const MANAGED = "managed-agent-token-for-the-harness-only";
   const claudePlanEnvironment = {
     CLAUDE_CODE_OAUTH_TOKEN: OAUTH,
-    PICKED_HARNESS_IMAGE: "ghcr.io/copilotkit/openbot-agent-claude-sdk:1.0.0",
+    PICKED_HARNESS_IMAGE: "ghcr.io/acme/xiongbao-agent-claude-sdk:1.0.0",
     PICKED_HARNESS_URL: "http://agent-harness:4206",
     MANAGED_AGENT_TOKEN: MANAGED,
   };

@@ -93,13 +93,10 @@ interface PromotionJournal {
 const DNS = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
 /**
  * The monolithic image as GHCR holds it (`ghcr`, release-manifest.ts readImages): a customer mirror of GHCR has the
- * same digest, which our registry's single-platform copy (images.xiongbao) does not. A manifest accepted before
- * v0.2.16 names it under its former key, and the installed one may be that.
- * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ * same digest, which our registry's single-platform copy (images.xiongbao) does not.
  */
 function selectedImage(manifest: ReleaseManifest) {
-  const image =
-    manifest.artifacts.images.ghcr ?? manifest.artifacts.images.openbot;
+  const image = manifest.artifacts.images.ghcr;
   if (!image)
     throw new Error(
       "Kubernetes requires the monolithic image as GHCR holds it ('ghcr'); the desktop server image does not contain every chart component",

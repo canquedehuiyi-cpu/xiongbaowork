@@ -967,15 +967,16 @@ try {
    * pair is seen together: the unit test has no pre-paint script, and the script has no registry.
    */
   await step(
-    "the skin cached under the earlier name: first frame and settled",
+    "a skin cached under a name this build does not ship: first frame and settled",
     async () => {
       type Frame = { at: string; skin: string | null; background: string };
       const ctx = context as BrowserContext;
       const visit = await ctx.newPage();
       try {
         await visit.addInitScript(() => {
-          // The cache a browser left behind before the rename: this key, that value.
-          window.localStorage.setItem("xiongbao-skin", "openbot");
+          // A cache naming a skin this build does not ship (one retired, or the default's name
+          // before the rename): this key, that value.
+          window.localStorage.setItem("xiongbao-skin", "retired-skin");
           const frames: Frame[] = [];
           const read = (at: string) => {
             const root = document.documentElement;
@@ -1046,7 +1047,7 @@ try {
             );
             // Whatever this build writes back is an answer; the cached name is not,
             // because that is what was in the key before the page ran.
-            return value === "openbot" ? undefined : { value };
+            return value === "retired-skin" ? undefined : { value };
           },
         );
         equal(
@@ -1072,7 +1073,7 @@ try {
           `the page recorded its own frames (${frames.length} of them)`,
         );
         check(
-          frames.some((frame) => frame.skin === "openbot"),
+          frames.some((frame) => frame.skin === "retired-skin"),
           "the pre-paint script does put the cached old name on <html>: the half-sentence that used to hold it back is gone, and nothing else stands between the two",
         );
         check(
@@ -1091,7 +1092,7 @@ try {
           const background = () =>
             getComputedStyle(root).getPropertyValue("--background").trim();
           const withoutName = background();
-          root.dataset.skin = "openbot";
+          root.dataset.skin = "retired-skin";
           const withOldName = background();
           delete root.dataset.skin;
           let named = 0;
@@ -1107,7 +1108,7 @@ try {
             for (const text of rules) {
               if (!text.includes("data-skin")) continue;
               named += 1;
-              if (text.includes('data-skin="openbot"')) oldName += 1;
+              if (text.includes('data-skin="retired-skin"')) oldName += 1;
             }
           }
           return { withoutName, withOldName, named, oldName };

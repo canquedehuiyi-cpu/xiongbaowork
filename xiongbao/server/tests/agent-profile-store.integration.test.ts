@@ -1872,7 +1872,7 @@ describe("a coworker's chosen avatar seed", () => {
     };
     process.env.PICKED_HARNESS_URL = "http://agent-harness:4206";
     process.env.PICKED_HARNESS_IMAGE =
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui:0.3.3";
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui:0.3.3";
     delete process.env.PICKED_HARNESS_SOURCE;
     try {
       const owner = await createUser();

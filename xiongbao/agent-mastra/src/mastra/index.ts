@@ -89,23 +89,8 @@ const XIONGBAO_CONTEXT_DESCRIPTIONS = [
   "XiongBao learned skills",
 ] as const;
 
-/**
- * The same entries' titles before v0.2.16, each in the same place as its new title: a server not yet
- * upgraded still writes them. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
- */
-const LEGACY_CONTEXT_DESCRIPTIONS: Record<
-  (typeof XIONGBAO_CONTEXT_DESCRIPTIONS)[number],
-  string
-> = {
-  "XiongBao standing role": "OpenBot standing role",
-  "XiongBao granted tools guidance": "OpenBot granted tools guidance",
-  "XiongBao learned skills": "OpenBot learned skills",
-};
-
-/** The prefix of every entry the server writes for this process; the old one before v0.2.16. */
+/** The prefix of every entry the server writes for this process. */
 const XIONGBAO_PREFIX = "XiongBao ";
-/** legacy-compat：introducedIn 0.2.16，removeIn 0.2.17 */
-const LEGACY_PREFIX = "OpenBot ";
 
 type XiongBaoInstructionArgs = {
   requestContext?: {
@@ -163,19 +148,11 @@ export function buildXiongBaoInstructions({
   const xiongbaoInstructions = XIONGBAO_CONTEXT_DESCRIPTIONS.flatMap(
     (description) =>
       contextEntries
-        .filter(
-          (entry) =>
-            entry.description === description ||
-            entry.description === LEGACY_CONTEXT_DESCRIPTIONS[description],
-        )
+        .filter((entry) => entry.description === description)
         .map((entry) => entry.value.trim()),
   );
   const callerInstructions = contextEntries
-    .filter(
-      (entry) =>
-        !entry.description.startsWith(XIONGBAO_PREFIX) &&
-        !entry.description.startsWith(LEGACY_PREFIX),
-    )
+    .filter((entry) => !entry.description.startsWith(XIONGBAO_PREFIX))
     .map((entry) =>
       entry.description.trim()
         ? `${entry.description.trim()}: ${entry.value.trim()}`

@@ -3,14 +3,11 @@ import {
   BOT_LABEL,
   DEFAULT_NAMESPACE,
   KIND_LABEL,
-  LEGACY_DEFAULT_NAMESPACE,
   labelOf,
-  legacyLabel,
   legacyNamesFor,
   NAMESPACE,
   NAMESPACE_LABEL,
   namesFor as namesOf,
-  namespaceForHost,
   networkHostFor,
   OWNER_LABEL,
   PERSON_LABEL,
@@ -108,68 +105,8 @@ describe("the ids a supervisor will accept", () => {
     expect(DEFAULT_NAMESPACE).toBe("xiongbao");
   });
 
-  /*
-   * The guard this default once had: changing it orphans every computer a running deployment already owns. A
-   * deployment that sets no COMPUTER_NAMESPACE settles it from what the host holds (docker.ts resolveNamespace), so
-   * a host upgraded from before v0.2.16 keeps its computers and their volumes.
-   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-   */
-  describe("a deployment that sets no namespace takes the host's", () => {
-    const earlier = {
-      "openbot.supervisor": "true",
-      "openbot.namespace": "openbot",
-    };
-    const unlabelled = { "openbot.supervisor": "true" };
-    const current = {
-      "xiongbao.supervisor": "true",
-      "xiongbao.namespace": "xiongbao",
-    };
-
-    test("an empty host takes the current default", () => {
-      expect(namespaceForHost([])).toEqual({
-        namespace: "xiongbao",
-        earlier: 0,
-        current: 0,
-      });
-    });
-
-    test("a host with computers only from before v0.2.16 keeps their namespace", () => {
-      expect(namespaceForHost([earlier, earlier]).namespace).toBe("openbot");
-      // Made before the namespace label existed: that day's default.
-      expect(namespaceForHost([unlabelled]).namespace).toBe("openbot");
-      // Labelled under the current prefix with the earlier namespace (a deployment that set it, then unset it).
-      expect(
-        namespaceForHost([
-          { "xiongbao.supervisor": "true", "xiongbao.namespace": "openbot" },
-        ]).namespace,
-      ).toBe("openbot");
-    });
-
-    test("a host with only current computers stays on the current default", () => {
-      expect(namespaceForHost([current]).namespace).toBe("xiongbao");
-    });
-
-    test("a host with both stays on the current default and counts the earlier ones it leaves", () => {
-      expect(namespaceForHost([earlier, current, unlabelled])).toEqual({
-        namespace: "xiongbao",
-        earlier: 2,
-        current: 1,
-      });
-    });
-
-    test("other deployments' computers and things not ours count for neither", () => {
-      expect(
-        namespaceForHost([
-          { "openbot.supervisor": "true", "openbot.namespace": "acme" },
-          { "xiongbao.supervisor": "true", "xiongbao.namespace": "acme" },
-          { "openbot.namespace": "openbot" },
-          { "openbot.supervisor": "false" },
-          undefined,
-        ]).namespace,
-      ).toBe("xiongbao");
-    });
-
-    test("a namespace the deployment sets is used as it is, and the host is not asked", () => {
+  describe("the namespace a deployment runs under", () => {
+    test("a namespace the deployment sets is used as it is, and none set is the default", () => {
       const probe = Bun.spawnSync(
         [
           process.execPath,
@@ -197,22 +134,8 @@ describe("the ids a supervisor will accept", () => {
     });
   });
 
-  /*
-   * Containers and volumes made before v0.2.16 keep the labels and the default namespace they were made with: a
-   * volume's labels can never change. Each label is read under either prefix, and an unlabelled namespace is the
-   * default of then, so a deployment that sets COMPUTER_NAMESPACE to it keeps its computers and their volumes.
-   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-   */
-  test("a label is read under the prefix it had before v0.2.16 too", () => {
-    expect(LEGACY_DEFAULT_NAMESPACE).toBe("openbot");
-    expect(legacyLabel(OWNER_LABEL)).toBe("openbot.supervisor");
-    expect(legacyLabel(KIND_LABEL)).toBe("openbot.computer-kind");
-    expect(labelOf({ "openbot.bot-id": "b1" }, BOT_LABEL)).toBe("b1");
+  test("a label is read under its own name only", () => {
     expect(labelOf({ "xiongbao.bot-id": "b2" }, BOT_LABEL)).toBe("b2");
-    // Written under the current prefix only, so a current label wins over a stale earlier one.
-    expect(
-      labelOf({ "xiongbao.bot-id": "new", "openbot.bot-id": "old" }, BOT_LABEL),
-    ).toBe("new");
     expect(labelOf({ "other.bot-id": "x" }, BOT_LABEL)).toBeUndefined();
     expect(labelOf(undefined, BOT_LABEL)).toBeUndefined();
   });

@@ -1,5 +1,5 @@
-// Must stay the first import: it copies settings written with the old prefix onto their XIONGBAO_* names before any module reads config.
-import "../../shared/apply-env-aliases";
+// Must stay the first import: it refuses settings still under their names before v0.2.16 before any module reads config.
+import "../../shared/refuse-old-settings";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { setDefaultAutoSelectFamily } from "node:net";
 import { tmpdir } from "node:os";

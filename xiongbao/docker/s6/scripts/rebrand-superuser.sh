@@ -1,16 +1,16 @@
 #!/bin/sh
-# The v0.2.16 rename of the embedded database's bootstrap superuser and of the database itself to
-# xiongbao, and the question every boot asks first: which names does this cluster answer to now.
+# The rename of a new embedded database's bootstrap superuser and of the database itself to xiongbao, and
+# the question every boot asks first: which names does this cluster answer to now.
 #
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the whole file goes once fresh volumes are created
-# under the new names (R4 baseline) and no volume from before v0.2.16 is left to rename
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，the whole file goes once new volumes are created
+# under the new names (the migrations squashed into a baseline, R4 Task 26)
 #
-# WHY A FRESH VOLUME STILL STARTS UNDER THE OLD NAMES. A historical migration (0054) grants default
+# WHY A NEW VOLUME STILL STARTS UNDER THE OLD NAMES. A historical migration (0054) grants default
 # privileges FOR ROLE <the old superuser name>, so until the migrations are squashed into a new baseline an
 # empty database can only be migrated by a superuser carrying that name. postgres-init therefore still
-# creates the cluster and the database under it; the first boot migrates, then renames, exactly as an
-# existing volume does on its upgrade boot. The old names are never spelled in here: migrate.sh passes them
-# as -U and -d, the names a volume made before v0.2.16 carries.
+# creates the cluster and the database under it; the first boot migrates, then renames. A volume made
+# before v0.2.16 is not renamed here any more: this release refuses it before migrating (upgrade-gate.sh),
+# and only v0.2.16 upgrades it. The old names are never spelled in here: migrate.sh passes them as -U and -d.
 #
 #   PGPASSWORD=<owner password> rebrand-superuser.sh names [--wait <seconds>] -h <host> [-p <port>] -U <old superuser> -d <old database>
 #
@@ -210,9 +210,9 @@ COMMIT;" | sql_as "$who" >/dev/null; then
       refuse "改名在一个事务里执行，已整体回滚：超级用户与库仍是改名前的名字。"
       case $failure in
         *'being accessed by other users'*)
-          refuse "原因是库上还有别的连接（改库名要求没有其它连接）；断开它们后重启容器会再试（不会再备份）。" ;;
+          refuse "原因是库上还有别的连接（改库名要求没有其它连接）；断开它们后重启容器会再试。" ;;
         *)
-          refuse "原因见上面数据库的报错；排除之后重启容器会再试（不会再备份）。" ;;
+          refuse "原因见上面数据库的报错；排除之后重启容器会再试。" ;;
       esac
     else
       refuse "改完之后读不出确定的结果（现在读到的超级用户与库：${after:-读不到}）。重启容器会重新判断，名字没改完就接着改。"

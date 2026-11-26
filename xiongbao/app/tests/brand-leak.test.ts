@@ -10,7 +10,6 @@ import {
   escapeRegExp,
   type Finding,
   findings,
-  LEGACY_NEVER_CHANGE,
   masked,
   NEVER_CHANGE,
   REPO,
@@ -108,15 +107,6 @@ describe("never-change strings carry the renamed spelling", () => {
     expect(
       [...NEVER_CHANGE, ...SIGNING_DOMAINS].filter((value) =>
         BRAND.test(value),
-      ),
-    ).toEqual([]);
-  });
-
-  test("each legacy spelling still masked is the former name of a never-change string", () => {
-    expect(
-      LEGACY_NEVER_CHANGE.filter(
-        (value) =>
-          !NEVER_CHANGE.includes(value.replaceAll("openbot", "xiongbao")),
       ),
     ).toEqual([]);
   });

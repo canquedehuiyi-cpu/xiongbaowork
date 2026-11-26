@@ -7,34 +7,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/copilot/a2ui-catalog-id.ts",
-    "text": "\"openbot/ui@1\"",
-    "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/harness-model.ts",
-    "text": "(?:openbot-)?agent-",
-    "reason": "persisted-identifier: matches published container image names",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/plan-model.ts",
-    "text": "(?:openbot-)?${harness}",
-    "reason": "persisted-identifier: matches published container image names",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/auth/dev-actor-email.ts",
-    "text": "\"dev@openbot.local\"",
-    "reason": "persisted-identifier: old demo address still recognised in upgraded databases (Task 8)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/auth/role-writer-lifecycle.ts",
     "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
     "reason": "persisted-identifier: database password of the public default setup",
@@ -49,115 +21,10 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/pipeline/action-step.ts",
-    "text": "RESERVED_SERVERS = new Set([\"bot\", \"host\", \"openbot\", \"computer\"])",
-    "reason": "persisted-identifier: reserved MCP server name",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/tenant-package.ts",
-    "text": "say exactly what you are doing; OpenBot asks the person before it happens",
-    "reason": "parsed-exact-text: EARLIER_STARTER_INSTRUCTIONS: matched verbatim to recognise unedited old starters",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/db/apply-migrations.ts",
-    "text": "\"openbot:apply-migrations\"",
-    "reason": "persisted-identifier: advisory lock key",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/plugins/composio-adapter.ts",
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
     "reason": "persisted-identifier: suffix of auth configs already created at Composio, still matched (Task 9)",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/plugins/personal-defaults.ts",
-    "text": "\"openbot:%\"",
-    "reason": "persisted-identifier: LIKE pattern over stored granted_by markers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/memory/tools.ts",
-    "text": "\"OpenBot personal memory\"",
-    "reason": "parsed-exact-text: memory context entry the agents match verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/host-access/tools.ts",
-    "text": "\"Declined in OpenBot Desktop.\"",
-    "reason": "parsed-exact-text: reply an older desktop sends; matched verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot standing role\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot granted tools guidance\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot Bot id\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot deployment tools\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot signed run assertion\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot learned skills\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "desktop-device/src-tauri/src/sidecar.rs",
-    "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
-    "reason": "persisted-identifier: old sidecar name the cleanup looks for on upgraded machines",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "desktop-device/src-tauri/src/sidecar.rs",
-    "text": "openbot-runner",
-    "reason": "developer-only: Rust unit-test fixtures for the legacy openbot-runner cleanup",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
-    "file": "desktop-device/src-tauri/src/sidecar.rs",
-    "text": "OPENBOT-RUNNER",
-    "reason": "developer-only: Rust unit-test fixtures: the cleanup matches the old name case-insensitively",
-    "category": "developer-only",
     "plan": "keep"
   },
   {
@@ -168,24 +35,10 @@
     "plan": "keep"
   },
   {
-    "file": "shared/harnesses.ts",
-    "text": "(?:openbot-)?(agent-",
-    "reason": "persisted-identifier: matches published container image names",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "shared/xiongbao-actor.ts",
     "text": "actor.startsWith(\"openbot:\")",
     "reason": "persisted-identifier: stored actor id prefix",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "shared/staffing-proposal.ts",
-    "text": "\"<<openbot:staffing-proposal>>\"",
-    "reason": "persisted-identifier: marker stored in conversation text and matched verbatim",
-    "category": "peer-protocol",
     "plan": "keep"
   },
   {
@@ -203,39 +56,11 @@
     "plan": "keep"
   },
   {
-    "file": "shared/env-aliases.ts",
+    "file": "shared/env-name.ts",
     "text": "\"OPENBOT_\"",
-    "reason": "developer-only: the alias module's own prefix, never shown",
+    "reason": "developer-only: the prefix before v0.2.16, matched only to refuse a setting still under it (names only in the refusal, never a value)",
     "category": "developer-only",
     "plan": "keep"
-  },
-  {
-    "file": "supervisor/src/docker.ts",
-    "text": ".openbot-carried-over",
-    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "supervisor/src/names.ts",
-    "text": "DEFAULT_NAMESPACE = \"openbot\"",
-    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "supervisor/src/names.ts",
-    "text": "= \"openbot.",
-    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "docker/compose.delivery.yml",
-    "text": "OPENBOT_PORT",
-    "reason": "internal-log: compose interpolation variable named in the delivery file, Task 18",
-    "category": "operator-visible",
-    "plan": "rewrite"
   },
   {
     "file": "docker/s6/scripts/postgres-init.sh",
@@ -250,19 +75,5 @@
     "reason": "persisted-identifier: database name and role names written into every customer database",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "desktop-device/src-tauri/src/sidecar.rs",
-    "text": "OPENBOT_RUNNER_BINARY",
-    "reason": "developer-only: development override variable read by the device shell, L1-20 (Task 13)",
-    "category": "operator-visible",
-    "plan": "rewrite"
-  },
-  {
-    "file": "desktop-device/src-tauri/src/sidecar.rs",
-    "text": "OPENBOT_AGENT_DESKTOP_BINARY",
-    "reason": "developer-only: development override variable read by the device shell, L1-20 (Task 13)",
-    "category": "operator-visible",
-    "plan": "rewrite"
   }
 ]

@@ -40,12 +40,12 @@ test("npx -y, npx --yes, bunx and bun x rewrite to the package and its args; npx
 test("bundledRuntime: the runner itself with BUN_BE_BUN=1", () => {
   expect(
     bundledRuntime({
-      execPath: "C:\\Device\\openbot-runner.exe",
+      execPath: "C:\\Device\\xiongbao-runner.exe",
       platform: "win32",
       exists: () => false,
     }),
   ).toEqual({
-    command: "C:\\Device\\openbot-runner.exe",
+    command: "C:\\Device\\xiongbao-runner.exe",
     prefix: ["x", "--bun"],
     env: { BUN_BE_BUN: "1" },
   });

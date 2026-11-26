@@ -6,20 +6,12 @@
 export const DEV_ACTOR_EMAIL = "admin@xiongbao.local";
 
 /**
- * Addresses the demo account had before the rename. An upgraded database keeps its row until the
- * next start rewrites the email, and an actor minted by an older build can still carry one.
- */
-export const LEGACY_DEV_ACTOR_EMAILS: readonly string[] = ["dev@openbot.local"];
-
-/**
- * Whether `email` is the demo account, under its current or any earlier address. Takes a missing
- * address too: callers hold actors whose email was never set, and those are not the demo account.
+ * Whether `email` is the demo account. Takes a missing address too: callers hold actors whose email
+ * was never set, and those are not the demo account.
  */
 export function isDevActorEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   // Trim and case-insensitive on purpose: an address typed or stored with stray spaces or capitals is still the same account.
   const lowered = email.trim().toLowerCase();
-  return (
-    lowered === DEV_ACTOR_EMAIL || LEGACY_DEV_ACTOR_EMAILS.includes(lowered)
-  );
+  return lowered === DEV_ACTOR_EMAIL;
 }
