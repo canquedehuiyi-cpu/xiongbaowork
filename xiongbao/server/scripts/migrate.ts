@@ -201,10 +201,16 @@ if (import.meta.main) {
    * Tests only (`NODE_ENV=test`): stop at the named migration, so a shell test can lay down a database
    * the way an earlier release left it (`docker/tests/rebrand-superuser.test.sh` stands a v0.2.15
    * volume up through 0239). Never honoured outside tests: a deployment always migrates to the end.
+   *
+   * Read through an alias, not `process.env.NODE_ENV` literally: the image bundles this script with
+   * `bun build --minify`, which replaces that exact expression with the build-time value, so the check
+   * would be decided when the image is built and the in-image shell tests could never pass `test`. The
+   * image sets NODE_ENV=production at run time, so deployments still never honour it.
    */
+  const env = process.env;
   const through =
-    process.env.NODE_ENV === "test"
-      ? process.env.XIONGBAO_TEST_MIGRATE_THROUGH?.trim() || undefined
+    env.NODE_ENV === "test"
+      ? env.XIONGBAO_TEST_MIGRATE_THROUGH?.trim() || undefined
       : undefined;
   const migrationsFolder = await mergedMigrationsFolder(
     through ? { through } : {},
@@ -218,7 +224,7 @@ if (import.meta.main) {
     await runMigrations(
       client,
       migrationsFolder,
-      through ? applyMigrations : applyRelease(process.env.KEY_ENCRYPTION_KEY),
+      through ? applyMigrations : applyRelease(env.KEY_ENCRYPTION_KEY),
     );
   } finally {
     // The merged folder is a temporary copy; removing it cannot fail the run (`force`).

@@ -54,12 +54,6 @@
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
-    "word": "OpenBot",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "界面与控制台文字、关于页 MIT 署名；Task 8"
-  },
-  {
     "word": "X-CopilotKit-Telemetry-Id",
     "category": "third-party-name",
     "plan": "keep",
@@ -196,12 +190,6 @@
     "category": "third-party-name",
     "plan": "keep",
     "note": "第三方库自带的 CopilotKit 字样"
-  },
-  {
-    "word": "openbot",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "租户 id（永久保留，Task 6 核实）；默认皮肤 id、data-orb 已在附录 A 第 2、13 行改成 xiongbao，旧皮肤 id 只在 normalizeSkinId 里认"
   },
   {
     "word": "openbot/",
