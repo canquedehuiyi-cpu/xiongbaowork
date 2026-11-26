@@ -77,16 +77,11 @@
   {
     "rule": "never-change",
     "scope": "server/src",
-    "lines": 9
+    "lines": 3
   },
   {
     "rule": "never-change",
     "scope": "shared/app-access-request.ts",
-    "lines": 1
-  },
-  {
-    "rule": "never-change",
-    "scope": "shared/computer-token.ts",
     "lines": 1
   },
   {

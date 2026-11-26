@@ -2406,6 +2406,10 @@ export type ComposioVendor = {
  * so a deployment that already holds "Linear (OpenBot)" must keep finding it, or enabling the app
  * again would create the second config this provenance exists to prevent. Renaming `englishName`
  * later would orphan configs made under the earlier non-legacy suffix: only this one is remembered.
+ *
+ * The configs live in the deployment's Composio project, which no migration here can reach. Before this goes, an
+ * operator renames any config still ending in it to the current suffix in Composio's dashboard.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
  */
 const LEGACY_CONFIG_SUFFIX = "(OpenBot)";
 

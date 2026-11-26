@@ -264,8 +264,8 @@ describe("a deployment signed in to a model plan instead of a key", () => {
             : { CHATGPT_AUTH_FILE: "/synthetic/auth.json" }),
           PICKED_HARNESS_IMAGE:
             provider === "claude"
-              ? "openbot-agent-claude-sdk:test"
-              : "openbot-agent-langgraph-agui:test",
+              ? "xiongbao-agent-claude-sdk:test"
+              : "xiongbao-agent-langgraph-agui:test",
           PICKED_HARNESS_URL: harness.url.origin,
           MANAGED_AGENT_TOKEN: "owned-harness-token",
         };

@@ -8,9 +8,13 @@
  * A harness somebody brought themselves is theirs, and is never told what to run on.
  */
 
-/** XiongBao's own harness images that read `forwardedProps.xiongbaoModel`, by name or digest. */
+/**
+ * XiongBao's own harness images that read `forwardedProps.xiongbaoModel`, by name or digest. An image built
+ * before v0.2.16 carries the earlier prefix, and an installation's setup may still name it.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
 const TAKES_MODEL =
-  /(?:^|\/)(?:openbot-)?agent-(?:langgraph-agui|claude-sdk)(?::|@|$)/;
+  /(?:^|\/)(?:xiongbao-)?(?:openbot-)?agent-(?:langgraph-agui|claude-sdk)(?::|@|$)/;
 
 const trimmed = (url: string) => url.trim().replace(/\/+$/, "");
 

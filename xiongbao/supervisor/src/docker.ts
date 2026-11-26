@@ -2,17 +2,23 @@ import Docker from "dockerode";
 import { type ContainerHealth, healthOf } from "./health";
 import {
   BOT_LABEL,
+  CONFIGURED_NAMESPACE,
   type ComputerKind,
   type ComputerNames,
   DEFAULT_NAMESPACE,
   isComputerKind,
   KIND_LABEL,
+  LEGACY_DEFAULT_NAMESPACE,
+  labelOf,
+  legacyLabel,
   legacyNamesFor,
   NAMESPACE,
   NAMESPACE_LABEL,
+  namespaceForHost,
   networkHostFor,
   OWNER_LABEL,
   PERSON_LABEL,
+  useNamespace,
 } from "./names";
 
 /**
@@ -205,12 +211,107 @@ export function parseHostPort(value: unknown): number | undefined {
 /**
  * Whether a labelled thing belongs to this deployment.
  *
- * Containers created before the namespace label existed carry the default namespace, so an existing
- * deployment keeps its own computers across an upgrade.
+ * Containers created before the namespace label existed belong to the namespace that was the default then, so a
+ * deployment still running under it keeps its own computers across an upgrade. Labels are read under either
+ * prefix (`labelOf`): a volume keeps the labels it was made with for good.
  */
 function ours(labels: Record<string, string> | undefined): boolean {
-  if (labels?.[OWNER_LABEL] !== "true") return false;
-  return (labels[NAMESPACE_LABEL] ?? DEFAULT_NAMESPACE) === NAMESPACE;
+  if (labelOf(labels, OWNER_LABEL) !== "true") return false;
+  return (
+    (labelOf(labels, NAMESPACE_LABEL) ?? LEGACY_DEFAULT_NAMESPACE) === NAMESPACE
+  );
+}
+
+/**
+ * Containers carrying the owner label, under either prefix, each once.
+ *
+ * Docker ANDs label filters, so the two prefixes are two listings.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+async function listOwnerLabelled(options: {
+  all?: boolean;
+  status?: string[];
+}): Promise<Docker.ContainerInfo[]> {
+  const found = new Map<string, Docker.ContainerInfo>();
+  for (const owner of [OWNER_LABEL, legacyLabel(OWNER_LABEL)]) {
+    const listed = await docker.listContainers({
+      ...(options.all ? { all: true } : {}),
+      filters: {
+        label: [`${owner}=true`],
+        ...(options.status ? { status: options.status } : {}),
+      },
+    });
+    for (const container of listed) found.set(container.Id, container);
+  }
+  return [...found.values()];
+}
+
+/** The namespace once settled, so the host is looked at once per process. */
+let settledNamespace: Promise<string> | undefined;
+
+/** Forget the settled namespace, as a restarted supervisor would. For the tests of {@link resolveNamespace}. */
+export function forgetNamespace(): void {
+  settledNamespace = undefined;
+  useNamespace(CONFIGURED_NAMESPACE ?? DEFAULT_NAMESPACE);
+}
+
+/**
+ * The namespace this process works in, settled before any computer is named.
+ *
+ * The configured one when the deployment sets `COMPUTER_NAMESPACE`. Otherwise the host decides (names.ts
+ * namespaceForHost): every container and volume carrying the owner label under either prefix is read once. A host
+ * that cannot be read is not guessed about, because guessing the new default on an upgraded host would start every
+ * computer on new empty volumes: the error goes back to the caller and the next request asks again.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export function resolveNamespace(): Promise<string> {
+  if (CONFIGURED_NAMESPACE) return Promise.resolve(CONFIGURED_NAMESPACE);
+  if (settledNamespace) return settledNamespace;
+  const attempt = (async () => {
+    const labelled: (Record<string, string> | undefined)[] = [];
+    try {
+      for (const owner of [OWNER_LABEL, legacyLabel(OWNER_LABEL)]) {
+        const filters = { label: [`${owner}=true`] };
+        for (const container of await docker.listContainers({
+          all: true,
+          filters,
+        }))
+          labelled.push(container.Labels);
+        const { Volumes } = await docker.listVolumes({ filters });
+        for (const volume of Volumes ?? [])
+          labelled.push(volume.Labels ?? undefined);
+      }
+    } catch (error) {
+      throw new DockerUnavailableError(String(error));
+    }
+    const chosen = namespaceForHost(labelled);
+    useNamespace(chosen.namespace);
+    if (chosen.namespace === LEGACY_DEFAULT_NAMESPACE)
+      console.info(
+        JSON.stringify({
+          type: "computer-namespace-kept",
+          namespace: chosen.namespace,
+          computers: chosen.earlier,
+          note: "COMPUTER_NAMESPACE is not set and this host has computers only under the default from before v0.2.16, so that namespace is kept. Set COMPUTER_NAMESPACE to choose one; the upgrade notes say how to clear the old computers first.",
+        }),
+      );
+    else if (chosen.earlier > 0)
+      console.warn(
+        JSON.stringify({
+          type: "computer-namespace-earlier-left",
+          namespace: chosen.namespace,
+          earlier: LEGACY_DEFAULT_NAMESPACE,
+          left: chosen.earlier,
+          note: "This host also has computers under the default from before v0.2.16. They are left as they are; COMPUTER_NAMESPACE set to that namespace uses them instead.",
+        }),
+      );
+    return chosen.namespace;
+  })();
+  settledNamespace = attempt;
+  attempt.catch(() => {
+    if (settledNamespace === attempt) settledNamespace = undefined;
+  });
+  return attempt;
 }
 
 /** The labels every container and volume this supervisor creates carries. */
@@ -227,9 +328,9 @@ function labelsFor(names: ComputerNames): Record<string, string> {
 function whoseLabels(
   labels: Record<string, string> | undefined,
 ): { kind: ComputerKind; id: string } | undefined {
-  const kind = labels?.[KIND_LABEL];
+  const kind = labelOf(labels, KIND_LABEL);
   if (!isComputerKind(kind)) return undefined;
-  const id = labels?.[kind === "bot" ? BOT_LABEL : PERSON_LABEL];
+  const id = labelOf(labels, kind === "bot" ? BOT_LABEL : PERSON_LABEL);
   return id ? { kind, id } : undefined;
 }
 
@@ -254,12 +355,7 @@ function isThisComputer(
 /** Every computer this supervisor owns, and only those. */
 export async function listOwned(): Promise<ComputerState[]> {
   try {
-    const containers = (
-      await docker.listContainers({
-        all: true,
-        filters: { label: [`${OWNER_LABEL}=true`] },
-      })
-    ).filter(
+    const containers = (await listOwnerLabelled({ all: true })).filter(
       // Today's computers only. One from before one per person is reached by nothing any more and
       // is stopped when the supervisor starts (see `retireLegacyComputers`).
       (container) => ours(container.Labels) && whoseLabels(container.Labels),
@@ -806,9 +902,7 @@ export async function reset(names: ComputerNames): Promise<boolean> {
 export async function retireLegacyComputers(): Promise<string[]> {
   let running: Docker.ContainerInfo[];
   try {
-    running = await docker.listContainers({
-      filters: { label: [`${OWNER_LABEL}=true`], status: ["running"] },
-    });
+    running = await listOwnerLabelled({ status: ["running"] });
   } catch (error) {
     throw new DockerUnavailableError(String(error));
   }
@@ -844,8 +938,9 @@ export type CarryOverOutcome = "copied" | "kept" | "done" | "absent";
  * cannot reach it. Both volumes are mounted rather than tarred through a host directory, so nothing
  * of a person's logins or files ever lands on the host's disk.
  *
- * Once, recorded in the destination: a marker under `.openbot-carried-over/` says it was done, and
- * what the owner already has for that Bot is never overwritten. Staged under a dot-name and moved
+ * Once, recorded in the destination: a marker under `.xiongbao-carried-over/` says it was done (or one
+ * under {@link LEGACY_CARRY_OVER_MARKS}, left by a supervisor before v0.2.16), and what the owner already has
+ * for that Bot is never overwritten. Staged under a dot-name and moved
  * into place, so the computer never sees half of it; a dot-name is not a seat it lists.
  *
  * `ROOT` is where the owner's volume is mounted (`/profiles`, `/workspace`) and `DEST` the Bot's
@@ -855,12 +950,12 @@ export type CarryOverOutcome = "copied" | "kept" | "done" | "absent";
  * The exit code is the outcome, so nothing depends on parsing a log stream.
  */
 const CARRY_OVER_SCRIPT = `set -eu
-marks="$ROOT/.openbot-carried-over"
+marks="$ROOT/.xiongbao-carried-over"
 dest="$ROOT/$DEST"
-if [ -e "$marks/$BOT" ]; then exit 11; fi
+if [ -e "$marks/$BOT" ] || [ -e "$ROOT/$LEGACY_MARKS/$BOT" ]; then exit 11; fi
 mkdir -p "$marks"
 if [ -e "$dest" ]; then touch "$marks/$BOT"; exit 10; fi
-staging="$ROOT/.openbot-carrying-$BOT"
+staging="$ROOT/.xiongbao-carrying-$BOT"
 rm -rf "$staging"
 mkdir "$staging"
 cp -a /carry-from/. "$staging"/
@@ -868,6 +963,13 @@ mkdir -p "$(dirname "$dest")"
 mv "$staging" "$dest"
 touch "$marks/$BOT"
 exit 0`;
+
+/**
+ * Where a supervisor before v0.2.16 recorded a carry-over in the owner's volume. Read so a copy done then is not
+ * done again; nothing is written there.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+const LEGACY_CARRY_OVER_MARKS = ".openbot-carried-over";
 
 /** Carry-overs started in this process, so two requests for one never copy at once. */
 const carrying = new Map<string, Promise<CarryOverOutcome>>();
@@ -899,12 +1001,17 @@ async function copyVolume(input: {
       Labels: {
         [OWNER_LABEL]: "true",
         [NAMESPACE_LABEL]: NAMESPACE,
-        "openbot.carry-over": input.botId,
+        "xiongbao.carry-over": input.botId,
       },
       Entrypoint: ["sh", "-c"],
       Cmd: [CARRY_OVER_SCRIPT],
       // A plain id checked by the caller, and fixed paths, handed over as data, never spliced into the script.
-      Env: [`BOT=${input.botId}`, `ROOT=${input.root}`, `DEST=${input.dest}`],
+      Env: [
+        `BOT=${input.botId}`,
+        `ROOT=${input.root}`,
+        `DEST=${input.dest}`,
+        `LEGACY_MARKS=${LEGACY_CARRY_OVER_MARKS}`,
+      ],
       NetworkDisabled: true,
       HostConfig: {
         Binds: [`${input.from}:/carry-from:ro`, `${input.to}:${input.root}`],
@@ -970,7 +1077,9 @@ export async function carryOverProfile(
 
   const attempt = (async (): Promise<CarryOverOutcome> => {
     const isLegacyOf = (labels: Record<string, string> | undefined) =>
-      ours(labels) && !whoseLabels(labels) && labels?.[BOT_LABEL] === botId;
+      ours(labels) &&
+      !whoseLabels(labels) &&
+      labelOf(labels, BOT_LABEL) === botId;
 
     const volume = await docker
       .getVolume(legacy.names.profileVolume)

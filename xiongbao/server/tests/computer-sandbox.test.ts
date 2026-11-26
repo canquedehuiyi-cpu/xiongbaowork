@@ -718,10 +718,10 @@ describe("whose computer a Sandbox is", () => {
  */
 describe("the token a computer is given", () => {
   const DEPLOYMENT = "deployment-computer-token";
-  /** `HMAC-SHA256(COMPUTER_TOKEN, "openbot computer token v1\n<kind>:<id>")`, from the documented scheme. */
+  /** `HMAC-SHA256(COMPUTER_TOKEN, "xiongbao computer token v1\n<kind>:<id>")`, from the documented scheme. */
   const own = (computer: string) =>
     createHmac("sha256", DEPLOYMENT)
-      .update(`openbot computer token v1\n${computer}`)
+      .update(`xiongbao computer token v1\n${computer}`)
       .digest("hex");
   /** The chart's template before this change: the deployment's token, from its Secret. */
   const fromSecret = (tag: string) => ({

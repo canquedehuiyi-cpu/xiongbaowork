@@ -195,7 +195,7 @@ beforeAll(async () => {
         ownerGrants,
         ...(mode === "shared"
           ? {
-              sharedVendorUserId: `openbot-deployment:${suite}:R`,
+              sharedVendorUserId: `xiongbao-deployment:${suite}:R`,
               sharedConnectedAt: new Date(),
               sharedConnectedBy: ADMIN,
               sharedVerified: true,

@@ -108,7 +108,7 @@ export function accountFor(
   };
 }
 
-export const DEPLOYMENT_VENDOR_PREFIX = "openbot-deployment:";
+export const DEPLOYMENT_VENDOR_PREFIX = "xiongbao-deployment:";
 
 /**
  * 部署自己的账号在 vendor 处登记的身份。

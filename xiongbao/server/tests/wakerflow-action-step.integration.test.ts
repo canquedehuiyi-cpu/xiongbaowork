@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import type { WakerFlowPlan } from "../../shared/wakerflows";
 import { BotPausedError } from "../src/agents/lifecycle";
@@ -345,6 +345,9 @@ test("only MCP tools: a computer, host, hand-off or built-in tool is refused on 
     "host/run_command",
     "bot/handoff",
     "xiongbao/share_private_information",
+    // A step saved before v0.2.16 names a built-in tool under the namespace's former name.
+    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+    "openbot/share_private_information",
     "files/computer_click",
   ])
     expect({ ref, mcp: isMcpToolRef(ref) }).toEqual({ ref, mcp: false });

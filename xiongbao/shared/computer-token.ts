@@ -32,7 +32,7 @@ import { createHmac } from "node:crypto";
  * this file in beside its own source (supervisor/Dockerfile), as the computer's copies the shared
  * files it imports.
  */
-export const COMPUTER_TOKEN_LABEL = "openbot computer token v1";
+export const COMPUTER_TOKEN_LABEL = "xiongbao computer token v1";
 
 export type ComputerIdentity = { kind: "person" | "bot"; id: string };
 

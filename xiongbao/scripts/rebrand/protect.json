@@ -30,14 +30,8 @@
   {
     "text": ".openbot-carried-over",
     "file": "xiongbao/supervisor/src/docker.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": ".openbot-carrying-",
-    "file": "xiongbao/supervisor/src/docker.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "改名前 supervisor 记在主人卷里的搬迁标记目录：读取它免得把 v0.2.16 前搬过的旧档案再搬一次，只写新标记；legacy-compat 到 R4 删除"
   },
   {
     "text": "\"<<openbot:staffing-proposal>>\"",
@@ -46,46 +40,10 @@
     "reason": "招聘提议卡片标记的旧名：迁移改写存量工具回答，读取端到 R4 仍认旧标记；legacy-compat 到 R4 删除"
   },
   {
-    "text": "\"openbot-browser\"",
-    "file": "xiongbao/shared/recorder-api.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/recorder-api.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-component-\"",
-    "file": "xiongbao/server/src/delivery/opentag.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-deployment:\"",
-    "file": "xiongbao/server/src/plugins/shared-accounts.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/plugins/shared-accounts.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "file": "xiongbao/server/src/db/apply-migrations.ts",
     "text": "\"openbot:apply-migrations\"",
     "until": "R4",
     "reason": "旧迁移锁名：v0.2.16 的迁移器先取旧锁再取新锁，升级期间与 v0.2.15 的迁移器互相排队（server/src/db/apply-migrations.ts LEGACY_MIGRATION_LOCK）；legacy-compat 到 R4 删除"
-  },
-  {
-    "text": "\"openbot.carry-over\"",
-    "file": "xiongbao/supervisor/src/docker.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot.sender\"",
-    "file": "xiongbao/server/src/delivery/opentag.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot.working\"",
-    "file": "xiongbao/server/src/delivery/opentag.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot/share_private_information\"",
@@ -108,36 +66,26 @@
   {
     "text": "\"openbotmobile://\"",
     "file": "xiongbao/server/src/auth/index.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/auth/index.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "forever",
+    "reason": "已装到手机上的旧版移动端（2026-11-12 改名前构建）在系统里登记的回调 scheme 是 openbotmobile://，服务器无法让已装客户端改登记，去掉就会让这些手机永远登录不回来；服务器继续双认（仅在配置了 EXPO_PROJECT_ID 的部署上才信任该 scheme）。只写新：新构建只登记 xiongbao://"
   },
   {
     "text": "(?:openbot-)?(agent-",
     "file": "xiongbao/shared/harnesses.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/harnesses.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "托管 Bot 镜像名正则同时认改名前构建的镜像前缀（库里与安装配置里可能还写着旧镜像名）；只写新；legacy-compat 到 R4 删除"
   },
   {
     "text": "(?:openbot-)?${harness}",
     "file": "xiongbao/server/src/agents/plan-model.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/agents/plan-model.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "套餐要求的托管 Bot 镜像名正则同时认改名前构建的镜像前缀（PICKED_HARNESS_IMAGE 可能还写着旧镜像名）；legacy-compat 到 R4 删除"
   },
   {
     "text": "(?:openbot-)?agent-",
     "file": "xiongbao/server/src/agents/harness-model.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/agents/harness-model.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "/openbot/deliver",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
-  },
-  {
-    "text": "/openbot/membership",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+    "until": "R4",
+    "reason": "接受模型选择的托管 Bot 镜像名正则同时认改名前构建的镜像前缀（PICKED_HARNESS_IMAGE 可能还写着旧镜像名）；legacy-compat 到 R4 删除"
   },
   {
     "text": "<<openbot:app-access-request>>",
@@ -148,20 +96,8 @@
   {
     "text": "= \"openbot.",
     "file": "xiongbao/supervisor/src/names.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "client_id:'openbot-desktop'",
-    "file": "xiongbao/server/src/auth/native-browser.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/auth/native-browser.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "clientID: \"openbot-desktop\"",
-    "file": "xiongbao/server/src/auth/index.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/auth/index.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "supervisor 改名前的容器/卷标签前缀：主机上已有的容器与卷（卷的标签永远改不了）带着它，读取两种前缀、只写新；legacy-compat 到 R4 删除"
   },
   {
     "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
@@ -172,8 +108,8 @@
   {
     "text": "DEFAULT_NAMESPACE = \"openbot\"",
     "file": "xiongbao/supervisor/src/names.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "改名前的默认电脑命名空间：没有命名空间标签的旧容器/卷按它归属；把 COMPUTER_NAMESPACE 设成它的部署继续用原来的电脑与卷；legacy-compat 到 R4 删除"
   },
   {
     "text": "images.openbot",
@@ -183,44 +119,8 @@
   {
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
     "file": "xiongbao/server/src/plugins/composio-adapter.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/plugins/composio-adapter.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "openbot computer token v1",
-    "until": "R3",
-    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
-  },
-  {
-    "text": "openbot web-bot-auth ed25519 v1",
-    "until": "R3",
-    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
-  },
-  {
-    "text": "openbot-agent-computer:latest",
-    "file": "xiongbao/supervisor/src/index.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/supervisor/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "openbot-automation-hook-signing:v1",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
-  },
-  {
-    "text": "openbot-bearer",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
-  },
-  {
-    "text": "openbot-deployment:",
-    "until": "R3",
-    "reason": "Composio/Arcade 共享账号身份前缀：第三方已登记"
-  },
-  {
-    "text": "openbot:agent-run",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+    "until": "R4",
+    "reason": "Composio 项目里改名前建的 auth config 名后缀（第三方系统里的登记，迁移够不着）：读取端认它，免得重复建 config；删除前须由运维在 Composio 控制台把这些 config 改成现在的后缀；legacy-compat 到 R4 删除"
   },
   {
     "text": "openbot:personal-memory",
@@ -241,15 +141,10 @@
     "file": "xiongbao/toolkit/src/headless-tools.ts"
   },
   {
-    "until": "R3",
-    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）",
-    "pattern": "openbot\\-product(?!\\w)"
-  },
-  {
     "text": "RESERVED_SERVERS = new Set([\"bot\", \"host\", \"openbot\", \"computer\"])",
     "file": "xiongbao/server/src/pipeline/action-step.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/pipeline/action-step.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "本产品自带工具改名前的命名空间仍列为保留服务器名：v0.2.16 前保存的动作步骤可能还引用它，不当作 MCP 服务器的工具；legacy-compat 到 R4 删除"
   },
   {
     "text": "startsWith(\"openbot/\")",
@@ -564,52 +459,34 @@
     "reason": "演示账号旧邮箱：升级上来的库里仍有这一行，LEGACY_DEV_ACTOR_EMAILS 识别后改写（legacy-compat，随兼容代码删除）"
   },
   {
-    "file": "xiongbao/server/tests/delivery-providers.test.ts",
-    "pattern": "openbot-component-|openbot\\.sender|openbot\\.working",
-    "until": "R3",
-    "reason": "测试引用 delivery/opentag.ts 已保护的对端名（OpenTag 上下文键、事件名、工具调用 id 前缀）"
-  },
-  {
-    "file": "xiongbao/server/tests/delivery-routes.test.ts",
-    "pattern": "openbot-component-|openbot\\.sender|openbot\\.working",
-    "until": "R3",
-    "reason": "测试引用 delivery/opentag.ts 已保护的对端名（OpenTag 上下文键、事件名、工具调用 id 前缀）"
-  },
-  {
     "file": "xiongbao/server/tests/auth-mobile-scheme.integration.test.ts",
     "pattern": "openbotmobile",
-    "until": "R3",
-    "reason": "测试引用 auth/index.ts 已保护的旧移动端回调 scheme（双认）"
-  },
-  {
-    "file": "xiongbao/server/tests/organization-auth.test.ts",
-    "pattern": "openbot-desktop",
-    "until": "R3",
-    "reason": "测试引用 auth 已保护的桌面端 OAuth client id"
+    "until": "forever",
+    "reason": "测试证明 auth/index.ts 永久保留的旧移动端回调 scheme（已装旧版移动端的登记，见该条）仍被接受、仿冒前缀仍被拒绝"
   },
   {
     "file": "xiongbao/server/tests/brand-third-party.test.ts",
     "pattern": "\\((?:OpenBot)\\)",
-    "until": "R3",
-    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+    "until": "R4",
+    "reason": "测试证明 composio-adapter.ts 仍认改名前建的 auth config 名后缀（LEGACY_CONFIG_SUFFIX）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/brokered-multiple-accounts.integration.test.ts",
     "pattern": "\\((?:OpenBot)\\)",
-    "until": "R3",
-    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+    "until": "R4",
+    "reason": "测试证明 composio-adapter.ts 仍认改名前建的 auth config 名后缀（LEGACY_CONFIG_SUFFIX）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/composio-adapter.test.ts",
     "pattern": "\\((?:OpenBot)\\)",
-    "until": "R3",
-    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+    "until": "R4",
+    "reason": "测试证明 composio-adapter.ts 仍认改名前建的 auth config 名后缀（LEGACY_CONFIG_SUFFIX）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/composio-deployment-client.test.ts",
     "pattern": "\\((?:OpenBot)\\)",
-    "until": "R3",
-    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+    "until": "R4",
+    "reason": "测试证明 composio-adapter.ts 仍认改名前建的 auth config 名后缀（LEGACY_CONFIG_SUFFIX）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/plugins-mcp-admin.integration.test.ts",
@@ -628,18 +505,6 @@
     "pattern": "skin: \\\"openbot\\\"|\\\"skin\\\":\\\"openbot\\\"",
     "until": "R4",
     "reason": "兼容读取的测试：库里或旧页面送来的旧默认皮肤值（0240 已把库里的改成 xiongbao），读取时归一为默认皮肤；legacy-compat 到 R4 删除"
-  },
-  {
-    "file": "xiongbao/server/tests/bot-knows-its-framework.test.ts",
-    "pattern": "(?<!copilotkit/)openbot-agent-(?!token)",
-    "until": "R3",
-    "reason": "测试里的托管 Bot 镜像名：agents/harness-model.ts 已保护的镜像名正则 (?:openbot-)?agent- 只认这个前缀"
-  },
-  {
-    "file": "xiongbao/server/tests/channel-titler.test.ts",
-    "pattern": "(?<!copilotkit/)openbot-agent-(?!token)",
-    "until": "R3",
-    "reason": "测试里的托管 Bot 镜像名：agents/harness-model.ts 已保护的镜像名正则 (?:openbot-)?agent- 只认这个前缀"
   },
   {
     "file": "xiongbao/server/tests/computer-wire-headers.test.ts",
@@ -686,8 +551,8 @@
   {
     "file": "xiongbao/server/src/plugins/composio-adapter.ts",
     "text": "\"Linear (OpenBot)\"",
-    "until": "R3",
-    "reason": "注释里举的是已保护的旧 auth config 名后缀（LEGACY_CONFIG_SUFFIX）"
+    "until": "R4",
+    "reason": "注释里举的是 LEGACY_CONFIG_SUFFIX 兼容读取的旧 auth config 名；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/tests/support/database.ts",
@@ -706,12 +571,6 @@
     "pattern": "(?<=\\\")openbot(?=\\\")|(?<=5432/)openbot(?=\\\")",
     "until": "R4",
     "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
-  },
-  {
-    "file": "xiongbao/app/tests/audit-xiongbao-setup-rows.test.tsx",
-    "pattern": "(?<=defaultContainerId: \")openbot(?=\")",
-    "until": "R3",
-    "reason": "学习容器 id openbot（服务器 shared/learning.ts、learning/ensure-container.ts 已保护到 R3，admin/learning.tsx 文案同），测试的服务器响应夹具与界面断言同值"
   },
   {
     "file": "xiongbao/app/tests/skin-compat.test.ts",
@@ -758,14 +617,14 @@
   {
     "file": "xiongbao/supervisor/tests/names.test.ts",
     "pattern": "\\bopenbots?-(?:computer|postgres)\\b|\"openbot(?:\\.(?:supervisor|bot-id|namespace|computer-kind|person-id))?\"",
-    "until": "R3",
-    "reason": "supervisor/src/names.ts 已保护的默认命名空间 openbot 与容器标签 openbot.*（已落在客户主机的容器与卷上），测试断言同值；networkHostFor 用例按默认命名空间算出恰好 63 字符的容器名"
+    "until": "R4",
+    "reason": "测试断言 supervisor/src/names.ts 改名前的默认命名空间与标签前缀仍被读取（legacyLabel/labelOf）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/supervisor/tests/fixtures/docker-lifecycle.ts",
     "pattern": "openbot\\.(?:supervisor|namespace|bot-id|computer-kind|person-id)\\b",
-    "until": "R3",
-    "reason": "supervisor/src/names.ts 已保护的容器标签 openbot.*（已落在客户主机的容器上），夹具按同名标签造容器与过滤"
+    "until": "R4",
+    "reason": "夹具按改名前的标签造「一人一台之前」的旧电脑与旧卷，证明 supervisor 仍认改名前标签（搬迁旧档案）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/toolkit/src/run-turn.ts",
@@ -848,14 +707,14 @@
   {
     "file": "xiongbao/scripts/start-local-chrome-computer.ts",
     "pattern": "\"(?:OpenBot|openbot)\"(?=[,)])",
-    "until": "R3",
-    "reason": "本机数据根目录名（macOS/Windows 的 OpenBot、Linux 的 openbot，其下 local-computer 存着个人电脑上已有的浏览器档案与工作区），改名会让已有档案找不到，需带迁移"
+    "until": "R4",
+    "reason": "本机电脑助手改名前的默认数据目录名（macOS/Windows 的 OpenBot、Linux 的 openbot），adoptLegacyLocalComputer 首次启动时把其下 local-computer 整体改名搬到新目录，搬不动就本次照旧用；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/agent-computer/tests/local-chrome-startup.test.ts",
     "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
-    "until": "R3",
-    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），测试断言与之同值；脚本里的同名目录有同样的作用域条目，改名需带迁移"
+    "until": "R4",
+    "reason": "测试断言 start-local-chrome-computer.ts 的改名前默认数据目录（legacyRoot）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/tests/chart-vanilla-secrets.test.ts",
@@ -902,12 +761,6 @@
     "pattern": "\\bopenbot_test\\b",
     "until": "R4",
     "reason": "tests/upstream-upgrade-checks.test.ts 要求这份 ci.yml 的 test 作业数据库与 upstream-upgrade.yml 的完全相同；上游同步工具（integrate-upstream.ts、upstream-upgrade.yml 及其测试）不在 R1 改名范围，Task 27/28 搬出产品仓库"
-  },
-  {
-    "file": "xiongbao/scripts/release-manifest.ts",
-    "pattern": "(?<=(?:^|\\n)\\s*)openbot(?=: \\{)",
-    "until": "R3",
-    "reason": "发行记录里的镜像键 images.openbot（对象字面量写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
   },
   {
     "text": ".openbot-release.json",
@@ -970,34 +823,10 @@
     "reason": "目录改名前的提交与标签里产品目录真实叫 openbot/：按旧基线或旧标签取文件时必须用这个路径（测试 clean-deploy 的旧标签分支）"
   },
   {
-    "file": "xiongbao/scripts/ci/device-release-workflow.test.mjs",
-    "pattern": "(?<=(?:^|[\\n{,])\\s*)openbot(?=:\\s)|files\\.openbot",
-    "until": "R3",
-    "reason": "发行记录 container-images.json 里的镜像键 images.openbot（对象字面量与 jq 写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
-  },
-  {
-    "file": "xiongbao/scripts/ci/mirror-release-workflow.test.mjs",
-    "pattern": "(?<=\\()openbot(?=\\))|(?<=, )openbot(?= \\})",
-    "until": "R3",
-    "reason": "发行记录 container-images.json 里的镜像键 images.openbot（对象字面量与 jq 写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
-  },
-  {
-    "file": ".github/workflows/release.yml",
-    "pattern": "(?<=(?:^|\\n)\\s+)openbot(?=: image\\()|(?<=# `)openbot(?=` is read by the promote step)",
-    "until": "R3",
-    "reason": "发行记录 container-images.json 里的镜像键 images.openbot（对象字面量与 jq 写法），与全仓保护的 images.openbot 同一个键，Task 23 处理"
-  },
-  {
     "file": "xiongbao/scripts/stop.sh",
     "text": "openbot.supervisor",
-    "until": "R3",
-    "reason": "supervisor 给电脑容器打的 docker 标签（supervisor/src/names.ts OWNER_LABEL，已保护），停止脚本按它找容器，须同名"
-  },
-  {
-    "file": "xiongbao/docker-compose.yml",
-    "text": "COMPUTER_NAMESPACE:-openbot",
-    "until": "R3",
-    "reason": "电脑容器命名空间默认值，与 supervisor/src/names.ts 已保护的 DEFAULT_NAMESPACE 同值"
+    "until": "R4",
+    "reason": "停止脚本同时按改名前的 supervisor 容器标签找电脑容器（v0.2.16 之前建的容器带它）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/tests/compose.test.ts",
@@ -1034,12 +863,6 @@
     "text": "`0054`'s public `openbot`",
     "until": "R4",
     "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的句子"
-  },
-  {
-    "file": "xiongbao/docs/configuration.md",
-    "text": "`COMPUTER_NAMESPACE` defaults to `openbot`",
-    "until": "R3",
-    "reason": "电脑命名空间默认值（supervisor/src/names.ts DEFAULT_NAMESPACE，已保护到 R3）：存量容器与卷名都含它"
   },
   {
     "file": "xiongbao/docs/cloud-repair/telemetry/sdk-evidence.json",
@@ -1106,24 +929,6 @@
     "text": "`openbot` 是超级用户",
     "until": "R4",
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
-  },
-  {
-    "file": "xiongbao/docs/configuration.md",
-    "pattern": "(?<=[/\\\\])(?:OpenBot|openbot)(?=[/\\\\]+local-computer)",
-    "until": "R3",
-    "reason": "scripts/start-local-chrome-computer.ts 的本机数据根目录（个人电脑上已有的浏览器档案与工作区落在 <数据目录>/OpenBot/local-computer），文档写的是实际路径；改名需带迁移"
-  },
-  {
-    "file": "xiongbao/docs/configuration.md",
-    "text": "label=openbot.namespace=openbot",
-    "until": "R3",
-    "reason": "电脑容器与卷上的标签：supervisor/src/names.ts 的 NAMESPACE_LABEL openbot.namespace 与 DEFAULT_NAMESPACE openbot（已保护到 R3），存量容器与卷带着它，文档里的清理命令须与之同值"
-  },
-  {
-    "file": "xiongbao/docs/personal-edition.md",
-    "text": ".openbot-carried-over/",
-    "until": "R3",
-    "reason": "supervisor/src/docker.ts 在电脑卷里写的搬迁标记目录名，已有卷里就是这个名字，改名需迁移"
   },
   {
     "file": "xiongbao/docs/development-environment-xiongbao.md",
@@ -1517,5 +1322,53 @@
     "text": "\"openbot/ui@1\"",
     "until": "R4",
     "reason": "网页读取端把旧目录 id 的界面按新目录画出来的用例（legacy-compat 测试，app/src/lib/copilot/a2ui.ts 的 withCurrentCatalogId）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/update-local.ts",
+    "pattern": "\"\\.openbot(?:-release\\.json|-update-journal\\.json|-update-policy\\.json|-deployment|-update\\.lock)?\"",
+    "until": "R4",
+    "reason": "已装检出目录里改名前的本机状态文件名（发行记录、更新日志、更新策略、部署记录、模型登录目录、旧版更新器的锁）：adoptLegacyLocalState 一次性改名，旧锁在时不动、旧日志仍挡启动；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start.sh",
+    "text": ".openbot-update-journal.json",
+    "until": "R4",
+    "reason": "旧版更新器持锁时状态文件不改名，启动脚本仍按改名前的更新日志判断能否启动；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/tests/update-local.test.ts",
+    "pattern": "\"\\.openbot(?:-release\\.json|-update-journal\\.json|-update\\.lock)?\"",
+    "until": "R4",
+    "reason": "测试证明 update-local.ts 把改名前的本机状态文件一次性改名、不覆盖、旧锁在时不动；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": ".github/workflows/mirror-release.yml",
+    "text": ".images.openbot)",
+    "until": "R4",
+    "reason": "补同步镜像读 v0.2.16 之前发布的 container-images.json 时，GHCR 镜像在当时的旧键下；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/ci/mirror-release-workflow.test.mjs",
+    "text": "openbot: OWN_IMAGE",
+    "until": "R4",
+    "reason": "测试证明补同步镜像仍能读 v0.2.16 之前发布记录里旧键下的 GHCR 镜像；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/promote-kubernetes.ts",
+    "text": "manifest.artifacts.images.openbot",
+    "until": "R4",
+    "reason": "Kubernetes 升级时已装的发行清单可能是 v0.2.16 之前接受的，镜像在旧键下；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/tests/promote-kubernetes.test.ts",
+    "text": "openbot: ghcr ??",
+    "until": "R4",
+    "reason": "测试证明已装发行清单的旧镜像键仍被读取；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/wakerflow-action-step.integration.test.ts",
+    "text": "\"openbot/share_private_information\"",
+    "until": "R4",
+    "reason": "测试证明改名前命名空间下的自带工具引用仍不被当作 MCP 工具（action-step.ts RESERVED_SERVERS 里的 \"openbot\"）；legacy-compat 到 R4 删除"
   }
 ]

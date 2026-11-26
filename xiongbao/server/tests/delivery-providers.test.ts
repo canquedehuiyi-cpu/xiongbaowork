@@ -71,7 +71,9 @@ describe("real HTTP provider adapters", () => {
         sender: { agentId: "bot1", name: "Research Bot", avatarSeed: "a b" },
       }),
     ).toEqual({ id: "D0987654321/171.5", status: "sent" });
-    expect(wire.requests[0]?.url).toBe("http://127.0.0.1:3000/openbot/deliver");
+    expect(wire.requests[0]?.url).toBe(
+      "http://127.0.0.1:3000/xiongbao/deliver",
+    );
     expect(
       (wire.requests[0]?.init?.headers as Record<string, string> | undefined)
         ?.authorization,
@@ -121,7 +123,7 @@ describe("real HTTP provider adapters", () => {
       }).isMember(ask),
     ).toBe(true);
     expect(yes.requests[0]?.url).toBe(
-      "http://127.0.0.1:3000/openbot/membership",
+      "http://127.0.0.1:3000/xiongbao/membership",
     );
     expect(await createOpenTagTransport({ secret }).isMember(ask)).toBe(false);
     expect(
@@ -249,5 +251,5 @@ test("a quiet OpenTag stream speaks before Bun closes it as idle", async () => {
     10,
   );
   const text = await new Response(stream).text();
-  expect(text).toContain('"name":"openbot.working"');
+  expect(text).toContain('"name":"xiongbao.working"');
 });

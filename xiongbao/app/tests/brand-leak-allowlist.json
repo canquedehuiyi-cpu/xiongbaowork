@@ -28,20 +28,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/auth/native-browser.ts",
-    "text": "client_id:'openbot-desktop'",
-    "reason": "persisted-identifier: OAuth client id the upstream desktop app is registered under",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/auth/index.ts",
-    "text": "clientID: \"openbot-desktop\"",
-    "reason": "persisted-identifier: OAuth client id the upstream desktop app is registered under",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/auth/dev-actor-email.ts",
     "text": "\"dev@openbot.local\"",
     "reason": "persisted-identifier: old demo address still recognised in upgraded databases (Task 8)",
@@ -52,27 +38,6 @@
     "file": "server/src/auth/role-writer-lifecycle.ts",
     "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
     "reason": "persisted-identifier: database password of the public default setup",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/delivery/opentag.ts",
-    "text": "\"openbot.sender\"",
-    "reason": "persisted-identifier: OpenTag context key the peer reads",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/delivery/opentag.ts",
-    "text": "\"openbot.working\"",
-    "reason": "persisted-identifier: AG-UI custom event name the peer reads",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/delivery/opentag.ts",
-    "text": "\"openbot-component-\"",
-    "reason": "persisted-identifier: tool-call id prefix the peer reads",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -115,13 +80,6 @@
     "file": "server/src/plugins/personal-defaults.ts",
     "text": "\"openbot:%\"",
     "reason": "persisted-identifier: LIKE pattern over stored granted_by markers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/plugins/shared-accounts.ts",
-    "text": "\"openbot-deployment:\"",
-    "reason": "persisted-identifier: vendor-side account prefix already stored at the broker",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -217,13 +175,6 @@
     "plan": "keep"
   },
   {
-    "file": "shared/recorder-api.ts",
-    "text": "\"openbot-browser\"",
-    "reason": "persisted-identifier: recorder connection `via` value stored in the database",
-    "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
     "file": "shared/xiongbao-actor.ts",
     "text": "actor.startsWith(\"openbot:\")",
     "reason": "persisted-identifier: stored actor id prefix",
@@ -266,20 +217,6 @@
     "plan": "keep"
   },
   {
-    "file": "supervisor/src/docker.ts",
-    "text": ".openbot-carrying-",
-    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "supervisor/src/docker.ts",
-    "text": "\"openbot.carry-over\"",
-    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "supervisor/src/names.ts",
     "text": "DEFAULT_NAMESPACE = \"openbot\"",
     "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
@@ -289,13 +226,6 @@
   {
     "file": "supervisor/src/names.ts",
     "text": "= \"openbot.",
-    "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "supervisor/src/index.ts",
-    "text": "openbot-agent-computer:latest",
     "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
     "category": "persisted-data",
     "plan": "keep"

@@ -320,10 +320,10 @@ async function cluster(options: {
 function promotion(run: CommandRunner): KubernetesPromotionOptions {
   const current = parseReleaseManifest(structuredClone(currentFixture));
   const candidate = parseReleaseManifest(structuredClone(targetFixture));
-  current.artifacts.images.openbot = {
+  current.artifacts.images.ghcr = {
     reference: `ghcr.io/acme/xiongbao@${digest}`,
   };
-  candidate.artifacts.images.openbot = {
+  candidate.artifacts.images.ghcr = {
     reference: `ghcr.io/acme/xiongbao@${digest}`,
   };
   candidate.artifacts.chart = {
@@ -423,7 +423,7 @@ describe.skipIf(!helm)("Helm promotion of the real chart", () => {
   test("a refusal before anything changed writes no journal and touches nothing", async () => {
     const { state, run } = await cluster({ applyMethod: "csa", installSets });
     const options = promotion(run);
-    options.current.artifacts.images.openbot = {
+    options.current.artifacts.images.ghcr = {
       reference: `ghcr.io/acme/xiongbao@sha256:${"e".repeat(64)}`,
     };
     await expect(promoteKubernetes(options)).rejects.toThrow("does not match");

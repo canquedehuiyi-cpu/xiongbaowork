@@ -2,6 +2,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  describe,
   expect,
   setDefaultTimeout,
   spyOn,
@@ -20,6 +21,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  adoptLegacyLocalState,
   applyLocalUpdate,
   assertLocalStartAllowed,
   type CommandRunner,
@@ -87,7 +89,7 @@ function fixture(topology: "host" | "image" = "image") {
   current.source.commit = old;
   const candidate = parseReleaseManifest(structuredClone(targetFixture));
   candidate.source.commit = target;
-  writeFileSync(join(root, ".openbot-release.json"), JSON.stringify(current));
+  writeFileSync(join(root, ".xiongbao-release.json"), JSON.stringify(current));
   writeFileSync(
     join(root, ".env"),
     `ENCRYPTION_KEY=keep-this\nDATABASE_URL=${HOST_APP_URL}\nMIGRATION_DATABASE_URL=${HOST_OWNER_URL}\nTENANT_PACKAGE_DIR=../customer\n`,
@@ -199,7 +201,7 @@ test("image apply preserves customer files and project identity and accepts only
     '{"name":"Customer"}',
   );
   expect(
-    JSON.parse(readFileSync(join(f.root, ".openbot-release.json"), "utf8"))
+    JSON.parse(readFileSync(join(f.root, ".xiongbao-release.json"), "utf8"))
       .version,
   ).toBe("v0.3.0");
   const stop = f.calls.findIndex(
@@ -233,11 +235,11 @@ test("migration failure keeps accepted metadata and durable recovery evidence", 
     "migration",
   );
   expect(
-    JSON.parse(readFileSync(join(f.root, ".openbot-release.json"), "utf8"))
+    JSON.parse(readFileSync(join(f.root, ".xiongbao-release.json"), "utf8"))
       .version,
   ).toBe("v0.2.0");
   const journal = JSON.parse(
-    readFileSync(join(f.root, ".openbot-update-journal.json"), "utf8"),
+    readFileSync(join(f.root, ".xiongbao-update-journal.json"), "utf8"),
   );
   expect(journal.phase).toBe("recovery-required");
   expect(journal.databaseMayHaveChanged).toBe(true);
@@ -248,7 +250,7 @@ test("migration failure keeps accepted metadata and durable recovery evidence", 
 test("an interrupted operation blocks another apply without starting containers", async () => {
   const f = fixture();
   writeFileSync(
-    join(f.root, ".openbot-update-journal.json"),
+    join(f.root, ".xiongbao-update-journal.json"),
     JSON.stringify({ phase: "migrating", databaseMayHaveChanged: true }),
   );
   await expect(applyLocalUpdate(f.options)).rejects.toThrow("interrupted");
@@ -331,8 +333,8 @@ test.each([
       ),
     ).toBe(false);
     expect(f.git("rev-parse", "HEAD")).toBe(f.old);
-    expect(existsSync(join(f.root, ".openbot-update.lock"))).toBe(false);
-    expect(existsSync(join(f.root, ".openbot-update-journal.json"))).toBe(
+    expect(existsSync(join(f.root, ".xiongbao-update.lock"))).toBe(false);
+    expect(existsSync(join(f.root, ".xiongbao-update-journal.json"))).toBe(
       false,
     );
   },
@@ -380,7 +382,7 @@ test("a ready server reporting the wrong release is never accepted", async () =>
     }),
   ).rejects.toThrow("ready");
   expect(
-    JSON.parse(readFileSync(join(f.root, ".openbot-release.json"), "utf8"))
+    JSON.parse(readFileSync(join(f.root, ".xiongbao-release.json"), "utf8"))
       .version,
   ).toBe("v0.2.0");
 });
@@ -388,7 +390,7 @@ test("a ready server reporting the wrong release is never accepted", async () =>
 test("manual startup refuses an interrupted journal while the exact update operation may start", () => {
   const f = fixture();
   writeFileSync(
-    join(f.root, ".openbot-update-journal.json"),
+    join(f.root, ".xiongbao-update-journal.json"),
     JSON.stringify({ phase: "starting", operation: "this-operation" }),
   );
   expect(() => assertLocalStartAllowed(f.root)).toThrow("recovery");
@@ -396,6 +398,100 @@ test("manual startup refuses an interrupted journal while the exact update opera
     "recovery",
   );
   expect(() => assertLocalStartAllowed(f.root, "this-operation")).not.toThrow();
+});
+
+/*
+ * An installation from before v0.2.16 keeps its accepted release, update journal and model sign-in folder under
+ * the names it had then. They are renamed once, nothing is overwritten, and an updater still holding the old lock
+ * is left alone, its journal still deciding whether a start is safe.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+describe("state files from before v0.2.16", () => {
+  const legacy = {
+    release: ".openbot-release.json",
+    journal: ".openbot-update-journal.json",
+    signIn: ".openbot",
+    lock: ".openbot-update.lock",
+  };
+
+  test("are renamed once, with what they hold", () => {
+    const f = fixture();
+    const accepted = readFileSync(join(f.root, ".xiongbao-release.json"));
+    rmSync(join(f.root, ".xiongbao-release.json"));
+    writeFileSync(join(f.root, legacy.release), accepted);
+    writeFileSync(
+      join(f.root, legacy.journal),
+      JSON.stringify({ phase: "accepted" }),
+    );
+    mkdirSync(join(f.root, legacy.signIn));
+    writeFileSync(join(f.root, legacy.signIn, "model-oauth.json"), "{}");
+
+    expect(adoptLegacyLocalState(f.root)).toEqual({
+      renamed: [
+        `${legacy.release} -> .xiongbao-release.json`,
+        `${legacy.journal} -> .xiongbao-update-journal.json`,
+        `${legacy.signIn} -> .xiongbao`,
+      ],
+      kept: [],
+      locked: false,
+    });
+    expect(readFileSync(join(f.root, ".xiongbao-release.json"))).toEqual(
+      accepted,
+    );
+    expect(
+      readFileSync(join(f.root, ".xiongbao", "model-oauth.json"), "utf8"),
+    ).toBe("{}");
+    for (const name of [legacy.release, legacy.journal, legacy.signIn])
+      expect(existsSync(join(f.root, name))).toBe(false);
+    // A second run has nothing to do.
+    expect(adoptLegacyLocalState(f.root)).toEqual({
+      renamed: [],
+      kept: [],
+      locked: false,
+    });
+  });
+
+  test("never replace a file that already has its current name", () => {
+    const f = fixture();
+    writeFileSync(join(f.root, legacy.release), "{}\n");
+    const current = readFileSync(join(f.root, ".xiongbao-release.json"));
+    expect(adoptLegacyLocalState(f.root)).toEqual({
+      renamed: [],
+      kept: [legacy.release],
+      locked: false,
+    });
+    expect(readFileSync(join(f.root, ".xiongbao-release.json"))).toEqual(
+      current,
+    );
+    expect(readFileSync(join(f.root, legacy.release), "utf8")).toBe("{}\n");
+  });
+
+  test("are left alone while an older updater holds its lock, and its journal still guards startup", () => {
+    const f = fixture();
+    mkdirSync(join(f.root, legacy.lock));
+    writeFileSync(
+      join(f.root, legacy.journal),
+      JSON.stringify({ phase: "starting", operation: "older-operation" }),
+    );
+    expect(adoptLegacyLocalState(f.root)).toEqual({
+      renamed: [],
+      kept: [],
+      locked: true,
+    });
+    expect(existsSync(join(f.root, legacy.journal))).toBe(true);
+    expect(() => assertLocalStartAllowed(f.root)).toThrow(legacy.journal);
+    expect(() =>
+      assertLocalStartAllowed(f.root, "older-operation"),
+    ).not.toThrow();
+  });
+
+  test("an update is refused while an older updater's lock is there", async () => {
+    const f = fixture();
+    mkdirSync(join(f.root, legacy.lock));
+    const plan = await planLocalUpdate(f.options);
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join("\n")).toContain("update lock exists");
+  });
 });
 
 /*
@@ -407,7 +503,7 @@ test("manual startup refuses an interrupted journal while the exact update opera
 test("the start an older updater runs is allowed by the operation it names under the old name", () => {
   const f = fixture();
   writeFileSync(
-    join(f.root, ".openbot-update-journal.json"),
+    join(f.root, ".xiongbao-update-journal.json"),
     JSON.stringify({ phase: "starting", operation: "this-operation" }),
   );
   const assertStart = (environment: Record<string, string>) =>
@@ -477,7 +573,7 @@ test("an absent worker cannot be accepted just because the server is ready", asy
     "worker",
   );
   expect(
-    JSON.parse(readFileSync(join(f.root, ".openbot-release.json"), "utf8"))
+    JSON.parse(readFileSync(join(f.root, ".xiongbao-release.json"), "utf8"))
       .version,
   ).toBe("v0.2.0");
 });

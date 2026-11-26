@@ -53,7 +53,7 @@ const CALENDAR = `GoogleCalendar${suite}`;
 const DRIVE = `GoogleDrive${suite}`;
 const GITHUB = `Github${suite}`;
 const app = (toolkit: string) => `arcade-${toolkit}`;
-const TEAM = `openbot-deployment:${suite}:team`;
+const TEAM = `xiongbao-deployment:${suite}:team`;
 const BOT = `re-bot-${suite}`;
 const platform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 const as = <T>(person: string, work: () => Promise<T>) =>

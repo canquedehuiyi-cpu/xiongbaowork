@@ -20,14 +20,19 @@ unset MIGRATION_DATABASE_URL
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-if [ -f "$ROOT/.openbot-update-journal.json" ]; then
+# This installation's state files and model sign-in folder under their names before v0.2.16 are renamed
+# once (scripts/update-local.ts adoptLegacyLocalState); a rename that fails stops here, nothing moved.
+# An updater from before then still holding its lock is left alone, so its journal is also checked below.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+bun "$ROOT/scripts/update.ts" local adopt-state --root "$ROOT"
+if [ -f "$ROOT/.xiongbao-update-journal.json" ] || [ -f "$ROOT/.openbot-update-journal.json" ]; then
   # Only the exact in-flight updater operation may start before acceptance. A normal startup
   # must not run source whose migration/activation was interrupted.
   bun "$ROOT/scripts/update.ts" local assert-start --root "$ROOT"
 fi
 # The v0.2.15 local updater runs this script with OPENBOT_UPDATE_OPERATION, the name before the rename.
 # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
-if [ -f "$ROOT/.openbot-release.json" ] && [ -z "${XIONGBAO_UPDATE_OPERATION:-${OPENBOT_UPDATE_OPERATION:-}}" ]; then
+if [ -f "$ROOT/.xiongbao-release.json" ] && [ -z "${XIONGBAO_UPDATE_OPERATION:-${OPENBOT_UPDATE_OPERATION:-}}" ]; then
   # Keep ordinary host restarts on the accepted build identity. Quoting each export treats
   # release strings as data; no shell text from metadata is evaluated.
   release_environment="$(bun "$ROOT/scripts/update.ts" local build-environment --root "$ROOT")"

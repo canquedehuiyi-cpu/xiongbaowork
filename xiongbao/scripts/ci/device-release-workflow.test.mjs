@@ -1610,6 +1610,52 @@ test("mirror copies only the platform manifest to our registry", () => {
   expect(setup.with.version).toMatch(/^v\d+\.\d+\.\d+$/);
 });
 
+test("release record carries only images.xiongbao", () => {
+  const record = (env) => {
+    const cwd = scratch();
+    const result = run(
+      "github-release",
+      "record",
+      {
+        VERSION: "0.2.16",
+        GITHUB_SHA: "abc",
+        REPOSITORY: "ghcr.io/o/r",
+        DIGEST: INDEX,
+        XB_REGISTRY: "",
+        OWN_REPOSITORY: "",
+        OWN_DIGEST: "",
+        ...env,
+      },
+      cwd,
+      process.env.PATH,
+      containerRelease,
+    );
+    expect(result.status).toBe(0);
+    return JSON.parse(readFileSync(join(cwd, "container-images.json"), "utf8"));
+  };
+  for (const json of [
+    record({}),
+    record({
+      XB_REGISTRY: OWN.XB_REGISTRY,
+      OWN_REPOSITORY,
+      OWN_DIGEST: PLATFORM,
+    }),
+  ]) {
+    expect(Object.keys(json.images)).toEqual(["xiongbao"]);
+    expect(Object.keys(json).sort()).toEqual([
+      "commit",
+      "ghcr",
+      "images",
+      "version",
+    ]);
+  }
+  // Nor does the step that writes it name any other image.
+  const script = step("github-release", "record", containerRelease).run;
+  expect(
+    [...script.matchAll(/^\s*(\w+): image\(/gm)].map((match) => match[1]),
+  ).toEqual(["xiongbao", "ghcr"]);
+});
+
 test("container-images.json names our registry's copy as images.xiongbao once it exists", () => {
   const record = (env) => {
     const cwd = scratch();
@@ -1641,15 +1687,16 @@ test("container-images.json names our registry's copy as images.xiongbao once it
     digest: INDEX,
     reference: `ghcr.io/o/r@${INDEX}`,
   };
-  // Not configured: the same image under both keys, as before.
+  // Not configured: images.xiongbao is the GHCR image, which is also what it was built as.
   const unset = record({});
   expect(unset.status).toBe(0);
   expect(unset.json).toEqual({
     version: "0.2.0",
     commit: "abc",
-    images: { xiongbao: ghcr, openbot: ghcr },
+    images: { xiongbao: ghcr },
+    ghcr,
   });
-  // Configured: images.xiongbao is the platform manifest mirror copied; images.openbot stays GHCR.
+  // Configured: images.xiongbao is the platform manifest mirror copied; `ghcr` is what it was copied from.
   const own = record({
     XB_REGISTRY: OWN.XB_REGISTRY,
     OWN_REPOSITORY,
@@ -1662,8 +1709,8 @@ test("container-images.json names our registry's copy as images.xiongbao once it
       digest: PLATFORM,
       reference: `${OWN_REPOSITORY}@${PLATFORM}`,
     },
-    openbot: ghcr,
   });
+  expect(own.json.ghcr).toEqual(ghcr);
   // Configured but no copy reported: no record is written.
   for (const env of [
     { XB_REGISTRY: OWN.XB_REGISTRY },
@@ -2176,10 +2223,8 @@ function cleanRecord(env, files) {
   const githubEnv = join(scratch(), "github-env");
   writeFileSync(githubEnv, "");
   const record = JSON.stringify({
-    images: {
-      xiongbao: { reference: files.xiongbao },
-      openbot: { reference: files.openbot },
-    },
+    images: { xiongbao: { reference: files.xiongbao } },
+    ...(files.ghcr ? { ghcr: { reference: files.ghcr } } : {}),
   });
   const fixture = join(scratch(), "container-images.json");
   writeFileSync(fixture, record);
@@ -2216,18 +2261,16 @@ function cleanRecord(env, files) {
 test("clean-deploy fetches from our download page when configured", () => {
   const ghcr = `ghcr.io/o/r@${INDEX}`;
   const own = `${OWN_REPOSITORY}@${PLATFORM}`;
-  // Not configured: the GitHub Release's record and its images.openbot, as before.
-  const before = cleanRecord({}, { xiongbao: ghcr, openbot: ghcr });
+  // Not configured: the GitHub Release's record and its images.xiongbao, which is then GHCR's.
+  const before = cleanRecord({}, { xiongbao: ghcr, ghcr });
   expect(before.status).toBe(0);
   expect(before.calls).toEqual([
     `gh release download v0.2.0 --pattern container-images.json --dir ${before.calls[0].split(" ").at(-1)}`,
   ]);
   expect(before.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
   expect(
-    cleanRecord(
-      {},
-      { xiongbao: ghcr, openbot: `registry.example.com/x@${INDEX}` },
-    ).status,
+    cleanRecord({}, { xiongbao: `registry.example.com/x@${INDEX}`, ghcr })
+      .status,
   ).not.toBe(0);
   // Configured: the record comes from our download page as a customer reaches it, and the image to
   // run and check is images.xiongbao, in our registry.
@@ -2236,7 +2279,7 @@ test("clean-deploy fetches from our download page when configured", () => {
     XB_DOWNLOAD_BUCKET: "downloads",
     XB_DOWNLOAD_BASE_URL: "https://download.example.com/xb/",
   };
-  const after = cleanRecord(configured, { xiongbao: own, openbot: ghcr });
+  const after = cleanRecord(configured, { xiongbao: own, ghcr });
   expect(after.status).toBe(0);
   expect(after.calls.length).toBe(1);
   expect(after.calls[0]).toStartWith("curl ");
@@ -2252,7 +2295,7 @@ test("clean-deploy fetches from our download page when configured", () => {
     `${OWN_REPOSITORY}:v0.2.0`,
     `registry.example.com/other@${PLATFORM}`,
   ]) {
-    const refused = cleanRecord(configured, { xiongbao, openbot: ghcr });
+    const refused = cleanRecord(configured, { xiongbao, ghcr });
     expect(refused.status).not.toBe(0);
     expect(refused.env).toBe("");
   }
@@ -2263,21 +2306,19 @@ test("clean-deploy fetches from our download page when configured", () => {
       XB_DOWNLOAD_BUCKET: "downloads",
       XB_DOWNLOAD_BASE_URL: "https://d.example.com",
     },
-    { xiongbao: ghcr, openbot: ghcr },
+    { xiongbao: ghcr, ghcr },
   );
   expect(pageOnly.calls[0]).toEndWith(
     " https://d.example.com/v0.2.0/container-images.json",
   );
   expect(pageOnly.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
-  const registryOnly = cleanRecord(OWN, { xiongbao: own, openbot: ghcr });
+  const registryOnly = cleanRecord(OWN, { xiongbao: own, ghcr });
   expect(registryOnly.calls[0]).toStartWith("gh release download");
   expect(registryOnly.env).toContain(`EXPECTED_REFERENCE=${own}\n`);
   // A bucket without the page's address fails rather than fetch from GitHub.
   expect(
-    cleanRecord(
-      { XB_DOWNLOAD_BUCKET: "downloads" },
-      { xiongbao: ghcr, openbot: ghcr },
-    ).status,
+    cleanRecord({ XB_DOWNLOAD_BUCKET: "downloads" }, { xiongbao: ghcr, ghcr })
+      .status,
   ).not.toBe(0);
   // A plain-http page fails too: nothing is fetched from it.
   const http = cleanRecord(
@@ -2285,7 +2326,7 @@ test("clean-deploy fetches from our download page when configured", () => {
       XB_DOWNLOAD_BUCKET: "downloads",
       XB_DOWNLOAD_BASE_URL: "http://d.example.com",
     },
-    { xiongbao: ghcr, openbot: ghcr },
+    { xiongbao: ghcr, ghcr },
   );
   expect(http.status).not.toBe(0);
   expect(http.calls).toEqual([]);

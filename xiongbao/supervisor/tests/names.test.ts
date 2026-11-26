@@ -3,10 +3,14 @@ import {
   BOT_LABEL,
   DEFAULT_NAMESPACE,
   KIND_LABEL,
+  LEGACY_DEFAULT_NAMESPACE,
+  labelOf,
+  legacyLabel,
   legacyNamesFor,
   NAMESPACE,
   NAMESPACE_LABEL,
   namesFor as namesOf,
+  namespaceForHost,
   networkHostFor,
   OWNER_LABEL,
   PERSON_LABEL,
@@ -53,7 +57,7 @@ describe("the ids a supervisor will accept", () => {
 
   test("ids that could name somebody else's container are refused", () => {
     for (const id of [
-      "openbot-postgres", // starts plausibly, still only ever becomes <namespace>-computer-*
+      "xiongbao-postgres", // starts plausibly, still only ever becomes <namespace>-computer-*
       "../postgres",
       "postgres:latest", // a tag
       "bot id", // whitespace
@@ -93,17 +97,124 @@ describe("the ids a supervisor will accept", () => {
 
   test("the ownership labels are stable", () => {
     // Stop and reset filter on these. Renaming one widens what the supervisor will act on.
-    expect(OWNER_LABEL).toBe("openbot.supervisor");
-    expect(BOT_LABEL).toBe("openbot.bot-id");
-    expect(NAMESPACE_LABEL).toBe("openbot.namespace");
-    expect(KIND_LABEL).toBe("openbot.computer-kind");
-    expect(PERSON_LABEL).toBe("openbot.person-id");
+    expect(OWNER_LABEL).toBe("xiongbao.supervisor");
+    expect(BOT_LABEL).toBe("xiongbao.bot-id");
+    expect(NAMESPACE_LABEL).toBe("xiongbao.namespace");
+    expect(KIND_LABEL).toBe("xiongbao.computer-kind");
+    expect(PERSON_LABEL).toBe("xiongbao.person-id");
   });
 
-  test("the default namespace is the one existing deployments already use", () => {
-    // Containers created before the namespace existed carry no namespace label and are read as this
-    // one, so changing it would orphan every computer a running deployment already owns.
-    expect(DEFAULT_NAMESPACE).toBe("openbot");
+  test("the default namespace is the product's", () => {
+    expect(DEFAULT_NAMESPACE).toBe("xiongbao");
+  });
+
+  /*
+   * The guard this default once had: changing it orphans every computer a running deployment already owns. A
+   * deployment that sets no COMPUTER_NAMESPACE settles it from what the host holds (docker.ts resolveNamespace), so
+   * a host upgraded from before v0.2.16 keeps its computers and their volumes.
+   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   */
+  describe("a deployment that sets no namespace takes the host's", () => {
+    const earlier = {
+      "openbot.supervisor": "true",
+      "openbot.namespace": "openbot",
+    };
+    const unlabelled = { "openbot.supervisor": "true" };
+    const current = {
+      "xiongbao.supervisor": "true",
+      "xiongbao.namespace": "xiongbao",
+    };
+
+    test("an empty host takes the current default", () => {
+      expect(namespaceForHost([])).toEqual({
+        namespace: "xiongbao",
+        earlier: 0,
+        current: 0,
+      });
+    });
+
+    test("a host with computers only from before v0.2.16 keeps their namespace", () => {
+      expect(namespaceForHost([earlier, earlier]).namespace).toBe("openbot");
+      // Made before the namespace label existed: that day's default.
+      expect(namespaceForHost([unlabelled]).namespace).toBe("openbot");
+      // Labelled under the current prefix with the earlier namespace (a deployment that set it, then unset it).
+      expect(
+        namespaceForHost([
+          { "xiongbao.supervisor": "true", "xiongbao.namespace": "openbot" },
+        ]).namespace,
+      ).toBe("openbot");
+    });
+
+    test("a host with only current computers stays on the current default", () => {
+      expect(namespaceForHost([current]).namespace).toBe("xiongbao");
+    });
+
+    test("a host with both stays on the current default and counts the earlier ones it leaves", () => {
+      expect(namespaceForHost([earlier, current, unlabelled])).toEqual({
+        namespace: "xiongbao",
+        earlier: 2,
+        current: 1,
+      });
+    });
+
+    test("other deployments' computers and things not ours count for neither", () => {
+      expect(
+        namespaceForHost([
+          { "openbot.supervisor": "true", "openbot.namespace": "acme" },
+          { "xiongbao.supervisor": "true", "xiongbao.namespace": "acme" },
+          { "openbot.namespace": "openbot" },
+          { "openbot.supervisor": "false" },
+          undefined,
+        ]).namespace,
+      ).toBe("xiongbao");
+    });
+
+    test("a namespace the deployment sets is used as it is, and the host is not asked", () => {
+      const probe = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          'const n = await import("./src/names.ts"); console.log(JSON.stringify([n.CONFIGURED_NAMESPACE, n.NAMESPACE]));',
+        ],
+        {
+          cwd: `${import.meta.dir}/..`,
+          env: { ...process.env, COMPUTER_NAMESPACE: "acme" },
+        },
+      );
+      expect(JSON.parse(probe.stdout.toString())).toEqual(["acme", "acme"]);
+      const unset = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          'const n = await import("./src/names.ts"); console.log(JSON.stringify([n.CONFIGURED_NAMESPACE ?? null, n.NAMESPACE]));',
+        ],
+        {
+          cwd: `${import.meta.dir}/..`,
+          env: { ...process.env, COMPUTER_NAMESPACE: "" },
+        },
+      );
+      expect(JSON.parse(unset.stdout.toString())).toEqual([null, "xiongbao"]);
+    });
+  });
+
+  /*
+   * Containers and volumes made before v0.2.16 keep the labels and the default namespace they were made with: a
+   * volume's labels can never change. Each label is read under either prefix, and an unlabelled namespace is the
+   * default of then, so a deployment that sets COMPUTER_NAMESPACE to it keeps its computers and their volumes.
+   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   */
+  test("a label is read under the prefix it had before v0.2.16 too", () => {
+    expect(LEGACY_DEFAULT_NAMESPACE).toBe("openbot");
+    expect(legacyLabel(OWNER_LABEL)).toBe("openbot.supervisor");
+    expect(legacyLabel(KIND_LABEL)).toBe("openbot.computer-kind");
+    expect(labelOf({ "openbot.bot-id": "b1" }, BOT_LABEL)).toBe("b1");
+    expect(labelOf({ "xiongbao.bot-id": "b2" }, BOT_LABEL)).toBe("b2");
+    // Written under the current prefix only, so a current label wins over a stale earlier one.
+    expect(
+      labelOf({ "xiongbao.bot-id": "new", "openbot.bot-id": "old" }, BOT_LABEL),
+    ).toBe("new");
+    expect(labelOf({ "other.bot-id": "x" }, BOT_LABEL)).toBeUndefined();
+    expect(labelOf(undefined, BOT_LABEL)).toBeUndefined();
   });
 });
 
@@ -172,32 +283,34 @@ describe("whose computer a name is", () => {
  * The address a computer is reached by on a shared network.
  *
  * Docker's network DNS answers for a container name of up to 63 characters, one DNS label, and not a
- * character more. An isolated Bot's name with the default namespace is exactly that long.
+ * character more. An isolated Bot's name with a seven-character namespace is exactly that long, and with
+ * the default namespace one character longer.
  */
 describe("the name a computer is reached by", () => {
   const agent = "agent_3e08c0e4-f039-4595-b096-c6170d552126";
 
   test("a name DNS can carry is used as it is", () => {
-    const container = `openbot-computer-bot-${agent}`;
+    const container = `acme-ns-computer-bot-${agent}`;
     expect(container.length).toBe(63);
     expect(networkHostFor(container, "1dc615a5bf1d")).toBe(container);
     expect(
-      networkHostFor("openbot-computer-person-u-ada", "1dc615a5bf1d"),
-    ).toBe("openbot-computer-person-u-ada");
+      networkHostFor("xiongbao-computer-person-u-ada", "1dc615a5bf1d"),
+    ).toBe("xiongbao-computer-person-u-ada");
   });
 
   test("a longer one is reached by its short id instead", () => {
-    // A namespace one character longer than the default is enough.
+    // The default namespace is already one character too long for an isolated Bot's name.
+    expect(`xiongbao-computer-bot-${agent}`.length).toBe(64);
     expect(
-      networkHostFor(`openbots-computer-bot-${agent}`, "1dc615a5bf1d"),
+      networkHostFor(`xiongbao-computer-bot-${agent}`, "1dc615a5bf1d"),
     ).toBe("1dc615a5bf1d");
     expect(
-      networkHostFor(`acme-openbot-computer-bot-${agent}`, "1dc615a5bf1d"),
+      networkHostFor(`acme-xiongbao-computer-bot-${agent}`, "1dc615a5bf1d"),
     ).toBe("1dc615a5bf1d");
   });
 
   test("without a short id the name is all there is", () => {
-    const container = `acme-openbot-computer-bot-${agent}`;
+    const container = `acme-xiongbao-computer-bot-${agent}`;
     expect(networkHostFor(container, undefined)).toBe(container);
   });
 });

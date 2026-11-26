@@ -1247,7 +1247,7 @@ describe("apps and versions an employee change touches", () => {
           authScheme: "OAUTH2",
           ownerGrants: "any",
           accountMode: "shared",
-          sharedVendorUserId: `openbot-deployment:${suite}:S`,
+          sharedVendorUserId: `xiongbao-deployment:${suite}:S`,
           sharedConnectedAt: new Date(),
           sharedConnectedBy: ADMIN,
           sharedVerified: true,

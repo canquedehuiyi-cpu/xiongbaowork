@@ -35,7 +35,7 @@ const ADMIN = `arcade-team-admin-${suite}`;
 const DANA = `arcade-team-dana-${suite}`;
 const SHARED = `Gmail${suite}`;
 const PERSONAL = `Notion${suite}`;
-const TEAM = `openbot-deployment:test:${suite}`;
+const TEAM = `xiongbao-deployment:test:${suite}`;
 const app = (toolkit: string) => `arcade-${toolkit}`;
 const APP_URL = "https://app.example";
 const platform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);

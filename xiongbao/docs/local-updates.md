@@ -2,7 +2,7 @@
 
 `bun scripts/update.ts local check|plan|apply` updates a known source checkout at an explicit maintenance boundary. It preserves the checkout root, customer files, Compose project and volume identities. Regular startup does not discover or install a newer release.
 
-The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.openbot-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Use `scripts/integrate-upstream.ts` to create a separate integration candidate; review/build that distribution's release first. The updater never merges arbitrary upstream changes into production.
+The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.xiongbao-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Use `scripts/integrate-upstream.ts` to create a separate integration candidate; review/build that distribution's release first. The updater never merges arbitrary upstream changes into production.
 
 **Not from v0.2.15 with the development Compose file, and v0.2.16 does not take the old volumes over.**
 This release renames the Compose project, its volumes, its database and the server's mount directory in
@@ -29,7 +29,7 @@ Keep the distribution policy separately from downloaded metadata, for example `c
 
 Obtain the candidate `release-manifest.json` and its approved SHA-256 from your release approval process. Verify publisher provenance using the configured repository before trusting that checksum. A checksum downloaded with untrusted content does not authenticate its publisher. The command requires the expected metadata hash, checks distribution identity/compatibility, and uses the exact source commit already present in Git. It does not download arbitrary archive URLs.
 
-For initial adoption, an operator must verify the accepted manifest against actual checkout HEAD, running artifacts, configuration/API versions and available Intelligence capabilities before recording `.openbot-release.json`. There is no automatic guess or forced baseline adoption. The existing database migration-history/advisory-lock guards remain authoritative.
+For initial adoption, an operator must verify the accepted manifest against actual checkout HEAD, running artifacts, configuration/API versions and available Intelligence capabilities before recording `.xiongbao-release.json`. There is no automatic guess or forced baseline adoption. The existing database migration-history/advisory-lock guards remain authoritative.
 
 ```bash
 bun scripts/update.ts local plan \
@@ -60,7 +60,7 @@ The accepted source remains pinned in Git. `docker compose restart` retains exis
 
 ## Interrupted operations and recovery
 
-The updater takes `.openbot-update.lock`, writes `.openbot-update-journal.json` before lifecycle changes, and retains previous/candidate source archives, the prior manifest, customer-state archive, database dump and its checksum in an operation-specific backup directory. `local status --root /srv/xiongbao` reads the journal. The operation lock survives process interruption; inspect it before manually removing a stale lock.
+The updater takes `.xiongbao-update.lock`, writes `.xiongbao-update-journal.json` before lifecycle changes, and retains previous/candidate source archives, the prior manifest, customer-state archive, database dump and its checksum in an operation-specific backup directory. `local status --root /srv/xiongbao` reads the journal. The operation lock survives process interruption; inspect it before manually removing a stale lock. Before v0.2.16 these files, and the `.xiongbao` sign-in folder, had the product's earlier name; every `scripts/update.ts local` action and `scripts/start.sh` rename them once (`local adopt-state` does only that), keep a file that already has its current name, and leave everything alone while an older updater still holds its lock.
 
 After migration begins, failure never automatically resets source or restores SQL. The accepted manifest remains unchanged, owned candidate services are stopped, and the journal records `recovery-required`. Normal `scripts/start.sh` is blocked by any unaccepted journal; only the matching active update operation may enter its startup phase. A kill/engine failure is retained in recovery diagnostics.
 

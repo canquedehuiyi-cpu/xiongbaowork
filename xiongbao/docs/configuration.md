@@ -957,7 +957,7 @@ all computers while preserving their browser profiles and workspaces, apply the 
 environment and remove only the owned containers (do not remove their volumes):
 
 ```sh
-docker ps -aq --filter "label=openbot.namespace=openbot" | xargs -r docker rm -f
+docker ps -aq --filter "label=xiongbao.namespace=xiongbao" | xargs -r docker rm -f
 ```
 
 The supervisor recreates each computer with the same named volumes on its next request.
@@ -1035,9 +1035,14 @@ only Edge installed it starts, but a Bot's browser needs Chrome and does not ope
 
 The helper ignores inherited `PROFILES_DIR` and `WORKSPACE_DIR`. Its defaults are:
 
-- macOS: `~/Library/Application Support/OpenBot/local-computer`
-- Windows: `%LOCALAPPDATA%\OpenBot\local-computer`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/openbot/local-computer`
+- macOS: `~/Library/Application Support/XiongBao/local-computer`
+- Windows: `%LOCALAPPDATA%\XiongBao\local-computer`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/xiongbao/local-computer`
+
+Before v0.2.16 the same folder sat under a directory named for the product's earlier name. The first
+start of v0.2.16 moves it here, profiles and files included, when nothing is here yet; if it cannot be
+moved (a browser still holding it open on Windows, say) the helper uses it where it is for that run
+and tries again next time.
 
 Set `XIONGBAO_LOCAL_COMPUTER_DIR` to an absolute, dedicated app-owned directory to change that root.
 Do not point it at your personal Chrome data. Each Bot uses a separate persistent subdirectory under
@@ -1160,17 +1165,22 @@ symlinks that path to the rootless socket. Rootless Podman on Linux needs
 symlink to the rootful socket, which is not the one running, and the supervisor reports that it
 cannot reach Docker.
 
-`COMPUTER_NAMESPACE` defaults to `openbot` and names the deployment a computer belongs to. It is part
-of every container and volume name the supervisor derives, and the supervisor acts only on computers
-carrying it, so two deployments on one Docker host never adopt each other's.
+`COMPUTER_NAMESPACE` names the deployment a computer belongs to. It is part of every container and
+volume name the supervisor derives, and the supervisor acts only on computers carrying it, so two
+deployments on one Docker host never adopt each other's. Left unset, the supervisor settles it from the
+host when it first needs it: `xiongbao`, unless every computer and volume it finds under either default
+is under the default from before v0.2.16, in which case it keeps that one and says so in its log, so an
+upgraded host keeps its people's browser logins and files. A host with computers under both stays on
+`xiongbao` and logs how many earlier ones it left; setting `COMPUTER_NAMESPACE` to the earlier default
+uses those instead. Nothing is removed either way.
 
 Per-Bot computers belong to the supervisor rather than to Compose, so `docker compose down -v` does
 not remove them: their containers keep running and their profile volumes, which hold whatever the
 Bots are signed in to, survive. Remove them by the label the supervisor sets:
 
 ```sh
-docker ps -aq --filter "label=openbot.namespace=openbot" | xargs -r docker rm -f
-docker volume ls -q --filter "label=openbot.namespace=openbot" | xargs -r docker volume rm
+docker ps -aq --filter "label=xiongbao.namespace=xiongbao" | xargs -r docker rm -f
+docker volume ls -q --filter "label=xiongbao.namespace=xiongbao" | xargs -r docker volume rm
 ```
 
 Proxy credentials may appear in proxy URLs, but the computer strips them before reporting proxy status.
@@ -1223,7 +1233,10 @@ signs with the same key and nothing new is needed to start. `WEB_BOT_AUTH_KEY` n
 Ed25519 private JWK (on Helm, `secrets.webBotAuthKey`). The server hands it to each computer with
 the network policy it already pushes, because the browser is what signs: a Bot's computer can sign as
 this deployment, which is what it is for, and nothing else the deployment holds can be recovered from
-it. Rotate by setting a new `WEB_BOT_AUTH_KEY` and registering again.
+it. Rotate by setting a new `WEB_BOT_AUTH_KEY` and registering again. v0.2.16 changed the label the
+derivation uses, so a deployment that signed with the derived key before it signs with a different key
+after it: its directory publishes the new public key and keyid, and Cloudflare has to be told again (the
+steps below). A deployment that set `WEB_BOT_AUTH_KEY` is unaffected.
 
 **Registering with Cloudflare (manual, once).** Signing earns nothing until Cloudflare knows the key:
 

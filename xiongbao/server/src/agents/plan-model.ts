@@ -37,7 +37,11 @@ export function planModelForEnvironment(
   const harness = claude ? "agent-claude-sdk" : "agent-langgraph-agui";
   if (
     environment.PICKED_HARNESS_SOURCE?.trim() === "byo" ||
-    !new RegExp(`(?:^|/)(?:openbot-)?${harness}(?::|@|$)`).test(image)
+    // The earlier prefix is an image built before v0.2.16 that setup may still name.
+    // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+    !new RegExp(`(?:^|/)(?:xiongbao-)?(?:openbot-)?${harness}(?::|@|$)`).test(
+      image,
+    )
   ) {
     throw new Error(
       `The selected plan requires the installed ${harness} harness for built-in Bots.`,

@@ -26,10 +26,10 @@ function fixture() {
   writeFileSync(chart, "pinned chart fixture");
   const current = parseReleaseManifest(structuredClone(currentFixture));
   const candidate = parseReleaseManifest(structuredClone(targetFixture));
-  current.artifacts.images.openbot = {
+  current.artifacts.images.ghcr = {
     reference: `ghcr.io/acme/xiongbao@sha256:${"b".repeat(64)}`,
   };
-  candidate.artifacts.images.openbot = {
+  candidate.artifacts.images.ghcr = {
     reference: `ghcr.io/acme/xiongbao@sha256:${"b".repeat(64)}`,
   };
   candidate.artifacts.chart = {
@@ -121,6 +121,21 @@ test("Helm plan pins the chart and images while leaving customer values separate
     "customer-secrets",
   );
   expect(f.calls).toHaveLength(0);
+});
+/*
+ * The installed manifest was accepted before v0.2.16, which named the GHCR image under the key it had then.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("an installed manifest from before v0.2.16 still names the image it runs", async () => {
+  const f = fixture();
+  const { ghcr, ...rest } = f.options.current.artifacts.images;
+  f.options.current.artifacts.images = {
+    ...rest,
+    openbot: ghcr ?? { reference: "" },
+  };
+  const plan = await planKubernetesPromotion(f.options);
+  expect(plan.allowed).toBe(true);
+  expect(plan.values.image.digest).toBe(`sha256:${"b".repeat(64)}`);
 });
 test("wrong chart checksum and missing backup block promotion before cluster mutation", async () => {
   const f = fixture();

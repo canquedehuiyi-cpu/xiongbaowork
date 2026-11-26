@@ -41,7 +41,7 @@ const EX_ADMIN = `action-exadmin-${suite}`;
 const GMAIL = `Gmail${suite}`;
 const DRIVE = `GoogleDrive${suite}`;
 const app = (toolkit: string) => `arcade-${toolkit}`;
-const TEAM = `openbot-deployment:${suite}:team`;
+const TEAM = `xiongbao-deployment:${suite}:team`;
 const SECRET_URL = "https://accounts.google.com/o/oauth2/auth?state=BEARER";
 const platform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 

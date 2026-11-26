@@ -223,7 +223,7 @@ beforeAll(async () => {
         ...(toolkit === TEAM_DOCS
           ? {
               accountMode: "shared",
-              sharedVendorUserId: `openbot-deployment:${suite}:R`,
+              sharedVendorUserId: `xiongbao-deployment:${suite}:R`,
               sharedConnectedAt: new Date(),
               sharedConnectedBy: ADMIN,
             }

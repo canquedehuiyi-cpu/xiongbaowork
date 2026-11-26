@@ -38,7 +38,12 @@ export const LINK_REFUSAL_MESSAGE =
   "该邮箱已有一个未验证的密码账号，不能直接用第三方登录接管。请用密码登录，或联系管理员处理。";
 
 /** What a person sees when SSO is required and they tried another way in. */
-/** The native app's custom scheme (mobile/app.config.ts), plus the pre-rename one still accepted for sign-in return. */
+/**
+ * The native app's custom scheme (mobile/app.config.ts), plus the one builds from before the rename registered
+ * with the phone. Such a build is installed on somebody's phone and cannot be changed from here, so its
+ * sign-in return stays accepted for good rather than until a release (kept forever in
+ * scripts/rebrand/protect.json, with the reason).
+ */
 const NATIVE_APP_ORIGINS = ["xiongbao://", "openbotmobile://"];
 
 export const SSO_REQUIRED_MESSAGE =
@@ -306,7 +311,7 @@ export function createAuth(
      * SCIM 2.0 at /api/auth/scim/v2, only when SCIM_BEARER_TOKEN is set. See scim.ts.
      */
     ...(scimPluginOptions ? [scim(scimPluginOptions)] : []),
-    electron({ clientID: "openbot-desktop", codeExpiresIn: 120 }),
+    electron({ clientID: "xiongbao-desktop", codeExpiresIn: 120 }),
     ...(authConfig.okta
       ? [
           genericOAuth({

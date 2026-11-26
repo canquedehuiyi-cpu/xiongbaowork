@@ -50,7 +50,10 @@ describe("asComposioBroker", () => {
     expect(
       await broker.isConnected({ userId: "user_a", toolkit: "Gmail" }),
     ).toBe(true);
-    await broker.revoke({ userId: "openbot-deployment:d:r", toolkit: "Gmail" });
+    await broker.revoke({
+      userId: "xiongbao-deployment:d:r",
+      toolkit: "Gmail",
+    });
     expect(seen).toEqual([
       {
         account: { holder: "person", userId: "user_a", vendorUserId: "user_a" },
@@ -59,8 +62,8 @@ describe("asComposioBroker", () => {
       {
         account: {
           holder: "person",
-          userId: "openbot-deployment:d:r",
-          vendorUserId: "openbot-deployment:d:r",
+          userId: "xiongbao-deployment:d:r",
+          vendorUserId: "xiongbao-deployment:d:r",
         },
         toolkit: "Gmail",
       },

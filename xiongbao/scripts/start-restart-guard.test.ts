@@ -26,7 +26,7 @@ type Run = {
   settings?: Record<string, string>;
   processEnvironment?: Record<string, string>;
   unavailableHealthPorts?: readonly number[];
-  /** An installation an update has accepted: `.openbot-release.json` is there. */
+  /** An installation an update has accepted: `.xiongbao-release.json` is there. */
   acceptedRelease?: boolean;
 };
 
@@ -80,7 +80,7 @@ async function runStartWithStaleServerProbe(
   );
   await writeFile(join(directory, ".env"), `${environment.join("\n")}\n`);
   if (acceptedRelease)
-    await writeFile(join(directory, ".openbot-release.json"), "{}\n");
+    await writeFile(join(directory, ".xiongbao-release.json"), "{}\n");
   await writeFile(
     join(scripts, "start.sh"),
     await readFile("scripts/start.sh"),

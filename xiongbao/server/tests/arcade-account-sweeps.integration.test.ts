@@ -71,7 +71,7 @@ const PEOPLE = [
 ].map(person);
 const toolkitFor = (name: string) => `${name}${suite}`;
 const app = (toolkit: string) => `arcade-${toolkit}`;
-const TEAM = `openbot-deployment:${suite}:team`;
+const TEAM = `xiongbao-deployment:${suite}:team`;
 const BOT = `sweep-bot-${suite}`;
 const platform = <T>(work: () => Promise<T>) => runAsTenant("platform", work);
 const as = <T>(who: string, work: () => Promise<T>) => runAsTenant(who, work);

@@ -1,6 +1,6 @@
 # Kubernetes release promotion
 
-`bun scripts/update.ts kubernetes plan|apply|gitops` is operator tooling around the existing Helm chart. The running application receives no cluster deployment permission. Promotion uses the manifest's exact monolithic image digest (`images.openbot`), chart archive checksum, independent distribution policy and explicit customer values files.
+`bun scripts/update.ts kubernetes plan|apply|gitops` is operator tooling around the existing Helm chart. The running application receives no cluster deployment permission. Promotion uses the manifest's exact monolithic image digest as GHCR holds it (`images.ghcr`, from the release record's `ghcr`; a manifest accepted before v0.2.16 names it under its former key, still read for that one), chart archive checksum, independent distribution policy and explicit customer values files.
 
 The release pipeline packages the existing chart and records its version, release-asset URL and SHA-256 in `release-manifest.json`. Download the approved package; this command checks its checksum before invoking Helm. The separate desktop `server` image cannot substitute for the monolithic image used by chart server/computer workloads.
 

@@ -1,7 +1,7 @@
 // Must stay the first import: it copies settings written with the old prefix onto their XIONGBAO_* names before any module reads config.
 import "../../shared/apply-env-aliases";
 import { serve } from "bun";
-import { Hono } from "hono";
+import { type Context, Hono, type Next } from "hono";
 import { authorised } from "./authorisation";
 import { computerMemoryBytes } from "./computer-memory-bytes";
 import {
@@ -14,6 +14,7 @@ import {
   NameHeldError,
   reachable,
   reset,
+  resolveNamespace,
   retireLegacyComputers,
   stop,
 } from "./docker";
@@ -66,7 +67,7 @@ if (!token) {
   process.exit(1);
 }
 const image =
-  process.env.COMPUTER_IMAGE?.trim() || "openbot-agent-computer:latest";
+  process.env.COMPUTER_IMAGE?.trim() || "xiongbao-agent-computer:latest";
 const network = process.env.COMPUTER_NETWORK?.trim() || undefined;
 const runtime = process.env.COMPUTER_RUNTIME?.trim() || undefined;
 const resolvedMemory = computerMemoryBytes(process.env.COMPUTER_MEMORY_BYTES);
@@ -88,6 +89,28 @@ app.use("*", async (context, next) => {
   }
   return next();
 });
+
+/*
+ * Every name a request derives contains the namespace, so it is settled first: on a host upgraded from before
+ * v0.2.16 without COMPUTER_NAMESPACE, that is the earlier default (docker.ts resolveNamespace).
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+async function namespaceSettled(
+  context: Context,
+  next: Next,
+): Promise<Response | undefined> {
+  try {
+    await resolveNamespace();
+  } catch (error) {
+    if (error instanceof DockerUnavailableError) {
+      return context.json({ error: error.message }, 503);
+    }
+    throw error;
+  }
+  await next();
+}
+app.use("/computers", namespaceSettled);
+app.use("/computers/*", namespaceSettled);
 
 app.get("/health", async (context) =>
   context.json({ status: "ok", docker: await reachable() }),
@@ -239,7 +262,8 @@ app.get("/computers", async (context) => {
  * they stop holding a browser each. Their volumes stay. Not fatal: a supervisor that cannot do this
  * still serves today's computers, and says why in its log.
  */
-void retireLegacyComputers()
+void resolveNamespace()
+  .then(() => retireLegacyComputers())
   .then((stopped) => {
     if (stopped.length > 0) {
       console.info(

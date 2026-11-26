@@ -143,7 +143,14 @@ else
   info "  compose services: not running"
 fi
 
-COMPUTERS="$(docker ps -q --filter label=openbot.supervisor=true 2>/dev/null || true)"
+# The supervisor's label, and the one it had before v0.2.16, which computers made then still carry.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+COMPUTERS="$(
+  {
+    docker ps -q --filter label=xiongbao.supervisor=true 2>/dev/null || true
+    docker ps -q --filter label=openbot.supervisor=true 2>/dev/null || true
+  } | sort -u
+)"
 if [ -z "$COMPUTERS" ]; then
   info "  Bot computers: none running"
 elif [ "$KEEP_COMPUTERS" = "true" ]; then

@@ -10,6 +10,7 @@ import {
   escapeRegExp,
   type Finding,
   findings,
+  LEGACY_NEVER_CHANGE,
   masked,
   NEVER_CHANGE,
   REPO,
@@ -96,6 +97,29 @@ describe("never-change strings survive", () => {
       expect(corpus.includes(value)).toBe(true);
     });
   }
+});
+
+/*
+ * Since v0.2.16 the guarded spellings are the renamed ones, so what the guard holds still is the new
+ * spelling: a change back, or to anything else, fails "is still spelled verbatim" above.
+ */
+describe("never-change strings carry the renamed spelling", () => {
+  test("no never-change string or signing domain names the upstream product", () => {
+    expect(
+      [...NEVER_CHANGE, ...SIGNING_DOMAINS].filter((value) =>
+        BRAND.test(value),
+      ),
+    ).toEqual([]);
+  });
+
+  test("each legacy spelling still masked is the former name of a never-change string", () => {
+    expect(
+      LEGACY_NEVER_CHANGE.filter(
+        (value) =>
+          !NEVER_CHANGE.includes(value.replaceAll("openbot", "xiongbao")),
+      ),
+    ).toEqual([]);
+  });
 });
 
 /*

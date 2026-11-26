@@ -220,7 +220,7 @@ services:
       # here. A key the person put in `.env` wins and arrives the same way.
       COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:-}
       # A Google or xAI sign-in, which the server reads and renews itself. The file is on the host,
-      # at `.openbot/model-oauth.json` beside this one, and reaches the container through the mount
+      # at `.xiongbao/model-oauth.json` beside this one, and reaches the container through the mount
       # below, so a host path here becomes the mount's. Empty stays empty: no sign-in, no file.
       XIONGBAO_MODEL_OAUTH_FILE: ${XIONGBAO_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
       # The same under the old name, because Compose cannot nest a `:+` inside a `:-`: a `.env` that
@@ -250,9 +250,10 @@ services:
       # The directory, not the file: the server renews the token by writing a sibling and renaming it
       # over the original, which a single-file mount cannot take. Not created here, because Docker
       # would create it as root on Linux and the desktop could then not write its sign-in into it;
-      # whoever starts this service makes it first.
+      # whoever starts this service makes it first. Before v0.2.16 the folder had the product's earlier
+      # name; scripts/start.sh renames it once (scripts/update-local.ts adoptLegacyLocalState).
       - type: bind
-        source: ./.openbot
+        source: ./.xiongbao
         target: /xiongbao
         bind:
           create_host_path: false
@@ -548,8 +549,10 @@ services:
       COMPUTER_BROWSER_MODE: ${COMPUTER_BROWSER_MODE:-headed}
       COMPUTER_IMAGE: ${COMPUTER_IMAGE:-xiongbao-agent-computer:latest}
       # Which deployment the computers it creates belong to, so two stacks on one Docker host never
-      # derive the same container and volume names for the same Bot.
-      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-openbot}
+      # derive the same container and volume names for the same Bot. Unset, the supervisor settles it
+      # from the host: the product's name, or on a host upgraded from before v0.2.16 whose computers are
+      # all under the default of then, that one (supervisor/src/names.ts namespaceForHost).
+      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-}
       # Empty by default because the API server runs on the host in local development and reaches
       # computers by published loopback ports. Deployments running the server inside this network set
       # the network name so computers publish no host ports.

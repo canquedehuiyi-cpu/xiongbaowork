@@ -51,7 +51,7 @@ function derivedSeed(keyEncryptionKey: string): Buffer {
       "sha256",
       Buffer.from(keyEncryptionKey, "base64"),
       Buffer.alloc(0),
-      Buffer.from("openbot web-bot-auth ed25519 v1"),
+      Buffer.from("xiongbao web-bot-auth ed25519 v1"),
       32,
     ),
   );

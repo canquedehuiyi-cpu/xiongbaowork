@@ -42,8 +42,8 @@ describe("renameText", () => {
 
   test("环境变量名在 R1 受保护，签名域名不被误改", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", p)).toBe("OPENBOT_PUBLIC_URL");
-    expect(renameText('"openbot-bearer", openbotRoot', p)).toBe(
-      '"openbot-bearer", xiongbaoRoot',
+    expect(renameText('".openbot-release.json", openbotRoot', p)).toBe(
+      '".openbot-release.json", xiongbaoRoot',
     );
   });
 
@@ -373,16 +373,18 @@ describe("保护清单按阶段到期", () => {
     expect(buildProtect([], "R1").test("anything")).toBe(false);
   });
 
-  test("真实清单：环境变量在 R1 受保护、R2 起改名；加密域名到 R3 才改", () => {
+  test("真实清单：环境变量在 R1 受保护、R2 起改名；本机状态文件名到 R3 才改", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R1"))).toBe(
       "OPENBOT_PUBLIC_URL",
     );
     expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R2"))).toBe(
       "XIONGBAO_PUBLIC_URL",
     );
-    const domain = '"openbot-bearer"';
+    const domain = '".openbot-release.json"';
     expect(renameText(domain, loadProtect("R2"))).toBe(domain);
-    expect(renameText(domain, loadProtect("R3"))).toBe('"xiongbao-bearer"');
+    expect(renameText(domain, loadProtect("R3"))).toBe(
+      '".xiongbao-release.json"',
+    );
     const copyright = "Copyright (c) 2026 CopilotKit";
     expect(renameText(copyright, loadProtect("R4"))).toBe(copyright);
   });

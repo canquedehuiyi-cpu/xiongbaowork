@@ -251,7 +251,7 @@ describe("official Better Auth desktop exchange", () => {
       verification: [],
     }),
     emailAndPassword: { enabled: true },
-    plugins: [electron({ clientID: "openbot-desktop" })],
+    plugins: [electron({ clientID: "xiongbao-desktop" })],
   });
   async function issue() {
     const signup = await auth.api.signUpEmail({
@@ -270,7 +270,7 @@ describe("official Better Auth desktop exchange", () => {
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const response = await auth.handler(
       new Request(
-        `${origin}/api/auth/electron/transfer-user?client_id=openbot-desktop&state=fixture-state&code_challenge=${challenge}`,
+        `${origin}/api/auth/electron/transfer-user?client_id=xiongbao-desktop&state=fixture-state&code_challenge=${challenge}`,
         {
           method: "POST",
           headers: { origin, cookie, "content-type": "application/json" },
