@@ -138,6 +138,19 @@ spec:
             - name: MIGRATION_URL_EXPECTED
               value: {{ (.Values.database).migrationExistingSecretKey | default "migration-database-url" | quote }}
             {{- end }}
+            {{- /*
+              The deployment's key encryption key: the v0.2.16 migration rekeys the credentials an earlier
+              release sealed (kid k1) with it, in the migration's own transaction, and refuses without it
+              only when there is such a credential. Optional because a pre-install hook runs before this
+              chart's Secret exists, on a database that holds no credential yet; on an upgrade the Secret
+              is there (it is kept, helm.sh/resource-policy: keep).
+            */}}
+            - name: KEY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "xiongbao.secretName" . }}
+                  key: key-encryption-key
+                  optional: true
             - name: EMBEDDED_POSTGRES
               value: "off"
             - name: EMBEDDED_COMPUTER

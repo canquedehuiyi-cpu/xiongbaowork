@@ -223,6 +223,24 @@ SELECT rolname, CASE WHEN rolpassword IS NULL THEN 'none'
 -- kind 为 scram：口令不变；md5：改名后要重新设口令；none：本来就没有口令
 ```
 
+从 v0.2.15 升级的外接库，迁移环境里还要有 API 用的同一个 `KEY_ENCRYPTION_KEY`：v0.2.16 的迁移在同一个迁移事务里，
+把 v0.2.15 加密的凭据（信封里 `kid` 为 `k1`）用这个密钥解开、按新格式（`k2`）重新加密，凭据内容不变。
+
+```dotenv
+# .env.migration：只给下面的迁移命令用，不交给 API 容器
+DATABASE_URL=postgres://<owner>:<URL编码口令>@db.example.com:5432/xiongbao_b?sslmode=require
+KEY_ENCRYPTION_KEY=<与 API 的 KEY_ENCRYPTION_KEY 相同>
+```
+
+- 库里没有 `k1` 凭据时不读这个变量。有 `k1` 凭据而迁移环境里没有它：迁移拒绝执行，整个迁移事务回滚（`0240` 也不生效），
+  报错写明要加 `KEY_ENCRYPTION_KEY`；库保持升级前的样子，补上后重跑即可，也可以继续用 v0.2.15。
+- 某条凭据解不开（密钥与写入时不同，或密文损坏）：同样整体回滚，报错给出这条凭据的 id 与租户。先核对密钥是不是 API 用的那个；
+  确实是这一条坏了，把报错发给开发者，不要手工改 `credentials` 表。
+- 迁移用的角色不必是超级用户：这张表强制行级安全，换密钥像以往的迁移一样在本事务里切到 platform 帧读写全部租户的凭据，
+  不改表的行级安全设置。迁移角色对 `credentials` 表没有读写权限时迁移拒绝执行并回滚；用建库时的 owner 连接串跑迁移。
+- 滚动升级期间还在跑的 v0.2.15 副本，在迁移之后写入的仍是 `k1` 凭据；v0.2.16 照常能读。每次跑迁移都会把剩下的 `k1` 换成 `k2`，
+  所以旧副本全部下线后再执行一次本节的迁移命令（没有要换的就什么都不改）。
+
 `ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `xiongbao_role_writer`，唯一可以写入身份角色的登录；
 缺少它 API 拒绝启动（`ROLE_WRITER_DATABASE_URL is required`）。内嵌模式自动生成这两条连接串，外接模式需要自己配置。
 嵌入模式会自动导出 `MIGRATION_DATABASE_URL`，外接模式不会自动迁移，运维在发布流程中单独执行。

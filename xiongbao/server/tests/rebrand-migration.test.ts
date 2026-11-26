@@ -99,25 +99,25 @@ const auditIds = [randomUUID(), randomUUID()];
 async function fingerprint(client: postgres.Sql) {
   const [row] = await client<{ text: string }[]>`
     select concat_ws(E'\n',
-      (select string_agg(p.oid::regprocedure::text || ' ' || md5(pg_get_functiondef(p.oid)), E'\n' order by 1)
+      (select string_agg(p.oid::regprocedure::text || ' ' || md5(pg_get_functiondef(p.oid)), E'\n' order by (p.oid::regprocedure::text || ' ' || md5(pg_get_functiondef(p.oid))) collate "C")
          from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'),
-      (select string_agg(t.tgrelid::regclass::text || ' ' || t.tgname, E'\n' order by 1)
+      (select string_agg(t.tgrelid::regclass::text || ' ' || t.tgname, E'\n' order by (t.tgrelid::regclass::text || ' ' || t.tgname) collate "C")
          from pg_trigger t where not t.tgisinternal),
-      (select string_agg(c.conrelid::regclass::text || ' ' || c.conname || ' ' || pg_get_constraintdef(c.oid), E'\n' order by 1)
+      (select string_agg(c.conrelid::regclass::text || ' ' || c.conname || ' ' || pg_get_constraintdef(c.oid), E'\n' order by (c.conrelid::regclass::text || ' ' || c.conname || ' ' || pg_get_constraintdef(c.oid)) collate "C")
          from pg_constraint c where c.connamespace = 'public'::regnamespace),
-      (select string_agg(c.oid::regclass::text || ' ' || coalesce(c.relacl::text, ''), E'\n' order by 1)
+      (select string_agg(c.oid::regclass::text || ' ' || coalesce(c.relacl::text, ''), E'\n' order by (c.oid::regclass::text || ' ' || coalesce(c.relacl::text, '')) collate "C")
          from pg_class c where c.relnamespace = 'public'::regnamespace),
-      (select string_agg(p.polrelid::regclass::text || ' ' || p.polname || ' ' || p.polroles::regrole[]::text, E'\n' order by 1)
+      (select string_agg(p.polrelid::regclass::text || ' ' || p.polname || ' ' || p.polroles::regrole[]::text, E'\n' order by (p.polrelid::regclass::text || ' ' || p.polname || ' ' || p.polroles::regrole[]::text) collate "C")
          from pg_policy p),
-      (select string_agg(coalesce(d.defaclacl::text, ''), E'\n' order by 1) from pg_default_acl d),
-      (select string_agg(array_to_string(s.setconfig, ','), E'\n' order by 1) from pg_db_role_setting s),
-      (select string_agg(md5(g::text), E'\n' order by 1) from plugin_grants g),
-      (select string_agg(md5(e::text), E'\n' order by 1) from enterprise_settings e),
-      (select string_agg(md5(u::text), E'\n' order by 1) from users u),
-      (select string_agg(md5(p::text), E'\n' order by 1) from platform_model_pool p),
-      (select string_agg(md5(r::text), E'\n' order by 1) from thread_run_events r),
-      (select string_agg(md5(d::text), E'\n' order by 1) from deployment_packages d),
-      (select string_agg(md5(a::text), E'\n' order by 1) from audit_events a)
+      (select string_agg(coalesce(d.defaclacl::text, ''), E'\n' order by coalesce(d.defaclacl::text, '') collate "C") from pg_default_acl d),
+      (select string_agg(array_to_string(s.setconfig, ','), E'\n' order by array_to_string(s.setconfig, ',') collate "C") from pg_db_role_setting s),
+      (select string_agg(md5(g::text), E'\n' order by md5(g::text) collate "C") from plugin_grants g),
+      (select string_agg(md5(e::text), E'\n' order by md5(e::text) collate "C") from enterprise_settings e),
+      (select string_agg(md5(u::text), E'\n' order by md5(u::text) collate "C") from users u),
+      (select string_agg(md5(p::text), E'\n' order by md5(p::text) collate "C") from platform_model_pool p),
+      (select string_agg(md5(r::text), E'\n' order by md5(r::text) collate "C") from thread_run_events r),
+      (select string_agg(md5(d::text), E'\n' order by md5(d::text) collate "C") from deployment_packages d),
+      (select string_agg(md5(a::text), E'\n' order by md5(a::text) collate "C") from audit_events a)
     ) as text`;
   return row?.text ?? "";
 }

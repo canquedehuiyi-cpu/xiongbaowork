@@ -46,8 +46,10 @@ PGPASSWORD="$OWNER_PW" "$PREFLIGHT" check -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAM
 # The owner URL is scoped to migration; the API's connection strings are written at the end.
 # Every step that may change data runs through `step`, which on failure names the step, the kind of
 # data, the steps already done, whether the business database changed, and the backup.
+# The same transaction rekeys the credentials v0.2.15 sealed (kid k1) with KEY_ENCRYPTION_KEY, which
+# with-contenv hands this script and the step passes on; see server/src/credentials-rekey.ts.
 PGPASSWORD="$OWNER_PW" DATABASE_URL="postgres://$DB_USER:$OWNER_PW@127.0.0.1:5432/$DB_NAME" \
-  "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
+  "$PREFLIGHT" step 数据库迁移 数据库表结构、系统数据与已存凭据 -- s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
 
 APP_PW="$(cat /var/lib/postgresql/pgpassword-app)"
 # Generated secrets are hex. Validate before placing one in a SQL literal.

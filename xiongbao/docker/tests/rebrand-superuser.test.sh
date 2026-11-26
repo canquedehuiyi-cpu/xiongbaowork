@@ -115,8 +115,12 @@ verifier_kind() { # volume port user db
 # Every row of the database, as pg_dump prints the data. Its comment lines name each table's owner, which
 # the rename changes, so they are left out; so is the migration journal, which the v0.2.16 migrations
 # (0240) add to, and each table's COPY line, whose column list grows when a migration adds a column.
-data_print() { # volume port user db
-  PGPASSWORD=$(pw_of "$1" pgpassword) "$PG_BIN/pg_dump" -w --data-only --exclude-schema=drizzle -h 127.0.0.1 -p "$2" -U "$3" -d "$4" 2>/dev/null |
+# Further pg_dump options after the four (the credential rows, which the upgrade rekeys, are left out
+# with --exclude-table-data=public.credentials when comparing with the data from before it).
+data_print() { # volume port user db [pg_dump option...]
+  d_vol=$1 d_port=$2 d_user=$3 d_db=$4
+  shift 4
+  PGPASSWORD=$(pw_of "$d_vol" pgpassword) "$PG_BIN/pg_dump" -w --data-only --exclude-schema=drizzle "$@" -h 127.0.0.1 -p "$d_port" -U "$d_user" -d "$d_db" 2>/dev/null |
     grep -v '^--\|^\\\(un\)\{0,1\}restrict \|^COPY ' | cksum
 }
 backups() { ls "$T/$1/vol/backup" 2>/dev/null | grep -c '^pre-rebrand-.*\.dump$'; }
@@ -124,6 +128,62 @@ backups() { ls "$T/$1/vol/backup" 2>/dev/null | grep -c '^pre-rebrand-.*\.dump$'
 url_at() { sed "s/@127\\.0\\.0\\.1:5432\\//@127.0.0.1:$2\\//" "$T/$1/env/$3"; }
 # Old brand words in what a boot printed: the delivery image's startup log is scanned for them.
 old_words() { grep -o -i 'openbot[a-z0-9_]*' "$@"; }
+
+# The deployment's KEY_ENCRYPTION_KEY, which the container's environment hands migrate.sh and so the
+# migrator: the upgrade rekeys the credentials v0.2.15 sealed (kid k1) to kid k2 with it. Never printed.
+REKEY_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '\n')
+# bun -e "$SEAL_V0215" <tenant> <id> <kind> <plaintext>, the key in SEAL_KEY: a credential envelope exactly
+# as v0.2.15 sealed one (kid k1, the label before v0.2.16), written out here rather than taken from the code
+# under test.
+SEAL_V0215='
+const [tenant, id, kind, plaintext] = process.argv.slice(1);
+const frame = (part) => { const b = Buffer.from(part, "utf8"); const n = Buffer.alloc(4); n.writeUInt32BE(b.length); return [n, b]; };
+const aad = Buffer.concat(["openbot.vault.credential.v2", tenant, id, kind].flatMap(frame));
+const key = await crypto.subtle.importKey("raw", Buffer.from(process.env.SEAL_KEY, "base64"), { name: "AES-GCM" }, false, ["encrypt"]);
+const iv = crypto.getRandomValues(new Uint8Array(12));
+const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, key, Buffer.from(plaintext, "utf8"));
+process.stdout.write(JSON.stringify({ version: 2, alg: "A256GCM", bind: "credential", kid: "k1",
+  iv: Buffer.from(iv).toString("base64"), ciphertext: Buffer.from(ciphertext).toString("base64") }));
+'
+# seed_credential <volume> <port> <key> <id> <tenant> <kind> <plaintext>: one such row, as v0.2.15 stored it.
+seed_credential() {
+  c_env=$(SEAL_KEY=$3 bun -e "$SEAL_V0215" "$5" "$4" "$6" "$7") || return 1
+  sql "$1" "$2" openbot openbot "INSERT INTO credentials (id, tenant_id, kind, provider, encrypted_value, key_id, metadata)
+    VALUES ('$4', '$5', '$6', 'upgrade-probe', '$c_env', 'probe-$4', '{}');"
+}
+# The credential rows a v0.2.15-shaped volume carries: id, tenant, kind, plaintext.
+CREDENTIALS='00000000-0000-4000-8000-0000000000c1 upgrade-person-a model probe-model-key
+00000000-0000-4000-8000-0000000000c2 team mcp probe-team-secret'
+# kids_of <volume> <port> <user> <db>: "<id> <kid>" per credential row.
+kids_of() {
+  sql "$1" "$2" "$3" "$4" "SELECT string_agg(id || ' ' || (encrypted_value::jsonb ->> 'kid'), ',' ORDER BY id) FROM credentials;"
+}
+# credentials_open <volume> <port> <user> <db>: every row in CREDENTIALS opens to its plaintext with REKEY_KEY
+# under the label its kid names (k1: v0.2.15's, k2: xiongbao.vault.credential.v2), bound to its own tenant,
+# id and kind; prints the ids that do not. Written out here too: in the image the server's source does not
+# ship (server/dist is bundled), and this way the check does not lean on the code under test.
+credentials_open() {
+  sql "$1" "$2" "$3" "$4" "SELECT json_agg(json_build_object('id', id, 'tenant', tenant_id, 'kind', kind, 'value', encrypted_value))
+    FROM credentials;" >"$T/rows.json" || { echo unreadable; return; }
+  ROWS="$T/rows.json" EXPECTED="$CREDENTIALS" OPEN_KEY="$REKEY_KEY" bun -e '
+    const labels = { k1: "openbot.vault.credential.v2", k2: "xiongbao.vault.credential.v2" };
+    const frame = (part) => { const b = Buffer.from(part, "utf8"); const n = Buffer.alloc(4); n.writeUInt32BE(b.length); return [n, b]; };
+    const key = await crypto.subtle.importKey("raw", Buffer.from(process.env.OPEN_KEY, "base64"), { name: "AES-GCM" }, false, ["decrypt"]);
+    const rows = await Bun.file(process.env.ROWS).json();
+    for (const line of process.env.EXPECTED.split("\n")) {
+      const [id, , , plaintext] = line.split(" ");
+      const row = rows.find((r) => r.id === id);
+      let opened = null;
+      try {
+        const envelope = JSON.parse(row.value);
+        const aad = Buffer.concat([labels[envelope.kid], row.tenant, row.id, row.kind].flatMap(frame));
+        opened = Buffer.from(await crypto.subtle.decrypt({ name: "AES-GCM", iv: Buffer.from(envelope.iv, "base64"), additionalData: aad },
+          key, Buffer.from(envelope.ciphertext, "base64"))).toString("utf8");
+      } catch {}
+      if (opened !== plaintext) console.log(id);
+    }'
+  rm -f "$T/rows.json"
+}
 
 # The migrator, run as migrate.sh runs it (from the server directory, the owner URL in DATABASE_URL).
 MIGRATE="cd \"\$1\" && exec bun scripts/migrate.ts"
@@ -152,7 +212,7 @@ boot() {
     vol=$T/$b_vol/vol
     export REBRAND_BACKUP_DIR="$vol/backup" REBRAND_STATE_DIR="$T/$b_vol/state" REBRAND_PG_BIN="$PG_BIN" \
       REBRAND_SUPERUSER_HINT="$vol/superuser-renamed" DATABASE_URLS_DIR="$T/$b_vol/env" DATABASE_SECRETS_DIR="$vol" \
-      HOME="$T/home"
+      HOME="$T/home" KEY_ENCRYPTION_KEY="$REKEY_KEY"
     OWNER_PW=$(cat "$vol/pgpassword")
     at() { echo "$1" >"$T/stage"; }
     at names
@@ -162,7 +222,7 @@ boot() {
     PGPASSWORD=$OWNER_PW sh "$PREFLIGHT" check -h 127.0.0.1 -p "$b_port" -U "$DB_USER" -d "$DB_NAME"
     at migrate
     PGPASSWORD=$OWNER_PW DATABASE_URL="postgres://$DB_USER:$OWNER_PW@127.0.0.1:$b_port/$DB_NAME" \
-      sh "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- sh -c "${MIGRATE_CMD:-$MIGRATE}" migrate "$MIGRATOR_DIR"
+      sh "$PREFLIGHT" step 数据库迁移 数据库表结构、系统数据与已存凭据 -- sh -c "${MIGRATE_CMD:-$MIGRATE}" migrate "$MIGRATOR_DIR"
     at passwords
     app_passwords "$b_vol" "$b_port" "$DB_USER" "$DB_NAME"
     at rename
@@ -246,14 +306,21 @@ v0215_volume() { # name; leaves the port in $port
   APP_ROLE=openbot_app WRITER_ROLE=openbot_role_writer app_passwords "$1" "$port" openbot openbot || return 1
   sql "$1" "$port" openbot openbot "CREATE TABLE public.upgrade_probe (id serial PRIMARY KEY, body text NOT NULL);
     INSERT INTO public.upgrade_probe (body) SELECT 'row ' || g FROM generate_series(1, 200) g;
-    GRANT SELECT ON public.upgrade_probe TO openbot_app;"
+    GRANT SELECT ON public.upgrade_probe TO openbot_app;" || return 1
+  printf '%s\n' "$CREDENTIALS" | while read -r c_id c_tenant c_kind c_plain; do
+    seed_credential "$1" "$port" "$REKEY_KEY" "$c_id" "$c_tenant" "$c_kind" "$c_plain" >/dev/null || exit 1
+  done
 }
 v0215_volume v0215 || exit 1
 V=$port
 V_PW=$(pw_of v0215 pgpassword)
 V_KIND=$(verifier_kind v0215 "$V" openbot openbot)
 V_VERIFIER=$(verifier_of v0215 "$V" openbot openbot)
-V_DATA=$(data_print v0215 "$V" openbot openbot)
+V_DATA=$(data_print v0215 "$V" openbot openbot --exclude-table-data=public.credentials)
+V_KIDS=$(kids_of v0215 "$V" openbot openbot)
+[ "$V_KIDS" = "00000000-0000-4000-8000-0000000000c1 k1,00000000-0000-4000-8000-0000000000c2 k1" ] ||
+  fail "a v0.2.15-shaped volume carries credentials sealed under kid k1 (got $V_KIDS)"
+[ -z "$(credentials_open v0215 "$V" openbot openbot)" ] || fail "the server reads the credentials v0.2.15 sealed"
 [ "$V_KIND" = SCRAM-SHA-256 ] || fail "a v0.2.15-shaped volume stores the superuser password as SCRAM (got $V_KIND)"
 
 # 2. rename failure keeps the old names and stops: a session still connected to the database (ALTER
@@ -314,7 +381,11 @@ else
   logs_in "$V" xiongbao xiongbao "$V_PW" || fail "$what: the old password does not log in under the new names"
   logs_in "$V" openbot postgres "$V_PW" && fail "$what: the old superuser name still logs in"
   [ "$(verifier_of v0215 "$V" xiongbao xiongbao)" = "$V_VERIFIER" ] || fail "$what: the password verifier changed"
-  [ "$(data_print v0215 "$V" xiongbao xiongbao)" = "$V_DATA" ] || fail "$what: the data changed"
+  [ "$(data_print v0215 "$V" xiongbao xiongbao --exclude-table-data=public.credentials)" = "$V_DATA" ] || fail "$what: the data changed"
+  # The credentials were rekeyed with the business migrations, and open to what they held.
+  [ "$(kids_of v0215 "$V" xiongbao xiongbao)" = "00000000-0000-4000-8000-0000000000c1 k2,00000000-0000-4000-8000-0000000000c2 k2" ] ||
+    fail "$what: the credentials are not under kid k2: $(kids_of v0215 "$V" xiongbao xiongbao)"
+  [ -z "$(credentials_open v0215 "$V" xiongbao xiongbao)" ] || fail "$what: rekeyed credentials do not open to what they held"
   [ "$(cat "$T/v0215/env/MIGRATION_DATABASE_URL")" = "postgres://xiongbao:$V_PW@127.0.0.1:5432/xiongbao" ] ||
     fail "$what: MIGRATION_DATABASE_URL does not name the new superuser and database"
   [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at v0215 "$V" DATABASE_URL)" -c "SELECT current_database() || ' ' || count(*) FROM public.upgrade_probe;" 2>&1)" = "xiongbao 200" ] ||
@@ -351,6 +422,10 @@ else
   [ "$(sql v0215 "$V" xiongbao xiongbao "SELECT count(*) FROM drizzle.__drizzle_migrations;")" = "$journal_before" ] ||
     fail "$what: the second boot applied migrations"
   [ "$(data_print v0215 "$V" xiongbao xiongbao)" = "$data_before" ] || fail "$what: the second boot changed data"
+  # The credentials included: nothing is left under kid k1, so the rekey writes nothing and says nothing.
+  grep -q 'credentials-rekeyed' "$T/out" "$T/err" && fail "$what: the second boot rekeyed credentials"
+  [ "$(kids_of v0215 "$V" xiongbao xiongbao)" = "00000000-0000-4000-8000-0000000000c1 k2,00000000-0000-4000-8000-0000000000c2 k2" ] ||
+    fail "$what: the credentials changed kid: $(kids_of v0215 "$V" xiongbao xiongbao)"
   [ "$(sql v0215 "$V" xiongbao xiongbao "SELECT count(*) FROM pg_roles WHERE rolname LIKE 'openbot%';")" = 0 ] ||
     fail "$what: a role still carries an old name"
 fi
@@ -415,6 +490,49 @@ else
     [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at killed "$K" DATABASE_URL)" -c "SELECT current_database() || ' ' || count(*) FROM public.upgrade_probe;" 2>&1)" = "xiongbao 200" ] ||
       fail "$what: the app role cannot read the person's rows through DATABASE_URL"
   fi
+fi
+clean && pass "$what"
+
+# 5c. a credential that does not open stops the upgrade before the business database changes: the rekey
+#     runs in the business migrations' transaction, so the row that fails rolls back the rows rekeyed before
+#     it and 0240 with them. The step names the credential, the journal is as it was at the backup, and the
+#     failure says the business database did not change. Once the row is dealt with, the next boot resumes
+#     without another backup and rekeys the rest.
+v0215_volume badcred || exit 1
+B=$port
+# Sealed under another key, and last in id order, so the good rows are rekeyed before it fails.
+seed_credential badcred "$B" "$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
+  00000000-0000-4000-8000-0000000000c9 upgrade-person-b model probe-unreadable >/dev/null || exit 1
+B_DATA=$(data_print badcred "$B" openbot openbot)
+B_JOURNAL=$(sql badcred "$B" openbot openbot "SELECT count(*) FROM drizzle.__drizzle_migrations;")
+boot badcred "$B"
+what="a credential that does not open stops the upgrade before the business database changes"
+begin
+if [ "$code" -eq 0 ] || [ "$stopped" != migrate ]; then fail "$what: stopped at $stopped (exit $code): $(cat "$T/out" "$T/err")"
+else
+  grep -q "凭据换密钥失败" "$T/err" && grep -q "00000000-0000-4000-8000-0000000000c9" "$T/err" ||
+    fail "$what: the failing credential is not named: $(cat "$T/err")"
+  grep -q "「数据库迁移」这一步失败" "$T/err" && grep -q "已存凭据" "$T/err" ||
+    fail "$what: the step and the kind of data are not named: $(cat "$T/err")"
+  grep -q "业务库没有改动" "$T/err" || fail "$what: does not say the business database is unchanged: $(cat "$T/err")"
+  grep -q "业务库已经改动" "$T/err" && fail "$what: calls an unchanged business database changed: $(cat "$T/err")"
+  [ "$(sql badcred "$B" openbot openbot "SELECT count(*) FROM drizzle.__drizzle_migrations;")" = "$B_JOURNAL" ] ||
+    fail "$what: the migration journal changed"
+  [ "$(data_print badcred "$B" openbot openbot)" = "$B_DATA" ] || fail "$what: the data changed"
+  [ "$(sql badcred "$B" openbot openbot "SELECT string_agg(rolname, ',' ORDER BY rolname) FROM pg_roles WHERE rolname LIKE '%\_app';")" = openbot_app ] ||
+    fail "$what: the application role was renamed"
+  [ "$(names_of badcred "$B" openbot openbot)" = "openbot | openbot" ] || fail "$what: names are $(names_of badcred "$B" openbot openbot)"
+  [ "$(backups badcred)" -eq 1 ] || fail "$what: $(backups badcred) backups"
+fi
+sql badcred "$B" openbot openbot "DELETE FROM credentials WHERE id = '00000000-0000-4000-8000-0000000000c9';"
+boot badcred "$B"
+if [ "$code" -ne 0 ]; then fail "$what: the boot after the row was removed stopped at $stopped (exit $code): $(cat "$T/out" "$T/err")"
+else
+  grep -q "不再备份" "$T/out" || fail "$what: the next boot does not keep the backup: $(cat "$T/out")"
+  [ "$(backups badcred)" -eq 1 ] || fail "$what: $(backups badcred) backups after the retry"
+  [ "$(kids_of badcred "$B" xiongbao xiongbao)" = "00000000-0000-4000-8000-0000000000c1 k2,00000000-0000-4000-8000-0000000000c2 k2" ] ||
+    fail "$what: the retry did not rekey: $(kids_of badcred "$B" xiongbao xiongbao)"
+  [ -z "$(credentials_open badcred "$B" xiongbao xiongbao)" ] || fail "$what: rekeyed credentials do not open to what they held"
 fi
 clean && pass "$what"
 
@@ -574,11 +692,17 @@ cat "$T/out" "$T/err" >>"$ALL"
 
 # 11. nothing above printed a password.
 leaked=0
-for v in fresh v0215 killed md5; do
+for v in fresh v0215 killed badcred md5; do
   for f in pgpassword pgpassword-app pgpassword-role-writer; do
     grep -qF "$(pw_of "$v" "$f")" "$ALL" && leaked=1
   done
 done
 [ "$leaked" -eq 0 ] && pass "no output carries a password" || fail "a password was printed"
+leaked=0
+grep -qF "$REKEY_KEY" "$ALL" && leaked=1
+for c_plain in $(printf '%s\n' "$CREDENTIALS" | awk '{ print $4 }') probe-unreadable; do
+  grep -qF "$c_plain" "$ALL" && leaked=1
+done
+[ "$leaked" -eq 0 ] && pass "no output carries the key encryption key or a credential" || fail "the key or a credential was printed"
 
 exit "$rc"

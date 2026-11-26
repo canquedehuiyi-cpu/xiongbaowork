@@ -31,7 +31,38 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres, { type Sql } from "postgres";
+import { rekeyCredentials } from "../src/credentials-rekey";
 import { applyMigrations } from "../src/db/apply-migrations";
+
+/**
+ * What a deployment applies: every pending migration and then, in the same transaction on the business
+ * database, the v0.2.16 credential rekey (`src/credentials-rekey`).
+ *
+ * One transaction, so the rekey commits with the migrations or not at all, and a credential that will not
+ * open rolls them back with it. It runs on every migration: the run that brings v0.2.16 applies 0240 and
+ * rekeys in the same commit; a later run rekeys only `k1` rows a v0.2.15 replica wrote during a rolling
+ * upgrade of an external database, with no journal change. The delivery container never has such a
+ * replica, so there the rekey commits only when the journal grows, which is what its rebrand-preflight.sh
+ * counts to tell whether the business database changed (see `src/credentials-rekey`).
+ *
+ * `encryptionKey` is the server's `KEY_ENCRYPTION_KEY`, read only when a `k1` row is there to rekey.
+ * The embedded image passes the container's own; an external database's `.env.migration` has to carry
+ * it (docs/deployment-xiongbao.md, section 4).
+ */
+export function applyRelease(
+  encryptionKey: string | undefined,
+  log: (line: string) => void = (line) => console.info(line),
+): typeof applyMigrations {
+  return async (client, folder, journal) => {
+    let rekeyed = 0;
+    await applyMigrations(client, folder, journal, async (tx) => {
+      ({ rekeyed } = await rekeyCredentials(tx, encryptionKey));
+    });
+    // Only once committed, and only when there was something to say: a second start prints nothing new.
+    if (rekeyed > 0)
+      log(JSON.stringify({ type: "credentials-rekeyed", rekeyed }));
+  };
+}
 
 /*
  * The migrations the Drizzle schema in `src/db/schema` is written against.
@@ -189,7 +220,15 @@ if (import.meta.main) {
   );
   const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
   try {
-    await runMigrations(client, migrationsFolder);
+    /*
+     * A database laid down at an earlier release's schema (`through`, tests only) is v0.2.15's, and
+     * v0.2.15 did not rekey: it keeps the credentials as that release wrote them.
+     */
+    await runMigrations(
+      client,
+      migrationsFolder,
+      through ? applyMigrations : applyRelease(env.KEY_ENCRYPTION_KEY),
+    );
   } finally {
     // The merged folder is a temporary copy; removing it cannot fail the run (`force`).
     await rm(migrationsFolder, { recursive: true, force: true });
