@@ -17,7 +17,7 @@
  * tries again on the next tick. So every phase below gets its own try/catch, and nothing here ever
  * lets a phase's error reach the top and take the process down.
  */
-// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+// Must stay the first import: it copies settings written with the old prefix onto their XIONGBAO_* names before any module reads config.
 import "../../shared/apply-env-aliases";
 import { checkRlsReadiness } from "../../server/src/auth/role-writer-lifecycle";
 import { createDatabase } from "../../server/src/db/client";

@@ -1064,3 +1064,92 @@ test("points the server at the bundled search and crawl services, without depend
     XIONGBAO_SEARCH_URL: "${XIONGBAO_SEARCH_URL:-http://searxng:8080}",
   });
 });
+
+/*
+ * The delivery file as Compose resolves it from an env file alone: a copy of compose.delivery.yml beside
+ * an `.env.delivery` holding `lines`, the way docs/deployment-xiongbao.md runs it.
+ */
+function deliveryConfig(lines: string[]) {
+  const dir = mkdtempSync(join(tmpdir(), "compose-delivery-"));
+  try {
+    mkdirSync(join(dir, "docker"));
+    writeFileSync(
+      join(dir, "docker", "compose.delivery.yml"),
+      readFileSync(
+        join(import.meta.dir, "..", "docker", "compose.delivery.yml"),
+        "utf8",
+      ),
+    );
+    writeFileSync(join(dir, ".env.delivery"), `${lines.join("\n")}\n`);
+    const output = execFileSync(
+      "docker",
+      [
+        "compose",
+        "--project-name",
+        "xiongbao-local",
+        "--env-file",
+        join(dir, ".env.delivery"),
+        "-f",
+        join(dir, "docker", "compose.delivery.yml"),
+        "config",
+        "--format",
+        "json",
+      ],
+      { env: { PATH: process.env.PATH ?? "" }, encoding: "utf8" },
+    );
+    const app = (
+      JSON.parse(output) as {
+        services: Record<
+          string,
+          {
+            image: string;
+            ports: Array<{
+              host_ip: string;
+              published: string;
+              target: number;
+            }>;
+          }
+        >;
+      }
+    ).services.app;
+    return {
+      image: app?.image,
+      ports: app?.ports.map(
+        (port) => `${port.host_ip}:${port.published}:${port.target}`,
+      ),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/*
+ * An env file written before the rename names the image and the port with the old prefix; one written
+ * after, with the new. Both must start the same container.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("the delivery file resolves the same image and port from the old names as from the new", () => {
+  const image = `ghcr.io/example/xiongbaowork@sha256:${"0".repeat(64)}`;
+  const legacy = deliveryConfig([
+    `OPENBOT_IMAGE=${image}`,
+    "OPENBOT_PORT=3780",
+  ]);
+  const renamed = deliveryConfig([
+    `XIONGBAO_IMAGE=${image}`,
+    "XIONGBAO_PORT=3780",
+  ]);
+  expect(renamed.image).toBe(image);
+  expect(renamed.ports).toContain("127.0.0.1:3780:3001");
+  expect(legacy).toEqual(renamed);
+  // Both set: the new name wins, as it does inside the container.
+  expect(
+    deliveryConfig([
+      `XIONGBAO_IMAGE=${image}`,
+      "OPENBOT_IMAGE=ghcr.io/example/old:v0",
+    ]).image,
+  ).toBe(image);
+  // Neither: the image built from source, on the usual port.
+  const unset = deliveryConfig([]);
+  expect(unset.image).toBe("xiongbao-digital-employee:local");
+  expect(unset.ports).toContain("127.0.0.1:3772:3001");
+});

@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { applyEnvironmentAliases, envName } from "@xiongbao/shared/env-aliases";
+import {
+  applyEnvironmentAliases,
+  envName,
+  reportEnvironmentAliases,
+} from "@xiongbao/shared/env-aliases";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import {
   addressesBeyondThisMachine,
@@ -1868,16 +1872,12 @@ function serverPort(environment: Environment): number {
 
 export function loadConfig(given: Environment = process.env): DeploymentConfig {
   /*
-   * Scripts call this without the server's entry, which is where the XIONGBAO_ names are otherwise copied onto the
-   * OPENBOT_ ones. The process environment is aliased in place so a script's own later reads see the same values; any
+   * Scripts call this without the server's entry, which is where the old-prefix names are otherwise copied onto the
+   * new ones. The process environment is aliased in place so a script's own later reads see the same values; any
    * other environment is aliased into a copy, so a caller's object is never written to.
    */
   const environment = given === process.env ? given : { ...given };
-  for (const name of applyEnvironmentAliases(environment).conflicts) {
-    console.warn(
-      `${name} is also set under its XIONGBAO_ name; using the XIONGBAO_ value.`,
-    );
-  }
+  reportEnvironmentAliases(applyEnvironmentAliases(environment));
   const google = oauthClient(environment, "GOOGLE");
   const auth = authConfig(environment, google);
   const organizationAuthValue = optional(
