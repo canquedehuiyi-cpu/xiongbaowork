@@ -38,9 +38,12 @@ import { applyMigrations } from "../src/db/apply-migrations";
  * What a deployment applies: every pending migration and then, in the same transaction on the business
  * database, the v0.2.16 credential rekey (`src/credentials-rekey`).
  *
- * One transaction because the delivery container's rebrand-preflight.sh tells whether the business
- * database changed by counting the migration journal: the rekey commits exactly when the journal rows of
- * the migrations it came with do, and a credential that will not open rolls those back with it.
+ * One transaction, so the rekey commits with the migrations or not at all, and a credential that will not
+ * open rolls them back with it. It runs on every migration: the run that brings v0.2.16 applies 0240 and
+ * rekeys in the same commit; a later run rekeys only `k1` rows a v0.2.15 replica wrote during a rolling
+ * upgrade of an external database, with no journal change. The delivery container never has such a
+ * replica, so there the rekey commits only when the journal grows, which is what its rebrand-preflight.sh
+ * counts to tell whether the business database changed (see `src/credentials-rekey`).
  *
  * `encryptionKey` is the server's `KEY_ENCRYPTION_KEY`, read only when a `k1` row is there to rekey.
  * The embedded image passes the container's own; an external database's `.env.migration` has to carry

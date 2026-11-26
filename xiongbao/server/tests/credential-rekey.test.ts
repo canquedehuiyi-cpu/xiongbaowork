@@ -111,6 +111,24 @@ async function renamedFunctions(client: postgres.Sql) {
   return row?.n ?? -1;
 }
 
+/** Whether row security is on and forced for the owner too: the rekey must leave both as they were. */
+async function rowSecurity(client: postgres.Sql) {
+  const [row] = await client<{ state: string }[]>`
+    select relrowsecurity::text || '/' || relforcerowsecurity::text as state
+      from pg_class where oid = 'public.credentials'::regclass`;
+  return row?.state ?? "";
+}
+
+/** The head's migrations without the rekey: k1 rows seeded after this are what a v0.2.15 replica writes. */
+async function migrateWithoutRekey(client: postgres.Sql) {
+  const folder = await mergedMigrationsFolder();
+  try {
+    await applyMigrations(client, folder);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
 /** A copy of the v0.2.15-shaped template, connected. */
 async function v0215Database(label: string) {
   const name = `xiongbao_rekey_${label}_${suffix}`;
@@ -161,6 +179,7 @@ afterAll(async () => {
     for (const name of created.reverse())
       await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
     await admin.unsafe("DROP ROLE IF EXISTS xiongbao_rekey_owner");
+    await admin.unsafe("DROP ROLE IF EXISTS xiongbao_rekey_stranger");
     // Migrating here on a cluster another database already renamed recreates the old roles; drop
     // them once nothing references them, as the rename migration's own test does.
     // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
@@ -186,7 +205,11 @@ describe.skipIf(!owner)("the v0.2.16 credential rekey", () => {
       const renamedBefore = await renamedFunctions(client);
       const log: string[] = [];
 
+      // A superuser migrates here, as in the delivery container.
       await migrateAsRelease(client, key, log);
+
+      // Nothing about the table's row security moved.
+      expect(await rowSecurity(client)).toBe("true/true");
 
       expect(log).toEqual(['{"type":"credentials-rekeyed","rekeyed":3}']);
       const after = await stored(client);
@@ -252,6 +275,7 @@ describe.skipIf(!owner)("the v0.2.16 credential rekey", () => {
       const before = await stored(client);
       const journalBefore = await journalSize(client);
       const renamedBefore = await renamedFunctions(client);
+      const securityBefore = await rowSecurity(client);
 
       const failure = await migrateAsRelease(client, key).then(
         () => null,
@@ -274,6 +298,7 @@ describe.skipIf(!owner)("the v0.2.16 credential rekey", () => {
       expect(await stored(client)).toEqual(before);
       expect(await journalSize(client)).toBe(journalBefore);
       expect(await renamedFunctions(client)).toBe(renamedBefore);
+      expect(await rowSecurity(client)).toBe(securityBefore);
     } finally {
       await client.end({ timeout: 5 });
     }
@@ -338,14 +363,7 @@ describe.skipIf(!owner)("the v0.2.16 credential rekey", () => {
   test("a table owner that row security filters still rekeys every tenant's rows", async () => {
     const client = await v0215Database("owner");
     try {
-      // Migrated to the head without the rekey, then k1 rows: what a v0.2.15 replica still running
-      // during a rolling upgrade writes after the migration has committed.
-      const folder = await mergedMigrationsFolder();
-      try {
-        await applyMigrations(client, folder);
-      } finally {
-        await rm(folder, { recursive: true, force: true });
-      }
+      await migrateWithoutRekey(client);
       const { k1 } = await seed(client);
       // Stand where an external database's owner stands: not a superuser, no BYPASSRLS, owning the
       // table that FORCE ROW LEVEL SECURITY applies to even its owner.
@@ -360,17 +378,24 @@ describe.skipIf(!owner)("the v0.2.16 credential rekey", () => {
       await client.unsafe(
         "GRANT SELECT ON public.user_roles TO xiongbao_rekey_owner",
       );
-      const result = await client.begin(async (tx) => {
+      const securityBefore = await rowSecurity(client);
+      const { result, frameAfter } = await client.begin(async (tx) => {
         await tx`set local role xiongbao_rekey_owner`;
         const [visible] = await tx<
           { n: number }[]
         >`select count(*)::int as n from credentials`;
-        // Without the rekey's own arrangement this role sees none of the rows.
+        // In no frame this role sees none of the seeded rows.
         expect(visible?.n).toBe(0);
-        return rekeyCredentials(tx, key);
+        // Whatever frame the caller is in, it is in it again afterwards.
+        await tx`select set_config('app.tenant_id', 'rekey-person-a', true)`;
+        const result = await rekeyCredentials(tx, key);
+        const [frame] = await tx<{ value: string }[]>`
+          select current_setting('app.tenant_id', true) as value`;
+        return { result, frameAfter: frame?.value };
       });
 
       expect(result).toEqual({ rekeyed: k1.length });
+      expect(frameAfter).toBe("rekey-person-a");
       const after = await stored(client);
       for (const row of k1)
         expect(
@@ -378,10 +403,70 @@ describe.skipIf(!owner)("the v0.2.16 credential rekey", () => {
             after.find((entry) => entry.id === row.id)?.encrypted_value ?? "{}",
           ).kid,
         ).toBe("k2");
-      // Row security on the table is as strict afterwards as it was before.
-      const [forced] = await client<{ forced: boolean }[]>`
-        select relforcerowsecurity as forced from pg_class where oid = 'public.credentials'::regclass`;
-      expect(forced?.forced).toBe(true);
+      // Done in the platform frame: the table's row security is exactly as it was.
+      expect(await rowSecurity(client)).toBe(securityBefore);
+      expect(securityBefore).toBe("true/true");
+    } finally {
+      await client.end({ timeout: 5 });
+    }
+  }, 300_000);
+
+  test("a role with no rights on the credentials table is refused and changes nothing", async () => {
+    const client = await v0215Database("stranger");
+    try {
+      await migrateWithoutRekey(client);
+      await seed(client);
+      await client.unsafe(`DO $$ BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'xiongbao_rekey_stranger') THEN
+          CREATE ROLE xiongbao_rekey_stranger NOLOGIN NOSUPERUSER NOBYPASSRLS;
+        END IF; END $$`);
+      const before = await stored(client);
+      const securityBefore = await rowSecurity(client);
+
+      const failure = await client
+        .begin(async (tx) => {
+          await tx`set local role xiongbao_rekey_stranger`;
+          return rekeyCredentials(tx, key);
+        })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain(
+        "没有读写 credentials 表的权限",
+      );
+      expect((failure as Error).message).toContain("业务库没有任何改动");
+      expect(await stored(client)).toEqual(before);
+      expect(await rowSecurity(client)).toBe(securityBefore);
+    } finally {
+      await client.end({ timeout: 5 });
+    }
+  }, 300_000);
+
+  test("a KEY_ENCRYPTION_KEY that is not a 32-byte base64 key is refused, changes nothing and is not printed", async () => {
+    const client = await v0215Database("badkey");
+    try {
+      await seed(client);
+      const before = await stored(client);
+      const journalBefore = await journalSize(client);
+      const securityBefore = await rowSecurity(client);
+      const notAKey = `secret-looking-${randomUUID()}`;
+
+      const failure = await migrateAsRelease(client, notAKey).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(Error);
+      const message = (failure as Error).message;
+      expect(message).toContain("不是 base64 编码的 32 字节密钥");
+      expect(message).toContain("业务库没有任何改动");
+      expect(message).not.toContain(notAKey);
+      expect(await stored(client)).toEqual(before);
+      expect(await journalSize(client)).toBe(journalBefore);
+      expect(await rowSecurity(client)).toBe(securityBefore);
     } finally {
       await client.end({ timeout: 5 });
     }
