@@ -620,6 +620,46 @@ restore "$T/restore.dump" REBRAND_RESTORE_URL_FILE="$T/oneshot/env/MIGRATION_DAT
 as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -l "$T/v0215/server.log" -w -t 20 \
   -o "-c listen_addresses=127.0.0.1 -c port=$V15 -c unix_socket_directories=$T/v0215" start >/dev/null ||
   { echo "restarting the restored cluster failed" >&2; exit 1; }
+# Another container's postmaster on the same data directory (the full container, or an earlier one-shot
+# restore still running after the terminal dropped): from this container it does not answer (its network
+# is not ours, here: the connection string names a port nothing listens on) and its pid is not ours, so
+# PostgreSQL's own check would call the lock file stale. The script refuses on the lock file and starts
+# nothing: the running cluster is the only postmaster, and untouched.
+before=$(security_print "$V15" openbot)$(data_print "$V15" openbot)
+cat >"$T/oneshot/elsewhere-init.sh" <<EOF
+[ "\${EMBEDDED_POSTGRES:-off}" = on ] || exit 0
+printf 'postgres://openbot:%s@127.0.0.1:%s/openbot' '$PW' '$((V15 + 3))' >"$T/oneshot/env/MIGRATION_DATABASE_URL"
+EOF
+rm -f "$T/oneshot/env/MIGRATION_DATABASE_URL"
+restore "$T/restore.dump" REBRAND_RESTORE_URL_FILE="$T/oneshot/env/MIGRATION_DATABASE_URL" \
+  REBRAND_RESTORE_POSTGRES_INIT="$T/oneshot/elsewhere-init.sh" REBRAND_RESTORE_DATA_DIR="$T/v0215/data"
+what="a one-shot run refuses to start a second database on a data directory another container holds"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0: $(cat "$T/out")"
+elif ! grep -q "postmaster.pid 在" "$T/err" || ! grep -q "docker ps" "$T/err"; then fail "$what: $(cat "$T/out" "$T/err")"
+elif grep -q "正在启动" "$T/out"; then fail "$what: it started a database"
+elif [ "$(pgrep -f -- "-D $T/v0215/data" 2>/dev/null | wc -l)" -gt 1 ]; then fail "$what: more than one postmaster on the directory"
+elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$before" ]; then fail "$what: the database changed"
+else pass "$what"; fi
+# Started, then refused (the database has conversations): the database it started is stopped again.
+sql "$V15" openbot postgres "COMMENT ON DATABASE openbot IS NULL;"
+sql "$V15" openbot openbot "SET app.tenant_id = 'platform';
+  INSERT INTO users (id, email) VALUES ('restore-person', 'restore-person@example.test');
+  INSERT INTO agents (id, name, type, configuration, tenant_id) VALUES ('restore-bot', 'Restore Bot', 'built_in', '{}', 'system');
+  INSERT INTO threads (id, tenant_id, agent_id) VALUES ('restore-thread', 'restore-person', 'restore-bot');" >/dev/null || exit 1
+as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -m fast -w stop >/dev/null
+rm -f "$T/oneshot/env/MIGRATION_DATABASE_URL"
+restore "$T/restore.dump" REBRAND_RESTORE_URL_FILE="$T/oneshot/env/MIGRATION_DATABASE_URL" \
+  REBRAND_RESTORE_POSTGRES_INIT="$T/oneshot/postgres-init.sh" REBRAND_RESTORE_DATA_DIR="$T/v0215/data"
+what="a one-shot run that refuses after starting the database stops it again"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0: $(cat "$T/out")"
+elif ! grep -q "正在启动这个卷上的 PostgreSQL" "$T/out" || ! grep -q "已经有 1 个对话" "$T/err"; then fail "$what: $(cat "$T/out" "$T/err")"
+elif as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" status >/dev/null 2>&1; then fail "$what: the database is still running"
+elif [ -e "$T/v0215/data/postmaster.pid" ]; then fail "$what: the lock file was left"
+else pass "$what"; fi
+as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -l "$T/v0215/server.log" -w -t 20 \
+  -o "-c listen_addresses=127.0.0.1 -c port=$V15 -c unix_socket_directories=$T/v0215" start >/dev/null ||
+  { echo "restarting the cluster failed" >&2; exit 1; }
+sql "$V15" openbot openbot "SET app.tenant_id = 'platform'; DELETE FROM threads; DELETE FROM agents WHERE id = 'restore-bot'; DELETE FROM users WHERE id = 'restore-person';" >/dev/null || exit 1
 # 8. migration failure leaves the backup and prints its path. The stand-in fails without committing
 #    anything (the journal is as it was), so the message says nothing changed and sends nobody to restore.
 preflight "$OLD" openbot openbot

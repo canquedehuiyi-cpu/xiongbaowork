@@ -786,11 +786,13 @@ mkdir -p rollback-v0216 && chmod 700 rollback-v0216 &&
 
   B3. 停掉这个容器，用 v0.2.15 镜像起一个只跑还原的一次性容器（挂同一个新卷和拷出来的备份目录），还原最新的那份备份（就是这次升级前做的），
   完了再启动完整容器。不能在运行中的容器里还原：v0.2.15 的 api 服务一停，它的收尾脚本会让整个容器停机，还原做不完。
+  一次性容器起固定的名字：终端断开后重跑，上一个还没结束时 Docker 会因为重名直接拒绝，不会有两个数据库同时写一个卷；
+  脚本也会在数据目录里有 `postmaster.pid` 时拒绝起库，并说明怎么处理。
 
   ```bash
   f=$(cd rollback-v0216/backup && ls pre-rebrand-*.dump | tail -n 1) &&
     docker stop -t 30 xiongbao-local &&
-    docker run --rm -i --user root --entrypoint sh \
+    docker run --rm -i --name xiongbao-local-v0215-restoring --user root --entrypoint sh \
       -v xiongbao-local-db-v0215:/var/lib/postgresql -v "$PWD/rollback-v0216/backup:/restore:ro" \
       "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0215)" -s "/restore/$f" < rollback-v0216/rebrand-restore.sh &&
     docker start xiongbao-local

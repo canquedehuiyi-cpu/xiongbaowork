@@ -43,7 +43,7 @@ EVIDENCE=$3
 SHEET=../docs/acceptance/HUMAN-STEPS.md
 D=/opt/xiongbao/upgrade-v0.2.16
 ENV_FILE=/opt/xiongbao/.env.delivery
-CONTAINERS=(xiongbao xiongbao-v0215-rollback xiongbao-v0216-failed xiongbao-v0216-stopped)
+CONTAINERS=(xiongbao xiongbao-v0215-rollback xiongbao-v0216-failed xiongbao-v0216-stopped xiongbao-v0215-restoring)
 VOLUMES=(xiongbao-db xiongbao-workspace xiongbao-profiles xiongbao-db-v0215-restore)
 mkdir -p "$EVIDENCE"
 : >"$EVIDENCE/result.txt"
@@ -334,6 +334,8 @@ expect "step ④: each backup has its database size beside it, 0600 postgres:pos
 600 postgres postgres" "$(docker exec xiongbao sh -c 'stat -c "%a %U %G" /var/lib/postgresql/backup/pre-rebrand-*.dump.size')"
 hostcopy=$(ls "$D"/pre-rebrand-*.dump 2>/dev/null | tail -n 1 || true)
 [ -n "$hostcopy" ] && expect "step ④: the host copy is 0600" 600 "$(stat -c '%a' "$hostcopy")" || fail "step ④: no host copy"
+[ -n "$hostcopy" ] && [ -f "$hostcopy.size" ] && expect "step ④: the host copy's size record is 0600" 600 "$(stat -c '%a' "$hostcopy.size")" ||
+  fail "step ④: no size record beside the host copy"
 
 sheet v0216:verify
 grep -qx 'xiongbao_app|f|f' "$SHEET_OUT" && pass "step ⑤: the API connects as xiongbao_app, no superuser, no BYPASSRLS" ||
@@ -398,6 +400,8 @@ expect "rollback B: the restore ran" 0 "$SHEET_RC"
 grep -q '正在启动这个卷上的 PostgreSQL' "$SHEET_OUT" && grep -q '还原完成' "$SHEET_OUT" &&
   pass "rollback B: the one-shot container started the volume's database and the restore says it is done" ||
   fail "rollback B: the restore did not finish in the one-shot container"
+docker inspect xiongbao-v0215-restoring >/dev/null 2>&1 && fail "rollback B: the one-shot container is still there" ||
+  pass "rollback B: the one-shot container is gone"
 sheet v0216:health
 wait_healthy "rollback B: v0.2.15 serves the restored database"
 sheet v0216:rollback-b-check

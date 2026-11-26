@@ -24,10 +24,11 @@
 #   2. 用 v0.2.15 镜像和一个「新的」数据库卷正常启动容器，等它健康：v0.2.15 首次启动会建好库和角色。
 #      不能还原到原来那个卷（它已经部分改名），也不能还原到还没被 v0.2.15 启动过的空卷（缺角色），
 #      也不能还原到已经在用、有对话的 v0.2.15 卷（会被备份内容整个替换）：这几种脚本都会拒绝。
-#   3. 停掉这个容器，用 v0.2.15 镜像起一次性容器挂上同一个新卷和备份目录，从标准输入执行本脚本：
+#   3. 停掉这个容器，用 v0.2.15 镜像起一次性容器挂上同一个新卷和备份目录，从标准输入执行本脚本。一次性容器
+#      起固定的名字：重跑时上一个还没结束，docker 会因为重名直接拒绝，不会有两个库同时写一个目录：
 #        docker stop <新容器>
-#        docker run --rm -i --user root --entrypoint sh -v <新卷>:/var/lib/postgresql -v "$PWD/backup:/restore:ro" \
-#          <v0.2.15 镜像> -s /restore/pre-rebrand-<时间>.dump < rebrand-restore.sh
+#        docker run --rm -i --name <新容器>-restoring --user root --entrypoint sh -v <新卷>:/var/lib/postgresql \
+#          -v "$PWD/backup:/restore:ro" <v0.2.15 镜像> -s /restore/pre-rebrand-<时间>.dump < rebrand-restore.sh
 #   4. docker start <新容器>，登录核对数据。
 #   宿主机上如果还有别的进程连着这个库（例如源码目录里 scripts/start.sh 起的 server、worker），先停掉。
 #
@@ -37,7 +38,8 @@
 #      就退出。到这里数据库一点没动。
 #   2) 一次性容器里（没有连接信息文件）：数据目录要已经由 v0.2.15 建好；用镜像自己的 postgres-init 写出
 #      连接信息（超级用户与库的名字、口令都来自卷和镜像，本脚本不写死），以 postgres 身份启动 PostgreSQL，
-#      只听 127.0.0.1；脚本退出时（成功或失败）把它停掉。
+#      只听 127.0.0.1；脚本退出时（成功或失败）把它停掉。数据目录里有 postmaster.pid 就不启动、拒绝：别的容器
+#      的进程跨容器看不见，PostgreSQL 自己的检查会把它当残留，在同一个目录上起第二个库。
 #   3) 认目标，下面几种都拒绝、数据库一点不动：集群里已经有新名字的角色（原来的卷或 v0.2.16 的卷）；卷上有
 #      pre-rebrand 备份或改名进行中记录（升级过的原卷）；应用角色还不在（没被 v0.2.15 启动完）；库里已经
 #      有对话（不是新卷）。
@@ -179,6 +181,16 @@ export PGPASSWORD="$pw"
 if ! "$PG_BIN/pg_isready" -q -h "$host" -p "$port" 2>/dev/null; then
   if [ ! -s "$DATA_DIR/PG_VERSION" ]; then
     echo "连不上 $host:$port 的数据库，$DATA_DIR 里也没有数据库可以启动。没有动任何东西。" >&2
+    exit 1
+  fi
+  # Another container may be running a postmaster on this very data directory (the full container, or an
+  # earlier one-shot restore still going after the terminal dropped). Its pid and shared memory live in
+  # that container's namespaces, so PostgreSQL's own check would take the lock file for a stale one and
+  # start a second postmaster on the same files. Any lock file at all is a refusal here.
+  if [ -e "$DATA_DIR/postmaster.pid" ]; then
+    echo "$DATA_DIR/postmaster.pid 在：可能还有别的容器正在用这个数据库卷（完整容器，或上一次还没结束的还原容器）。没有动数据库。" >&2
+    echo "先用 docker ps 看还有没有挂着这个卷在跑的容器（docker ps --filter volume=<新卷>）：有就等它结束或 docker stop 它，再重跑。" >&2
+    echo "确实一个都没有，说明上一次没有正常停库：把完整容器 docker start 一次、等它健康，再 docker stop（这样会正常停库、删掉这个文件），然后重跑。" >&2
     exit 1
   fi
   [ "$(id -u)" != 0 ] || chown postgres:postgres "$work"
