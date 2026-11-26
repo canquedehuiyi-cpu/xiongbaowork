@@ -214,9 +214,13 @@ ROLE_WRITER_DATABASE_URL=postgres://xiongbao_role_writer:<URL编码口令>@db.ex
 升级前用 owner 执行下面的只读查询看是哪一种（只显示格式前缀，不显示口令内容）：
 
 ```sql
-SELECT rolname, split_part(rolpassword, '$', 1) AS kind FROM pg_authid
+SELECT rolname, CASE WHEN rolpassword IS NULL THEN 'none'
+                    WHEN rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram'
+                    WHEN rolpassword LIKE 'md5%' THEN 'md5'
+                    ELSE 'other' END AS kind
+  FROM pg_authid
   WHERE rolname LIKE '%\_app' OR rolname LIKE '%\_role\_writer' ORDER BY rolname;
--- kind 为 SCRAM-SHA-256：口令不变；以 md5 开头：改名后要重新设口令；为空：本来就没有口令
+-- kind 为 scram：口令不变；md5：改名后要重新设口令；none：本来就没有口令
 ```
 
 `ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `xiongbao_role_writer`，唯一可以写入身份角色的登录；
