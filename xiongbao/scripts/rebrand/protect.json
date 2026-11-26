@@ -1729,6 +1729,12 @@
     "reason": "容器内新旧双认（s6 env-aliases.sh）的测试：故意用旧名，含京东云 .env.delivery 形状的夹具；legacy-compat 到 R4 删除"
   },
   {
+    "file": "xiongbao/docker/tests/rebrand-preflight.test.sh",
+    "pattern": "\\bopenbot(?:_app|_role_writer)?\\b",
+    "until": "R4",
+    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+  },
+  {
     "file": "xiongbao/docker/s6/scripts/env-aliases.sh",
     "text": "old=OPENBOT_",
     "until": "R4",

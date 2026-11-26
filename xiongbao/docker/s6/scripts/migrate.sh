@@ -29,8 +29,17 @@ until PGPASSWORD="$OWNER_PW" PGCONNECT_TIMEOUT=2 s6-setuidgid apiuser \
   sleep 1
 done
 echo 'migrate: embedded PostgreSQL is ready'
+# The rename of persisted names (v0.2.16) starts here, before any migration can touch data: a volume
+# that still carries the old names is refused while work is in flight or the backup would not fit, and
+# backed up otherwise; a volume already renamed passes straight through. See rebrand-preflight.sh.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+PREFLIGHT="$(dirname "$0")/rebrand-preflight.sh"
+PGPASSWORD="$OWNER_PW" "$PREFLIGHT" check -h 127.0.0.1 -U openbot -d openbot
 # Scope the owner URL to migration; never replace the API's environment file.
-DATABASE_URL="$MIGRATION_DATABASE_URL" s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
+# Every step that may change data runs through `step`, which on failure names the step, the kind of
+# data and the backup, so the container stops saying where to go back to. Later rename steps go here.
+DATABASE_URL="$MIGRATION_DATABASE_URL" "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- \
+  s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
 
 APP_PW="$(cat /var/lib/postgresql/pgpassword-app)"
 # Generated secrets are hex. Validate before placing one in a SQL literal.
