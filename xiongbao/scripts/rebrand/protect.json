@@ -1835,7 +1835,7 @@
   },
   {
     "file": "xiongbao/docs/deployment-xiongbao.md",
-    "pattern": "OPENBOT_(?:X|IMAGE|PORT|RLS_ENFORCE)(?![A-Z0-9_])",
+    "pattern": "OPENBOT_(?:PUBLIC_URL|IMAGE|PORT|RLS_ENFORCE)(?![A-Z0-9_])",
     "until": "R4",
     "reason": "部署手册 6.3 节向运维说明旧名仍被认与怎样改名；legacy-compat 到 R4 删除"
   },
