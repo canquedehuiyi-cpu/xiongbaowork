@@ -204,34 +204,10 @@
     "note": "内置工具引用，已存进数据库"
   },
   {
-    "word": "openbot/ui@1",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "A2UI 目录 id，与对端共享"
-  },
-  {
     "word": "openbot:",
     "category": "persisted-data",
     "plan": "rewrite",
     "note": "浏览器存储键前缀；Task 7"
-  },
-  {
-    "word": "openbot:app-access-request",
-    "category": "parsed-exact-text",
-    "plan": "keep",
-    "note": "授权与提案标记，按原文被对端解析"
-  },
-  {
-    "word": "openbot:staffing-proposal",
-    "category": "parsed-exact-text",
-    "plan": "keep",
-    "note": "授权与提案标记，按原文被对端解析"
-  },
-  {
-    "word": "openbotWaiting",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
   },
   {
     "word": "public/icons/copilotkit-kite.svg",
