@@ -574,9 +574,8 @@ COMMIT;
    后面列出要改的名字。只列名字，不列值。
 2. **新旧名都写了且值不同：以新名为准**，日志对每个这样的旧名打一行，例如
    `OPENBOT_PUBLIC_URL and XIONGBAO_PUBLIC_URL are both set and differ; using XIONGBAO_PUBLIC_URL.`，服务照常启动。值相同不算冲突。
-3. **Compose 的镜像与端口变量**：v0.2.16 起的 `docker/compose.delivery.yml` 写成
-   `${XIONGBAO_IMAGE:-${OPENBOT_IMAGE:-xiongbao-digital-employee:local}}` 与 `${XIONGBAO_PORT:-${OPENBOT_PORT:-3772}}`，
-   `.env.delivery` 里的旧名照样生效。更早的 Compose 文件只认旧名，所以**先按第 2 节换上新标签的 `compose.delivery.yml`，再改 env 文件**。
+3. **Compose 的镜像与端口变量**：v0.2.16 起的 `docker/compose.delivery.yml` 新名优先、旧名其次：`XIONGBAO_IMAGE` 没设时读
+   `OPENBOT_IMAGE`，端口写成 `${XIONGBAO_PORT:-${OPENBOT_PORT:-3772}}`，`.env.delivery` 里的旧名照样生效。更早的 Compose 文件只认旧名，所以**先按第 2 节换上新标签的 `compose.delivery.yml`，再改 env 文件**。
 4. **平台模型的密钥变量不改名**（用 `server/scripts/platform-models.ts add --api-key-env` 登记的那些）：模型池在数据库里记着变量名，
    随数据库迁移一起改，在那之前不要手改。
 5. **一次改完**（可选）：在放 `.env.delivery` 的目录，下载与新版本同标签的改写脚本并执行一次：
