@@ -270,7 +270,7 @@ rm -rf "$BACKUP"
 #    renames a role; the backup is not touched afterwards; `finish` clears the record.
 source_print=$(fingerprint "$OLD" openbot openbot)
 echo stale >"$T/stale"
-mkdir -p "$BACKUP" && cp "$T/stale" "$BACKUP/.pre-rebrand-killed.partial"
+mkdir -p "$BACKUP" && cp "$T/stale" "$BACKUP/.pre-rebrand-killed.partial" && cp "$T/stale" "$BACKUP/.rebrand-in-progress.cutoff"
 [ "$(id -u)" = 0 ] && chown -R postgres:postgres "$BACKUP"
 preflight "$OLD" openbot openbot
 dump=$(state_of backup)
@@ -286,7 +286,7 @@ elif [ "$(mode_of "$dump")" != 600 ]; then fail "$what: file mode $(mode_of "$du
 elif [ "$(mode_of "$BACKUP")" != 700 ]; then fail "$what: directory mode $(mode_of "$BACKUP")"
 elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$dump")" != postgres ]; then fail "$what: owner $(stat -c %U "$dump")"
 elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$BACKUP")" != postgres ]; then fail "$what: directory owner $(stat -c %U "$BACKUP")"
-elif [ -e "$BACKUP/.pre-rebrand-killed.partial" ]; then fail "$what: a killed dump's temporary file was kept"
+elif [ -e "$BACKUP/.pre-rebrand-killed.partial" ] || [ -e "$BACKUP/.rebrand-in-progress.cutoff" ]; then fail "$what: an interrupted temporary file was kept"
 elif ls -A "$BACKUP" | grep -v '^pre-rebrand-' | grep -vqx 'rebrand-in-progress'; then fail "$what: leftovers: $(ls -A "$BACKUP")"
 elif [ ! -f "$MARKER" ] || [ "$(mode_of "$MARKER")" != 600 ]; then fail "$what: no 0600 in-progress record"
 elif ! grep -qx "backup=$dump" "$MARKER"; then fail "$what: record does not name the backup: $(cat "$MARKER")"
@@ -415,8 +415,33 @@ preflight "$OLD" openbot openbot
 # 12. resuming still refuses work in flight, and refuses when the recorded backup has gone.
 sql "$OLD" openbot openbot "INSERT INTO approval_requests (status) VALUES ('pending');"
 preflight "$OLD" openbot openbot
-[ "$code" -ne 0 ] && grep -q "待审批：1" "$T/err" && pass "resuming still refuses work in flight" ||
-  fail "resuming still refuses work in flight: exit $code"
+what="resuming still refuses work in flight, and says the database is as backed up"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "待审批：1" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif ! grep -q "上一次改名没有改动业务库" "$T/err" || ! grep -qF "$MARKER" "$T/err"; then fail "$what: no comparison or no record to delete: $(cat "$T/err")"
+elif grep -q "数据没动过" "$T/err"; then fail "$what: still the unconditional wording: $(cat "$T/err")"
+else pass "$what"; fi
+# The previous boot committed the business transaction and then stopped short of `finish` (killed, or a
+# command outside the steps failed); someone went back to v0.2.15 on the same volume and left work in
+# flight. The refusal must say the database has changed, never that it is untouched.
+sql "$OLD" openbot openbot "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('h2', 2);"
+preflight "$OLD" openbot openbot
+what="a resumed refusal after a committed change says the database changed"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "已经改动了业务库" "$T/err" || ! grep -q "1 条变成 2 条" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif grep -q "数据没动过\|数据没有改动" "$T/err"; then fail "$what: claims untouched data: $(cat "$T/err")"
+elif ! grep -q "rebrand-restore.sh" "$T/err"; then fail "$what: no way back given: $(cat "$T/err")"
+else pass "$what"; fi
+sql "$OLD" openbot openbot "DELETE FROM drizzle.__drizzle_migrations WHERE hash = 'h2';"
+# The database cannot be read (after the role rename has half run, the old name no longer connects):
+# unknown, never "unchanged".
+preflight "$OLD" openbot openbot PGPASSWORD=wrong-password
+what="a resumed refusal that cannot read the database does not claim it is unchanged"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "无法确认上一次改名是否已经改动了业务库" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif grep -q "数据没动过\|数据没有改动" "$T/err"; then fail "$what: claims untouched data: $(cat "$T/err")"
+elif [ "$(backups)" -ne "$count" ]; then fail "$what: $(backups) backups, was $count"
+else pass "$what"; fi
 sql "$OLD" openbot openbot "UPDATE approval_requests SET status = 'denied' WHERE status = 'pending';"
 mv "$dump" "$T/moved.dump"
 preflight "$OLD" openbot openbot
@@ -447,6 +472,23 @@ preflight "$OLD" openbot openbot
 [ "$code" -ne 0 ] && [ ! -e "$T/elsewhere/planted" ] && pass "a link where the record goes is refused and not followed" ||
   fail "a link where the record goes is refused: exit $code"
 rm -f "$MARKER"
+
+# 15a. a catalog query that fails refuses before anything is written: the connection refused (wrong
+#      password), or an answer that is not a number.
+count=$(backups)
+preflight "$OLD" openbot openbot PGPASSWORD=wrong-password
+what="a catalog query that fails refuses and writes nothing"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "无法读取数据库角色" "$T/err" || ! grep -q "数据没有改动" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif [ "$(backups)" -ne "$count" ] || [ -e "$MARKER" ] || [ -e "$STATE/state" ]; then fail "$what: something was written"
+else pass "$what"; fi
+mkdir -p "$T/oddbin"
+printf '#!/bin/sh\ncat >/dev/null\necho "not-a-number"\n' >"$T/oddbin/psql"
+chmod 755 "$T/oddbin/psql"
+preflight "$OLD" openbot openbot REBRAND_PG_BIN="$T/oddbin"
+[ "$code" -ne 0 ] && grep -q "无法读取数据库角色" "$T/err" && [ "$(backups)" -eq "$count" ] && [ ! -e "$STATE/state" ] &&
+  pass "a catalog answer that is not a number refuses" ||
+  fail "a catalog answer that is not a number refuses: exit $code: $(cat "$T/err")"
 
 # 15. a dump that fails refuses, and leaves neither a temporary file, a record nor a state.
 mkdir -p "$T/badbin"

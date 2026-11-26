@@ -28,7 +28,8 @@
 #         failed, a command outside the steps failed, or the container was killed) means resume: no new
 #         backup, the recorded one is named in the log and every step runs again. Checked before the
 #         names, because the last step renames the roles and can fail half-way. Refused if the recorded
-#         backup is gone, or if work is in flight again;
+#         backup is gone, or if work is in flight again; such a refusal first compares the migration
+#         journal with the record, and says the business database changed, did not, or cannot be told;
 #       - not needed: prints nothing, writes nothing but the state file, exits 0;
 #       - needed, on a database no migration has ever run on (a new volume's first boot): no user data,
 #         nothing to back up, exits 0;
@@ -87,8 +88,15 @@ as_pg() {
 }
 
 state_value() { sed -n "s/^$1=//p" "$STATE" 2>/dev/null || true; }
-marker_value() { sed -n "s/^$1=//p" "$MARKER" 2>/dev/null | tail -n 1; }
-done_steps() { sed -n 's/^ok=//p' "$MARKER" 2>/dev/null | awk '!seen[$0]++' | tr '\n' ' ' | sed 's/ $//'; }
+# The record is read as postgres too: a link swapped in after the -L check reaches only what postgres can.
+marker_value() { as_pg sed -n "s/^$1=//p" "$MARKER" 2>/dev/null | tail -n 1; }
+done_steps() { as_pg sed -n 's/^ok=//p' "$MARKER" 2>/dev/null | awk '!seen[$0]++' | tr '\n' ' ' | sed 's/ $//'; }
+
+# What a refusal may say about the data. Without an in-progress record nothing has been renamed yet; with
+# one, check() replaces both after comparing the migration journal with its size at backup time
+# (resume_notes), so a refusal never claims "unchanged" for a database an earlier boot changed.
+DATA_NOTE='（数据没有改动）'
+GO_BACK='换回 v0.2.15 镜像启动（数据没动过，可以直接回去）'
 
 write_state() { # needs_rebrand backup
   printf 'needs_rebrand=%s\nbackup=%s\nhost=%s\nport=%s\nuser=%s\ndb=%s\n' \
@@ -108,7 +116,8 @@ write_marker() {
 no_links() {
   for p in "$BACKUP_DIR" "$MARKER"; do
     if [ -L "$p" ]; then
-      refuse "$p 是符号链接，不改名、不启动（数据没有改动）。备份目录和其中的记录只能是普通目录、普通文件；删掉这个链接后再启动。"
+      refuse "$p 是符号链接，不改名、不启动（这次启动没有改动任何数据；没有读它，所以说不出上一次改名做到了哪里）。" \
+        "备份目录和其中的记录只能是普通目录、普通文件；删掉这个链接后再启动。"
       exit 1
     fi
   done
@@ -126,7 +135,7 @@ number() { # what sql
   n=$(ask "$2") || n=''
   case $n in
     '' | *[!0-9]*)
-      refuse "无法读取$1，不改名、不启动（数据没有改动）。数据库的报错：" "$(cat "$ERR" 2>/dev/null)"
+      refuse "无法读取$1，不改名、不启动$DATA_NOTE。数据库的报错：" "$(cat "$ERR" 2>/dev/null)"
       exit 1
       ;;
   esac
@@ -153,15 +162,37 @@ in_flight() {
   in_flight_count steps approval_continuation_steps "未完成的续跑步骤数" "SELECT count(*) FROM approval_continuation_steps WHERE state <> 'completed';"
   [ -z "$missing" ] || say "这个库还没有这些表（早于 v0.2.12 的卷），对应的在途数按 0 计：$missing"
   if [ "$pending" -gt 0 ] || [ "$continuations" -gt 0 ] || [ "$steps" -gt 0 ]; then
-    refuse "还有没处理完的在途工作，不改名、不启动（数据没有改动）：" \
+    refuse "还有没处理完的在途工作，不改名、不启动$DATA_NOTE：" \
       "  待审批：$pending" \
       "  未完成的续跑：$continuations" \
       "  未完成的续跑步骤：$steps" \
       "  未过期的运行断言：不入库，不计数（10 分钟内自动过期的签名令牌）" \
-      "处理办法：换回 v0.2.15 镜像启动（数据没动过，可以直接回去），在网页里把待审批全部批准或拒绝，" \
+      "处理办法：$GO_BACK，在网页里把待审批全部批准或拒绝，" \
       "等已批准的任务续跑完；再在服务器上运行 pre-upgrade-check.sh，三项都是 0 时重新升级。"
     exit 1
   fi
+}
+
+# With an in-progress record: has the business database changed since the backup? Same three answers
+# as a failing step gives. Unknown (the database cannot be read, or the record lacks the count) is never
+# reported as unchanged.
+resume_notes() {
+  was=$(marker_value journal)
+  now=$(ask "SELECT count(*) FROM drizzle.__drizzle_migrations;") || now=''
+  case $was:$now in
+    *[!0-9:]* | :* | *:)
+      DATA_NOTE='（这次启动没有改动任何数据；但读不到迁移记录，无法确认上一次改名是否已经改动了业务库）'
+      GO_BACK='先不要换回 v0.2.15（上一次改名可能已经改动了业务库）：修好数据库连接后再启动，看到确切结论再决定'
+      ;;
+    "$now:$now")
+      DATA_NOTE="（上一次改名没有改动业务库：迁移记录与备份时一样，$now 条）"
+      GO_BACK="换回 v0.2.15 镜像启动（业务库没被改动，可以直接回去；换回之前先删掉 $MARKER，以后再升级时才会重新备份）"
+      ;;
+    *)
+      DATA_NOTE="（注意：上一次改名已经改动了业务库，迁移记录从备份时的 $was 条变成 $now 条）"
+      GO_BACK="不能直接换回 v0.2.15（业务库已经改动）：要在 v0.2.15 上处理，先按 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用备份还原"
+      ;;
+  esac
 }
 
 check() {
@@ -186,15 +217,16 @@ check() {
   trap 'rm -f "$ERR"' EXIT
   no_links
   # A dump killed half-way (container stopped, host rebooted) leaves its temporary file: not a backup,
-  # and it would count against the space check.
+  # and it would count against the space check. Same for a record write cut off before its rename.
   if [ -d "$BACKUP_DIR" ]; then
-    as_pg find "$BACKUP_DIR" -maxdepth 1 -type f -name '.pre-rebrand-*.partial' -delete
+    as_pg find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '.pre-rebrand-*.partial' -o -name '.rebrand-in-progress.*' \) -delete
   fi
 
   if [ -f "$MARKER" ]; then
+    resume_notes
     backup=$(marker_value backup)
     if [ -z "$backup" ] || [ ! -f "$backup" ]; then
-      refuse "上一次改名迁移没有完成，记录里的备份 ${backup:-（没有）} 却不见了。不改名、不启动。" \
+      refuse "上一次改名迁移没有完成，记录里的备份 ${backup:-（没有）} 却不见了。不改名、不启动$DATA_NOTE。" \
         "没有备份就不再继续：先把备份放回原处，再启动。" \
         "确认不需要那份备份时，删掉 $MARKER 再启动，会重新检查、重新备份。"
       exit 1
@@ -280,14 +312,15 @@ step() {
   label=$1 data=$2
   shift 3
   code=0
-  "$@" || code=$?
+  # The command runs under the usual umask; 077 is for what this script itself writes.
+  (umask 022 && exec "$@") || code=$?
   if [ -L "$MARKER" ] || [ ! -f "$MARKER" ]; then
     [ "$code" -eq 0 ] && return 0
     refuse "「$label」这一步失败（退出码 $code），涉及的数据：$data。服务不启动；它自己的报错见上方。"
     exit "$code"
   fi
   if [ "$code" -eq 0 ]; then
-    { cat "$MARKER"; printf 'ok=%s\n' "$label"; } | write_marker
+    { as_pg cat "$MARKER"; printf 'ok=%s\n' "$label"; } | write_marker
     return 0
   fi
 
