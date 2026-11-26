@@ -28,7 +28,8 @@ so it does not hide the old one: to drop an old setting, delete its line rather 
 name empty. A platform model key's variable (`OPENBOT_POOL_*`) keeps its name, because the model pool
 stores it. The old names stop working in v0.2.17; `scripts/rebrand/rewrite-env.sh <file>` renames them
 in an env file and keeps a backup (see docs/deployment-xiongbao.md, section 6.3). An installation from
-v0.2.15 that runs the development Compose file cannot update in place yet: see docs/local-updates.md.
+v0.2.15 that runs the development Compose file cannot update in place, and v0.2.16 does not take its
+volumes over: its data moves by a manual backup and restore, see docs/local-updates.md.
 
 ## Required API server variables
 

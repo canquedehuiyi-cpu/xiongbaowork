@@ -4,13 +4,18 @@
 
 The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.openbot-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Use `scripts/integrate-upstream.ts` to create a separate integration candidate; review/build that distribution's release first. The updater never merges arbitrary upstream changes into production.
 
-**Not yet from v0.2.15 with the development Compose file.** This release renames the Compose project,
-its volumes and its database in `docker-compose.yml`. The v0.2.15 updater compares those before it stops
-anything and refuses the update, leaving the services running and the database untouched. Wait for the
-v0.2.16 release that carries the data migration (R3), which takes over the existing volumes and database,
-and update then. Until then, do not start the new file by hand with `docker compose up`: it would start a
-new project on new, empty volumes while the existing data stays in the old ones. The delivery container
-(`docker/compose.delivery.yml`) is not affected.
+**Not from v0.2.15 with the development Compose file, and v0.2.16 does not take the old volumes over.**
+This release renames the Compose project, its volumes, its database and the server's mount directory in
+`docker-compose.yml`. The v0.2.15 updater compares the database and the mounts before it stops anything and
+refuses the update, leaving the services running and the database untouched; no later release changes that.
+Do not start the new file by hand with `docker compose up` either: it would start a new project on new,
+empty volumes while the existing data stays in the old ones. To keep the data, migrate it by hand: back the
+old database up with `pg_dump -Fc` in the old project, start the v0.2.16 project's database and run its
+migration once, replace that database with an empty one, restore with
+`pg_restore --single-transaction --exit-on-error`, run the migration again and start the services. The
+exact commands, and why the database must be empty, are in docs/deployment-xiongbao.md, section 6.3,
+item 6. The delivery container (`docker/compose.delivery.yml`) is not affected: it backs up and renames in
+place on its first v0.2.16 start.
 
 ## Trust and preparation
 

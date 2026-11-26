@@ -54,7 +54,11 @@
 #     kind of data, which steps had already completed, and whether the business database has changed:
 #     it compares the migration journal with its size at backup time, which the ruling above makes exact
 #     for the business transaction. Unchanged: nothing to restore, the old version runs on this volume as
-#     it is. Changed: resume by restarting, or restore with rebrand-restore.sh next to this file.
+#     it is. Changed: resume by restarting, or restore with rebrand-restore.sh next to this file. The
+#     superuser and database rename is a change to the cluster that the journal never records, and once it
+#     is made v0.2.15 cannot log in at all: so "unchanged" also needs the cluster to still carry its old
+#     names (asked, not assumed), and a renamed cluster is reported as one the old version cannot take back.
+#     The same holds for check's refusals while it resumes.
 #
 #   rebrand-preflight.sh finish
 #
@@ -178,24 +182,38 @@ in_flight() {
   fi
 }
 
-# With an in-progress record: has the business database changed since the backup? Same three answers
-# as a failing step gives. Unknown (the database cannot be read, or the record lacks the count) is never
-# reported as unchanged.
+# Whether the superuser or the database already carries the new name: 1, 0, or nothing when it cannot be
+# read. A change to the cluster, not to the business database, so the migration journal does not show it.
+cluster_renamed() {
+  r=$(ask "SELECT ((SELECT rolname FROM pg_roles WHERE oid = 10) = 'xiongbao' OR current_database() = 'xiongbao')::int;") || r=''
+  case $r in 0 | 1) echo "$r" ;; esac
+}
+RESTORE_STEPS='先按 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用备份还原'
+
+# With an in-progress record: has the business database changed since the backup, or the cluster been
+# renamed? Same answers as a failing step gives. Unknown (the database cannot be read, or the record
+# lacks the count) is never reported as unchanged.
 resume_notes() {
   was=$(marker_value journal)
   now=$(ask "SELECT count(*) FROM drizzle.__drizzle_migrations;") || now=''
-  case $was:$now in
-    *[!0-9:]* | :* | *:)
-      DATA_NOTE='（这次启动没有改动任何数据；但读不到迁移记录，无法确认上一次改名是否已经改动了业务库）'
-      GO_BACK='先不要换回 v0.2.15（上一次改名可能已经改动了业务库）：修好数据库连接后再启动，看到确切结论再决定'
+  renamed=''
+  [ -z "$now" ] || renamed=$(cluster_renamed)
+  case $was:$now:$renamed in
+    *[!0-9:]* | :* | *::* | *:)
+      DATA_NOTE='（这次启动没有改动任何数据；但读不到迁移记录或集群的名字，无法确认上一次改名是否已经改动了数据库）'
+      GO_BACK='先不要换回 v0.2.15（上一次改名可能已经改动了数据库）：修好数据库连接后再启动，看到确切结论再决定'
       ;;
-    "$now:$now")
+    "$now:$now:1")
+      DATA_NOTE="（注意：上一次改名已经把数据库超级用户与库改成了新名字；迁移记录虽与备份时一样（$now 条），v0.2.15 已经登录不了这个库）"
+      GO_BACK="不能直接换回 v0.2.15（集群已改名）：要在 v0.2.15 上处理，$RESTORE_STEPS"
+      ;;
+    "$now:$now:0")
       DATA_NOTE="（上一次改名没有改动业务库：迁移记录与备份时一样，$now 条）"
       GO_BACK="换回 v0.2.15 镜像启动（业务库没被改动，可以直接回去；换回之前先删掉 $MARKER，以后再升级时才会重新备份）"
       ;;
     *)
       DATA_NOTE="（注意：上一次改名已经改动了业务库，迁移记录从备份时的 $was 条变成 $now 条）"
-      GO_BACK="不能直接换回 v0.2.15（业务库已经改动）：要在 v0.2.15 上处理，先按 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用备份还原"
+      GO_BACK="不能直接换回 v0.2.15（业务库已经改动）：要在 v0.2.15 上处理，$RESTORE_STEPS"
       ;;
   esac
 }
@@ -334,16 +352,24 @@ step() {
   journal=$(marker_value journal)
   steps_done=$(done_steps)
   host=$(state_value host) port=$(state_value port) user=$(state_value user) db=$(state_value db)
-  now=''
+  now='' renamed=''
   if [ -n "$host" ]; then
     now=$(ask "SELECT count(*) FROM drizzle.__drizzle_migrations;") || now=''
+    [ "$now" != "$journal" ] || renamed=$(cluster_renamed)
     rm -f "$ERR"
   fi
+  # Unchanged journal but a renamed cluster (or one whose names cannot be read): not "unchanged".
+  case $renamed in 0) ;; 1) now=renamed ;; *) [ "$now" != "$journal" ] || now='' ;; esac
   refuse "「$label」这一步失败（退出码 $code），涉及的数据：$data。服务不启动；它自己的报错见上方。" \
     "这次之前已完成的步骤：${steps_done:-无}。升级前的备份：$backup（容器内路径，0600）。"
   case $now in
+    renamed)
+      refuse "业务库的迁移记录与备份时一样（$journal 条），但数据库超级用户与库已经改成新名字（这是集群级改动，迁移记录里看不到），" \
+        "v0.2.15 用旧名登录不了：不能直接换回 v0.2.15。修好原因后重启容器，各步骤会接着做（不会再备份）；" \
+        "要回到升级前，按镜像里 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用这份备份还原。"
+      ;;
     '' | *[!0-9]*)
-      refuse "无法确认业务库是否已改动（读不到迁移记录）。修好原因后重启容器会接着做（不会再备份）；" \
+      refuse "无法确认数据库是否已改动（读不到迁移记录或集群的名字）。修好原因后重启容器会接着做（不会再备份）；" \
         "要回到升级前，按镜像里 /etc/s6-overlay/scripts/rebrand-restore.sh 开头写的步骤用这份备份还原。"
       ;;
     "$journal")

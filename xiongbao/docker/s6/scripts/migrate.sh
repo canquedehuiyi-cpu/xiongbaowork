@@ -20,16 +20,15 @@ export HOME=/home/apiuser
 # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
 OWNER_PW="$(cat /var/lib/postgresql/pgpassword)"
 SUPERUSER="$(dirname "$0")/rebrand-superuser.sh"
-deadline=$(($(date +%s)+30))
-until NAMES="$(PGPASSWORD="$OWNER_PW" PGCONNECT_TIMEOUT=2 "$SUPERUSER" names -h 127.0.0.1 -U openbot -d openbot 2>/dev/null)"; do
-  if [ "$(date +%s)" -ge "$deadline" ]; then
-    # Once more, to show why.
-    PGPASSWORD="$OWNER_PW" PGCONNECT_TIMEOUT=2 "$SUPERUSER" names -h 127.0.0.1 -U openbot -d openbot >/dev/null || true
-    echo 'migrate: embedded PostgreSQL was not ready within 30 seconds' >&2
-    exit 1
-  fi
-  sleep 1
-done
+# Up to 30 seconds for a login; a refusal for a reason that waiting does not change (exit 3: both databases
+# there, or neither) stops at once, and only that reason is printed.
+rc=0
+NAMES="$(PGPASSWORD="$OWNER_PW" PGCONNECT_TIMEOUT=2 "$SUPERUSER" names --wait 30 -h 127.0.0.1 -U openbot -d openbot)" || rc=$?
+case $rc in
+  0) ;;
+  3) exit 1 ;;
+  *) echo 'migrate: embedded PostgreSQL was not ready within 30 seconds' >&2; exit 1 ;;
+esac
 DB_USER="${NAMES% *}"
 DB_NAME="${NAMES#* }"
 echo 'migrate: embedded PostgreSQL is ready'

@@ -127,6 +127,10 @@ test("migrate.sh renames the superuser and the database last, then writes the co
   );
   expect(names).toBeGreaterThan(-1);
   expect(check).toBeGreaterThan(names);
+  // The first ask is the readiness wait; a refusal waiting cannot change (exit 3) stops at once instead
+  // of being reported as a database that never came up. Both are tested in rebrand-superuser.test.sh.
+  expect(migrate).toContain('"$SUPERUSER" names --wait 30 ');
+  expect(migrate).toMatch(/\n {2}3\) exit 1 ;;\n/);
   // After the migrations and the application roles' passwords: no other session on the database.
   const rename = migrate.indexOf(
     '"$PREFLIGHT" step 超级用户与库改名 数据库超级用户名与库名 -- \\\n  "$SUPERUSER" rename ',

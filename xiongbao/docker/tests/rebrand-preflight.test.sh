@@ -454,7 +454,7 @@ sql "$OLD" openbot openbot "DELETE FROM drizzle.__drizzle_migrations WHERE hash 
 preflight "$OLD" openbot openbot PGPASSWORD=wrong-password
 what="a resumed refusal that cannot read the database does not claim it is unchanged"
 if [ "$code" -eq 0 ]; then fail "$what: exit 0"
-elif ! grep -q "无法确认上一次改名是否已经改动了业务库" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif ! grep -q "无法确认上一次改名是否已经改动了数据库" "$T/err"; then fail "$what: $(cat "$T/err")"
 elif grep -q "数据没动过\|数据没有改动" "$T/err"; then fail "$what: claims untouched data: $(cat "$T/err")"
 elif [ "$(backups)" -ne "$count" ]; then fail "$what: $(backups) backups, was $count"
 else pass "$what"; fi
@@ -531,6 +531,27 @@ preflight "$OLD" openbot older REBRAND_BACKUP_DIR="$T/older-backup"
 [ "$code" -eq 0 ] && grep -q "按 0 计" "$T/out" && grep -q "approval_continuations" "$T/out" &&
   [ -n "$(state_of backup)" ] && pass "missing continuation tables count as 0 on an older volume" ||
   fail "missing continuation tables count as 0 on an older volume: exit $code: $(cat "$T/out" "$T/err")"
+
+# 16b. resuming on a cluster whose superuser and database already carry the new name (the last step
+#     committed, the boot was killed before finish) while the journal is as it was at the backup: the rename
+#     is a cluster change the journal never records, and v0.2.15 cannot log in to it, so a refusal must not
+#     call the database unchanged or send anyone back to v0.2.15 directly.
+R=$T/renamed-backup
+mkdir -p "$R"
+echo dump >"$R/pre-rebrand-20261126T000000Z.dump"
+printf 'started=2026-11-26T00:00:00Z\nbackup=%s\njournal=1\nok=数据库迁移\nok=超级用户与库改名\n' "$R/pre-rebrand-20261126T000000Z.dump" >"$R/rebrand-in-progress"
+chmod 700 "$R" && chmod 600 "$R"/*
+[ "$(id -u)" = 0 ] && chown -R postgres:postgres "$R"
+sql "$NEW" xiongbao xiongbao "INSERT INTO approval_requests (status) VALUES ('pending');"
+preflight "$NEW" xiongbao xiongbao REBRAND_BACKUP_DIR="$R"
+what="a resumed refusal on a renamed cluster does not call it unchanged"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "待审批：1" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif ! grep -q "已经把数据库超级用户与库改成了新名字" "$T/err" || ! grep -q "不能直接换回 v0.2.15（集群已改名）" "$T/err"; then fail "$what: no renamed wording: $(cat "$T/err")"
+elif grep -q "没有改动业务库\|可以直接回去\|数据没动过" "$T/err"; then fail "$what: claims unchanged: $(cat "$T/err")"
+elif ! grep -q "rebrand-restore.sh" "$T/err"; then fail "$what: no restore pointer: $(cat "$T/err")"
+else pass "$what"; fi
+sql "$NEW" xiongbao xiongbao "DELETE FROM approval_requests WHERE status = 'pending';"
 
 # 17. the read-only self-check reads the same numbers from a real database. A stand-in `docker` runs the
 #    in-container part here, against the old cluster; every session is read-only, so data is untouched.

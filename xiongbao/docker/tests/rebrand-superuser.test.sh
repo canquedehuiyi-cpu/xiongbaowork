@@ -143,6 +143,8 @@ app_passwords() {
 # through the step runner; the application roles' passwords; the superuser and database rename through the
 # step runner; the names again and the connection strings; finish. Stops at the first command that fails,
 # as `set -e` does: $code is the exit code, $stopped names the command, the output is in $T/out and $T/err.
+# MIGRATE_CMD stands in for the migrator; KILLED_AFTER_RENAME=1 ends the boot right after the rename step,
+# the way a container killed there (docker stop, OOM, a host reboot) ends it.
 boot() {
   b_vol=$1 b_port=$2
   (
@@ -154,18 +156,19 @@ boot() {
     OWNER_PW=$(cat "$vol/pgpassword")
     at() { echo "$1" >"$T/stage"; }
     at names
-    NAMES=$(PGPASSWORD=$OWNER_PW sh "$SUPERUSER" names -h 127.0.0.1 -p "$b_port" -U openbot -d openbot)
+    NAMES=$(PGPASSWORD=$OWNER_PW sh "$SUPERUSER" names --wait 5 -h 127.0.0.1 -p "$b_port" -U openbot -d openbot)
     DB_USER=${NAMES% *} DB_NAME=${NAMES#* }
     at check
     PGPASSWORD=$OWNER_PW sh "$PREFLIGHT" check -h 127.0.0.1 -p "$b_port" -U "$DB_USER" -d "$DB_NAME"
     at migrate
     PGPASSWORD=$OWNER_PW DATABASE_URL="postgres://$DB_USER:$OWNER_PW@127.0.0.1:$b_port/$DB_NAME" \
-      sh "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- sh -c "$MIGRATE" migrate "$MIGRATOR_DIR"
+      sh "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- sh -c "${MIGRATE_CMD:-$MIGRATE}" migrate "$MIGRATOR_DIR"
     at passwords
     app_passwords "$b_vol" "$b_port" "$DB_USER" "$DB_NAME"
     at rename
     PGPASSWORD=$OWNER_PW sh "$PREFLIGHT" step 超级用户与库改名 数据库超级用户名与库名 -- \
       sh "$SUPERUSER" rename -h 127.0.0.1 -p "$b_port" -U openbot -d openbot
+    if [ "${KILLED_AFTER_RENAME:-}" = 1 ]; then at killed; exit 137; fi
     at urls
     NAMES=$(PGPASSWORD=$OWNER_PW sh "$SUPERUSER" names -h 127.0.0.1 -p "$b_port" -U openbot -d openbot)
     sh "$URLS" "${NAMES% *}" "${NAMES#* }"
@@ -230,15 +233,20 @@ clean && pass "$what"
 # A volume made by v0.2.15: the same postgres-init (since v0.2.0: initdb -A scram-sha-256 under the old
 # superuser, createdb under the old database name), migrated, the application roles' passwords set as
 # v0.2.15's migrate.sh sets them, and a person's data on top.
-fresh_volume v0215 || exit 1
+# The migrations are byte for byte the ones v0.2.15 shipped (server/drizzle and the recovery overlay have
+# not changed since that tag), so the schema is v0.2.15's too.
+v0215_volume() { # name; leaves the port in $port
+  fresh_volume "$1" || return 1
+  PGPASSWORD=$(pw_of "$1" pgpassword) DATABASE_URL="postgres://openbot:$(pw_of "$1" pgpassword)@127.0.0.1:$port/openbot" HOME="$T/home" \
+    sh -c "$MIGRATE" migrate "$MIGRATOR_DIR" >"$T/out" 2>&1 || { echo "migrating the v0.2.15 volume failed: $(tail -n 20 "$T/out")" >&2; return 1; }
+  app_passwords "$1" "$port" openbot openbot || return 1
+  sql "$1" "$port" openbot openbot "CREATE TABLE public.upgrade_probe (id serial PRIMARY KEY, body text NOT NULL);
+    INSERT INTO public.upgrade_probe (body) SELECT 'row ' || g FROM generate_series(1, 200) g;
+    GRANT SELECT ON public.upgrade_probe TO openbot_app;"
+}
+v0215_volume v0215 || exit 1
 V=$port
 V_PW=$(pw_of v0215 pgpassword)
-PGPASSWORD=$V_PW DATABASE_URL="postgres://openbot:$V_PW@127.0.0.1:$V/openbot" HOME="$T/home" \
-  sh -c "$MIGRATE" migrate "$MIGRATOR_DIR" >"$T/out" 2>&1 || { echo "migrating the v0.2.15 volume failed: $(tail -n 20 "$T/out")" >&2; exit 1; }
-app_passwords v0215 "$V" openbot openbot || exit 1
-sql v0215 "$V" openbot openbot "CREATE TABLE public.upgrade_probe (id serial PRIMARY KEY, body text NOT NULL);
-  INSERT INTO public.upgrade_probe (body) SELECT 'row ' || g FROM generate_series(1, 200) g;
-  GRANT SELECT ON public.upgrade_probe TO openbot_app;" || exit 1
 V_KIND=$(verifier_kind v0215 "$V" openbot openbot)
 V_VERIFIER=$(verifier_of v0215 "$V" openbot openbot)
 V_DATA=$(data_print v0215 "$V" openbot openbot)
@@ -341,6 +349,57 @@ superuser v0215 "$V" rename
 [ "$code" -eq 0 ] && [ -f "$T/v0215/vol/superuser-renamed" ] && [ ! -L "$T/v0215/vol/superuser-renamed" ] &&
   pass "the rename on a renamed cluster records the hint again" || fail "the rename records the hint again: exit $code: $(cat "$T/err")"
 
+# 5b. a boot killed after the rename committed, before the hint, the connection strings and finish: the
+#     in-progress record stays, and the next boot connects under the new names, resumes without another
+#     backup, and finishes with connection strings that name the new superuser and database. While it is
+#     in that state, a refusal or a failing step must not call the database unchanged, though the journal
+#     is: the cluster has been renamed and v0.2.15 can no longer log in.
+v0215_volume killed || exit 1
+K=$port
+K_PW=$(pw_of killed pgpassword)
+KILLED_AFTER_RENAME=1 boot killed "$K"
+rm -f "$T/killed/vol/superuser-renamed"
+what="a boot killed after the rename commits resumes on restart without a new backup"
+begin
+if [ "$stopped" != killed ]; then fail "$what: the first boot stopped at $stopped (exit $code): $(cat "$T/out" "$T/err")"
+else
+  [ "$(names_of killed "$K" xiongbao xiongbao)" = "xiongbao | xiongbao" ] || fail "$what: not renamed before the kill"
+  [ -f "$T/killed/vol/backup/rebrand-in-progress" ] || fail "$what: no in-progress record after the kill"
+  [ -z "$(ls -A "$T/killed/env")" ] || fail "$what: connection strings were written before the kill"
+  # A refusal while resuming (the recorded backup has gone missing), with the journal as it was at the backup.
+  k_dump=$(ls "$T/killed/vol/backup"/pre-rebrand-*.dump)
+  mv "$k_dump" "$T/killed-backup.dump"
+  boot killed "$K"
+  mv "$T/killed-backup.dump" "$k_dump"
+  if [ "$code" -eq 0 ] || [ "$stopped" != check ]; then fail "$what: the missing backup was not refused (stopped at $stopped, exit $code)"
+  else
+    grep -q "已经把数据库超级用户与库改成了新名字" "$T/err" && grep -q "v0.2.15 已经登录不了这个库" "$T/err" ||
+      fail "$what: the refusal does not say the cluster was renamed: $(cat "$T/err")"
+    grep -q "没有改动业务库\|可以直接回去\|数据没有改动" "$T/err" && fail "$what: the refusal calls a renamed cluster unchanged: $(cat "$T/err")"
+  fi
+  # A failing step while resuming, with the journal as it was at the backup.
+  MIGRATE_CMD='echo "migration exploded" >&2; exit 3' boot killed "$K"
+  if [ "$code" -eq 0 ] || [ "$stopped" != migrate ]; then fail "$what: the stand-in step did not fail (stopped at $stopped, exit $code)"
+  else
+    grep -q "已经改成新名字" "$T/err" && grep -q "不能直接换回 v0.2.15" "$T/err" ||
+      fail "$what: the step failure does not say the cluster was renamed: $(cat "$T/err")"
+    grep -q "业务库没有改动\|直接换回 v0.2.15 镜像继续用这个卷" "$T/err" && fail "$what: the step failure calls a renamed cluster unchanged: $(cat "$T/err")"
+  fi
+  boot killed "$K"
+  if [ "$code" -ne 0 ]; then fail "$what: the resumed boot stopped at $stopped (exit $code): $(cat "$T/out" "$T/err")"
+  else
+    grep -q "不再备份" "$T/out" || fail "$what: the resumed boot does not say it keeps the backup: $(cat "$T/out")"
+    [ "$(backups killed)" -eq 1 ] || fail "$what: $(backups killed) backups"
+    [ ! -e "$T/killed/vol/backup/rebrand-in-progress" ] || fail "$what: the in-progress record was not cleared"
+    [ -f "$T/killed/vol/superuser-renamed" ] || fail "$what: the hint was not written again"
+    [ "$(cat "$T/killed/env/MIGRATION_DATABASE_URL")" = "postgres://xiongbao:$K_PW@127.0.0.1:5432/xiongbao" ] ||
+      fail "$what: MIGRATION_DATABASE_URL does not name the new superuser and database"
+    [ "$(PGPASSWORD='' "$PG_BIN/psql" -X -q -A -t -w "$(url_at killed "$K" DATABASE_URL)" -c "SELECT current_database() || ' ' || count(*) FROM public.upgrade_probe;" 2>&1)" = "xiongbao 200" ] ||
+      fail "$what: the app role cannot read the person's rows through DATABASE_URL"
+  fi
+fi
+clean && pass "$what"
+
 # A cluster whose superuser password is stored as an MD5 hash (possible only with an md5 line in
 # pg_hba.conf, which v0.2.15 never writes): PostgreSQL clears MD5 hashes on a rename, because the hash
 # involves the role name.
@@ -367,6 +426,24 @@ superuser md5 "$M" rename
   fail "a stray role with the new name refuses: exit $code: $(cat "$T/err")"
 sql md5 "$M" openbot postgres "DROP ROLE xiongbao;"
 
+# 7b. a leftover of the temporary role the rename uses (the transaction never commits one, so only a
+#     hand-made one exists): one that can log in, holds a privilege or belongs to anything is refused by
+#     name before anything changes; a bare NOLOGIN one is dropped and the rename goes on (case 8 below).
+sql md5 "$M" openbot postgres "CREATE ROLE xiongbao_renaming NOLOGIN; GRANT CONNECT ON DATABASE postgres TO xiongbao_renaming;"
+superuser md5 "$M" rename
+what="a leftover temporary role that holds anything is refused by name"
+if [ "$code" -ne 3 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif ! grep -q "xiongbao_renaming" "$T/err"; then fail "$what: the role is not named: $(cat "$T/err")"
+elif grep -q "别的连接" "$T/err"; then fail "$what: blamed on other connections: $(cat "$T/err")"
+elif [ "$(names_of md5 "$M" openbot openbot)" != "openbot | openbot" ]; then fail "$what: names changed"
+else pass "$what"; fi
+sql md5 "$M" openbot postgres "REVOKE CONNECT ON DATABASE postgres FROM xiongbao_renaming; ALTER ROLE xiongbao_renaming LOGIN;"
+superuser md5 "$M" rename
+[ "$code" -eq 3 ] && grep -q "xiongbao_renaming" "$T/err" && [ "$(names_of md5 "$M" openbot openbot)" = "openbot | openbot" ] &&
+  pass "a leftover temporary role that can log in is refused by name" ||
+  fail "a leftover temporary role that can log in is refused: exit $code: $(cat "$T/err")"
+sql md5 "$M" openbot postgres "ALTER ROLE xiongbao_renaming NOLOGIN;"
+
 # 8. an MD5-hashed password still works after the rename: replaced in the same transaction by a SCRAM
 #    verifier of the same password.
 superuser md5 "$M" rename
@@ -374,6 +451,7 @@ what="an md5 password still logs in after the rename, now as scram"
 if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
 elif ! logs_in "$M" xiongbao xiongbao "$M_PW"; then fail "$what: the password does not log in under the new names"
 elif [ "$(verifier_kind md5 "$M" xiongbao xiongbao)" != SCRAM-SHA-256 ]; then fail "$what: stored as $(verifier_kind md5 "$M" xiongbao xiongbao | cut -c1-3)"
+elif [ "$(sql md5 "$M" xiongbao xiongbao "SELECT count(*) FROM pg_roles WHERE rolname = 'xiongbao_renaming';")" != 0 ]; then fail "$what: the bare leftover role was not dropped"
 else pass "$what"; fi
 
 # 8b. a cluster with one name new and the other old (the rename does both in one transaction, so only a
@@ -405,7 +483,28 @@ n_code=$code
 superuser md5 "$M" rename
 [ "$n_code" -ne 0 ] && [ "$code" -ne 0 ] && grep -q "同时存在" "$T/err" && [ "$(names_of md5 "$M" xiongbao xiongbao)" = "$before" ] &&
   pass "two candidate databases are refused, not guessed" || fail "two candidate databases are refused: exit $n_code/$code: $(cat "$T/err")"
+# 9b. with --wait (migrate.sh's readiness wait), a refusal like that one is final: it returns at once with
+#     its own exit code and reason, not after the wait as if the database were not up. A login that keeps
+#     failing is waited for, then said so.
+started=$(date +%s)
+env PGPASSWORD="$M_PW" REBRAND_PG_BIN="$PG_BIN" REBRAND_SUPERUSER_HINT="$T/md5/vol/superuser-renamed" \
+  sh "$SUPERUSER" names --wait 10 -h 127.0.0.1 -p "$M" -U openbot -d openbot >"$T/out" 2>"$T/err" </dev/null
+code=$?
+took=$(($(date +%s) - started))
+cat "$T/out" "$T/err" >>"$ALL"
+[ "$code" -eq 3 ] && [ "$took" -lt 5 ] && grep -q "同时存在" "$T/err" && ! grep -q "等了" "$T/err" &&
+  pass "a refusal under --wait returns at once with its own reason" ||
+  fail "a refusal under --wait returns at once: exit $code after ${took}s: $(cat "$T/err")"
 sql md5 "$M" xiongbao postgres "DROP DATABASE openbot;"
+started=$(date +%s)
+env PGPASSWORD=wrong-password REBRAND_PG_BIN="$PG_BIN" REBRAND_SUPERUSER_HINT="$T/md5/vol/superuser-renamed" \
+  sh "$SUPERUSER" names --wait 2 -h 127.0.0.1 -p "$M" -U openbot -d openbot >"$T/out" 2>"$T/err" </dev/null
+code=$?
+took=$(($(date +%s) - started))
+cat "$T/out" "$T/err" >>"$ALL"
+[ "$code" -eq 1 ] && [ "$took" -ge 2 ] && grep -q "等了 2 秒" "$T/err" &&
+  pass "a login that keeps failing is waited for, then reported" ||
+  fail "a login that keeps failing is waited for: exit $code after ${took}s: $(cat "$T/err")"
 
 # 10. the connection strings: an explicit DATABASE_URL or ROLE_WRITER_DATABASE_URL is left as the deployment
 #     wrote it; each file is replaced by a rename (a new inode), never rewritten in place; a password file
@@ -436,10 +535,28 @@ cat "$T/out" "$T/err" >>"$ALL"
 [ "$code" -ne 0 ] && grep -q "pgpassword-app" "$T/err" && ! grep -q "not-hex" "$T/err" && [ ! -e "$T/urls/env/DATABASE_URL" ] &&
   [ -z "$(ls -A "$T/urls/env" | grep '^\.')" ] && pass "a password file that is not a generated password is refused" ||
   fail "a password file that is not a generated password is refused: exit $code: $(cat "$T/err")"
+# One hex digit short of a generated password is refused too.
+cp "$T/fresh/vol/pgpassword-app" "$T/urls/vol/pgpassword-app"
+cut -c2- "$T/fresh/vol/pgpassword-role-writer" | tr -d '\n' >"$T/urls/vol/pgpassword-role-writer"
+env DATABASE_URLS_DIR="$T/urls/env" DATABASE_SECRETS_DIR="$T/urls/vol" sh "$URLS" xiongbao xiongbao >"$T/out" 2>"$T/err"
+code=$?
+cat "$T/out" "$T/err" >>"$ALL"
+[ "$code" -ne 0 ] && grep -q "pgpassword-role-writer" "$T/err" && pass "a password of the wrong length is refused" ||
+  fail "a password of the wrong length is refused: exit $code: $(cat "$T/err")"
+cp "$T/fresh/vol/pgpassword-role-writer" "$T/urls/vol/pgpassword-role-writer"
+# A rename that fails leaves no temporary file behind (it holds a password).
+mkdir -p "$T/failmv"
+printf '#!/bin/sh\nexit 1\n' >"$T/failmv/mv"
+chmod 755 "$T/failmv/mv"
+env PATH="$T/failmv:$PATH" DATABASE_URLS_DIR="$T/urls/env" DATABASE_SECRETS_DIR="$T/urls/vol" sh "$URLS" xiongbao xiongbao >"$T/out" 2>"$T/err"
+code=$?
+cat "$T/out" "$T/err" >>"$ALL"
+[ "$code" -ne 0 ] && [ -z "$(ls -A "$T/urls/env" | grep '^\.')" ] && pass "a failed rename leaves no temporary file with a password" ||
+  fail "a failed rename leaves no temporary file: exit $code: $(ls -A "$T/urls/env")"
 
 # 11. nothing above printed a password.
 leaked=0
-for v in fresh v0215 md5; do
+for v in fresh v0215 killed md5; do
   for f in pgpassword pgpassword-app pgpassword-role-writer; do
     grep -qF "$(pw_of "$v" "$f")" "$ALL" && leaked=1
   done

@@ -29,8 +29,10 @@ for n in "$owner" "$db"; do
   case $n in '' | *[!a-z0-9_]*) echo "database-urls: not a database name: $n" >&2; exit 2 ;; esac
 done
 
+# Generated as 32 random bytes in hex (postgres-init), checked the way migrate.sh checks them.
 secret() { # file
   v=$(cat "$SECRETS/$1" 2>/dev/null) || v=''
+  [ "${#v}" -eq 64 ] || v=''
   case $v in
     '' | *[!0-9a-f]*)
       echo "database-urls: $SECRETS/$1 is missing or not a generated password; restore it with the database volume." >&2
@@ -40,10 +42,14 @@ secret() { # file
   printf '%s' "$v"
 }
 
+# The temporary file holds a password until it is renamed: removed on any way out.
+tmp=''
+trap '[ -z "$tmp" ] || rm -f "$tmp"' EXIT
 put() { # name value
   tmp=$(mktemp "$DIR/.$1.XXXXXX")
   printf '%s' "$2" >"$tmp"
   mv -f "$tmp" "$DIR/$1"
+  tmp=''
 }
 
 owner_pw=$(secret pgpassword)

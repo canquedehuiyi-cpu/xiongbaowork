@@ -593,11 +593,36 @@ COMMIT;
    （运行时本来就以新名为准）；同名新行只有空值时，运行时生效的是旧值，所以注释掉的是空的新行，旧行照常改名。
    平台模型的密钥变量保持原样。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
    改完照常 `up -d`。要退回，把备份文件改回原名即可。源码目录的 `.env` 也可以这样改，`scripts/start.sh` 同样新名优先、旧名其次。
-6. **用开发 Compose（`xiongbao/docker-compose.yml`，本机更新器的 image 拓扑）安装的 v0.2.15 暂时不能原地升级。**
-   这一版里该文件的 Compose 项目名、卷名和数据库名已经改了，v0.2.15 的本机更新器会在停服之前发现这些变化并拒绝更新，
-   不停服务、不动数据库。请等包含数据迁移（R3）的 v0.2.16 正式版发布后再升级，那一版会把已有的卷和数据库接过来；在那之前
-   不要手工用新文件 `docker compose up`，否则会起一个使用全新空卷的新项目，原有数据仍在旧卷里但不会被用到。
-   交付容器（`docker/compose.delivery.yml`，第 1、2 节的起法）不受影响，按本节前几条升级即可。
+6. **用开发 Compose（`xiongbao/docker-compose.yml`，本机更新器的 image 拓扑）安装的 v0.2.15 不能原地升级到 v0.2.16，v0.2.16 也不会接管旧卷和旧库。**
+   这一版里该文件的 Compose 项目名、卷名、数据库名和 server 的挂载目录都改了。v0.2.15 的本机更新器会在停服务之前发现库名和挂载的变化并拒绝更新，
+   服务照常运行、数据库不动。不要直接用新文件 `docker compose up`：那会起一个用全新空卷的新项目，原有数据留在旧卷里不会被用到。
+   要保留数据，按下面的步骤手工迁移（在源码目录执行；`OLD` 是 v0.2.15 的 Compose 项目名，用 `docker compose ls` 查看）：
+
+   ```bash
+   OLD=<v0.2.15 的 Compose 项目名>
+   # 1. 还在 v0.2.15 源码上：停应用，用库的 owner 账号备份旧库并确认备份可读，再停整个旧项目（不要加 -v，旧卷留着）
+   docker compose -p "$OLD" stop server worker
+   docker compose -p "$OLD" exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > xiongbao-v0215.dump
+   docker compose -p "$OLD" exec -T postgres pg_restore --list < xiongbao-v0215.dump > /dev/null
+   docker compose -p "$OLD" stop
+   # 2. 把源码换到 v0.2.16，起新项目的数据库，跑一次迁移：在新卷上建好表、应用角色和 role writer 的口令
+   docker compose up -d postgres
+   docker compose run --rm migrate
+   # 3. 换成空库再灌回。必须是空库：迁移建的默认权限会让灌回时重建的表多出写权限，空库里没有它，表的权限与备份时逐条一致
+   docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE \"$POSTGRES_DB\"" -c "CREATE DATABASE \"$POSTGRES_DB\" OWNER \"$POSTGRES_USER\""'
+   docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --single-transaction --exit-on-error' < xiongbao-v0215.dump
+   # 4. 再跑一次迁移（补上备份之后才有的迁移），然后照常启动服务
+   docker compose run --rm migrate
+   ```
+
+   - 灌回在一个事务里执行，任何一条出错就整体回滚，新库保持空库，排除原因后从第 3 步重来即可。
+   - 开发 Compose 的数据库超级用户在这一版没有改名（只有库名改了），备份里各对象的属主就是它，灌回后属主和权限与旧库一致，
+     应用角色和 role writer 照常读写。上面的命令都从容器自己的 `POSTGRES_USER`/`POSTGRES_DB` 取名字，不需要手填。
+   - 电脑的文件和浏览器登录在旧项目的 `<OLD>_agent-workspace`、`<OLD>_agent-profiles` 两个卷里。要带过来，在第 2 步之后先
+     `docker compose up --no-start` 建好新卷，再按 `docker volume ls` 看到的名字，用任意带 `sh` 的镜像把旧卷内容 `cp -a` 到新卷。
+   - 确认新项目一切正常后再删旧项目：`docker compose -p "$OLD" down`；确定不再需要旧数据时才加 `-v` 删旧卷。
+
+   交付容器（`docker/compose.delivery.yml`，第 1、2 节的起法）不受影响：它在 v0.2.16 第一次启动时自动备份、在原卷上完成改名，按本节前几条升级即可。
 7. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。
    chart 自己用新名下发的几项（如来自 `config.publicUrl` 的公网地址、单用户开关）若又在 `config.extraEnv` 里用旧名写了不同的值，
    现在一律以 chart 下发的新名值为准，服务端日志点名这个冲突；以前两者同名，按 env 列表的先后决定。
