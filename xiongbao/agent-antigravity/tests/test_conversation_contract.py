@@ -222,7 +222,7 @@ def test_other_system_rows_reach_the_model_as_labelled_data(monkeypatch, tmp_pat
     model, labelled with its role, and gains no system authority.
     """
     run = conversation()
-    memory = {"id": "openbot:personal-memory", "role": "system", "content": MEMORY}
+    memory = {"id": "xiongbao:personal-memory", "role": "system", "content": MEMORY}
     run["messages"].insert(2, memory)
     run["messages"].insert(-1, _skill())
     with fresh_bot(monkeypatch, tmp_path) as send:
@@ -301,7 +301,7 @@ def test_a_long_thread_is_seeded_with_its_newest_messages_and_the_question(monke
             {"id": f"u-{index}", "role": "user", "content": f"{index} {filler}"},
             {"id": f"a-{index}", "role": "assistant", "content": f"{index} {filler}"},
         ]
-    memory = {"id": "openbot:personal-memory", "role": "system", "content": MEMORY}
+    memory = {"id": "xiongbao:personal-memory", "role": "system", "content": MEMORY}
     run["messages"][2:2] = [memory, *history]
     with fresh_bot(monkeypatch, tmp_path) as send:
         body = send(run)

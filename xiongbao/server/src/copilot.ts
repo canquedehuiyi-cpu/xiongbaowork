@@ -76,6 +76,11 @@ import {
   CoworkerUnavailableError,
 } from "./agents/agent-resolver";
 import { attributeBotAnswers } from "./agents/bot-answers";
+import {
+  LEGACY_RUN_ASSERTION_PROP,
+  RUN_ASSERTION_PROP,
+  runAssertionIn,
+} from "./agents/callback-token";
 import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { HANDOFF_TOOL } from "./agents/handoff-tool";
@@ -3471,7 +3476,7 @@ function remoteAgentWithStandingRole(
             agent.id,
             input.runId,
             input.threadId,
-            input.forwardedProps?.openbotRun,
+            runAssertionIn(input.forwardedProps),
           )
         : undefined;
     // Governed vendor/host calls use the actual AG-UI client lifecycle, so approvals capture
@@ -3527,7 +3532,7 @@ function remoteAgentWithStandingRole(
        * one shared secret.
        */
       ...(runAssertion
-        ? { openbotRun: runAssertion }
+        ? { [RUN_ASSERTION_PROP]: runAssertion }
         : /*
            * Absent means this deployment cannot sign, so the agent is given nothing to hand back
            * and its tool calls will be refused. That is the right direction to fail: a Bot that
@@ -3536,7 +3541,11 @@ function remoteAgentWithStandingRole(
           {}),
     };
     // Nor one it carried in: a statement copied from another run would still be accepted.
-    if (!held) delete forwardedProps.openbotRun;
+    if (!held) delete forwardedProps[RUN_ASSERTION_PROP];
+    // The name before v0.2.16, from a stored continuation or an old agent image: never passed on.
+    delete (forwardedProps as Record<string, unknown>)[
+      LEGACY_RUN_ASSERTION_PROP
+    ];
     // The model is this deployment's decision, never the request's. Set below when it applies.
     delete (forwardedProps as Record<string, unknown>).xiongbaoModel;
     /*
@@ -3787,13 +3796,36 @@ function remoteAgentWithStandingRole(
   });
 }
 
-const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set([
+/**
+ * The context entries this deployment writes for a Mastra Bot, by title. The framework image reads
+ * them by these exact titles (agent-mastra/src/mastra/index.ts).
+ */
+const MASTRA_CONTEXT = {
+  standingRole: "XiongBao standing role",
+  grantedTools: "XiongBao granted tools guidance",
+  botId: "XiongBao Bot id",
+  deploymentTools: "XiongBao deployment tools",
+  runAssertion: "XiongBao signed run assertion",
+  learnedSkills: "XiongBao learned skills",
+} as const;
+
+/**
+ * The same titles before v0.2.16. An approval's stored continuation from before the upgrade carries
+ * its run's context under them, and a resumed run must not pass them on as the caller's own.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+const LEGACY_MASTRA_CONTEXT = [
   "OpenBot standing role",
   "OpenBot granted tools guidance",
   "OpenBot Bot id",
   "OpenBot deployment tools",
   "OpenBot signed run assertion",
   "OpenBot learned skills",
+];
+
+const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set<string>([
+  ...Object.values(MASTRA_CONTEXT),
+  ...LEGACY_MASTRA_CONTEXT,
 ]);
 
 function callerMastraContext(context: AgentContext[]): AgentContext[] {
@@ -3817,29 +3849,29 @@ function mastraXiongBaoContext({
 }): AgentContext[] {
   return [
     {
-      description: "OpenBot standing role",
+      description: MASTRA_CONTEXT.standingRole,
       value: standingMessage.content,
     },
     ...(holdingsMessage
       ? [
           {
-            description: "OpenBot granted tools guidance",
+            description: MASTRA_CONTEXT.grantedTools,
             value: holdingsMessage.content,
           },
         ]
       : []),
     {
-      description: "OpenBot Bot id",
+      description: MASTRA_CONTEXT.botId,
       value: botId,
     },
     {
-      description: "OpenBot deployment tools",
+      description: MASTRA_CONTEXT.deploymentTools,
       value: JSON.stringify(deploymentTools),
     },
     ...(runAssertion
       ? [
           {
-            description: "OpenBot signed run assertion",
+            description: MASTRA_CONTEXT.runAssertion,
             value: runAssertion,
           },
         ]

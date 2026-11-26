@@ -38,7 +38,13 @@ export function isStaffingProposalTool(name: string): boolean {
 }
 
 /** 回答第一行的开头，后面紧跟卡片的 JSON。 */
-export const STAFFING_PROPOSAL_MARKER = "<<openbot:staffing-proposal>>";
+export const STAFFING_PROPOSAL_MARKER = "<<xiongbao:staffing-proposal>>";
+
+/**
+ * v0.2.16 之前的标记。改名迁移（recovery 0241）把存下的工具回答改成新标记；读的时候两个都认，写只写新的。
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_STAFFING_PROPOSAL_MARKER = "<<openbot:staffing-proposal>>";
 
 export const STAFFING_PROPOSAL_KINDS = [
   "employee",
@@ -67,8 +73,12 @@ export function writeStaffingProposalAnswer(
 export function readStaffingProposalAnswer(
   text: string,
 ): { card: StaffingProposalCard; sentence: string } | null {
-  if (!text.startsWith(STAFFING_PROPOSAL_MARKER)) return null;
-  const rest = text.slice(STAFFING_PROPOSAL_MARKER.length);
+  const marker = [
+    STAFFING_PROPOSAL_MARKER,
+    LEGACY_STAFFING_PROPOSAL_MARKER,
+  ].find((candidate) => text.startsWith(candidate));
+  if (marker === undefined) return null;
+  const rest = text.slice(marker.length);
   const newline = rest.indexOf("\n");
   const json = newline === -1 ? rest : rest.slice(0, newline);
   const sentence = newline === -1 ? "" : rest.slice(newline + 1);

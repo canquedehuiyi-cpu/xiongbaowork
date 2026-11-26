@@ -7,24 +7,10 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/copilot/a2ui.ts",
+    "file": "app/src/lib/copilot/a2ui-catalog-id.ts",
     "text": "\"openbot/ui@1\"",
     "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
     "category": "peer-protocol",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/connection-test.ts",
-    "text": "`openbot-connection-test-",
-    "reason": "persisted-identifier: thread/run id of a throwaway probe; never shown",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/tool-search.ts",
-    "text": "ref: `openbot/${SEARCH_TOOLS}`",
-    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
-    "category": "persisted-data",
     "plan": "keep"
   },
   {
@@ -38,20 +24,6 @@
     "file": "server/src/agents/plan-model.ts",
     "text": "(?:openbot-)?${harness}",
     "reason": "persisted-identifier: matches published container image names",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/agents/plan-model.ts",
-    "text": "`openbot-${config.provider}-plan`",
-    "reason": "persisted-identifier: internal provider id",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/routing/model.ts",
-    "text": "\"openbot-model-call\"",
-    "reason": "persisted-identifier: internal span/run name",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -106,13 +78,6 @@
   },
   {
     "file": "server/src/proactive/private-share.ts",
-    "text": "\"openbot/share_private_information\"",
-    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/approvals/rule-vocabulary.ts",
     "text": "\"openbot/share_private_information\"",
     "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
     "category": "persisted-data",

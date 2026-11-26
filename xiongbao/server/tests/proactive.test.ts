@@ -1041,7 +1041,7 @@ describe("private information sharing check", () => {
     const { store, opened } = approvals("pending", [
       {
         botId: "bot",
-        toolRef: "openbot/share_private_information",
+        toolRef: "xiongbao/share_private_information",
         effect: "share_private",
         scope: "slack_channel:C1",
         revokedAt: null,

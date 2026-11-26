@@ -344,7 +344,7 @@ test("only MCP tools: a computer, host, hand-off or built-in tool is refused on 
     "computer_run_command",
     "host/run_command",
     "bot/handoff",
-    "openbot/share_private_information",
+    "xiongbao/share_private_information",
     "files/computer_click",
   ])
     expect({ ref, mcp: isMcpToolRef(ref) }).toEqual({ ref, mcp: false });

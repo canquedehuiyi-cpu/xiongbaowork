@@ -27,6 +27,7 @@ import type { AuditInitiator } from "../audit";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import { suppressRunnerCard } from "../threads/unattended-card";
+import { RUN_ASSERTION_PROP } from "./callback-token";
 import type { HandoffDelivery, HandoffWork } from "./handoff-runner";
 import { textOf } from "./message-text";
 
@@ -560,7 +561,7 @@ export function createHandoffDelivery(options: {
                    * gone. It is what stops the addressed Bot handing the work on for ever, and it is
                    * signed, so the Bot cannot edit its own depth on the way past.
                    */
-                  forwardedProps: { openbotRun: assertion },
+                  forwardedProps: { [RUN_ASSERTION_PROP]: assertion },
                 },
               }),
               deadlineMs,

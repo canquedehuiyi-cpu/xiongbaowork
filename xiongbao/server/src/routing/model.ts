@@ -329,7 +329,7 @@ async function askPlan(
   try {
     const result = await new PlanModel(
       plan,
-      "openbot-model-call",
+      "xiongbao-model-call",
       { threadId: crypto.randomUUID() },
       new Set(),
       controller.signal,

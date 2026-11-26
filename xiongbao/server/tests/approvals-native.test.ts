@@ -105,7 +105,7 @@ test("a real built-in native tool carries provider call identity and suspends AG
     expect(events).toContainEqual(
       expect.objectContaining({
         type: "CUSTOM",
-        name: "openbot.headless.waiting",
+        name: "xiongbao.headless.waiting",
       }),
     );
     expect(events).toContainEqual(

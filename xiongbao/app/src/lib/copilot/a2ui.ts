@@ -10,8 +10,11 @@ import {
   BREAKDOWN_DESCRIPTION,
   breakdownProps,
 } from "./a2ui-breakdown";
+import { XIONGBAO_UI_ID } from "./a2ui-catalog-id";
 import { A2UICode, A2UIMarkdown } from "./a2ui-markdown";
 import { A2UITextField } from "./a2ui-text-field";
+
+export { withCurrentCatalogId } from "./a2ui-catalog-id";
 
 /**
  * The standard components a Bot is not given.
@@ -45,7 +48,7 @@ export const OMITTED_STANDARD_COMPONENTS = [
  * with a bar of how the total splits; see a2ui-breakdown.tsx.
  */
 export const XIONGBAO_UI = createGenerativeUI({
-  id: "openbot/ui@1",
+  id: XIONGBAO_UI_ID,
   extends: [standardUI.omit([...OMITTED_STANDARD_COMPONENTS])],
   overrides: {
     Code: { component: A2UICode },

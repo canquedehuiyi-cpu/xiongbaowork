@@ -204,7 +204,7 @@ test("a remote responsibility question suspends, saves an answer, and resumes wi
       { runId },
       {
         onCustomEvent: ({ event }) => {
-          if (event.name === "openbot.headless.waiting") waiting = event.value;
+          if (event.name === "xiongbao.headless.waiting") waiting = event.value;
         },
       },
     );

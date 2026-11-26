@@ -131,7 +131,7 @@ def _turn_with(body: dict, marker: str) -> str:
 def test_every_other_system_row_reaches_the_model_as_conversation_data(monkeypatch, environment):
     """Any system or developer row but the server's two is part of the conversation, as data.
 
-    The server puts the person's quoted memory records first (`openbot:personal-memory`) and the
+    The server puts the person's quoted memory records first (`xiongbao:personal-memory`) and the
     browser puts a skill's instructions just before the message that used it. `ag_ui_strands`
     drops every system row from the history, so a skill never reached the model. Each now goes into the
     turn it came before, labelled with its role, in the person's own message rather than the system
@@ -143,7 +143,7 @@ def test_every_other_system_row_reaches_the_model_as_conversation_data(monkeypat
     body = conversation()
     body["messages"].insert(
         0,
-        {"id": "openbot:personal-memory", "role": "system", "content": f"Personal memory. {memory}"},
+        {"id": "xiongbao:personal-memory", "role": "system", "content": f"Personal memory. {memory}"},
     )
     body["messages"].insert(
         -1, {"id": "skill-row-1", "role": "system", "content": f"Use the receipts skill. {skill}"}
@@ -180,8 +180,8 @@ def test_a_row_the_run_also_sends_as_context_is_said_once(monkeypatch):
     memory = "CONTRACT_MEMORY_ROW_7f3a"
     records = f"Personal memory. {memory}"
     body = conversation()
-    body["messages"].insert(0, {"id": "openbot:personal-memory", "role": "system", "content": records})
-    body["context"] = [{"description": "OpenBot personal memory", "value": records}]
+    body["messages"].insert(0, {"id": "xiongbao:personal-memory", "role": "system", "content": records})
+    body["context"] = [{"description": "XiongBao personal memory", "value": records}]
 
     with fake_provider() as (base, bodies):
         _post(TestClient(_app(monkeypatch, openai_environment, base)), body)

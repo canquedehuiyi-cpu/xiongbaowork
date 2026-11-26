@@ -199,7 +199,7 @@ export class PlanModel implements PlanLanguageModel {
      */
     private readonly choice?: { model: string; reasoningEffort?: string },
   ) {
-    this.provider = `openbot-${config.provider}-plan`;
+    this.provider = `xiongbao-${config.provider}-plan`;
     this.modelId = config.provider;
     // Separate SDK/checkpoint state for two Bots in the same channel, stable across tool continuations.
     this.threadId = createHash("sha256")

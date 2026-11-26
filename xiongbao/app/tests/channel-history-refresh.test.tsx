@@ -246,7 +246,7 @@ async function mounted() {
  * A trip form a Bot drew, as its conversation stores it: a committed surface activity whose operations
  * carry the A2UI version they were written in.
  */
-function tripForm(version: string) {
+function tripForm(version: string, catalogId: string = XIONGBAO_UI.id) {
   return {
     id: "channel-trip-form",
     role: "activity",
@@ -254,7 +254,7 @@ function tripForm(version: string) {
     content: {
       surfaceId: "trip",
       target: "chat",
-      catalogId: XIONGBAO_UI.id,
+      catalogId,
       status: "ready",
       rejected: [],
       operations: [
@@ -262,7 +262,7 @@ function tripForm(version: string) {
           version,
           createSurface: {
             surfaceId: "trip",
-            catalogId: XIONGBAO_UI.id,
+            catalogId,
             dataModel: { destination: "Paris" },
           },
         },
@@ -300,6 +300,17 @@ function tripForm(version: string) {
     },
   } satisfies Message;
 }
+
+test("an interface the stored transcript holds under the catalog's old id still shows", async () => {
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the id before v0.2.16 (see withCurrentCatalogId).
+  // Read from the store: the v0.2.16 migration rewrote the ones the gateway replays (recovery 0241).
+  const activity = tripForm("1.0", "openbot/ui@1");
+  const view = mounting(async () => stored([activity]), [], null, true);
+  expect(
+    await view.findByRole("textbox", { name: "Destination" }),
+  ).toBeTruthy();
+  expect(view.getByRole("button", { name: "Confirm trip" })).toBeTruthy();
+});
 
 test("generated UI actions run the actual channel agent and thread with edited values", async () => {
   const activity = tripForm("1.0");

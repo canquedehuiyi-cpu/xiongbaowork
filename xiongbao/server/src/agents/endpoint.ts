@@ -9,6 +9,7 @@ import {
   OutboundRefusedError,
   untilAborted,
 } from "../net/outbound-guard";
+import { withoutRunAssertion } from "./callback-token";
 import { isManagedEndpoint } from "./managed-endpoint";
 
 /**
@@ -254,8 +255,12 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
   if (!run.forwardedProps || typeof run.forwardedProps !== "object") {
     return { body };
   }
-  const { openbotRun: _dropped, ...rest } = run.forwardedProps;
-  return { body: JSON.stringify({ ...run, forwardedProps: rest }) };
+  return {
+    body: JSON.stringify({
+      ...run,
+      forwardedProps: withoutRunAssertion(run.forwardedProps),
+    }),
+  };
 }
 
 /**

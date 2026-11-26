@@ -2,7 +2,7 @@ import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import type { HeadlessTool } from "@xiongbao/toolkit/headless-tools";
 import { z } from "zod";
 import { GIT_LOCAL_TOOLS } from "../../../shared/git-tools";
-import type { RunAssertion } from "../agents/callback-token";
+import { type RunAssertion, runAssertionIn } from "../agents/callback-token";
 import type { AuditInitiator } from "../audit";
 import { PluginRefusedError } from "../plugins/store";
 import { isApprovalRecheck } from "./service";
@@ -76,6 +76,12 @@ export type ApprovedActionDependencies = {
   readRun?(forwardedProps: unknown): RunAssertion | null;
   answer(result: { text: string; isError: boolean }): string;
   privateShareToolRef: string;
+  /**
+   * The same tool's ref before v0.2.16: an approval opened before the upgrade keeps it, because the
+   * ref is part of the action's digest (`approvalAction`) and the migration leaves both alone.
+   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   */
+  legacyPrivateShareToolRef?: string;
   refusalMarker: string;
   personInitiator: AuditInitiator;
 };
@@ -105,7 +111,11 @@ export function createApprovedActionExecutor(deps: ApprovedActionDependencies) {
       );
     // A private-information share the person allowed: the approval is the whole action, and the Bot
     // is told to send again, which the share check then passes. Gated so re-entry validation sees it.
-    if (action.toolRef === deps.privateShareToolRef) {
+    if (
+      action.toolRef === deps.privateShareToolRef ||
+      (deps.legacyPrivateShareToolRef !== undefined &&
+        action.toolRef === deps.legacyPrivateShareToolRef)
+    ) {
       await deps.gate({
         actorId: action.actorId,
         botId: action.botId,
@@ -178,11 +188,9 @@ export function createApprovedActionExecutor(deps: ApprovedActionDependencies) {
     // A hand-off is not a connector call: sent to the connector path, it was refused as not
     // granted, so "Allow once" on a hand-off could never be carried out.
     if (action.toolRef.startsWith("bot/")) {
-      const forwarded = snapshot.forwardedProps;
+      const carried = runAssertionIn(snapshot.forwardedProps);
       const signed =
-        forwarded && typeof forwarded === "object" && "openbotRun" in forwarded
-          ? (deps.readRun?.(forwarded.openbotRun) ?? null)
-          : null;
+        carried === undefined ? null : (deps.readRun?.(carried) ?? null);
       const run: RunAssertion =
         signed &&
         signed.actorId === action.actorId &&

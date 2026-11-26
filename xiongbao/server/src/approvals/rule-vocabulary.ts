@@ -14,7 +14,7 @@
  *   (`host-access/broker.ts`);
  * - asking another Bot: `bot/message_bot`, effect `delegate`, target the Bot asked
  *   (`agents/handoff-tool.ts`);
- * - sharing private information in a conversation: `openbot/share_private_information`
+ * - sharing private information in a conversation: `xiongbao/share_private_information`
  *   (`proactive/private-share.ts`).
  *
  * `server/tests/approval-rule-translate.test.ts` holds the fixed entries against the code they come
@@ -145,7 +145,7 @@ export const HANDOFF_APPROVAL_TOOL = {
 } as const;
 
 export const PRIVATE_SHARE_APPROVAL_TOOL = {
-  ref: "openbot/share_private_information",
+  ref: "xiongbao/share_private_information",
   effects: ["share_private"],
   about:
     "share the person's private information in a conversation other people read",

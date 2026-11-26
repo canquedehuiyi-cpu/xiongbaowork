@@ -1117,7 +1117,7 @@ describe("a Bot gives part of its work to a subagent", () => {
             if (this.late) await clock;
             subscriber.next({
               type: EventType.CUSTOM,
-              name: "openbot.headless.waiting",
+              name: "xiongbao.headless.waiting",
               value: {
                 kind: "approval",
                 requestId: parked?.approvalId,

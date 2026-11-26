@@ -967,7 +967,7 @@ describe("what the server runs today", () => {
     for (const tool of [
       "host/run_command",
       "bot/handoff",
-      "openbot/share_private_information",
+      "xiongbao/share_private_information",
     ])
       expect(
         problems(

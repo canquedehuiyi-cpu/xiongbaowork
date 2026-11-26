@@ -572,7 +572,7 @@ test("every run the app starts carries the person's time zone", async () => {
   for (const run of runs)
     expect(
       (run.forwardedProps as Record<string, unknown> | undefined)
-        ?.openbotTimeZone,
+        ?.xiongbaoTimeZone,
     ).toBe(zone);
 });
 

@@ -49,12 +49,16 @@ RUN_EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "m
 # Server-only props, read here and never passed to the integration, so none of them can reach
 # graph state, a checkpoint or a snapshot.
 XIONGBAO_PROPS = {
-    "openbotRun",
+    "xiongbaoRun",
     "xiongbaoDeploymentTools",
     "xiongbaoModel",
-    "openbot_run",
+    "xiongbao_run",
     "xiongbao_deployment_tools",
     "xiongbao_model",
+    # The run assertion's names before v0.2.16, from a server not yet upgraded: read, and never passed
+    # on either. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+    "openbotRun",
+    "openbot_run",
 }
 
 
@@ -251,7 +255,8 @@ class ToolAwareAgent(WholeThreadAgent):
     async def run(self, input: RunAgentInput):
         props = input.forwarded_props if isinstance(input.forwarded_props, dict) else {}
         names = props.get("xiongbaoDeploymentTools", [])
-        assertion = props.get("openbotRun", "")
+        # The name before v0.2.16. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+        assertion = props.get("xiongbaoRun", props.get("openbotRun", ""))
         model, effort = run_model(props)
         context = RunTools(
             tools=tuple(input.tools or []),

@@ -471,7 +471,7 @@ describe("a chat that hands its computer tools to the server", () => {
     const { events } = await runToEnd(serving, true);
     expect(ran).toHaveLength(1);
     const waiting = events.find(
-      (event) => event.name === "openbot.headless.waiting",
+      (event) => event.name === "xiongbao.headless.waiting",
     );
     expect(waiting?.value).toMatchObject({ kind: "approval" });
     const finished = events.find((event) => event.type === "RUN_FINISHED");
@@ -775,7 +775,7 @@ describe("a run that goes quiet keeps its stream open", () => {
     const events = eventsOf(quiet.text + rest.text);
     expect(events.at(-1)?.type).toBe("RUN_FINISHED");
     expect(
-      events.some((event) => event.name === "openbot.headless.waiting"),
+      events.some((event) => event.name === "xiongbao.headless.waiting"),
     ).toBe(true);
   });
 

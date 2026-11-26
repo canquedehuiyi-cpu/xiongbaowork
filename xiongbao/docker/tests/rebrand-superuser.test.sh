@@ -154,6 +154,32 @@ seed_credential() {
 # The credential rows a v0.2.15-shaped volume carries: id, tenant, kind, plaintext.
 CREDENTIALS='00000000-0000-4000-8000-0000000000c1 upgrade-person-a model probe-model-key
 00000000-0000-4000-8000-0000000000c2 team mcp probe-team-secret'
+# The conversation history a v0.2.15-shaped volume carries, as v0.2.15 wrote it (drizzle's own jsonb
+# stores each run event and the message snapshot as a JSON string): a run that stopped for an approval,
+# under the names before v0.2.16, and a person's message that happens to start with the old card marker.
+HISTORY_EVENT='{"type":"CUSTOM","name":"openbot.headless.waiting","value":{"kind":"approval","continuation":{"threadId":"upgrade-thread","runId":"upgrade-run","messages":[],"context":[{"description":"OpenBot standing role","value":"Be kind."}],"forwardedProps":{"openbotRun":"signed","openbotTimeZone":"Asia/Shanghai"}}}}'
+HISTORY_SNAPSHOT='[{"id":"m-1","role":"user","content":"<<openbot:staffing-proposal>>{} typed by the person"}]'
+seed_history() { # volume port
+  sql "$1" "$2" openbot openbot "SET app.tenant_id = 'platform';
+    INSERT INTO users (id, email) VALUES ('upgrade-person-a', 'upgrade-person-a@example.test');
+    INSERT INTO agents (id, name, type, configuration, tenant_id) VALUES ('upgrade-bot', 'Upgrade Bot', 'built_in', '{}', 'system');
+    INSERT INTO threads (id, tenant_id, agent_id, messages_snapshot)
+      VALUES ('upgrade-thread', 'upgrade-person-a', 'upgrade-bot', to_jsonb('$HISTORY_SNAPSHOT'::text));
+    INSERT INTO thread_run_events (thread_id, run_id, seq, event, tenant_id)
+      VALUES ('upgrade-thread', 'upgrade-run', 0, to_jsonb('$HISTORY_EVENT'::text), 'upgrade-person-a');"
+}
+# history_of <volume> <port> <user> <db>: the stored event's name, its run properties' keys and its context
+# titles, then whether the person's message is byte for byte what they wrote (t or f).
+history_of() {
+  sql "$1" "$2" "$3" "$4" "SELECT h.event ->> 'name' || ' '
+      || (SELECT string_agg(k, ',' ORDER BY k COLLATE \"C\") FROM jsonb_object_keys(h.event #> '{value,continuation,forwardedProps}') k) || ' '
+      || jsonb_path_query_array(h.event, '\$.value.continuation.context[*].description')::text || ' '
+      || (t.messages_snapshot #>> '{}' = '$HISTORY_SNAPSHOT')::text
+    FROM (SELECT (event #>> '{}')::jsonb AS event FROM thread_run_events WHERE run_id = 'upgrade-run') h,
+         threads t WHERE t.id = 'upgrade-thread';"
+}
+HISTORY_V0215='openbot.headless.waiting openbotRun,openbotTimeZone ["OpenBot standing role"] true'
+HISTORY_V0216='xiongbao.headless.waiting xiongbaoRun,xiongbaoTimeZone ["XiongBao standing role"] true'
 # kids_of <volume> <port> <user> <db>: "<id> <kid>" per credential row.
 kids_of() {
   sql "$1" "$2" "$3" "$4" "SELECT string_agg(id || ' ' || (encrypted_value::jsonb ->> 'kid'), ',' ORDER BY id) FROM credentials;"
@@ -307,6 +333,7 @@ v0215_volume() { # name; leaves the port in $port
   sql "$1" "$port" openbot openbot "CREATE TABLE public.upgrade_probe (id serial PRIMARY KEY, body text NOT NULL);
     INSERT INTO public.upgrade_probe (body) SELECT 'row ' || g FROM generate_series(1, 200) g;
     GRANT SELECT ON public.upgrade_probe TO openbot_app;" || return 1
+  seed_history "$1" "$port" || return 1
   printf '%s\n' "$CREDENTIALS" | while read -r c_id c_tenant c_kind c_plain; do
     seed_credential "$1" "$port" "$REKEY_KEY" "$c_id" "$c_tenant" "$c_kind" "$c_plain" >/dev/null || exit 1
   done
@@ -316,12 +343,15 @@ V=$port
 V_PW=$(pw_of v0215 pgpassword)
 V_KIND=$(verifier_kind v0215 "$V" openbot openbot)
 V_VERIFIER=$(verifier_of v0215 "$V" openbot openbot)
-V_DATA=$(data_print v0215 "$V" openbot openbot --exclude-table-data=public.credentials)
+# The run events are left out too: the upgrade renames what the system wrote in them (checked on its own).
+V_DATA=$(data_print v0215 "$V" openbot openbot --exclude-table-data=public.credentials --exclude-table-data=public.thread_run_events)
 V_KIDS=$(kids_of v0215 "$V" openbot openbot)
 [ "$V_KIDS" = "00000000-0000-4000-8000-0000000000c1 k1,00000000-0000-4000-8000-0000000000c2 k1" ] ||
   fail "a v0.2.15-shaped volume carries credentials sealed under kid k1 (got $V_KIDS)"
 [ -z "$(credentials_open v0215 "$V" openbot openbot)" ] || fail "the server reads the credentials v0.2.15 sealed"
 [ "$V_KIND" = SCRAM-SHA-256 ] || fail "a v0.2.15-shaped volume stores the superuser password as SCRAM (got $V_KIND)"
+[ "$(history_of v0215 "$V" openbot openbot)" = "$HISTORY_V0215" ] ||
+  fail "a v0.2.15-shaped volume carries history under the old names (got $(history_of v0215 "$V" openbot openbot))"
 
 # 2. rename failure keeps the old names and stops: a session still connected to the database (ALTER
 #    DATABASE … RENAME refuses then) fails the transaction after the superuser rename in it, and both
@@ -381,7 +411,11 @@ else
   logs_in "$V" xiongbao xiongbao "$V_PW" || fail "$what: the old password does not log in under the new names"
   logs_in "$V" openbot postgres "$V_PW" && fail "$what: the old superuser name still logs in"
   [ "$(verifier_of v0215 "$V" xiongbao xiongbao)" = "$V_VERIFIER" ] || fail "$what: the password verifier changed"
-  [ "$(data_print v0215 "$V" xiongbao xiongbao --exclude-table-data=public.credentials)" = "$V_DATA" ] || fail "$what: the data changed"
+  [ "$(data_print v0215 "$V" xiongbao xiongbao --exclude-table-data=public.credentials --exclude-table-data=public.thread_run_events)" = "$V_DATA" ] || fail "$what: the data changed"
+  # The history was rewritten with the business migrations (0241): the names the system wrote are new, the
+  # person's own words are not touched.
+  [ "$(history_of v0215 "$V" xiongbao xiongbao)" = "$HISTORY_V0216" ] ||
+    fail "$what: the history is not under the new names: $(history_of v0215 "$V" xiongbao xiongbao)"
   # The credentials were rekeyed with the business migrations, and open to what they held.
   [ "$(kids_of v0215 "$V" xiongbao xiongbao)" = "00000000-0000-4000-8000-0000000000c1 k2,00000000-0000-4000-8000-0000000000c2 k2" ] ||
     fail "$what: the credentials are not under kid k2: $(kids_of v0215 "$V" xiongbao xiongbao)"
@@ -422,6 +456,9 @@ else
   [ "$(sql v0215 "$V" xiongbao xiongbao "SELECT count(*) FROM drizzle.__drizzle_migrations;")" = "$journal_before" ] ||
     fail "$what: the second boot applied migrations"
   [ "$(data_print v0215 "$V" xiongbao xiongbao)" = "$data_before" ] || fail "$what: the second boot changed data"
+  # The history included: already under the new names, so nothing in it is rewritten again.
+  [ "$(history_of v0215 "$V" xiongbao xiongbao)" = "$HISTORY_V0216" ] ||
+    fail "$what: the history changed: $(history_of v0215 "$V" xiongbao xiongbao)"
   # The credentials included: nothing is left under kid k1, so the rekey writes nothing and says nothing.
   grep -q 'credentials-rekeyed' "$T/out" "$T/err" && fail "$what: the second boot rekeyed credentials"
   [ "$(kids_of v0215 "$V" xiongbao xiongbao)" = "00000000-0000-4000-8000-0000000000c1 k2,00000000-0000-4000-8000-0000000000c2 k2" ] ||
@@ -519,6 +556,8 @@ else
   [ "$(sql badcred "$B" openbot openbot "SELECT count(*) FROM drizzle.__drizzle_migrations;")" = "$B_JOURNAL" ] ||
     fail "$what: the migration journal changed"
   [ "$(data_print badcred "$B" openbot openbot)" = "$B_DATA" ] || fail "$what: the data changed"
+  [ "$(history_of badcred "$B" openbot openbot)" = "$HISTORY_V0215" ] ||
+    fail "$what: the history rewrite was not rolled back: $(history_of badcred "$B" openbot openbot)"
   [ "$(sql badcred "$B" openbot openbot "SELECT string_agg(rolname, ',' ORDER BY rolname) FROM pg_roles WHERE rolname LIKE '%\_app';")" = openbot_app ] ||
     fail "$what: the application role was renamed"
   [ "$(names_of badcred "$B" openbot openbot)" = "openbot | openbot" ] || fail "$what: names are $(names_of badcred "$B" openbot openbot)"

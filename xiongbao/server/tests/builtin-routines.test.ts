@@ -256,7 +256,7 @@ describe("dispatch", () => {
 
   test("create_routine without a timezone takes the person's own from the run asking", async () => {
     // "Every weekday at 9am", asked from a browser in California: the run carries the person's zone
-    // (`openbotTimeZone`), and a tool call is made inside that run's continuation.
+    // (`xiongbaoTimeZone`), and a tool call is made inside that run's continuation.
     const inRun = (forwardedProps: unknown) =>
       withApprovalContext(
         {
@@ -282,12 +282,12 @@ describe("dispatch", () => {
     };
 
     const local = recordingTools();
-    await inRun({ openbotTimeZone: "America/Los_Angeles" });
+    await inRun({ xiongbaoTimeZone: "America/Los_Angeles" });
     expect(zoneOf(local)).toBe("America/Los_Angeles");
 
     // A zone the run carries that is not one stays absent: the store's UTC default applies.
     const bogus = recordingTools();
-    await inRun({ openbotTimeZone: "Mars/Olympus_Mons" });
+    await inRun({ xiongbaoTimeZone: "Mars/Olympus_Mons" });
     expect(zoneOf(bogus)).toBe(undefined);
 
     // And the Bot's own zone always wins over the person's.
@@ -302,7 +302,7 @@ describe("dispatch", () => {
         messages: [],
         state: {},
         context: [],
-        forwardedProps: { openbotTimeZone: "America/Los_Angeles" },
+        forwardedProps: { xiongbaoTimeZone: "America/Los_Angeles" },
       },
       () =>
         callTool(CONNECTION, "create_routine", {

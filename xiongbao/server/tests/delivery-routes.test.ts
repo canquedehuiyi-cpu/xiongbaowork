@@ -1015,7 +1015,7 @@ for (const [name, action, phrase] of [
   [
     "the share check",
     {
-      toolRef: ["openbot", "share_private_information"].join("/"),
+      toolRef: ["xiongbao", "share_private_information"].join("/"),
       effect: "share_private",
       scope: "group:g-1:members:abc",
       args: { preview: "修好了" },
@@ -1053,7 +1053,7 @@ for (const [name, action, phrase] of [
     });
     expect(said(denied.events)).toBe(`已拒绝。Research Bot 不会${phrase}。`);
     expect(JSON.stringify([asked.events, denied.events])).not.toMatch(
-      /openbot|acp\/|share_private|group:g-1/i,
+      /xiongbao\/|acp\/|share_private|group:g-1/i,
     );
   });
 test("SMS STOP and START record opt-out without a turn or a second reply", async () => {

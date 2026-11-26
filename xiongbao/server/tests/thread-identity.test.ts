@@ -62,7 +62,7 @@ describe("a thread id carries the deployment that minted it", () => {
     for (const value of [
       "",
       "not-a-uuid",
-      "openbot-connection-test-123",
+      "xiongbao-connection-test-123",
       "377529b0-9a52-4fe3-bfaa-b99a3886710",
       "377529b0-9a52-4fe3-bfaa-b99a3886710e-extra",
       "zzzzzzzz-9a52-4fe3-bfaa-b99a3886710e",

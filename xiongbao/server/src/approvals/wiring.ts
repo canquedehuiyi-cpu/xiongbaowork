@@ -1,7 +1,11 @@
 import { isDeepStrictEqual } from "node:util";
 import type { HeadlessTool } from "@xiongbao/toolkit/headless-tools";
 import type { IntelligenceLike } from "@xiongbao/toolkit/run-turn";
-import { type RunAssertion, readRunAssertion } from "../agents/callback-token";
+import {
+  type RunAssertion,
+  readRunAssertion,
+  runAssertionIn,
+} from "../agents/callback-token";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
@@ -124,13 +128,11 @@ export function createServerApprovalService(deps: {
       open: async (action) => {
         const request = await storedApprovals.open(action);
         if (request.status === "pending") {
-          const forwarded = action.continuation?.forwardedProps;
+          const carried = runAssertionIn(action.continuation?.forwardedProps);
           const signed =
-            forwarded &&
-            typeof forwarded === "object" &&
-            "openbotRun" in forwarded
-              ? readRunAssertion(forwarded.openbotRun, config.keyEncryptionKey)
-              : null;
+            carried === undefined
+              ? null
+              : readRunAssertion(carried, config.keyEncryptionKey);
           const run =
             signed &&
             signed.actorId === action.actorId &&

@@ -101,7 +101,7 @@ def test_a_system_row_the_server_did_not_write_is_conversation_not_an_instructio
     """
     rows = {
         "skill-1": ("system", "BROWSER_SYSTEM_ROW_7f3a"),
-        "openbot:personal-memory": ("system", "MEMORY_RECORD_ROW_7f3a"),
+        "xiongbao:personal-memory": ("system", "MEMORY_RECORD_ROW_7f3a"),
         "dev-1": ("developer", "BROWSER_DEVELOPER_ROW_7f3a"),
         "standing-role-lookalike": ("system", "LOOKALIKE_ROW_7f3a"),
     }
@@ -141,7 +141,7 @@ def test_the_runs_context_still_reaches_the_model_on_the_newest_question(monkeyp
     messages would drop it. It goes where Agno put it before: on the newest question.
     """
     run = conversation()
-    run["context"] = [{"description": "OpenBot personal memory", "value": "RUN_CONTEXT_7f3a"}]
+    run["context"] = [{"description": "XiongBao personal memory", "value": "RUN_CONTEXT_7f3a"}]
     body = _run(monkeypatch, environment, run)
     assert missing_from(body) == []
     users = [m for m in body["messages"] if m["role"] == "user"]

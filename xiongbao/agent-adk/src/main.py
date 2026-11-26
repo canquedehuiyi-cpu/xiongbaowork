@@ -73,7 +73,9 @@ SERVER_INSTRUCTION_ID_PREFIXES = ("standing-role:", "granted-tools:")
 # quoted personal-memory records (`PersonalMemoryMiddleware`, server/src/memory/tools.ts) and the
 # learned-skills catalog (server/src/learning/remote.ts). They describe this run, not a point in
 # the conversation, so they go with the turn being answered.
-SERVER_RUN_CONTEXT_ID_PREFIX = "openbot:"
+# The second prefix is the one before v0.2.16, from a server not yet upgraded.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+SERVER_RUN_CONTEXT_ID_PREFIX = ("xiongbao:", "openbot:")
 
 # Said ahead of system rows that reach the model as part of the conversation.
 CONVERSATION_ENTRIES = (

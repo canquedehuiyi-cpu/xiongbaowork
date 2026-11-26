@@ -1116,7 +1116,7 @@ describe("a turn's admission", () => {
 });
 
 /**
- * The waiting details travel two ways: as an `openbot.headless.waiting` CUSTOM event, and on the
+ * The waiting details travel two ways: as an `xiongbao.headless.waiting` CUSTOM event, and on the
  * interrupt's metadata for when that event did not survive the trip. Both must end the turn as a
  * suspension that names the open request, never as the generic "nobody to ask" failure, or the
  * request the person still has to answer is lost.
@@ -1198,7 +1198,7 @@ describe("a turn waiting on a person", () => {
       drive: ({ agent, observer }) => {
         observer.next({
           type: EventType.CUSTOM,
-          name: "openbot.headless.waiting",
+          name: "xiongbao.headless.waiting",
           value: fromEvent,
           // biome-ignore lint/suspicious/noExplicitAny: the harness observer types only RUN_ERROR.
         } as any);

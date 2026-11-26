@@ -1,9 +1,9 @@
 import type { Message } from "@ag-ui/client";
-import type { AuditInitiator } from "../audit";
 import {
   type ApprovalContinuation,
   withApprovalContext,
 } from "../approvals/types";
+import type { AuditInitiator } from "../audit";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import type { StepResult } from "./store";
 
@@ -31,6 +31,8 @@ import type { StepResult } from "./store";
 
 /** Servers that are not someone's MCP server: hand-offs, host commands, this product's own tools. */
 const RESERVED_SERVERS = new Set(["bot", "host", "openbot", "computer"]);
+/** This product's own tools' namespace since v0.2.16 (`xiongbao/share_private_information`, `xiongbao/search_tools`). */
+const OWN_SERVER = "xiongbao";
 
 /** Whether a tool reference names an MCP tool an action step may call (gate 4, its static half). */
 export function isMcpToolRef(ref: string): boolean {
@@ -39,7 +41,8 @@ export function isMcpToolRef(ref: string): boolean {
   const server = ref.slice(0, slash);
   const tool = ref.slice(slash + 1);
   if (/\s/.test(ref)) return false;
-  if (RESERVED_SERVERS.has(server.toLowerCase())) return false;
+  const name = server.toLowerCase();
+  if (RESERVED_SERVERS.has(name) || name === OWN_SERVER) return false;
   return !/^(computer|host)_/i.test(tool);
 }
 

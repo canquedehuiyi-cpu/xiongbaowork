@@ -85,6 +85,7 @@ if [ "$healthy" = true ]; then
     sha256sum /var/lib/postgresql/pgpassword > /var/lib/postgresql/.trackb-owner-hash
     url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL)
     /usr/lib/postgresql/16/bin/psql "$url" -v ON_ERROR_STOP=1 -c "CREATE TABLE public.track_b_delivery_probe (marker text NOT NULL); INSERT INTO public.track_b_delivery_probe VALUES ('"'"'preserved'"'"');" >/dev/null
+    /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations" > /var/lib/postgresql/.trackb-journal
   '
   # URL stays in a private temporary file, never on stdout or the job summary.
   docker exec "$name" sh -c 'printf "DATABASE_URL=%s\n" "$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL)"' > "$secret_env"
@@ -111,6 +112,10 @@ if [ "$healthy" = true ]; then
   # boot had any to rekey (the v0.2.16 rekey prints a line only when it rewrites rows).
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from credentials where encrypted_value::jsonb ->> '"'"'kid'"'"' = '"'"'k1'"'"'"')" = 0
   check test "$(cat "$evidence/initial.log" "$evidence/recreated.log" | grep -ac 'credentials-rekeyed' || true)" = 0
+  # The history rewrite (recovery 0241, stamped 1795165000000) ran once, with the first boot's migrations; the
+  # second boot found no migration left to apply, so nothing it rewrites is touched again.
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations where created_at = 1795165000000"')" = 1
+  check docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); test "$(/usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations")" = "$(cat /var/lib/postgresql/.trackb-journal)"'
   # Model the upgrade from an older embedded volume which has only an owner secret.
   docker exec "$name" rm /var/lib/postgresql/pgpassword-app
   docker stop "$name" >/dev/null

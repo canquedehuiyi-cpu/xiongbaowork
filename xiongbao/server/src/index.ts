@@ -477,6 +477,7 @@ import { createProactiveEngine } from "./proactive/engine";
 import { checkInOfferTools } from "./proactive/offer-tool";
 import {
   createPrivateShareCheck,
+  LEGACY_PRIVATE_SHARE_TOOL_REF,
   PRIVATE_SHARE_TOOL_REF,
 } from "./proactive/private-share";
 import {
@@ -4237,6 +4238,7 @@ await startupLifecycle.run(async (startup) => {
       readApprovedRunAssertion(value, config.keyEncryptionKey),
     answer: vendorAnswer,
     privateShareToolRef: PRIVATE_SHARE_TOOL_REF,
+    legacyPrivateShareToolRef: LEGACY_PRIVATE_SHARE_TOOL_REF,
     refusalMarker: REFUSAL_MARKER,
     personInitiator: PERSON_INITIATOR,
   });

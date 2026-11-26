@@ -98,7 +98,7 @@ test("disabled and unresolved deployments do not send the catalog", () => {
 });
 
 test("the catalog is the standard one, less the omitted components, plus Breakdown and without the gallery", () => {
-  expect(XIONGBAO_UI.id).toBe("openbot/ui@1");
+  expect(XIONGBAO_UI.id).toBe("xiongbao/ui@1");
   const expected = Object.keys(standardUI.manifestComponents).filter(
     (name) =>
       !(OMITTED_STANDARD_COMPONENTS as readonly string[]).includes(name),

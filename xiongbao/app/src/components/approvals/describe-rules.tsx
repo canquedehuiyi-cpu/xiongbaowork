@@ -294,6 +294,9 @@ export function mediaOf(toolRef: string): ReplayRow["media"] {
     return { icon: <IconFolder />, label: "电脑上的文件夹" };
   if (toolRef.startsWith("bot/"))
     return { icon: <IconUsers />, label: "转交给其他员工的工作" };
+  if (toolRef.startsWith("xiongbao/"))
+    return { icon: <IconLock />, label: "私密信息" };
+  // v0.2.16 之前的审批记录与审计行里的引用。legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
   if (toolRef.startsWith("openbot/"))
     return { icon: <IconLock />, label: "私密信息" };
   return { icon: <IconPlug />, label: "应用调用" };
