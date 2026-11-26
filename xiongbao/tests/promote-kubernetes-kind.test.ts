@@ -144,8 +144,8 @@ describe.skipIf(!kubeconfig)("Kubernetes promotion on a real cluster", () => {
       const release = `xiongbao-${serverSide === "true" ? "ssa" : "csa"}`;
       const current = parseReleaseManifest(structuredClone(currentFixture));
       const candidate = parseReleaseManifest(structuredClone(targetFixture));
-      current.artifacts.images.openbot = { reference: image };
-      candidate.artifacts.images.openbot = { reference: image };
+      current.artifacts.images.ghcr = { reference: image };
+      candidate.artifacts.images.ghcr = { reference: image };
       candidate.artifacts.chart = {
         version: "0.1.4",
         url: "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao-fixture.tgz",

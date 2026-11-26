@@ -8,7 +8,18 @@ import {
 } from "bun:test";
 import type Docker from "dockerode";
 import { environmentFor } from "../../src/environment";
-import { legacyNamesFor, NAMESPACE, namesFor } from "../../src/names";
+import {
+  BOT_LABEL,
+  KIND_LABEL,
+  labelOf,
+  legacyLabel,
+  legacyNamesFor,
+  NAMESPACE,
+  NAMESPACE_LABEL,
+  namesFor,
+  OWNER_LABEL,
+  PERSON_LABEL,
+} from "../../src/names";
 
 // Launched by docker.integration.test.ts in a fresh process: names.ts reads its namespace once.
 const namespace = NAMESPACE;
@@ -80,8 +91,8 @@ async function remove(container: string) {
     if (
       labels?.["xiongbao.test-fixture"] !== namespace &&
       !(
-        labels?.["openbot.namespace"] === namespace &&
-        labels?.["openbot.bot-id"] === BOT
+        labelOf(labels, NAMESPACE_LABEL) === namespace &&
+        labelOf(labels, BOT_LABEL) === BOT
       )
     ) {
       throw new Error("Refusing to clean a container outside this fixture.");
@@ -104,8 +115,8 @@ async function removeVolumes() {
     try {
       const info = await withDocker().docker.getVolume(volume).inspect();
       if (
-        info.Labels?.["openbot.namespace"] !== namespace ||
-        info.Labels?.["openbot.bot-id"] !== BOT
+        labelOf(info.Labels ?? undefined, NAMESPACE_LABEL) !== namespace ||
+        labelOf(info.Labels ?? undefined, BOT_LABEL) !== BOT
       ) {
         throw new Error("Refusing to clean a volume outside this fixture.");
       }
@@ -197,11 +208,19 @@ async function plant(labels: Record<string, string>, health?: boolean) {
 }
 
 const OURS = {
-  "openbot.supervisor": "true",
-  "openbot.namespace": namespace,
-  "openbot.computer-kind": "bot",
-  "openbot.bot-id": BOT,
+  [OWNER_LABEL]: "true",
+  [NAMESPACE_LABEL]: namespace,
+  [KIND_LABEL]: "bot",
+  [BOT_LABEL]: BOT,
 };
+
+/**
+ * The same computer as a supervisor before v0.2.16 labelled it.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+const OURS_BEFORE_RENAME = Object.fromEntries(
+  Object.entries(OURS).map(([label, value]) => [legacyLabel(label), value]),
+);
 
 /**
  * Everything this run made in its own namespace, which is unique to it: people's computers, a Bot's
@@ -209,10 +228,17 @@ const OURS = {
  */
 async function removeNamespace() {
   const docker = withDocker().docker;
-  const containers = await docker.listContainers({
-    all: true,
-    filters: { label: [`openbot.namespace=${namespace}`] },
-  });
+  // Under either prefix: what this supervisor makes, and what the cases plant as made before v0.2.16.
+  const labels = [NAMESPACE_LABEL, legacyLabel(NAMESPACE_LABEL)].map(
+    (label) => `${label}=${namespace}`,
+  );
+  const containers = (
+    await Promise.all(
+      labels.map((label) =>
+        docker.listContainers({ all: true, filters: { label: [label] } }),
+      ),
+    )
+  ).flat();
   for (const container of containers) {
     await docker
       .getContainer(container.Id)
@@ -221,10 +247,16 @@ async function removeNamespace() {
         if (!isMissing(error)) throw error;
       });
   }
-  const { Volumes } = await docker.listVolumes({
-    filters: { label: [`openbot.namespace=${namespace}`] },
-  });
-  for (const volume of Volumes ?? []) {
+  const Volumes = (
+    await Promise.all(
+      labels.map(
+        async (label) =>
+          (await docker.listVolumes({ filters: { label: [label] } })).Volumes ??
+          [],
+      ),
+    )
+  ).flat();
+  for (const volume of Volumes) {
     await docker
       .getVolume(volume.Name)
       .remove()
@@ -249,7 +281,7 @@ async function inVolumes(binds: string[], script: string): Promise<string> {
     Image: IMAGE,
     Labels: {
       "xiongbao.test-fixture": namespace,
-      "openbot.namespace": namespace,
+      [NAMESPACE_LABEL]: namespace,
     },
     Entrypoint: ["sh", "-c"],
     Cmd: [script],
@@ -320,6 +352,48 @@ describe("a name held by somebody else", () => {
     });
 
     expect(state.status).toBe("running");
+  }, 90_000);
+
+  /*
+   * A supervisor before v0.2.16 labelled what it made under the earlier prefix, and a volume never changes its
+   * labels. With the namespace it was made in, that computer and its files are still this one's.
+   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   */
+  test("and so is one made before v0.2.16", async () => {
+    await plant(OURS_BEFORE_RENAME, true);
+
+    const state = await withDocker().supervisor.ensure(names, {
+      image: IMAGE,
+      environment: [],
+    });
+
+    expect(state.status).toBe("running");
+  }, 90_000);
+
+  test("and its files made before v0.2.16 are mounted into a new one", async () => {
+    for (const volume of [names.profileVolume, names.workspaceVolume]) {
+      await withDocker().docker.createVolume({
+        Name: volume,
+        Labels: OURS_BEFORE_RENAME,
+      });
+    }
+    await inVolumes(
+      [`${names.workspaceVolume}:/workspace`],
+      "echo saved-work > /workspace/keep",
+    );
+
+    const state = await withDocker().supervisor.ensure(names, {
+      image: IMAGE,
+      environment: [],
+    });
+
+    expect(state.status).toBe("running");
+    expect(
+      await inVolumes(
+        [`${names.workspaceVolume}:/workspace`],
+        "cat /workspace/keep",
+      ),
+    ).toContain("saved-work");
   }, 90_000);
 });
 
@@ -506,7 +580,7 @@ describe("a computer built from an older image", () => {
     const network = `${namespace}-net`;
     await docker.createNetwork({
       Name: network,
-      Labels: { "openbot.namespace": namespace },
+      Labels: { [NAMESPACE_LABEL]: namespace },
     });
     try {
       await withDocker().supervisor.ensure(names, {
@@ -523,7 +597,7 @@ describe("a computer built from an older image", () => {
       await docker.getNetwork(network).remove();
       const remade = await docker.createNetwork({
         Name: network,
-        Labels: { "openbot.namespace": namespace },
+        Labels: { [NAMESPACE_LABEL]: namespace },
       });
       const live = (await remade.inspect()).Id;
 
@@ -715,8 +789,8 @@ describe("one computer per person", () => {
       .docker.getContainer(ADA.container)
       .inspect();
     expect(info.Config.Labels).toMatchObject({
-      "openbot.computer-kind": "person",
-      "openbot.person-id": "ada",
+      [KIND_LABEL]: "person",
+      [PERSON_LABEL]: "ada",
     });
     const listed = await withDocker().supervisor.listOwned();
     expect(listed).toContainEqual(
@@ -734,10 +808,7 @@ describe("one computer per person", () => {
      * called `supervisortestbot` is named now. Ours by owner and namespace, but not this computer:
      * adopting it would hand one Bot another's logins.
      */
-    await plant(
-      { ...OURS, "openbot.computer-kind": "", "openbot.bot-id": `bot-${BOT}` },
-      true,
-    );
+    await plant({ ...OURS, [KIND_LABEL]: "", [BOT_LABEL]: `bot-${BOT}` }, true);
     await expect(
       withDocker().supervisor.ensure(names, { image: IMAGE, environment: [] }),
     ).rejects.toBeInstanceOf(withDocker().supervisor.NameHeldError);

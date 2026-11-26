@@ -143,7 +143,8 @@ jobs:
             # The README's command takes the image from XIONGBAO_IMAGE; the customer run sets it to this.
             echo "CUSTOMER_IMAGE=$own:$TAG" >> "$GITHUB_ENV"
           else
-            expected="$(jq -r .images.openbot.reference "$EVIDENCE/container-images.json")"
+            # No registry of ours: images.xiongbao is the GHCR image, in every release's record.
+            expected="$(jq -r .images.xiongbao.reference "$EVIDENCE/container-images.json")"
             if [[ ! "$expected" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
               echo "::error::container-images.json has no usable reference: '$expected'"
               exit 1

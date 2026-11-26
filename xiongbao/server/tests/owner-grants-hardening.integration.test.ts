@@ -95,7 +95,7 @@ const grantRow = async (botId: string, ref: string) =>
 
 const sharedColumns = {
   accountMode: "shared",
-  sharedVendorUserId: `openbot-deployment:${suite}:R`,
+  sharedVendorUserId: `xiongbao-deployment:${suite}:R`,
   sharedConnectedAt: new Date(),
   sharedConnectedBy: ADMIN,
   sharedVerified: true,
@@ -270,7 +270,7 @@ describe("switching the account mode", () => {
       plugins.setAccountModeColumns(
         MAIL,
         "shared",
-        `openbot-deployment:${suite}:M`,
+        `xiongbao-deployment:${suite}:M`,
       ),
     );
     const [row] = await asPlatform(() =>
@@ -330,7 +330,7 @@ describe("switching the account mode", () => {
       plugins.setAccountModeColumns(
         MAIL,
         "shared",
-        `openbot-deployment:${suite}:M`,
+        `xiongbao-deployment:${suite}:M`,
       ),
     );
     await asPlatform(() =>

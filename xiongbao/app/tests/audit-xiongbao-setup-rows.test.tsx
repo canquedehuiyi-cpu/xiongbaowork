@@ -182,7 +182,7 @@ const KEPT = [
     initiatorKind: "deployment",
     payload: {
       change: "default_container_assigned_automatically",
-      defaultContainerId: "openbot",
+      defaultContainerId: "xiongbao",
     },
   }),
 ];

@@ -15,7 +15,7 @@
  * the XiongBao approval id without dashes, and the decision still goes through the approvals service.
  *
  * Proactive messages (no Slack turn open) go the other way: XiongBao POSTs to OpenTag's
- * `/openbot/deliver`, because a managed Channel can only post inside a live delivery.
+ * `/xiongbao/deliver`, because a managed Channel can only post inside a live delivery.
  */
 import { timingSafeEqual } from "node:crypto";
 import { approvalDetails } from "@xiongbao/shared/tool-name";
@@ -41,7 +41,7 @@ export type OpenTagConfig = {
   fetch?: ProviderFetch;
 };
 
-export const OPENTAG_SENDER_CONTEXT = "openbot.sender";
+export const OPENTAG_SENDER_CONTEXT = "xiongbao.sender";
 
 function sameSecret(expected: string, presented: string) {
   const a = Buffer.from(expected);
@@ -72,7 +72,7 @@ export function createOpenTagTransport(config: OpenTagConfig) {
     },
     /**
      * Whether a Slack user is in a channel, answered by OpenTag with the workspace's bot token
-     * (`POST /openbot/membership`). Fails closed: any error or missing configuration is `false`.
+     * (`POST /xiongbao/membership`). Fails closed: any error or missing configuration is `false`.
      * Installed for Slack triggers with `useSlackChannelMembership`.
      */
     async isMember(input: {
@@ -83,7 +83,7 @@ export function createOpenTagTransport(config: OpenTagConfig) {
       if (!config.url) return false;
       try {
         const response = await wire(
-          new URL("/openbot/membership", config.url),
+          new URL("/xiongbao/membership", config.url),
           {
             method: "POST",
             signal: AbortSignal.timeout(15_000),
@@ -117,7 +117,7 @@ export function createOpenTagTransport(config: OpenTagConfig) {
         input.transport === "teams" ? "teams" : "slack";
       let response: Response;
       try {
-        response = await wire(new URL("/openbot/deliver", config.url), {
+        response = await wire(new URL("/xiongbao/deliver", config.url), {
           method: "POST",
           signal: AbortSignal.timeout(DELIVERY_REQUEST_TIMEOUT_MS),
           headers: {
@@ -430,7 +430,7 @@ export function agUiStream(
       // A long governed turn says nothing for minutes; an ignored CUSTOM event keeps proxies and the
       // runner's socket from treating the silence as a dead stream.
       const heartbeat = setInterval(
-        () => emit({ type: "CUSTOM", name: "openbot.working", value: {} }),
+        () => emit({ type: "CUSTOM", name: "xiongbao.working", value: {} }),
         heartbeatMs,
       );
       heartbeat.unref?.();
@@ -457,7 +457,7 @@ export function textEvents(messageId: string, text: string) {
 /** OpenTag's chart component (`app/tools/render-chart.tsx`): native in Slack and Teams. */
 export const OPENTAG_CHART_TOOL = "render_chart";
 /** Our component calls carry this id prefix, so the Channel's follow-up run is recognised. */
-export const COMPONENT_CALL_PREFIX = "openbot-component-";
+export const COMPONENT_CALL_PREFIX = "xiongbao-component-";
 
 const LABEL_MAX = 20;
 /** Labels clipped to OpenTag's limit and kept unique, since categories must be. */

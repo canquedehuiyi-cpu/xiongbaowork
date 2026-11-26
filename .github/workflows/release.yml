@@ -695,7 +695,8 @@ jobs:
           set -euo pipefail
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           # images.xiongbao is our registry's copy once XB_REGISTRY is set (mirror made and read it
-          # back); until then it is the GHCR image, the same as images.openbot.
+          # back); until then it is the GHCR image. `ghcr` is always the GHCR image the release built,
+          # which mirror-release.yml copies from.
           if [ -n "$XB_REGISTRY" ]; then
             if [ -z "$OWN_REPOSITORY" ] || [[ ! "$OWN_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               echo "::error::XB_REGISTRY is set but mirror reported no copy: '$OWN_REPOSITORY' '$OWN_DIGEST'"
@@ -716,12 +717,10 @@ jobs:
             {
               version: $version,
               commit: $commit,
-              # `openbot` is read by the promote step and the installers already out, and stays on
-              # GHCR; `xiongbao` is the new name.
               images: {
-                xiongbao: image($own_repository; $own_digest),
-                openbot: image($repository; $digest)
-              }
+                xiongbao: image($own_repository; $own_digest)
+              },
+              ghcr: image($repository; $digest)
             }' > container-images.json
           cat container-images.json
       # Our download page (Task U3), before the GitHub Release: a failed upload leaves nothing

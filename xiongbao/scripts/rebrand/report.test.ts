@@ -54,7 +54,7 @@ beforeEach(() => {
   put("THIRD-PARTY-NOTICES.md", NOTICES);
   put(
     "xiongbao/server/src/a.ts",
-    'export const openbotRoot = "x";\nconst domain = "openbot-bearer";\n',
+    'export const openbotRoot = "x";\nconst accepted = ".openbot-release.json";\n',
   );
 });
 
@@ -71,7 +71,7 @@ const files = [
 ];
 
 describe("findLeftovers", () => {
-  test("依赖声明与许可证段放行，只剩两处 openbot，其中加密串在 R1 受保护", () => {
+  test("依赖声明与许可证段放行，只剩两处 openbot，其中本机状态文件名在 R1 受保护", () => {
     const found = findLeftovers(files, "R1", root);
     expect(found).toEqual([
       {
@@ -99,7 +99,7 @@ describe("findLeftovers", () => {
   test("同一行的两处命中各自判断：只有落在保护片段里的那处受保护", () => {
     put(
       "xiongbao/server/src/b.ts",
-      'const a = "openbot-bearer"; const openbotX = 1;\n',
+      'const a = ".openbot-release.json"; const openbotX = 1;\n',
     );
     const found = findLeftovers(["xiongbao/server/src/b.ts"], "R1", root);
     expect(found.map((hit) => hit.protected)).toEqual([true, false]);
@@ -435,7 +435,7 @@ describe("report.ts 命令行", () => {
   test("--scope 限定到只有已保护命中的文件时，--fail-on-unprotected 退出 0", () => {
     put(
       "xiongbao/server/src/only-protected.ts",
-      'const a = "openbot-bearer";\n',
+      'const a = ".openbot-release.json";\n',
     );
     gitAdd();
     const result = run([
@@ -451,7 +451,7 @@ describe("report.ts 命令行", () => {
   test("--fail-on-any 有已保护的命中也退出 1", () => {
     put(
       "xiongbao/server/src/only-protected.ts",
-      'const a = "openbot-bearer";\n',
+      'const a = ".openbot-release.json";\n',
     );
     gitAdd();
     const result = run([

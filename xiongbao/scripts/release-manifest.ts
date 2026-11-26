@@ -393,7 +393,7 @@ function placeholderManifest(
         sha256: "0".repeat(64),
       },
       images: {
-        openbot: {
+        ghcr: {
           reference: `ghcr.io/${configuration.repository.toLowerCase()}@sha256:${"0".repeat(64)}`,
         },
       },
@@ -625,16 +625,24 @@ function readImages(path: string): ReleaseManifest["artifacts"]["images"] {
     Array.isArray(input.images)
   )
     throw new Error("Image manifest has no images object");
+  /*
+   * The GHCR image the release built is the record's `ghcr`, beside `images` rather than in it: images.xiongbao
+   * is our registry's copy once one is configured. Kubernetes promotion deploys the GHCR one (promote-kubernetes.ts
+   * selectedImage), so the manifest carries it as an image of that name.
+   */
+  const ghcr = "ghcr" in input ? { ghcr: input.ghcr } : {};
   return Object.fromEntries(
-    Object.entries(input.images).map(([name, value]: [string, unknown]) => {
-      if (
-        typeof value !== "object" ||
-        value === null ||
-        !("reference" in value)
-      )
-        throw new Error(`Image ${name} has no reference`);
-      return [name, { reference: value.reference }];
-    }),
+    Object.entries({ ...input.images, ...ghcr }).map(
+      ([name, value]: [string, unknown]) => {
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          !("reference" in value)
+        )
+          throw new Error(`Image ${name} has no reference`);
+        return [name, { reference: value.reference }];
+      },
+    ),
   ) as ReleaseManifest["artifacts"]["images"];
 }
 

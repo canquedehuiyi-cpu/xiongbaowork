@@ -51,7 +51,7 @@ export function desktopAuthPage(
 const config=${config};
 const status=document.getElementById('status');
 const button=document.getElementById('continue');
-const query=new URLSearchParams({client_id:'openbot-desktop',state:config.state,code_challenge:config.challenge});
+const query=new URLSearchParams({client_id:'xiongbao-desktop',state:config.state,code_challenge:config.challenge});
 async function proceed(){button.disabled=true;try{
  const transfer=await fetch('/api/auth/electron/transfer-user?'+query,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:'{}'});
  if(transfer.ok){const grant=await transfer.json();if(typeof grant.electron_authorization_code!=='string')throw new Error('Sign-in did not return a code.');const target=new URL(config.redirect);target.searchParams.set('code',grant.electron_authorization_code);target.searchParams.set('state',config.state);location.replace(target.href);return;}

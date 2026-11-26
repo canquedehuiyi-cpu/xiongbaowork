@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { environmentFor } from "../src/environment";
 
 /**
- * `HMAC-SHA256("secret", "openbot computer token v1\nbot:invoice-collector")`, worked out with
+ * `HMAC-SHA256("secret", "xiongbao computer token v1\nbot:invoice-collector")`, worked out with
  * `openssl dgst -sha256 -hmac secret` rather than by the code under test: the computer's own token,
  * which is never the deployment's (shared/computer-token.ts).
  */
 const INVOICE_COLLECTOR_TOKEN =
-  "31db2a55d194c376fc535e591cc965ed9c597031945934f1913254fb8ca7e1cc";
+  "537fb60355e34e4a6cdd4ffe573e186a825ecdbc48f62aae46ffefec77ed28fd";
 
 describe("what the supervisor tells a computer about its browser", () => {
   test("passes the deployment's browser mode to an isolated Bot's computer", () => {

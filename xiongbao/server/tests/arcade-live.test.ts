@@ -46,7 +46,7 @@ import { mintDeploymentVendorUserId } from "../src/plugins/shared-accounts";
  * WHAT THIS CREATES AND MUTATES IN THE ARCADE PROJECT THE KEY BELONGS TO (this is PRODUCTION if the
  * key is)
  * - ONE authorization attempt (`ar_...`) per successful mint, for ONE throwaway user id of the shape
- *   `openbot-deployment:live-arcade:<random>`. Several mints are attempted: the `next_uri` cases are
+ *   `xiongbao-deployment:live-arcade:<random>`. Several mints are attempted: the `next_uri` cases are
  *   expected to be refused, and if one is ever accepted it creates an attempt too.
  * - ONE completed CONSENT by YOU, at the third party (Github by default), and so ONE user-connection
  *   (`ac_...`) under that throwaway user id in Arcade. It is the only durable write.

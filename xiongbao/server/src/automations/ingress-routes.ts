@@ -72,7 +72,7 @@ export function signingSecretFromHash(
   pepper: string,
 ): string {
   const key = createHmac("sha256", pepper)
-    .update(`openbot-automation-hook-signing:v1:${secretHash.toLowerCase()}`)
+    .update(`xiongbao-automation-hook-signing:v1:${secretHash.toLowerCase()}`)
     .digest();
   return `whsec_${key.toString("base64")}`;
 }

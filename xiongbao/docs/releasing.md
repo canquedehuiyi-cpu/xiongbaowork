@@ -203,7 +203,8 @@ Two more things to set up on the GitHub side:
 
 **Copying an older release.** Run **补同步镜像到自有仓库** (`mirror-release.yml`) from `main`, with the
 tag, for example `v0.2.15`. It reads `container-images.json` of that Release, which must have been uploaded by the release
-workflow, and takes the GHCR image under `images.openbot`, which must be this repository's own. The
+workflow, and takes the GHCR image under `ghcr` (a record from before v0.2.16 names it under its former image
+key, still read for those), which must be this repository's own. The
 digest in it must be the one the GHCR version tag has: the run stops otherwise. It then copies its linux/amd64 manifest to `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>:<tag>`
 with the same sign-in and copy steps as `release.yml` (a test keeps their text identical), and writes
 the target and the platform manifest's digest in the step summary. The Release and its assets are not
@@ -220,7 +221,7 @@ The server pulls by digest, `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>@<platform manif
 ```sh
 gh release download v0.1.0 --pattern container-images.json
 docker run -p 3001:3001 --env-file .env \
-  "$(jq -r .images.openbot.reference container-images.json)"
+  "$(jq -r .ghcr.reference container-images.json)"
 ```
 
 The same file is how a machine runs the stack without building any of it. Each key under `images`

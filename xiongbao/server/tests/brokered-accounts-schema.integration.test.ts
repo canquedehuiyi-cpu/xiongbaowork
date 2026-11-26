@@ -82,7 +82,7 @@ describe("an app's account mode", () => {
     ).toMatch(/mcp_servers_shared_account_check/);
     await server(`${app}-shared`, {
       accountMode: "shared",
-      sharedVendorUserId: `openbot-deployment:x:${suite}`,
+      sharedVendorUserId: `xiongbao-deployment:x:${suite}`,
     });
   });
 
@@ -97,7 +97,7 @@ describe("an app's account mode", () => {
       await violation(() =>
         server(`${app}-anonymous`, {
           accountMode: "shared",
-          sharedVendorUserId: `openbot-deployment:z:${suite}`,
+          sharedVendorUserId: `xiongbao-deployment:z:${suite}`,
           sharedConnectedAt: new Date(),
         }),
       ),
@@ -109,7 +109,7 @@ describe("an app's account mode", () => {
       await violation(() =>
         server(`${app}-leftover`, {
           accountMode: "personal",
-          sharedVendorUserId: `openbot-deployment:y:${suite}`,
+          sharedVendorUserId: `xiongbao-deployment:y:${suite}`,
         }),
       ),
     ).toMatch(/mcp_servers_shared_account_check/);

@@ -309,7 +309,7 @@ test("manual g7:external-migrate migrates with the released digest and the owner
   expect(result.status).toBe(0);
   const body = externalMigrate.body;
   expect(body).toContain(
-    'XIONGBAO_IMAGE="$(jq -r .images.openbot.reference container-images.json)"',
+    'XIONGBAO_IMAGE="$(jq -r .ghcr.reference container-images.json)"',
   );
   expect(body).toContain("--env-file .env.migration");
   expect(body).toContain("scripts/migrate.ts");
@@ -426,9 +426,7 @@ test("docker build appears only in the build-from-source appendix", () => {
 test("deployment manual pins digests and explains how to verify them", () => {
   expect(manual).toContain(`${IMAGE}@sha256:`);
   expect(manual).toContain("container-images.json");
-  expect(manual).toContain(
-    "jq -r .images.openbot.reference container-images.json",
-  );
+  expect(manual).toContain("jq -r .ghcr.reference container-images.json");
   expect(manual).toContain(
     `gh attestation verify "oci://$XIONGBAO_IMAGE" -R canquedehuiyi-cpu/xiongbaowork`,
   );

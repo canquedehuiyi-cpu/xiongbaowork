@@ -232,7 +232,7 @@ describe("a Bot at an address", () => {
       "GPT-6.1 Terra",
     ],
     [
-      "127.0.0.1:5050/openbot-agent-claude-sdk:sha-4d17",
+      "127.0.0.1:5050/xiongbao-agent-claude-sdk:sha-4d17",
       "Claude Agent SDK",
       { provider: "anthropic", defaultModel: "claude-sonnet-4-5" },
       "Claude Sonnet 5.5",

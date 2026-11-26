@@ -56,7 +56,7 @@ const SHARED_ON = `srs_shared_on_${slug}`;
 /** 以登录人的身份访问的自定义服务器。 */
 const ENTRA = `srs-entra-${suite}`;
 const apps = [PERSONAL, BACKFILLED, SHARED_OFF, SHARED_ON, ENTRA];
-const TEAM_IDENTITY = `openbot-deployment:${suite}:TEAMSECRET`;
+const TEAM_IDENTITY = `xiongbao-deployment:${suite}:TEAMSECRET`;
 const ENTRA_SCOPE = "api://srs-hr/.default";
 let releaseRoleWriter: (() => Promise<void>) | undefined;
 

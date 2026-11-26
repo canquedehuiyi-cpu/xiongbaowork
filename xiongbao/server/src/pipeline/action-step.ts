@@ -29,7 +29,11 @@ import type { StepResult } from "./store";
  * outputs, as text only (never evaluated): those outputs may have been written by a model.
  */
 
-/** Servers that are not someone's MCP server: hand-offs, host commands, this product's own tools. */
+/**
+ * Servers that are not someone's MCP server: hand-offs, host commands, and (the third) this product's own tools
+ * under the namespace they had before v0.2.16, which an action step saved then may still name.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
 const RESERVED_SERVERS = new Set(["bot", "host", "openbot", "computer"]);
 /** This product's own tools' namespace since v0.2.16 (`xiongbao/share_private_information`, `xiongbao/search_tools`). */
 const OWN_SERVER = "xiongbao";

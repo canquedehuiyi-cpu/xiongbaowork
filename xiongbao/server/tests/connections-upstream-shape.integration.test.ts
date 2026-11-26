@@ -52,7 +52,7 @@ const TEAM_ON = `cus_team_on_${slug}`;
 const TEAM_OFF = `cus_team_off_${slug}`;
 const apps = [MAIL, TEAM_ON, TEAM_OFF];
 const identityOf = (app: string) =>
-  `openbot-deployment:${suite}:TEAMSECRET-${app}`;
+  `xiongbao-deployment:${suite}:TEAMSECRET-${app}`;
 const CONNECTED_AT = "2026-04-04T00:00:00.000Z";
 const VERIFIED_AT = "2026-04-05T00:00:00.000Z";
 
@@ -331,7 +331,7 @@ describe("who sees what of a team account's row", () => {
     for (const actor of [ADMIN, TEAMMATE]) {
       const { text } = await connectionsFor(actor, "?shared=1");
       expect(text).not.toContain("TEAMSECRET");
-      expect(text).not.toContain("openbot-deployment:");
+      expect(text).not.toContain("xiongbao-deployment:");
     }
   });
 

@@ -26,7 +26,14 @@ const ALLOWED = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * containers as its own. The namespace is part of every derived name, and is held to the same
  * character rules for the same reason.
  */
-export const DEFAULT_NAMESPACE = "openbot";
+export const DEFAULT_NAMESPACE = "xiongbao";
+
+/**
+ * The default before v0.2.16. A container or volume made before the namespace label existed belongs to it, so
+ * a deployment that keeps it (`COMPUTER_NAMESPACE` set to it) keeps those computers too.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_DEFAULT_NAMESPACE = "openbot";
 
 export const NAMESPACE = (() => {
   const configured = process.env.COMPUTER_NAMESPACE?.trim();
@@ -73,7 +80,7 @@ export type NameResult =
   | { ok: false; reason: string };
 
 /** The label every container and volume the supervisor owns carries. */
-export const OWNER_LABEL = "openbot.supervisor";
+export const OWNER_LABEL = "xiongbao.supervisor";
 
 /**
  * The label holding the Bot a computer belongs to, on a Bot's own computer.
@@ -82,16 +89,40 @@ export const OWNER_LABEL = "openbot.supervisor";
  * on. Computers from before one per person carry it too, without {@link KIND_LABEL}, which is how
  * they are told apart.
  */
-export const BOT_LABEL = "openbot.bot-id";
+export const BOT_LABEL = "xiongbao.bot-id";
 
 /** The label holding the person a computer belongs to, on a person's computer. */
-export const PERSON_LABEL = "openbot.person-id";
+export const PERSON_LABEL = "xiongbao.person-id";
 
 /** Whether a computer is a person's or a Bot's. Absent on a computer from before that existed. */
-export const KIND_LABEL = "openbot.computer-kind";
+export const KIND_LABEL = "xiongbao.computer-kind";
 
 /** The label holding the deployment a container belongs to. */
-export const NAMESPACE_LABEL = "openbot.namespace";
+export const NAMESPACE_LABEL = "xiongbao.namespace";
+
+/**
+ * The prefix every label above had before v0.2.16. Containers and volumes on a host keep the labels they were
+ * made with (a volume's can never change), so each label is read under either prefix and written under the
+ * current one: see {@link labelOf}.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+const LEGACY_LABEL_PREFIX = "openbot.";
+const LABEL_PREFIX = "xiongbao.";
+
+/** The same label under the prefix it had before v0.2.16. */
+export function legacyLabel(label: string): string {
+  return label.startsWith(LABEL_PREFIX)
+    ? `${LEGACY_LABEL_PREFIX}${label.slice(LABEL_PREFIX.length)}`
+    : label;
+}
+
+/** A label's value on a container or volume, under the current prefix or, made before v0.2.16, the earlier one. */
+export function labelOf(
+  labels: Record<string, string> | undefined,
+  label: string,
+): string | undefined {
+  return labels?.[label] ?? labels?.[legacyLabel(label)];
+}
 
 /** A person or Bot id, checked before it becomes any part of a name. */
 function checkId(id: unknown, what: string): string | undefined {

@@ -217,7 +217,7 @@ const sender = (
   user = "slack:T1:U1",
   conversation: unknown = { id: "D0123456789", kind: "im" },
 ) => ({
-  description: "openbot.sender",
+  description: "xiongbao.sender",
   value: JSON.stringify({ user, event: "Ev9", conversation }),
 });
 async function run(
@@ -474,7 +474,7 @@ test("a Reachability code in a shared Teams chat still links until Teams' privat
 const observedMessage = (content: string) => ({
   context: [
     {
-      description: "openbot.sender",
+      description: "xiongbao.sender",
       value: JSON.stringify({
         user: "slack:T1:U1",
         event: "Ev50",
@@ -744,14 +744,14 @@ test("verified Slack events feed the owners' triggers once, and observe-only run
   mention.event = "Ev10";
   await run(f, {
     context: [
-      { description: "openbot.sender", value: JSON.stringify(mention) },
+      { description: "xiongbao.sender", value: JSON.stringify(mention) },
     ],
     messages: [{ id: "m2", role: "user", content: "<@UBOT> hi" }],
   });
   const observed = await run(f, {
     context: [
       {
-        description: "openbot.sender",
+        description: "xiongbao.sender",
         value: JSON.stringify({
           user: "slack:T1:U1",
           event: "Ev11",
@@ -1173,7 +1173,7 @@ test("a chart the Bot drew is drawn natively by the Channel, and its follow-up r
   expect(said(result.events)).toBe("github.com led the front page.");
   const start = result.events.find((e) => e.type === "TOOL_CALL_START");
   expect(start).toMatchObject({ toolCallName: "render_chart" });
-  expect(start.toolCallId).toStartWith("openbot-component-");
+  expect(start.toolCallId).toStartWith("xiongbao-component-");
   const args = JSON.parse(
     result.events.find((e) => e.type === "TOOL_CALL_ARGS").delta,
   );
@@ -1312,7 +1312,7 @@ test("a channel message from a colleague who never linked still reaches the owne
   const observed = await run(f, {
     context: [
       {
-        description: "openbot.sender",
+        description: "xiongbao.sender",
         value: JSON.stringify({
           user: "slack:T1:U9COLLEAGUE",
           event: "Ev42",

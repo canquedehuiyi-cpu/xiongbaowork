@@ -37,11 +37,11 @@ const BOT = "notes-bot";
 
 /**
  * Each computer's own token, written out from the documented scheme (shared/computer-token.ts) rather than taken from
- * the code under test: `HMAC-SHA256(COMPUTER_TOKEN, "openbot computer token v1\n<kind>:<id>")`, in hex.
+ * the code under test: `HMAC-SHA256(COMPUTER_TOKEN, "xiongbao computer token v1\n<kind>:<id>")`, in hex.
  */
 function ownToken(kind: "person" | "bot", id: string): string {
   return createHmac("sha256", DEPLOYMENT_TOKEN)
-    .update(`openbot computer token v1\n${kind}:${id}`)
+    .update(`xiongbao computer token v1\n${kind}:${id}`)
     .digest("hex");
 }
 

@@ -95,7 +95,7 @@ function installation(dotenv: string) {
   current.source.commit = old;
   const candidate = parseReleaseManifest(structuredClone(targetFixture));
   candidate.source.commit = target;
-  writeFileSync(join(root, ".openbot-release.json"), JSON.stringify(current));
+  writeFileSync(join(root, ".xiongbao-release.json"), JSON.stringify(current));
   writeFileSync(join(root, ".env"), dotenv);
   const identity = {
     version: candidate.version,
@@ -262,7 +262,7 @@ describe.skipIf(!docker)(
       expect(f.git("rev-parse", "HEAD")).toBe(f.old);
       expect(
         JSON.parse(
-          readFileSync(join(f.root, ".openbot-update-journal.json"), "utf8"),
+          readFileSync(join(f.root, ".xiongbao-update-journal.json"), "utf8"),
         ).phase,
       ).toBe("failed");
     });
@@ -495,12 +495,12 @@ describe.skipIf(!docker)("image migration with real Docker Compose", () => {
         ).rejects.toThrow(`exit ${exitCode}`);
         expect(
           JSON.parse(
-            readFileSync(join(f.root, ".openbot-update-journal.json"), "utf8"),
+            readFileSync(join(f.root, ".xiongbao-update-journal.json"), "utf8"),
           ).phase,
         ).toBe("recovery-required");
         expect(
           JSON.parse(
-            readFileSync(join(f.root, ".openbot-release.json"), "utf8"),
+            readFileSync(join(f.root, ".xiongbao-release.json"), "utf8"),
           ).source.commit,
         ).toBe(f.old);
       }

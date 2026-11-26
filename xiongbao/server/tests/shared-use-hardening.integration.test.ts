@@ -108,7 +108,7 @@ function as(actorId: string) {
 
 const sharedColumns = {
   accountMode: "shared",
-  sharedVendorUserId: `openbot-deployment:${suite}:R`,
+  sharedVendorUserId: `xiongbao-deployment:${suite}:R`,
   sharedConnectedAt: new Date(),
   sharedConnectedBy: ADMIN,
   sharedVerified: true,
@@ -373,7 +373,7 @@ describe("an approval left behind by an interrupted switch", () => {
       plugins.setAccountModeColumns(
         APP,
         "shared",
-        `openbot-deployment:${suite}:R`,
+        `xiongbao-deployment:${suite}:R`,
       ),
     );
     expect(

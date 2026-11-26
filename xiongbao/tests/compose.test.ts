@@ -704,12 +704,12 @@ test("a host setting under its old name still reaches the containers, and the ne
  */
 test("a model sign-in file named under the old name still reaches the server", () => {
   const legacy = runComposeConfig({
-    OPENBOT_MODEL_OAUTH_FILE: "/home/someone/.openbot/model-oauth.json",
+    OPENBOT_MODEL_OAUTH_FILE: "/home/someone/.xiongbao/model-oauth.json",
   }).services.server?.environment;
   expect(legacy?.OPENBOT_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
   expect(legacy?.XIONGBAO_MODEL_OAUTH_FILE ?? "").toBe("");
   const renamed = runComposeConfig({
-    XIONGBAO_MODEL_OAUTH_FILE: "/home/someone/.openbot/model-oauth.json",
+    XIONGBAO_MODEL_OAUTH_FILE: "/home/someone/.xiongbao/model-oauth.json",
   }).services.server?.environment;
   expect(renamed?.XIONGBAO_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
   expect(renamed?.OPENBOT_MODEL_OAUTH_FILE ?? "").toBe("");
@@ -1008,7 +1008,7 @@ test("mounts the model sign-in folder into the server, and only there", () => {
 
   expect(server.volumes).toContainEqual({
     type: "bind",
-    source: "./.openbot",
+    source: "./.xiongbao",
     target: "/xiongbao",
     bind: { create_host_path: false },
   });
@@ -1022,7 +1022,7 @@ test("mounts the model sign-in folder into the server, and only there", () => {
   );
   for (const [name, service] of Object.entries(services)) {
     if (name === "server") continue;
-    expect(JSON.stringify(service.volumes ?? [])).not.toContain(".openbot");
+    expect(JSON.stringify(service.volumes ?? [])).not.toContain("./.xiongbao");
   }
 });
 

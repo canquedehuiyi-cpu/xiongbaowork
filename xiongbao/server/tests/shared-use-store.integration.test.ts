@@ -130,7 +130,7 @@ beforeAll(async () => {
         provenance: "composio",
         authScheme: "OAUTH2",
         accountMode: "shared",
-        sharedVendorUserId: `openbot-deployment:${suite}:R`,
+        sharedVendorUserId: `xiongbao-deployment:${suite}:R`,
         sharedConnectedAt: new Date(),
         sharedConnectedBy: ADMIN,
         sharedVerified: true,
@@ -476,7 +476,7 @@ describe("where approvals are written", () => {
       plugins.setAccountModeColumns(
         APP,
         "shared",
-        `openbot-deployment:${suite}:R`,
+        `xiongbao-deployment:${suite}:R`,
       ),
     );
     await asPlatform(() =>
@@ -684,7 +684,7 @@ describe("a call through the plugin store", () => {
     const refused = callAs(plugin, NEWHIRE, TEAM_BOT);
     await expect(refused).rejects.toBeInstanceOf(PluginRefusedError);
     await expect(refused).rejects.toThrow(/使用范围不包括/);
-    expect(reached).toEqual([`openbot-deployment:${suite}:R`]);
+    expect(reached).toEqual([`xiongbao-deployment:${suite}:R`]);
     const trail = await asPlatform(() =>
       database
         .select({ payload: auditEvents.payload })
@@ -728,6 +728,6 @@ describe("a call through the plugin store", () => {
     await approve(BOT, { audience: "owner", outsideInput: true, members: [] });
     expect((await callAs(plugin, OWNER, BOT, duty)).isError).toBe(false);
     // 团队账号：vendor 处是部署的团队身份，不是任何人自己的账号。
-    expect(reached).toEqual([`openbot-deployment:${suite}:R`]);
+    expect(reached).toEqual([`xiongbao-deployment:${suite}:R`]);
   });
 });

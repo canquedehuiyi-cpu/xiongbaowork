@@ -35,7 +35,7 @@ const TOKEN_PREFIX = "obot_agt_";
 const TOKEN_BYTES = 32;
 
 /** Signed under its own label, so a signature here can never be replayed as a visitor's cookie. */
-const RUN_LABEL = "openbot:agent-run";
+const RUN_LABEL = "xiongbao:agent-run";
 
 /**
  * How long an assertion is good for.

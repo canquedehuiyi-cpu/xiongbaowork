@@ -41,7 +41,7 @@ chmod 600 .env.delivery
 printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
 curl --fail --silent --show-error --location -o container-images.json \
   "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/$XIONGBAO_TAG/container-images.json"
-printf 'XIONGBAO_IMAGE=%s\n' "$(jq -r .images.openbot.reference container-images.json)" >> .env.delivery
+printf 'XIONGBAO_IMAGE=%s\n' "$(jq -r .ghcr.reference container-images.json)" >> .env.delivery
 grep -E '^XIONGBAO_IMAGE=ghcr\.io/.+@sha256:[0-9a-f]{64}$' .env.delivery
 ```
 
@@ -250,7 +250,7 @@ KEY_ENCRYPTION_KEY=<与 API 的 KEY_ENCRYPTION_KEY 相同>
 
 <!-- g7:external-migrate:begin -->
 ```bash
-XIONGBAO_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
+XIONGBAO_IMAGE="$(jq -r .ghcr.reference container-images.json)"
 docker run --rm --env-file .env.migration --entrypoint /bin/sh \
   "$XIONGBAO_IMAGE" \
   -c 'cd /app/server && exec /usr/local/bin/bun scripts/migrate.ts'
@@ -677,14 +677,16 @@ COMMIT;
 ```bash
 XIONGBAO_TAG=v0.2.13
 gh release download "$XIONGBAO_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
-XIONGBAO_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
+XIONGBAO_IMAGE="$(jq -r .ghcr.reference container-images.json)"
 gh attestation verify "oci://$XIONGBAO_IMAGE" -R canquedehuiyi-cpu/xiongbaowork
 docker pull "$XIONGBAO_IMAGE"
 docker image inspect "$XIONGBAO_IMAGE" --format '{{json .RepoDigests}}'
 ```
 
 `reference` 形如 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<64 位十六进制>`；
-按标签拉取后 `RepoDigests` 应包含同一个引用。`gh attestation verify` 需要已登录的 GitHub CLI。
+按标签拉取后 `RepoDigests` 应包含同一个引用。`ghcr` 是发布构建出的 GHCR 镜像；`images.xiongbao` 在配置了自有仓库时是
+同步过去的那份（7.1），否则与 `ghcr` 相同。v0.2.16 之前的版本记录里没有 `ghcr` 这一项，取那些版本时改用
+`images.xiongbao`（当时未配置自有仓库）或该版本自己的文档。`gh attestation verify` 需要已登录的 GitHub CLI。
 
 ### 7.1 从京东云镜像仓库拉取（国内服务器）
 

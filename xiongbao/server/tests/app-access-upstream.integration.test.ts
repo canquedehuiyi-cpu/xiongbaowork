@@ -256,14 +256,14 @@ beforeAll(async () => {
       app(GMAIL, `Gmail ${suite}`),
       app(SLACK, `Slack ${suite}`, {
         accountMode: "shared",
-        sharedVendorUserId: `openbot-deployment:test:${suite}`,
+        sharedVendorUserId: `xiongbao-deployment:test:${suite}`,
         sharedConnectedAt: new Date(),
         sharedConnectedBy: admin,
         sharedVerified: true,
       }),
       app(LINEAR, `Linear ${suite}`, {
         accountMode: "shared",
-        sharedVendorUserId: `openbot-deployment:test:${suite}-l`,
+        sharedVendorUserId: `xiongbao-deployment:test:${suite}-l`,
       }),
       app(NEWS, `News ${suite}`, { authScheme: "NO_AUTH" }),
       app(CALENDAR, `Calendar ${suite}`),

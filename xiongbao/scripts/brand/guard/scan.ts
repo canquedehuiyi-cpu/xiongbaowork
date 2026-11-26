@@ -24,29 +24,45 @@ export const PRODUCT_DIRS = ["xiongbao", "openbot"] as const;
 export const BRAND = /OpenBot|CopilotKit|copilotkit\.ai|qoder/i;
 export const TEXT_FILE = /\.(ts|tsx|js|mjs|cjs|jsx|rs|json|html|css|svg|cs)$/;
 
-// Global Constraints「绝对不改」: changing any of these corrupts stored data or breaks a peer.
+// Global Constraints「绝对不改」: changing any of these corrupts stored data or breaks a peer. Renamed once,
+// in v0.2.16, with a migration or a check that nothing depended on the old spelling; these spellings are
+// the ones that must never move again.
 export const NEVER_CHANGE = [
-  "openbot.vault.credential.v2",
-  "openbot:agent-run",
-  "openbot-bearer",
-  "openbot-automation-hook-signing:v1",
-  "openbot.headless.waiting",
-  "openbot.ap.local-terminal.v1",
-  "<<openbot:app-access-request>>",
-  "openbot:personal-memory",
-  "/openbot/membership",
-  "/openbot/deliver",
+  "xiongbao.vault.credential.v2",
+  "xiongbao:agent-run",
+  "xiongbao-bearer",
+  "xiongbao-automation-hook-signing:v1",
+  "xiongbao.headless.waiting",
+  "xiongbao.ap.local-terminal.v1",
+  "<<xiongbao:app-access-request>>",
+  "xiongbao:personal-memory",
+  "/xiongbao/membership",
+  "/xiongbao/deliver",
 ];
 
 // The crypto / signing / hashing domains: a rename silently invalidates every stored secret,
 // token, signature, published key or pseudonymous id, so each must still be spelled verbatim.
 export const SIGNING_DOMAINS = [
+  "xiongbao.vault.credential.v2",
+  "xiongbao:agent-run",
+  "xiongbao-bearer",
+  "xiongbao-automation-hook-signing:v1",
+  "xiongbao web-bot-auth ed25519 v1",
+  "xiongbao computer token v1",
+];
+
+/**
+ * The spellings before v0.2.16, still read (never written) by the compatibility code that carries data
+ * stored under them across the upgrade. Masked like the ones above, but not required to survive: they go
+ * with that code.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_NEVER_CHANGE = [
   "openbot.vault.credential.v2",
-  "openbot:agent-run",
-  "openbot-bearer",
-  "openbot-automation-hook-signing:v1",
-  "openbot web-bot-auth ed25519 v1",
-  "openbot computer token v1",
+  "openbot.headless.waiting",
+  "openbot.ap.local-terminal.v1",
+  "<<openbot:app-access-request>>",
+  "openbot:personal-memory",
 ];
 
 // Wire headers peers send and read: the server and every managed Bot image must spell them the same.
@@ -172,7 +188,9 @@ export const RULES: Rule[] = [
   {
     id: "never-change",
     pattern: new RegExp(
-      [...NEVER_CHANGE, ...SIGNING_DOMAINS].map(escapeRegExp).join("|"),
+      [...NEVER_CHANGE, ...SIGNING_DOMAINS, ...LEGACY_NEVER_CHANGE]
+        .map(escapeRegExp)
+        .join("|"),
       "g",
     ),
     reason:

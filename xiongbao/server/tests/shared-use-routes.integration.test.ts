@@ -135,7 +135,7 @@ beforeAll(async () => {
       provenance: "composio",
       authScheme: "OAUTH2",
       accountMode: "shared",
-      sharedVendorUserId: `openbot-deployment:${suite}:R`,
+      sharedVendorUserId: `xiongbao-deployment:${suite}:R`,
       sharedConnectedAt: new Date(),
       sharedConnectedBy: ADMIN,
       sharedVerified: true,
