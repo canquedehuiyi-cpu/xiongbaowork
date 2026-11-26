@@ -1,5 +1,7 @@
 #!/command/with-contenv sh
-# Create the cluster the first time, and hand the API a password every time.
+# Create the cluster the first time, and make sure its generated passwords are on the volume every time.
+# The connection strings that carry them are written by migrate.sh (database-urls.sh), once the database
+# has said which names it answers to: v0.2.16 renames the superuser and the database.
 #
 # Bound to loopback, but no longer trust-auth. The process beside it is not the only client: the
 # Bot's shell runs in this same container, and under trust it could `psql -h 127.0.0.1 -U openbot`
@@ -50,6 +52,12 @@ if [ ! -s "$DATA/PG_VERSION" ]; then
   ( umask 077; printf '%s' "$PW" > "$PW_FILE" )
   chown postgres:postgres "$PW_FILE"
 
+  # The superuser and the database still get the names they had before v0.2.16: a historical migration
+  # (0054) grants default privileges FOR ROLE that superuser, so an empty database can only be migrated
+  # under it. migrate.sh renames both to xiongbao right after this volume's first migrations, the same way
+  # it renames an existing volume.
+  # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+  #
   # initdb reads the superuser password from a file (never an argument, which would show in `ps`), and
   # sets scram for both local and TCP connections. The temp file is removed the moment initdb returns.
   PWTMP="$(mktemp)"
@@ -65,11 +73,8 @@ if [ ! -s "$DATA/PG_VERSION" ]; then
   s6-setuidgid postgres "$BIN/pg_ctl" -D "$DATA" -w stop >/dev/null
 fi
 
-# Every boot, not only the first: hand the password-bearing URL to the services that connect over TCP
-# (`api` and `migrate`, both `with-contenv`). The password persists with the cluster; the container
-# environment is fresh each boot, so this has to run outside the first-init guard above. The file is
-# root-written here into s6's own environment directory, which pwuser cannot write and the Bot's shell
-# does not read.
+# Every boot, not only the first: the owner password persists with the cluster, and a volume from an
+# older release may lack the newer secrets, which are created here once and kept beside it.
 [ -s "$PW_FILE" ] || { echo 'postgres-init: owner password file is missing; restore it with the database volume.' >&2; exit 1; }
 # Also upgrades existing volumes: preserve the owner and create only the app secret.
 if [ ! -s "$APP_PW_FILE" ]; then
@@ -82,20 +87,3 @@ if [ ! -s "$WRITER_PW_FILE" ]; then
 fi
 chmod 600 "$PW_FILE" "$APP_PW_FILE" "$WRITER_PW_FILE"
 chown postgres:postgres "$PW_FILE" "$APP_PW_FILE" "$WRITER_PW_FILE"
-PW="$(cat "$PW_FILE")"
-APP_PW="$(cat "$APP_PW_FILE")"
-printf 'postgres://openbot:%s@127.0.0.1:5432/openbot' "$PW" \
-  > /run/s6/container_environment/MIGRATION_DATABASE_URL
-chmod 600 /run/s6/container_environment/MIGRATION_DATABASE_URL
-# Respect an explicit runtime URL, including a mistaken owner URL: refuse must
-# catch that configuration, rather than quietly replacing it with a safe one.
-if [ -z "${DATABASE_URL:-}" ]; then
-  printf 'postgres://openbot_app:%s@127.0.0.1:5432/openbot' "$APP_PW" \
-    > /run/s6/container_environment/DATABASE_URL
-fi
-# The server refuses to start without the role writer; same rule as DATABASE_URL for an explicit value.
-if [ -z "${ROLE_WRITER_DATABASE_URL:-}" ]; then
-  printf 'postgres://openbot_role_writer:%s@127.0.0.1:5432/openbot' "$(cat "$WRITER_PW_FILE")" \
-    > /run/s6/container_environment/ROLE_WRITER_DATABASE_URL
-  chmod 600 /run/s6/container_environment/ROLE_WRITER_DATABASE_URL
-fi

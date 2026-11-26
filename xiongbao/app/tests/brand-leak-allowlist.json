@@ -483,13 +483,6 @@
     "plan": "keep"
   },
   {
-    "file": "docker/s6/scripts/postgres-init.sh",
-    "text": "postgres://openbot",
-    "reason": "persisted-identifier: database name and role names written into every customer database",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "docker/s6/scripts/migrate.sh",
     "text": "-U openbot",
     "reason": "persisted-identifier: database name and role names written into every customer database",

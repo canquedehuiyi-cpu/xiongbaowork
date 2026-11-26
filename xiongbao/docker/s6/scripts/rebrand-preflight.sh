@@ -16,18 +16,23 @@
 #
 #   PGPASSWORD=<owner password> rebrand-preflight.sh check -h <host> [-p <port>] -U <superuser> -d <database>
 #
-#     The rename is needed when the cluster does not yet carry the new names: the bootstrap superuser
-#     (oid 10, the role initdb created) is not yet called xiongbao, or there is no xiongbao_app role yet.
-#     In the delivery container that is the same as "one of the two old roles is still there": initdb
-#     created the superuser under the old name, migration 0054 created the old app role, and the rename
-#     turns exactly those two into the new names. (Spelled through the new names because the brand
-#     guard keeps the bare old superuser name out of new image script lines.)
+#     The rename is needed while the cluster does not yet carry every new name: the bootstrap superuser
+#     (oid 10, the role initdb created) called xiongbao, the database this connects to called xiongbao,
+#     and the roles xiongbao_app and xiongbao_role_writer. In the delivery container that is the same as
+#     "one of the old names is still there": initdb created the superuser and the database under the old
+#     name, migrations 0054 and 0109 created the old application roles, and the rename turns exactly
+#     those four into the new names, in two steps (the application roles with the business database, the
+#     superuser and the database last), so a volume can sit between them and still needs the rename.
+#     (Spelled through the new names because the brand guard keeps the bare old superuser name out of new
+#     image script lines.) Connect with the names the cluster answers to now (migrate.sh asks
+#     rebrand-superuser.sh), so a resumed rename finds the database whichever step it stopped after.
 #
 #     In this order:
 #       - an in-progress record from an earlier boot (the rename started and did not finish: a step
 #         failed, a command outside the steps failed, or the container was killed) means resume: no new
 #         backup, the recorded one is named in the log and every step runs again. Checked before the
-#         names, because the last step renames the roles and can fail half-way. Refused if the recorded
+#         names, because the rename is several steps, the last of them committed apart from the others,
+#         and a boot can stop between them with some names new and some old. Refused if the recorded
 #         backup is gone, or if work is in flight again; such a refusal first compares the migration
 #         journal with the record, and says the business database changed, did not, or cannot be told;
 #       - not needed: prints nothing, writes nothing but the state file, exits 0;
@@ -239,8 +244,9 @@ check() {
     return 0
   fi
 
-  renamed=$(number "数据库角色" "SELECT count(*) FROM pg_roles WHERE (oid = 10 AND rolname = 'xiongbao') OR rolname = 'xiongbao_app';") || exit 1
-  if [ "$renamed" -eq 2 ]; then
+  renamed=$(number "数据库角色" "SELECT count(*) + (current_database() = 'xiongbao')::int FROM pg_roles
+    WHERE (oid = 10 AND rolname = 'xiongbao') OR rolname IN ('xiongbao_app', 'xiongbao_role_writer');") || exit 1
+  if [ "$renamed" -eq 4 ]; then
     write_state 0 ''
     return 0
   fi

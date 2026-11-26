@@ -51,7 +51,8 @@ as_pg() {
   if [ "$(id -u)" = 0 ]; then runuser -u postgres -- "$@"; else "$@"; fi
 }
 
-# start_cluster <name> <superuser>: initdb + start on a free loopback port; prints the port.
+# start_cluster <name> <superuser>: initdb + start on a free loopback port; prints the port. Called in a
+# command substitution, so the caller adds $T/<name>/data to CLUSTERS for cleanup.
 start_cluster() {
   d=$T/$1
   mkdir -p "$d"
@@ -160,6 +161,7 @@ backups() { ls "$BACKUP" 2>/dev/null | grep -c '^pre-rebrand-.*\.dump$'; }
 mode_of() { stat -c %a "$1"; }
 
 OLD=$(start_cluster old openbot) || exit 1
+CLUSTERS="$CLUSTERS $T/old/data"
 sql "$OLD" openbot postgres "CREATE DATABASE openbot OWNER openbot;" || exit 1
 sql "$OLD" openbot postgres "CREATE ROLE openbot_app LOGIN; CREATE ROLE openbot_role_writer LOGIN;" || exit 1
 seed "$OLD" openbot openbot openbot_app || exit 1
@@ -167,6 +169,7 @@ use "$OLD" openbot openbot || exit 1
 sql "$OLD" openbot postgres "CREATE DATABASE fresh OWNER openbot;" || exit 1
 
 NEW=$(start_cluster new xiongbao) || exit 1
+CLUSTERS="$CLUSTERS $T/new/data"
 sql "$NEW" xiongbao postgres "CREATE DATABASE xiongbao OWNER xiongbao;" || exit 1
 sql "$NEW" xiongbao postgres "CREATE ROLE xiongbao_app LOGIN; CREATE ROLE xiongbao_role_writer LOGIN;" || exit 1
 seed "$NEW" xiongbao xiongbao xiongbao_app || exit 1
@@ -206,6 +209,18 @@ preflight "$NEW" xiongbao fresh
 [ "$code" -eq 0 ] && [ "$(state_of needs_rebrand)" = 1 ] ||
   fail "renamed superuser with the old app role still needs the rename (exit $code, $(cat "$T/err"))"
 sql "$NEW" xiongbao postgres "ALTER ROLE openbot_app RENAME TO xiongbao_app;"
+# The superuser and the database are renamed in a step of their own, after the application roles: every
+# role renamed but the database not yet (or the other way round) is still a rename to finish.
+preflight "$NEW" xiongbao fresh
+[ "$code" -eq 0 ] && [ "$(state_of needs_rebrand)" = 1 ] ||
+  fail "every role renamed but not the database still needs the rename (exit $code, $(cat "$T/err"))"
+sql "$NEW" xiongbao postgres "ALTER ROLE xiongbao_role_writer RENAME TO openbot_role_writer;"
+sql "$NEW" xiongbao xiongbao "INSERT INTO approval_requests (status) VALUES ('pending');"
+preflight "$NEW" xiongbao xiongbao
+[ "$code" -ne 0 ] && grep -q "待审批：1" "$T/err" ||
+  fail "the renamed database with the old role writer still needs the rename (exit $code, $(cat "$T/err"))"
+sql "$NEW" xiongbao xiongbao "DELETE FROM approval_requests WHERE status = 'pending';"
+sql "$NEW" xiongbao postgres "ALTER ROLE openbot_role_writer RENAME TO xiongbao_role_writer;"
 clean && pass "a half-renamed cluster still needs the rename"
 
 # 3. a fresh empty database needs no backup: a new volume's first boot has the old names (initdb runs
@@ -320,6 +335,7 @@ fi
 #    pg_restore on that same volume does not (the seeded table's rows clash), which is why the steps say
 #    --clean; the control below keeps that reason honest.
 V15=$(start_cluster v0215 openbot) || exit 1
+CLUSTERS="$CLUSTERS $T/v0215/data"
 sql "$V15" openbot postgres "CREATE DATABASE openbot OWNER openbot;" || exit 1
 sql "$V15" openbot postgres "CREATE ROLE openbot_app LOGIN; CREATE ROLE openbot_role_writer LOGIN;" || exit 1
 seed "$V15" openbot openbot openbot_app || exit 1

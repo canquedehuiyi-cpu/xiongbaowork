@@ -181,23 +181,30 @@ describe("renameText", () => {
     });
 
     for (const name of ["postgres-init.sh", "migrate.sh"]) {
-      test(`s6/${name}：R1 后与原文逐字相同；R3 起库名才改，超级用户到 R4 才改`, () => {
+      test(`s6/${name}：R1 后与原文逐字相同；库名由 v0.2.16 的数据迁移改，脚本里的旧库名与超级用户一起到 R4 才改`, () => {
         const path = `xiongbao/docker/s6/scripts/${name}`;
         const { source, out } = R1(path);
         expect(out).toBe(source);
+        // R3 不机械改库名：交付容器里的库由 v0.2.16 启动时改名（rebrand-superuser.sh）。脚本里剩下的旧库名
+        // 都是改名前的卷上的名字（新装卷初次建库、查名字与改名时传的旧名），跟超级用户一样要到 R4 基线化。
         const r3 = renameText(source, loadProtect("R3", path));
-        expect(r3).not.toMatch(OLD_DATABASE);
+        const oldDatabase = /-d openbot\b/g;
+        expect(count(source, oldDatabase)).toBeGreaterThan(0);
+        expect(count(r3, oldDatabase)).toBe(count(source, oldDatabase));
         // 超级用户到 R4 才改：迁移基线化（R4）时随保护条目一起删除这一断言。
         expect(r3).toMatch(/-U openbot\b/);
         const r4 = renameText(source, loadProtect("R4", path));
+        expect(r4).not.toMatch(OLD_DATABASE);
         expect(r4).not.toMatch(/-U openbot\b/);
         expect(r4).toMatch(/-U xiongbao\b/);
       });
     }
 
-    test("image-smoke.sh：检查交付镜像里的库，库名与应用角色口令都不动", () => {
+    test("image-smoke.sh：检查交付镜像里改名后的库，应用角色口令不动", () => {
       const { source, out } = R1("xiongbao/scripts/ci/image-smoke.sh");
-      expect(count(out, /-d openbot\b/g)).toBe(count(source, /-d openbot\b/g));
+      // 新装卷首启就改了名：默认口令的反例要连改名后的库，失败才只说明口令不对。
+      expect(source).not.toMatch(/-d openbot\b/);
+      expect(count(out, /-U openbot_app -d xiongbao\b/g)).toBe(2);
       expect(out).toContain("PGPASSWORD=openbot ");
     });
 
