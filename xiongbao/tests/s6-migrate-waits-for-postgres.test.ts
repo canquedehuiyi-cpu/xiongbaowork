@@ -107,7 +107,11 @@ test("migrate.sh runs the rename preflight once the database is ready and the mi
   expect(migrates).toBeGreaterThan(step);
   // Nothing between the check and the step runner may reach the database on its own.
   expect(migrate.slice(check, step)).not.toContain("psql");
-  expect(statSync(join(SCRIPTS, "rebrand-preflight.sh")).mode & 0o111).toBe(
-    0o111,
-  );
+  // The in-progress record is cleared only after every other command: anything that fails before
+  // it makes the next boot resume instead of taking another backup.
+  const finish = migrate.indexOf('"$PREFLIGHT" finish');
+  expect(finish).toBeGreaterThan(migrate.lastIndexOf("psql"));
+  expect(migrate.slice(finish).trim()).toBe('"$PREFLIGHT" finish');
+  for (const script of ["rebrand-preflight.sh", "rebrand-restore.sh"])
+    expect(statSync(join(SCRIPTS, script)).mode & 0o111).toBe(0o111);
 });

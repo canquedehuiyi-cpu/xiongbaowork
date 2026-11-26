@@ -71,12 +71,30 @@ mb() { # 字节 -> MB，向上取整
 }
 
 # 「需要改名」按 Task 18 的接口：库里存在角色 openbot 或 openbot_app。
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，读旧角色名判断要不要改名，随改名迁移一起删
 roles=$(number "SELECT count(*) FROM pg_roles WHERE rolname IN ('openbot', 'openbot_app');")
-# 以下三条与 prod-inspect.sh、docker/s6/scripts/rebrand-preflight.sh 逐字相同（pre-upgrade-check.test.ts 守着）。
-pending=$(number "SELECT count(*) FROM approval_requests WHERE status = 'pending';")
-continuations=$(number "SELECT count(*) FROM approval_continuations WHERE state <> 'completed';")
-steps=$(number "SELECT count(*) FROM approval_continuation_steps WHERE state <> 'completed';")
+# 在途数：表不存在（早于 v0.2.12 的卷没有续跑表）按 0 计，与 v0.2.16 的前置检查一致。
+# 计数语句与 prod-inspect.sh、docker/s6/scripts/rebrand-preflight.sh 逐字相同（pre-upgrade-check.test.ts 守着）。
+in_flight() { # 表名 计数语句；表不存在时输出 none
+  t=$(number "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename = '$1';")
+  case $t in
+    0) echo none ;;
+    '?') echo '?' ;;
+    *) number "$2" ;;
+  esac
+}
+pending=$(in_flight approval_requests "SELECT count(*) FROM approval_requests WHERE status = 'pending';")
+continuations=$(in_flight approval_continuations "SELECT count(*) FROM approval_continuations WHERE state <> 'completed';")
+steps=$(in_flight approval_continuation_steps "SELECT count(*) FROM approval_continuation_steps WHERE state <> 'completed';")
+MISSING=''
+[ "$pending" != none ] || { MISSING="$MISSING approval_requests"; pending=0; }
+[ "$continuations" != none ] || { MISSING="$MISSING approval_continuations"; continuations=0; }
+[ "$steps" != none ] || { MISSING="$MISSING approval_continuation_steps"; steps=0; }
 size=$(number "SELECT pg_database_size(current_database());")
+# v0.2.16 上次升级没完成时留在卷上的进行中记录：留着它再升级会沿用旧备份，不重新备份。
+MARKER=/var/lib/postgresql/backup/rebrand-in-progress
+leftover=0
+if docker exec "$CONTAINER" test -e "$MARKER" >/dev/null 2>&1; then leftover=1; fi
 avail_kb=$(docker exec "$CONTAINER" df -kP /var/lib/postgresql 2>/dev/null | awk 'NR == 2 { print $4 }') || avail_kb=''
 case $avail_kb in '' | *[!0-9]*) avail_kb='?' ;; esac
 UNKNOWN=0
@@ -94,6 +112,7 @@ esac
 echo "待审批：$pending"
 echo "未完成的续跑：$continuations"
 echo "未完成的续跑步骤：$steps"
+[ -z "$MISSING" ] || echo "（这个库还没有这些表，按 0 计：$MISSING）"
 echo "未过期的运行断言：不入库，无法计数（10 分钟内有效的签名令牌；升级前确认没有正在执行的对话或任务即可）"
 echo "数据库大小：$(mb "$size") MB"
 if [ "$size" = '?' ]; then
@@ -121,6 +140,12 @@ if [ "$roles" != 0 ]; then
     blocked=1
     echo "· 数据库卷空间不够：还差 $(((need_kb - avail_kb + 1023) / 1024)) MB。在宿主机上清理这块盘（例如 docker system prune 清掉不用的镜像），再运行本自查。"
   fi
+fi
+
+if [ "$leftover" -eq 1 ]; then
+  blocked=1
+  echo "· 卷上有上次 v0.2.16 升级没完成留下的记录 $MARKER：在 v0.2.15 上用过之后它对应的备份已经过时。"
+  echo "  删掉它再升级（v0.2.16 会重新备份）：docker exec $CONTAINER rm -f $MARKER"
 fi
 
 if [ "$blocked" -eq 1 ]; then

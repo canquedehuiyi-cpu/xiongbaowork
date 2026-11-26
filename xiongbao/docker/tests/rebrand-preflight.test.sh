@@ -76,20 +76,34 @@ sql() {
   PGPASSWORD=$PW "$PG_BIN/psql" -X -q -A -t -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -p "$1" -U "$2" -d "$3" -c "$4"
 }
 
-# The tables the in-flight check reads, as the server's schema has them (the columns that matter),
-# the migration journal that marks a database as migrated, and some business rows.
-seed() { # port superuser db
-  sql "$1" "$2" "$3" "CREATE SCHEMA drizzle;
+# What a migrated volume looks like where it matters here: the tables the in-flight check reads, the
+# migration journal that marks a database as migrated, pgvector, a table that migrations seed with a
+# default row (restoring over it is where a plain pg_restore loses data), a grant and a row-security
+# policy naming the app role (restoring needs that role), and some business rows.
+seed() { # port superuser db app-role
+  sql "$1" "$2" "$3" "CREATE EXTENSION IF NOT EXISTS vector;
+    CREATE SCHEMA drizzle;
     CREATE TABLE drizzle.__drizzle_migrations (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint);
     INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('h1', 1);
     CREATE TABLE approval_requests (id serial PRIMARY KEY, status text NOT NULL DEFAULT 'pending');
     CREATE TABLE approval_continuations (id serial PRIMARY KEY, state text NOT NULL);
     CREATE TABLE approval_continuation_steps (id serial PRIMARY KEY, state text NOT NULL);
-    CREATE TABLE notes (id serial PRIMARY KEY, body text NOT NULL);
+    CREATE TABLE settings (key text PRIMARY KEY, value text NOT NULL);
+    INSERT INTO settings VALUES ('theme', 'default');
+    CREATE TABLE notes (id serial PRIMARY KEY, body text NOT NULL, embedding vector(3));
     INSERT INTO notes (body) SELECT 'note ' || g FROM generate_series(1, 500) g;
+    GRANT SELECT, INSERT ON notes TO $4;
+    ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY notes_app ON notes TO $4 USING (true);
     INSERT INTO approval_requests (status) VALUES ('approved'), ('denied'), ('consumed');
     INSERT INTO approval_continuations (state) VALUES ('completed');
     INSERT INTO approval_continuation_steps (state) VALUES ('completed');"
+}
+# What a person did on top: changed a seeded row, added rows.
+use() { # port superuser db
+  sql "$1" "$2" "$3" "UPDATE settings SET value = 'dark' WHERE key = 'theme';
+    INSERT INTO settings VALUES ('lang', 'zh');
+    INSERT INTO notes (body, embedding) VALUES ('written by a person', '[1,2,3]');"
 }
 
 # Everything a refusal must leave alone: the roles, and the database as pg_dump prints it.
@@ -127,26 +141,35 @@ preflight() {
 step() {
   n=$1 k=$2
   shift 2
-  env REBRAND_BACKUP_DIR="$BACKUP" REBRAND_STATE_DIR="$STATE" sh "$PREFLIGHT" step "$n" "$k" -- "$@" \
-    >"$T/out" 2>"$T/err" </dev/null
+  env PGPASSWORD="$PW" REBRAND_BACKUP_DIR="$BACKUP" REBRAND_STATE_DIR="$STATE" REBRAND_PG_BIN="$PG_BIN" \
+    sh "$PREFLIGHT" step "$n" "$k" -- "$@" >"$T/out" 2>"$T/err" </dev/null
+  code=$?
+  cat "$T/out" "$T/err" >>"$ALL"
+}
+
+# finish: the last line of migrate.sh.
+finish() {
+  env REBRAND_BACKUP_DIR="$BACKUP" REBRAND_STATE_DIR="$STATE" sh "$PREFLIGHT" finish >"$T/out" 2>"$T/err" </dev/null
   code=$?
   cat "$T/out" "$T/err" >>"$ALL"
 }
 
 state_of() { sed -n "s/^$1=//p" "$STATE/state" 2>/dev/null; }
+MARKER=$BACKUP/rebrand-in-progress
 backups() { ls "$BACKUP" 2>/dev/null | grep -c '^pre-rebrand-.*\.dump$'; }
 mode_of() { stat -c %a "$1"; }
 
 OLD=$(start_cluster old openbot) || exit 1
 sql "$OLD" openbot postgres "CREATE DATABASE openbot OWNER openbot;" || exit 1
 sql "$OLD" openbot postgres "CREATE ROLE openbot_app LOGIN; CREATE ROLE openbot_role_writer LOGIN;" || exit 1
-seed "$OLD" openbot openbot || exit 1
+seed "$OLD" openbot openbot openbot_app || exit 1
+use "$OLD" openbot openbot || exit 1
 sql "$OLD" openbot postgres "CREATE DATABASE fresh OWNER openbot;" || exit 1
 
 NEW=$(start_cluster new xiongbao) || exit 1
 sql "$NEW" xiongbao postgres "CREATE DATABASE xiongbao OWNER xiongbao;" || exit 1
 sql "$NEW" xiongbao postgres "CREATE ROLE xiongbao_app LOGIN; CREATE ROLE xiongbao_role_writer LOGIN;" || exit 1
-seed "$NEW" xiongbao xiongbao || exit 1
+seed "$NEW" xiongbao xiongbao xiongbao_app || exit 1
 sql "$NEW" xiongbao postgres "CREATE DATABASE fresh OWNER xiongbao;" || exit 1
 
 # 1. already renamed database skips preflight and backup: a pending approval and no free space at all
@@ -161,13 +184,13 @@ elif [ "$(state_of needs_rebrand)" != 0 ]; then fail "$what: state says needs_re
 else pass "$what"; fi
 sql "$NEW" xiongbao xiongbao "DELETE FROM approval_requests WHERE status = 'pending';"
 
-# ...and a failing step on such a volume is an ordinary failure: no backup named, no failure marker.
+# ...and a failing step on such a volume is an ordinary failure: no backup named, no record written.
 step "数据库迁移" "数据库表结构与系统数据" sh -c 'exit 4'
-what="a failing step on a renamed volume names the step and leaves no marker"
+what="a failing step on a renamed volume names the step and writes no record"
 if [ "$code" -eq 0 ]; then fail "$what: exit 0"
 elif ! grep -q "数据库迁移" "$T/err"; then fail "$what: step not named: $(cat "$T/err")"
 elif grep -q "备份" "$T/err"; then fail "$what: mentions a backup: $(cat "$T/err")"
-elif [ -e "$BACKUP/rebrand-failed" ]; then fail "$what: wrote a failure marker"
+elif [ -e "$BACKUP" ]; then fail "$what: wrote under $BACKUP"
 else pass "$what"; fi
 
 # 2. the roles decide, in every half-renamed shape: either old name left means the rename is not done.
@@ -244,7 +267,11 @@ preflight "$OLD" openbot openbot PATH="$FAKEBIN:$PATH" FAKE_AVAIL_KB=$need_kb
 rm -rf "$BACKUP"
 
 # 6. backup is written 0600 before any rename: the rename stand-in looks at the backup first, then
-#    renames a role; the dump restores to the data as it was and the file is not touched afterwards.
+#    renames a role; the backup is not touched afterwards; `finish` clears the record.
+source_print=$(fingerprint "$OLD" openbot openbot)
+echo stale >"$T/stale"
+mkdir -p "$BACKUP" && cp "$T/stale" "$BACKUP/.pre-rebrand-killed.partial"
+[ "$(id -u)" = 0 ] && chown -R postgres:postgres "$BACKUP"
 preflight "$OLD" openbot openbot
 dump=$(state_of backup)
 what="backup is written 0600 before any rename"
@@ -258,9 +285,15 @@ elif [ ! -f "$dump" ]; then fail "$what: $dump missing"
 elif [ "$(mode_of "$dump")" != 600 ]; then fail "$what: file mode $(mode_of "$dump")"
 elif [ "$(mode_of "$BACKUP")" != 700 ]; then fail "$what: directory mode $(mode_of "$BACKUP")"
 elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$dump")" != postgres ]; then fail "$what: owner $(stat -c %U "$dump")"
-elif ls -A "$BACKUP" | grep -vq '^pre-rebrand-'; then fail "$what: leftovers: $(ls -A "$BACKUP")"
+elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$BACKUP")" != postgres ]; then fail "$what: directory owner $(stat -c %U "$BACKUP")"
+elif [ -e "$BACKUP/.pre-rebrand-killed.partial" ]; then fail "$what: a killed dump's temporary file was kept"
+elif ls -A "$BACKUP" | grep -v '^pre-rebrand-' | grep -vqx 'rebrand-in-progress'; then fail "$what: leftovers: $(ls -A "$BACKUP")"
+elif [ ! -f "$MARKER" ] || [ "$(mode_of "$MARKER")" != 600 ]; then fail "$what: no 0600 in-progress record"
+elif ! grep -qx "backup=$dump" "$MARKER"; then fail "$what: record does not name the backup: $(cat "$MARKER")"
 elif ! grep -q "$dump" "$T/out" "$T/err"; then fail "$what: path not printed"
 elif [ "$(state_of needs_rebrand)" != 1 ]; then fail "$what: state $(cat "$STATE/state")"
+elif [ "$(ls -A "$STATE")" != state ]; then fail "$what: more than the state file under $STATE: $(ls -A "$STATE")"
+elif [ "$(mode_of "$STATE/state")" != 644 ]; then fail "$what: state file mode $(mode_of "$STATE/state")"
 else
   begin
   sum=$(cksum <"$dump")
@@ -271,19 +304,58 @@ else
   ' rename "$dump" "$PW" "$PG_BIN" "$OLD"
   if [ "$code" -ne 0 ]; then fail "$what: rename stand-in failed: $(cat "$T/err")"
   elif [ "$(cksum <"$dump")" != "$sum" ]; then fail "$what: backup changed after the rename"
-  else
-    sql "$OLD" openbot postgres "CREATE DATABASE restored OWNER openbot;"
-    PGPASSWORD=$PW "$PG_BIN/pg_restore" -w -h 127.0.0.1 -p "$OLD" -U openbot -d restored "$dump" 2>"$T/restore.err" ||
-      fail "$what: pg_restore: $(cat "$T/restore.err")"
-    [ "$(sql "$OLD" openbot restored "SELECT count(*) FROM notes;")" = 500 ] || fail "$what: restored notes differ"
-    clean && pass "$what"
+  elif ! grep -qx "ok=改名" "$MARKER"; then fail "$what: completed step not recorded: $(cat "$MARKER")"
   fi
   sql "$OLD" openbot postgres "ALTER ROLE xiongbao_role_writer RENAME TO openbot_role_writer;"
-  sql "$OLD" openbot postgres "DROP DATABASE IF EXISTS restored;"
+  finish
+  if [ "$code" -ne 0 ] || [ -e "$MARKER" ]; then fail "$what: finish did not clear the record (exit $code)"
+  elif ! grep -qF "$dump" "$T/out"; then fail "$what: finish does not name the backup it keeps"
+  elif [ ! -f "$dump" ]; then fail "$what: finish removed the backup"
+  fi
+  clean && pass "$what"
 fi
 
-# 7. migration failure leaves the backup and prints its path: the step stand-in fails as a migration
-#    that rolled back would; the container must say which step, which data, and where the backup is.
+# 7. the backup restores, by the documented steps, over a new volume that v0.2.15 has already started
+#    on (tables created, default rows seeded, roles in place): every row comes back exactly. A plain
+#    pg_restore on that same volume does not (the seeded table's rows clash), which is why the steps say
+#    --clean; the control below keeps that reason honest.
+V15=$(start_cluster v0215 openbot) || exit 1
+sql "$V15" openbot postgres "CREATE DATABASE openbot OWNER openbot;" || exit 1
+sql "$V15" openbot postgres "CREATE ROLE openbot_app LOGIN; CREATE ROLE openbot_role_writer LOGIN;" || exit 1
+seed "$V15" openbot openbot openbot_app || exit 1
+sql "$V15" openbot postgres "CREATE DATABASE plain OWNER openbot;" || exit 1
+seed "$V15" openbot plain openbot_app || exit 1
+cp "$dump" "$T/restore.dump"
+chmod 644 "$T/restore.dump"
+printf 'postgres://openbot:%s@127.0.0.1:%s/openbot' "$PW" "$V15" >"$T/v15-url"
+# The script arrives on stdin, as `docker exec -i <container> sh -s <dump> < rebrand-restore.sh` feeds it.
+env REBRAND_RESTORE_URL_FILE="$T/v15-url" REBRAND_RESTORE_PG_BIN="$PG_BIN" REBRAND_RESTORE_API_SERVICE="$T/no-api" \
+  sh -s "$T/restore.dump" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
+code=$?
+cat "$T/out" "$T/err" >>"$ALL"
+what="the backup restores every row over a volume v0.2.15 has started on"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/out" "$T/err")"
+elif [ "$(fingerprint "$V15" openbot openbot)" != "$source_print" ]; then fail "$what: the restored database differs from the one backed up"
+elif [ "$(sql "$V15" openbot openbot "SELECT string_agg(key || '=' || value, ',' ORDER BY key) FROM settings;")" != "lang=zh,theme=dark" ]; then fail "$what: settings rows differ"
+elif [ "$(sql "$V15" openbot openbot "SELECT count(*) FROM notes WHERE body = 'written by a person' AND embedding = '[1,2,3]';")" != 1 ]; then fail "$what: the person's note is missing"
+else pass "$what"; fi
+PGPASSWORD=$PW "$PG_BIN/pg_restore" -w -h 127.0.0.1 -p "$V15" -U openbot -d plain "$T/restore.dump" >/dev/null 2>&1
+[ "$(sql "$V15" openbot plain "SELECT count(*) FROM settings WHERE key = 'lang';")" = 0 ] &&
+  pass "control: a plain pg_restore over the seeded tables loses the person's rows" ||
+  fail "control: a plain pg_restore over seeded tables kept every row, so --clean may no longer be needed"
+# A file that is not a complete backup is refused before the database is touched.
+head -c 2000 "$T/restore.dump" >"$T/cut.dump"
+before=$(fingerprint "$V15" openbot openbot)
+env REBRAND_RESTORE_URL_FILE="$T/v15-url" REBRAND_RESTORE_PG_BIN="$PG_BIN" REBRAND_RESTORE_API_SERVICE="$T/no-api" \
+  sh -s "$T/cut.dump" >"$T/out" 2>"$T/err" <"$HERE/../s6/scripts/rebrand-restore.sh"
+code=$?
+cat "$T/out" "$T/err" >>"$ALL"
+[ "$code" -ne 0 ] && [ "$(fingerprint "$V15" openbot openbot)" = "$before" ] &&
+  pass "a truncated backup is refused and the database is untouched" ||
+  fail "a truncated backup is refused and the database is untouched: exit $code: $(cat "$T/err")"
+
+# 8. migration failure leaves the backup and prints its path. The stand-in fails without committing
+#    anything (the journal is as it was), so the message says nothing changed and sends nobody to restore.
 preflight "$OLD" openbot openbot
 dump=$(state_of backup)
 count=$(backups)
@@ -294,25 +366,115 @@ elif [ -z "$dump" ] || [ ! -f "$dump" ]; then fail "$what: backup gone ($dump)"
 elif ! grep -qF "$dump" "$T/err"; then fail "$what: backup path not printed: $(cat "$T/err")"
 elif ! grep -q "数据库迁移" "$T/err" || ! grep -q "数据库表结构与系统数据" "$T/err"; then fail "$what: step or data not named: $(cat "$T/err")"
 elif ! grep -q "migration exploded" "$T/err"; then fail "$what: the step's own error was swallowed"
-elif [ ! -f "$BACKUP/rebrand-failed" ] || [ "$(mode_of "$BACKUP/rebrand-failed")" != 600 ]; then fail "$what: no 0600 failure marker"
+elif ! grep -q "业务库没有改动" "$T/err"; then fail "$what: does not say the database is unchanged: $(cat "$T/err")"
+elif grep -q "rebrand-restore.sh" "$T/err"; then fail "$what: sends an unchanged database to a restore"
+elif [ ! -f "$MARKER" ]; then fail "$what: the in-progress record is gone"
 else pass "$what"; fi
 
-# 8. a failed attempt is not retried with a fresh backup on restart: the restart policy brings the
-#    container straight back, and each boot would otherwise add a dump until the disk filled.
+# 9. a restart after the failure resumes: no new backup, the old one named, the steps run again.
 preflight "$OLD" openbot openbot
-what="a failed attempt is not retried with a fresh backup on restart"
-if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+what="a restart after a failed step resumes with the same backup and makes no new one"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
 elif [ "$(backups)" -ne "$count" ]; then fail "$what: $(backups) backups, was $count"
-elif ! grep -qF "$dump" "$T/err" || ! grep -q "数据库迁移" "$T/err"; then fail "$what: earlier failure not repeated: $(cat "$T/err")"
-elif ! grep -q "rebrand-failed" "$T/err"; then fail "$what: no way to retry given: $(cat "$T/err")"
+elif [ "$(state_of backup)" != "$dump" ] || [ "$(state_of needs_rebrand)" != 1 ]; then fail "$what: state $(cat "$STATE/state")"
+elif ! grep -qF "$dump" "$T/out" || ! grep -q "不再备份" "$T/out"; then fail "$what: log does not name the backup it keeps: $(cat "$T/out")"
 else pass "$what"; fi
-rm -f "$BACKUP/rebrand-failed"
+
+# 10. a step that committed and then failed: the journal grew, so the message says the database changed
+#     and points to the restore steps.
+step "数据库迁移" "数据库表结构与系统数据" sh -c '
+  PGPASSWORD=$1 "$2/psql" -X -q -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -p "$3" -U openbot -d openbot \
+    -c "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('"'h2'"', 2);" && exit 1
+' commit "$PW" "$PG_BIN" "$OLD"
+what="a step that changed the database says so and points to the restore steps"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "业务库已经改动" "$T/err" || ! grep -q "1 条变成 2 条" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif ! grep -q "/etc/s6-overlay/scripts/rebrand-restore.sh" "$T/err" || ! grep -qF "$dump" "$T/err"; then fail "$what: no restore pointer or backup: $(cat "$T/err")"
+else pass "$what"; fi
+sql "$OLD" openbot openbot "DELETE FROM drizzle.__drizzle_migrations WHERE hash = 'h2';"
+
+# 11. the container killed in the middle of a step (docker stop, OOM, host reboot): the runner never gets
+#     to report, the record stays, and the next boot resumes without a new backup. Same for a failure in
+#     migrate.sh outside any step: nothing clears the record but `finish`.
+preflight "$OLD" openbot openbot
+step "数据库迁移" "数据库表结构与系统数据" sh -c 'kill -KILL "$PPID"; sleep 5'
+killed=$code
+preflight "$OLD" openbot openbot
+what="an attempt killed mid-step resumes on restart without a new backup"
+if [ "$killed" -eq 0 ]; then fail "$what: the stand-in was not killed"
+elif [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
+elif [ "$(backups)" -ne "$count" ]; then fail "$what: $(backups) backups, was $count"
+elif [ "$(state_of backup)" != "$dump" ]; then fail "$what: state names $(state_of backup)"
+else pass "$what"; fi
+step "改名" "数据库角色名" true
+preflight "$OLD" openbot openbot
+[ "$code" -eq 0 ] && [ "$(backups)" -eq "$count" ] && grep -q "已完成的步骤：改名" "$T/out" &&
+  pass "a failure outside any step resumes without a new backup and lists the steps done" ||
+  fail "a failure outside any step resumes without a new backup: exit $code, $(backups) backups: $(cat "$T/out" "$T/err")"
+
+# 12. resuming still refuses work in flight, and refuses when the recorded backup has gone.
+sql "$OLD" openbot openbot "INSERT INTO approval_requests (status) VALUES ('pending');"
+preflight "$OLD" openbot openbot
+[ "$code" -ne 0 ] && grep -q "待审批：1" "$T/err" && pass "resuming still refuses work in flight" ||
+  fail "resuming still refuses work in flight: exit $code"
+sql "$OLD" openbot openbot "UPDATE approval_requests SET status = 'denied' WHERE status = 'pending';"
+mv "$dump" "$T/moved.dump"
+preflight "$OLD" openbot openbot
+[ "$code" -ne 0 ] && grep -qF "$dump" "$T/err" && [ "$(backups)" -eq $((count - 1)) ] &&
+  pass "a recorded backup that has gone refuses rather than carrying on without one" ||
+  fail "a recorded backup that has gone refuses: exit $code: $(cat "$T/err")"
+mv "$T/moved.dump" "$dump"
+
+# 13. once `finish` has run, the next attempt is a new one with a new backup.
+finish
 sleep 1
 preflight "$OLD" openbot openbot
-[ "$code" -eq 0 ] && [ "$(backups)" -eq $((count + 1)) ] && pass "removing the marker allows a new attempt" ||
-  fail "removing the marker allows a new attempt: exit $code, $(backups) backups: $(cat "$T/err")"
+[ "$code" -eq 0 ] && [ "$(backups)" -eq $((count + 1)) ] && pass "after finish the next attempt makes a new backup" ||
+  fail "after finish the next attempt makes a new backup: exit $code, $(backups) backups: $(cat "$T/err")"
+finish
 
-# 9. the read-only self-check reads the same numbers from a real database. A stand-in `docker` runs the
+# 14. links on the volume are refused, never followed: the backup directory as a link, or a link where
+#     the in-progress record goes. The link's target is left as it was.
+mkdir -p "$T/elsewhere"
+chmod 755 "$T/elsewhere"
+ln -s "$T/elsewhere" "$T/linked-dir"
+preflight "$OLD" openbot openbot REBRAND_BACKUP_DIR="$T/linked-dir"
+[ "$code" -ne 0 ] && [ "$(mode_of "$T/elsewhere")" = 755 ] && [ -z "$(ls -A "$T/elsewhere")" ] &&
+  pass "a backup directory that is a link is refused and its target untouched" ||
+  fail "a backup directory that is a link is refused: exit $code, target mode $(mode_of "$T/elsewhere"): $(ls -A "$T/elsewhere")"
+ln -s "$T/elsewhere/planted" "$MARKER"
+preflight "$OLD" openbot openbot
+[ "$code" -ne 0 ] && [ ! -e "$T/elsewhere/planted" ] && pass "a link where the record goes is refused and not followed" ||
+  fail "a link where the record goes is refused: exit $code"
+rm -f "$MARKER"
+
+# 15. a dump that fails refuses, and leaves neither a temporary file, a record nor a state.
+mkdir -p "$T/badbin"
+for b in psql pg_restore; do ln -s "$PG_BIN/$b" "$T/badbin/$b"; done
+printf '#!/bin/sh\necho "pg_dump: error: simulated" >&2\nexit 1\n' >"$T/badbin/pg_dump"
+chmod 755 "$T/badbin/pg_dump"
+count=$(backups)
+preflight "$OLD" openbot openbot REBRAND_PG_BIN="$T/badbin"
+what="a failed dump refuses and leaves nothing behind"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0"
+elif ! grep -q "simulated" "$T/err"; then fail "$what: dump error not shown: $(cat "$T/err")"
+elif [ "$(backups)" -ne "$count" ] || ls -A "$BACKUP" | grep -q '\.partial$'; then fail "$what: files left: $(ls -A "$BACKUP")"
+elif [ -e "$MARKER" ] || [ -e "$STATE/state" ]; then fail "$what: record or state written"
+else pass "$what"; fi
+
+# 16. a volume from before the continuation tables existed (before v0.2.12): those counts are 0, the log
+#     says so, and the rename goes ahead instead of refusing for ever.
+sql "$OLD" openbot postgres "CREATE DATABASE older OWNER openbot;"
+sql "$OLD" openbot older "CREATE SCHEMA drizzle;
+  CREATE TABLE drizzle.__drizzle_migrations (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint);
+  INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('h1', 1);
+  CREATE TABLE approval_requests (id serial PRIMARY KEY, status text NOT NULL DEFAULT 'pending');"
+preflight "$OLD" openbot older REBRAND_BACKUP_DIR="$T/older-backup"
+[ "$code" -eq 0 ] && grep -q "按 0 计" "$T/out" && grep -q "approval_continuations" "$T/out" &&
+  [ -n "$(state_of backup)" ] && pass "missing continuation tables count as 0 on an older volume" ||
+  fail "missing continuation tables count as 0 on an older volume: exit $code: $(cat "$T/out" "$T/err")"
+
+# 17. the read-only self-check reads the same numbers from a real database. A stand-in `docker` runs the
 #    in-container part here, against the old cluster; every session is read-only, so data is untouched.
 cat >"$FAKEBIN/docker" <<'EOF'
 #!/bin/sh
@@ -323,7 +485,7 @@ case "$1" in
     [ "$1" = "-i" ] && shift
     shift
     case "$1" in
-      test) exit 0 ;;
+      test) case "$*" in *rebrand-in-progress*) exit 1 ;; *) exit 0 ;; esac ;;
       df) printf 'Filesystem 1K-blocks Used Available Use%% Mounted on\n/dev/vdb 99999999 1 %s 1%% /var/lib/postgresql\n' "$FAKE_AVAIL_KB" ;;
       sh) shift; exec sh "$@" ;;
       *) echo "unexpected exec: $*" >&2; exit 1 ;;
@@ -356,7 +518,7 @@ precheck
 [ "$code" -eq 0 ] && grep -q "可以升级" "$T/out" && pass "pre-upgrade check says go once nothing is in flight" ||
   fail "pre-upgrade check says go once nothing is in flight: exit $code: $(cat "$T/out" "$T/err")"
 
-# 10. nothing above ever printed the database password.
+# 18. nothing above ever printed the database password.
 if grep -qF "$PW" "$ALL"; then fail "the password was printed"; else pass "no output carries the password"; fi
 
 exit "$rc"

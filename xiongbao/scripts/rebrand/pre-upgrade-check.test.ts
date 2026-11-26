@@ -28,7 +28,7 @@ const preflight = join(
 );
 
 // 假 docker：inspect 按 FAKE_NO_CONTAINER 成败；`exec C test -s <URL 文件>` 按 FAKE_NO_URL 成败；
-// `exec C df` 返回 FAKE_AVAIL_KB；`exec -i C sh -c …` 把标准输入存成 sql/N.sql，按语句里的表名回答。
+// `exec C test -e <进行中记录>` 按 FAKE_MARKER 成败；`exec C df` 返回 FAKE_AVAIL_KB；`exec -i C sh -c …` 把标准输入存成 sql/N.sql，按语句里的表名回答。
 const FAKE_DOCKER = `#!/bin/sh
 printf '%s\\n' "$*" >> "$FAKE_DIR/args.log"
 case "$1" in
@@ -40,7 +40,11 @@ case "$1" in
     [ "$1" = "-i" ] && shift
     shift
     case "$1" in
-      test) [ -z "\${FAKE_NO_URL:-}" ] ;;
+      test)
+        case "$*" in
+          *rebrand-in-progress*) [ -n "\${FAKE_MARKER:-}" ] ;;
+          *) [ -z "\${FAKE_NO_URL:-}" ] ;;
+        esac ;;
       df)
         printf 'Filesystem 1K-blocks Used Available Use%% Mounted on\\n/dev/vdb 99999999 400 %s 40%% /var/lib/postgresql\\n' "$FAKE_AVAIL_KB" ;;
       sh)
@@ -56,6 +60,9 @@ case "$1" in
         last=$(tail -n 1 "$FAKE_DIR/sql/$n.sql")
         case "$last" in
           *pg_roles*) echo "$FAKE_ROLES" ;;
+          *pg_tables*approval_continuation*)
+            if [ -n "\${FAKE_NO_CONTINUATION_TABLES:-}" ]; then echo 0; else echo 1; fi ;;
+          *pg_tables*) echo 1 ;;
           *approval_requests*) echo "$FAKE_PENDING" ;;
           *approval_continuation_steps*) echo "$FAKE_STEPS" ;;
           *approval_continuations*) echo "$FAKE_CONTINUATIONS" ;;
@@ -177,6 +184,32 @@ describe("pre-upgrade-check.sh", () => {
     ).toBe(0);
   });
 
+  test("a volume older than the continuation tables counts them as 0 and says so", () => {
+    const { code, out } = run({ FAKE_NO_CONTINUATION_TABLES: "1" });
+    expect(code).toBe(0);
+    expect(out).toContain("未完成的续跑：0");
+    expect(out).toContain("未完成的续跑步骤：0");
+    expect(out).toContain("按 0 计");
+    expect(out).toContain("approval_continuations");
+    expect(out).toContain("结论：可以升级");
+    // 表不存在时不去数它
+    expect(
+      sessions().some((lines) =>
+        lines[1]?.startsWith("SELECT count(*) FROM approval_continuations "),
+      ),
+    ).toBe(false);
+  });
+
+  test("a record left by an unfinished v0.2.16 upgrade is a no-go with the command to remove it", () => {
+    const { code, out } = run({ FAKE_MARKER: "1" });
+    expect(code).toBe(1);
+    expect(out).toContain("rebrand-in-progress");
+    expect(out).toContain(
+      "docker exec xiongbao rm -f /var/lib/postgresql/backup/rebrand-in-progress",
+    );
+    expect(out).toContain("结论：暂不能升级");
+  });
+
   test("a volume already carrying the new names needs no rename and is a go", () => {
     const { code, out } = run({ FAKE_ROLES: "0" });
     expect(code).toBe(0);
@@ -187,7 +220,8 @@ describe("pre-upgrade-check.sh", () => {
   test("every session is read-only and asks only for counts and the database size", () => {
     run();
     const all = sessions();
-    expect(all.length).toBe(5);
+    // 角色、三张表是否存在、三项在途、库大小
+    expect(all.length).toBe(8);
     for (const lines of all) {
       expect(lines.length).toBe(2);
       expect(lines[0]).toBe("SET default_transaction_read_only = on;");

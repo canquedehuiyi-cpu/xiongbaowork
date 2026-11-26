@@ -31,14 +31,16 @@ done
 echo 'migrate: embedded PostgreSQL is ready'
 # The rename of persisted names (v0.2.16) starts here, before any migration can touch data: a volume
 # that still carries the old names is refused while work is in flight or the backup would not fit, and
-# backed up otherwise; a volume already renamed passes straight through. See rebrand-preflight.sh.
+# backed up otherwise; a volume already renamed passes straight through; a rename an earlier boot started
+# and did not finish resumes without another backup. See rebrand-preflight.sh for the order the steps
+# keep: the business database in one transaction first, the role and database rename last.
 # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
 PREFLIGHT="$(dirname "$0")/rebrand-preflight.sh"
 PGPASSWORD="$OWNER_PW" "$PREFLIGHT" check -h 127.0.0.1 -U openbot -d openbot
 # Scope the owner URL to migration; never replace the API's environment file.
 # Every step that may change data runs through `step`, which on failure names the step, the kind of
-# data and the backup, so the container stops saying where to go back to. Later rename steps go here.
-DATABASE_URL="$MIGRATION_DATABASE_URL" "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- \
+# data, the steps already done, whether the business database changed, and the backup.
+PGPASSWORD="$OWNER_PW" DATABASE_URL="$MIGRATION_DATABASE_URL" "$PREFLIGHT" step 数据库迁移 数据库表结构与系统数据 -- \
   s6-setuidgid apiuser /usr/local/bin/bun scripts/migrate.ts
 
 APP_PW="$(cat /var/lib/postgresql/pgpassword-app)"
@@ -57,3 +59,6 @@ printf "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASS
   PGPASSWORD="$OWNER_PW" s6-setuidgid apiuser /usr/lib/postgresql/16/bin/psql \
     -h 127.0.0.1 -U openbot -d openbot -v ON_ERROR_STOP=1 >/dev/null
 echo 'migrate: openbot_role_writer password installed'
+# Everything above has run: the rename, if this boot did one, is complete. Until this line runs, every
+# boot resumes the rename instead of making another backup.
+"$PREFLIGHT" finish
