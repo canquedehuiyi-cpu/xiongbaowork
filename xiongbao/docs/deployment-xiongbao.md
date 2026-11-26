@@ -593,7 +593,12 @@ COMMIT;
    （运行时本来就以新名为准）；同名新行只有空值时，运行时生效的是旧值，所以注释掉的是空的新行，旧行照常改名。
    平台模型的密钥变量保持原样。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
    改完照常 `up -d`。要退回，把备份文件改回原名即可。源码目录的 `.env` 也可以这样改，`scripts/start.sh` 同样新名优先、旧名其次。
-6. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。
+6. **用开发 Compose（`xiongbao/docker-compose.yml`，本机更新器的 image 拓扑）安装的 v0.2.15 暂时不能原地升级。**
+   这一版里该文件的 Compose 项目名、卷名和数据库名已经改了，v0.2.15 的本机更新器会在停服之前发现这些变化并拒绝更新，
+   不停服务、不动数据库。请等包含数据迁移（R3）的 v0.2.16 正式版发布后再升级，那一版会把已有的卷和数据库接过来；在那之前
+   不要手工用新文件 `docker compose up`，否则会起一个使用全新空卷的新项目，原有数据仍在旧卷里但不会被用到。
+   交付容器（`docker/compose.delivery.yml`，第 1、2 节的起法）不受影响，按本节前几条升级即可。
+7. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。
    chart 自己用新名下发的几项（如来自 `config.publicUrl` 的公网地址、单用户开关）若又在 `config.extraEnv` 里用旧名写了不同的值，
    现在一律以 chart 下发的新名值为准，服务端日志点名这个冲突；以前两者同名，按 env 列表的先后决定。
 

@@ -4,6 +4,14 @@
 
 The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.openbot-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Use `scripts/integrate-upstream.ts` to create a separate integration candidate; review/build that distribution's release first. The updater never merges arbitrary upstream changes into production.
 
+**Not yet from v0.2.15 with the development Compose file.** This release renames the Compose project,
+its volumes and its database in `docker-compose.yml`. The v0.2.15 updater compares those before it stops
+anything and refuses the update, leaving the services running and the database untouched. Wait for the
+v0.2.16 release that carries the data migration (R3), which takes over the existing volumes and database,
+and update then. Until then, do not start the new file by hand with `docker compose up`: it would start a
+new project on new, empty volumes while the existing data stays in the old ones. The delivery container
+(`docker/compose.delivery.yml`) is not affected.
+
 ## Trust and preparation
 
 Keep the distribution policy separately from downloaded metadata, for example `customer-update-policy.json`:
