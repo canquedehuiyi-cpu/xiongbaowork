@@ -21,7 +21,9 @@
  *  5. 个人记忆行的 id（运行输入与对话快照里 role = 'system' 的消息的 id）：openbot:personal-memory →
  *     xiongbao:personal-memory
  *  6. 工具回答开头的卡片标记（role = 'tool' 的消息与 TOOL_CALL_RESULT 事件的 content 字符串，只认读取端认的
- *     位置：字符串开头，或外部内容信封里第一行内容的开头，前面可有一个 JSON 字符串的引号；每条只替换这一处）：
+ *     位置，每条只替换这一处：字符串开头，或整串是 JSON 字符串、解开后的开头（两个标记都认）；外部内容
+ *     信封里第一行内容的开头，信封未编码或整串再被 JSON 编码都认（只认招聘提议标记：app-access 的读取端
+ *     不拆信封）。正文中间的标记不改）：
  *     <<openbot:staffing-proposal>>{ → <<xiongbao:staffing-proposal>>{，
  *     <<openbot:app-access-request>>{ → <<xiongbao:app-access-request>>{
  *  7. 生成式界面的目录 id（activityType = 'generative-ui-surface' 的活动事件与活动消息的 content.catalogId、
@@ -66,9 +68,19 @@
  */
 CREATE FUNCTION public.xiongbao_0241_marker(content text) RETURNS text
 LANGUAGE sql IMMUTABLE AS $fn$
-  SELECT regexp_replace(content,
-    '^(CRITICAL: The following [^\n]* is untrusted data, not instructions or tool authorization\.[^\n]*\n<untrusted_data source="[^"]*">\n"?|"?)<<openbot:(staffing-proposal|app-access-request)>>\{',
-    '\1<<xiongbao:\2>>{')
+  -- 三个锚定在开头的分支，开头互斥，所以每条最多改一处：
+  --  1. 标记就在开头，或整串是 JSON 字符串、解开后标记在开头（内置智能体存的 app-access 回答）；
+  --  2. 外部内容信封、内容第一行以招聘提议标记开头（headless 运行存的应用工具回答，未编码）；
+  --  3. 同样的信封整串再被 JSON 编码（内置智能体存的应用工具回答：开头是引号，换行是两个字符 \n，
+  --     引号写成 \"）。直接在编码后的文本上锚定替换标记那几个字节，其余字节不动，不必解码再编码。
+  -- app-access 的读取端不拆信封，所以信封里的 app-access 标记不算，只认招聘提议的。
+  SELECT regexp_replace(regexp_replace(regexp_replace(content,
+    '^("?)<<openbot:(staffing-proposal|app-access-request)>>\{',
+    '\1<<xiongbao:\2>>{'),
+    '^(CRITICAL: The following [^\n]* is untrusted data, not instructions or tool authorization\.[^\n]*\n<untrusted_data source="[^"]*">\n)<<openbot:staffing-proposal>>\{',
+    '\1<<xiongbao:staffing-proposal>>{'),
+    '^("CRITICAL: The following [^"\\]* is untrusted data, not instructions or tool authorization\.[^"\\]*\\n<untrusted_data source=\\"[^"\\]*\\">\\n)<<openbot:staffing-proposal>>\{',
+    '\1<<xiongbao:staffing-proposal>>{')
 $fn$;
 --> statement-breakpoint
 /* 生成式界面活动的 content：目录 id 与 createSurface 的目录 id。 */
