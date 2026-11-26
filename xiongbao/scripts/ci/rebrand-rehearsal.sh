@@ -257,7 +257,7 @@ grep -qx 'credentials_live_kid_k1=3' "$SHEET_OUT" && pass "step ①: three live 
   fail "step ①: the k1 count is not 3: $(grep '^credentials_' "$SHEET_OUT" | tr '\n' ' ')"
 grep -q 'xiongbao-db:/var/lib/postgresql' "$SHEET_OUT" && grep -q '3772->3001/tcp' "$SHEET_OUT" &&
   pass "step ①: the volumes and ports the sheet names are the container's" || fail "step ①: volumes or ports differ from the sheet"
-grep -Eq '^shm=67108864 memory=0 cpus=0 restart=unless-stopped network=(default|bridge) security=\[\] capadd=\[\] devices=0$' "$SHEET_OUT" &&
+grep -Eq '^shm=67108864 memory=0 cpus=0 restart=unless-stopped network=(default|bridge) security=(\[\]|<no value>) capadd=(\[\]|<no value>) devices=0$' "$SHEET_OUT" &&
   pass "step ①: the other run settings are the ones the sheet says to expect" ||
   fail "step ①: other run settings: $(grep '^shm=' "$SHEET_OUT")"
 sheet v0216:credcheck
@@ -362,7 +362,8 @@ expect "step ⑦: nothing to reconnect" "" "$(grep -E '=' "$SHEET_OUT" | grep -v
 
 expect "after the upgrade: the rows are as they were" "$PROBE" "$(probe owner_sql)"
 expect "after the upgrade: the app role reads them" "$PROBE" "$(probe app_sql)"
-expect "after the upgrade: the app role cannot write user_roles" "xiongbao_app|f|f|f" "$(app_role)"
+# The probe concatenates booleans into text, which spells them out (true/false), unlike psql's column display (t/f).
+expect "after the upgrade: the app role cannot write user_roles" "xiongbao_app|false|false|false" "$(app_role)"
 expect "after the upgrade: the history is under the new names, the person's text untouched" "$HISTORY_V0216" "$(history)"
 expect "after the upgrade: the credentials are kid k2 and open to the same secrets" \
   "$C1 k2 rehearsal-model-key,$C2 k2 rehearsal-team-secret" "$(credentials)"

@@ -793,7 +793,7 @@ tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
 - `automation_hooks_signed`、`opentag_chat_bindings`、`learning_…`、`shared_account_…`、`web_bot_auth_env_named`、`approval_exact_input_…` 都是 `0`（不是 0 的，先别升级，把输出发给 Claude）。
 - `credentials_…` 只是记一下：`credentials_live_kid_k1` 就是升级时要重新加密的在用凭据数（摸底时是 3）。
 - 卷是 `xiongbao-db:/var/lib/postgresql`、`xiongbao-workspace:/workspace`、`xiongbao-profiles:/profiles`，端口是 `3772->3001/tcp` 与 `3773->3773/tcp`（顺序可以不同）。不一样的话先别往下做，把输出发给 Claude：第 ③ 步的命令是按这几个名字写的。
-- 其它启动参数一行应是 `shm=67108864 memory=0 cpus=0 restart=unless-stopped network=default security=[] capadd=[] devices=0`（`network` 也可能显示 `bridge`，一样）。有别的值说明当初建容器时多加了参数，第 ③ 步的命令里没有，先发给 Claude。
+- 其它启动参数一行应是 `shm=67108864 memory=0 cpus=0 restart=unless-stopped network=default security=<no value> capadd=<no value> devices=0`（`network` 也可能显示 `bridge`；`security`、`capadd` 也可能显示 `[]`，都一样）。有别的值说明当初建容器时多加了参数，第 ③ 步的命令里没有，先发给 Claude。
 - 容器列表里除了 `xiongbao`（运行中）和以前切换留下的、停着的 `xiongbao-v0212-rollback`、`xiongbao-v0214-rollback`，如果还有别的员工框架镜像在跑（名字里带 `agent-` 的），告诉 Claude：它们要和服务器一起升级。
 
 再确认要重新加密的凭据都能用现在的 `KEY_ENCRYPTION_KEY` 解开（只读：只查库、在容器里试着解开，不改任何东西，不打印密钥和凭据内容）。有解不开的，v0.2.16 的迁移会整体回滚、拒绝启动（数据不动，可以按回滚 A 回来），所以先在这里查清：
