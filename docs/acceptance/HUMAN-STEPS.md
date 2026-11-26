@@ -698,11 +698,11 @@ v0.2.16 把系统里剩下的旧名字统一换成熊宝自己的名字：数据
 
 下面的命令都在京东云服务器上以 root 执行，原样复制即可。网页终端断开也没关系：每一步要用的东西都存在 `/opt/xiongbao/upgrade-v0.2.16` 里，重连后从断开的那一步接着做。命令里不含任何口令或密钥，输出里也不会打印。
 
-前提：`v0.2.16` 的发布流水线成功，镜像已同步到京东云仓库（发布后由 Claude 确认，并把 digest 发给你核对）。
+前提：`v0.2.16` 的发布流水线成功，镜像已同步到京东云仓库，发布记录 `container-images.json` 已传到 Release（发布后由 Claude 确认）。新镜像按发布记录里的 digest 拉取，不用人工比对。
 
-### 21.0 准备：下载自查脚本、拉新镜像、记下新旧镜像
+### 21.0 准备：下载自查脚本和发布记录、按 digest 拉新镜像、记下新旧镜像
 
-1. 下载升级要用的三个脚本（都只读或只改 env 文件，后面几步用）：
+1. 下载升级要用的三个脚本（都只读或只改 env 文件，后面几步用）和 v0.2.16 的发布记录 `container-images.json`：
 
 <!-- v0216:fetch:begin -->
 ```bash
@@ -715,35 +715,26 @@ v0.2.16 把系统里剩下的旧名字统一换成熊宝自己的名字：数据
     curl --fail --silent --show-error --location -o "$D/$f" \
       "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/v0.2.16/xiongbao/scripts/rebrand/$f"
   done
+  curl --fail --silent --show-error --location -o "$D/container-images.json" \
+    "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/v0.2.16/container-images.json"
   ls -l "$D"
 )
 ```
 <!-- v0216:fetch:end -->
 
-2. 登录京东云仓库：在京东云控制台注册表 `xiongbao-work` 那一行点「获取临时令牌」，把它给出的 `docker login …` 命令复制到服务器上执行，看到 `Login Succeeded` 就行。这条命令带着临时密码，只在服务器上执行，不要发给别人。
-
-3. 拉新镜像（放在后台跑，网页终端断开也不影响）：
-
-```bash
-setsid nohup sh -c 'for i in 1 2 3 4 5; do docker pull xiongbao-work-cn-north-1.jcr.service.jdcloud.com/xiongbao:v0.2.16 && echo PULL_OK && exit 0; sleep 20; done; echo PULL_FAILED' > /opt/xiongbao/upgrade-v0.2.16/pull.log 2>&1 < /dev/null &
-```
-
-隔一两分钟看一次，显示 `PULL_OK` 就是拉好了：
-
-```bash
-tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
-```
-
-4. 记下新镜像（按 digest 固定）和现在跑的 v0.2.15 镜像（回滚时用）：
+2. 从发布记录取新镜像（发布流水线同步到京东云仓库的那份，按 digest，不靠可以移动的标签），并记下现在跑的 v0.2.15 镜像（回滚时用）。
+   `jq` 用正在运行的 v0.2.15 容器里自带的，服务器上不用装：
 
 <!-- v0216:images:begin -->
 ```bash
 (
   set -eu
   D=/opt/xiongbao/upgrade-v0.2.16
-  NEW_IMAGE=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' \
-    xiongbao-work-cn-north-1.jcr.service.jdcloud.com/xiongbao:v0.2.16 |
-    grep -m 1 '^xiongbao-work-cn-north-1\.jcr\.service\.jdcloud\.com/xiongbao@sha256:')
+  NEW_IMAGE=$(docker exec -i xiongbao jq -er '.images.xiongbao.reference' < "$D/container-images.json")
+  if ! printf '%s\n' "$NEW_IMAGE" | grep -Eqx 'xiongbao-work-cn-north-1\.jcr\.service\.jdcloud\.com/xiongbao@sha256:[0-9a-f]{64}'; then
+    echo "发布记录里的镜像不是京东云仓库按 digest 的引用：$NEW_IMAGE。先把这一行发给 Claude，这次什么都没写。"
+    exit 1
+  fi
   OLD_IMAGE=$(docker inspect --format '{{.Config.Image}}' xiongbao)
   printf 'NEW_IMAGE=%s\nOLD_IMAGE=%s\n' "$NEW_IMAGE" "$OLD_IMAGE" > "$D/images.env"
   cat "$D/images.env"
@@ -751,7 +742,27 @@ tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
 ```
 <!-- v0216:images:end -->
 
-把输出的两行发给 Claude：`NEW_IMAGE` 的 digest 要和发布记录里的一致，`OLD_IMAGE` 应该是 v0.2.15 那次用的 `…/xiongbao@sha256:19f8151c…`。
+`NEW_IMAGE` 就是发布记录里的那一个（发布流水线核对过它的 digest），`OLD_IMAGE` 应该是 v0.2.15 那次用的 `…/xiongbao@sha256:19f8151c…`。把这两行发给 Claude 留底。
+
+3. 登录京东云仓库：在京东云控制台注册表 `xiongbao-work` 那一行点「获取临时令牌」，把它给出的 `docker login …` 命令复制到服务器上执行，看到 `Login Succeeded` 就行。这条命令带着临时密码，只在服务器上执行，不要发给别人。
+
+4. 按 digest 拉新镜像（放在后台跑，网页终端断开也不影响）：
+
+<!-- v0216:pull:begin -->
+```bash
+(
+  . /opt/xiongbao/upgrade-v0.2.16/images.env
+  setsid nohup sh -c 'for i in 1 2 3 4 5; do docker pull "$1" && echo PULL_OK && exit 0; sleep 20; done; echo PULL_FAILED' sh "$NEW_IMAGE" \
+    > /opt/xiongbao/upgrade-v0.2.16/pull.log 2>&1 < /dev/null &
+)
+```
+<!-- v0216:pull:end -->
+
+隔一两分钟看一次，显示 `PULL_OK` 就是拉好了：
+
+```bash
+tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
+```
 
 ### 21.① 升级前自查（还在 v0.2.15 上，只读）
 
@@ -768,6 +779,8 @@ tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
   echo '--- 现在这个容器的卷和端口'
   docker inspect xiongbao --format '{{range .Mounts}}{{.Name}}:{{.Destination}} {{end}}'
   docker inspect xiongbao --format '{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}{{.HostIp}}:{{.HostPort}}->{{$p}} {{end}}{{end}}'
+  echo '--- 现在这个容器的其它启动参数'
+  docker inspect xiongbao --format 'shm={{.HostConfig.ShmSize}} memory={{.HostConfig.Memory}} cpus={{.HostConfig.NanoCpus}} restart={{.HostConfig.RestartPolicy.Name}} network={{.HostConfig.NetworkMode}} security={{.HostConfig.SecurityOpt}} capadd={{.HostConfig.CapAdd}} devices={{len .HostConfig.Devices}}'
   echo '--- 本机所有容器'
   docker ps -a --format '{{.Names}}  {{.Status}}  {{.Image}}'
 )
@@ -780,6 +793,7 @@ tail -n 2 /opt/xiongbao/upgrade-v0.2.16/pull.log
 - `automation_hooks_signed`、`opentag_chat_bindings`、`learning_…`、`shared_account_…`、`web_bot_auth_env_named`、`approval_exact_input_…` 都是 `0`（不是 0 的，先别升级，把输出发给 Claude）。
 - `credentials_…` 只是记一下：`credentials_live_kid_k1` 就是升级时要重新加密的在用凭据数（摸底时是 3）。
 - 卷是 `xiongbao-db:/var/lib/postgresql`、`xiongbao-workspace:/workspace`、`xiongbao-profiles:/profiles`，端口是 `3772->3001/tcp` 与 `3773->3773/tcp`（顺序可以不同）。不一样的话先别往下做，把输出发给 Claude：第 ③ 步的命令是按这几个名字写的。
+- 其它启动参数一行应是 `shm=67108864 memory=0 cpus=0 restart=unless-stopped network=default security=[] capadd=[] devices=0`（`network` 也可能显示 `bridge`，一样）。有别的值说明当初建容器时多加了参数，第 ③ 步的命令里没有，先发给 Claude。
 - 容器列表里除了 `xiongbao`（运行中）和以前切换留下的、停着的 `xiongbao-v0212-rollback`、`xiongbao-v0214-rollback`，如果还有别的员工框架镜像在跑（名字里带 `agent-` 的），告诉 Claude：它们要和服务器一起升级。
 
 再确认要重新加密的凭据都能用现在的 `KEY_ENCRYPTION_KEY` 解开（只读：只查库、在容器里试着解开，不改任何东西，不打印密钥和凭据内容）。有解不开的，v0.2.16 的迁移会整体回滚、拒绝启动（数据不动，可以按回滚 A 回来），所以先在这里查清：
@@ -831,7 +845,7 @@ grep -c '^OPENBOT_' /opt/xiongbao/.env.delivery
 (
   set -eu
   . /opt/xiongbao/upgrade-v0.2.16/images.env
-  docker image inspect "$NEW_IMAGE" >/dev/null 2>&1 || { echo '新镜像不在本机：先做 21.0 的第 3、4 步。这次什么都没动。'; exit 1; }
+  docker image inspect "$NEW_IMAGE" >/dev/null 2>&1 || { echo '新镜像不在本机：先做 21.0 的第 2 到 4 步。这次什么都没动。'; exit 1; }
   if docker inspect xiongbao-v0215-rollback >/dev/null 2>&1; then
     echo '已经有一个 xiongbao-v0215-rollback 容器（上一次切换留下的），先把情况发给 Claude。这次什么都没动。'
     exit 1
@@ -966,7 +980,7 @@ docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential env
 - **A. 升级没成功，日志里说「业务库没有改动」（或「数据没有改动」）**：业务数据没动过，直接换回 v0.2.15 用原来的卷，什么数据都不丢。
 - **B. 升级已经成功（或日志说「业务库已经改动」「已经改成新名字」），但还是要回到 v0.2.15**：用第 ④ 步之前自动做的备份还原到一个**新卷**，再用 v0.2.15 镜像起来。**升级之后写进去的数据（新对话、新审批、改过的设置）都会丢**；还原后要重新发起在途的事。
 
-**A. 直接换回 v0.2.15**（这条命令会先核对日志，日志里有任何「已经改动」的字样就什么都不做）：
+**A. 直接换回 v0.2.15**（这条命令会先核对日志：日志里有任何「已经改动」的字样，或者失败后自动重启又改名成功了——有「已改名为 xiongbao」「改名迁移全部完成」——就什么都不做，那时要走 B）：
 
 <!-- v0216:rollback-a:begin -->
 ```bash
@@ -975,7 +989,7 @@ docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential env
   docker inspect xiongbao-v0215-rollback >/dev/null 2>&1 || { echo '找不到 xiongbao-v0215-rollback：不能走 A，先把情况发给 Claude。'; exit 1; }
   log=$(docker logs xiongbao 2>&1)
   if ! printf '%s\n' "$log" | grep -qE '业务库没有改动|数据没有改动' ||
-    printf '%s\n' "$log" | grep -qE '业务库已经改动|已经改成新名字|无法确认|已经改动了'; then
+    printf '%s\n' "$log" | grep -qE '业务库已经改动|已经改成新名字|无法确认|已经改动了|已改名为 xiongbao|改名迁移全部完成'; then
     echo '日志不是「业务库没有改动」这一种：不能走 A，先把第 ④ 步的输出发给 Claude。这次什么都没动。'
     exit 1
   fi
@@ -1045,23 +1059,29 @@ B2. 用 v0.2.15 镜像和一个新的数据库卷 `xiongbao-db-v0215-restore` �
 
 用第 ④ 步的第一条命令等它起来（这是一个全新的空库，v0.2.15 首次启动会建好表和角色）。
 
-B3. 把备份还原进去（用的是最新的那份 `pre-rebrand-*.dump`，就是这次升级前做的），再重启：
+B3. 停掉刚起来的 v0.2.15 容器，用 v0.2.15 镜像起一个**只跑还原**的一次性容器，挂同一个新卷和拷出来的备份目录，把备份还原进去（用的是最新的那份 `pre-rebrand-*.dump`，就是这次升级前做的），完了再启动完整容器。不能在运行中的容器里还原：v0.2.15 的网站服务一停，整个容器就跟着停机。
 
 <!-- v0216:rollback-b-restore:begin -->
 ```bash
 (
   set -eu
   D=/opt/xiongbao/upgrade-v0.2.16
-  f=$(ls "$D"/backup-from-volume/pre-rebrand-*.dump | tail -n 1)
+  . "$D/images.env"
+  f=$(cd "$D/backup-from-volume" && ls pre-rebrand-*.dump | tail -n 1)
   echo "用这份备份还原：$f"
-  docker cp "$f" xiongbao:/tmp/restore.dump
-  docker exec -i xiongbao sh -s /tmp/restore.dump < "$D/rebrand-restore.sh"
-  docker restart xiongbao
+  docker stop -t 30 xiongbao
+  if ! docker run --rm -i --user root --entrypoint sh \
+    -v xiongbao-db-v0215-restore:/var/lib/postgresql -v "$D/backup-from-volume:/restore:ro" \
+    "$OLD_IMAGE" -s "/restore/$f" < "$D/rebrand-restore.sh"; then
+    echo '还原没有完成（原因见上方），容器先停着：按提示处理后原样再执行一次 B3。'
+    exit 1
+  fi
+  docker start xiongbao
 )
 ```
 <!-- v0216:rollback-b-restore:end -->
 
-还原脚本先核对：备份完整可读、这是 v0.2.15 刚起来的新卷（不是原来那个卷、库里还没有对话）、盘上放得下一份副本；任何一项不满足就什么都不动并说明原因。它停掉网站服务、把备份灌进一个临时库，成功后在一个事务里换上，最后打印「还原完成」。中途断了就原样再执行一次 B3，它会从断开的地方接着做。
+还原脚本先核对：备份完整可读、这是 v0.2.15 起过一次的新卷（不是原来那个卷、库里还没有对话）、盘上放得下一份副本（按备份旁边记下的库大小，含索引）、库上没有任何连接；任何一项不满足就什么都不动并说明原因。然后它用镜像自己的初始化步骤写好连接信息、只启动数据库，把备份灌进一个临时库，成功后在一个事务里换上，打印「还原完成」，再把数据库停掉。中途断了就原样再执行一次 B3，它会从断开的地方接着做。
 
 再用第 ④ 步的第一条命令等它起来，然后核对：
 

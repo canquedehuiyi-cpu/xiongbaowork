@@ -694,7 +694,7 @@ v0.2.16 把数据库里剩下的旧名统一改成新名：内置库的超级用
 `KEY_ENCRYPTION_KEY` 重新加密，内容不变）。用内置库的交付容器在 v0.2.16 **第一次启动时自动完成**，顺序是：
 
 1. **前置检查**：库里还有待审批、未完成的续跑或续跑步骤，或者数据库卷可用空间不到库大小的 2 倍，就拒绝启动，日志写明各项数字和处理办法，数据不动。
-2. **自动备份**：`pg_dump -Fc` 到数据库卷上的 `/var/lib/postgresql/backup/pre-rebrand-<UTC 时间>.dump`（0600，属主 postgres），读回一遍确认完整。
+2. **自动备份**：`pg_dump -Fc` 到数据库卷上的 `/var/lib/postgresql/backup/pre-rebrand-<UTC 时间>.dump`（0600，属主 postgres），读回一遍确认完整；旁边的 `<备份>.size` 记下当时的库大小（还原时估算空间用）。
 3. **业务库改名**：数据库迁移、凭据重新加密、历史改写在**同一个事务**里，任何一步失败整体回滚。
 4. **超级用户与库改名**，写新的连接串，然后才启动服务。
 5. 之后每次启动：名字都已是新的，什么都不做，不再备份，日志里没有改名相关的输出。
@@ -744,7 +744,8 @@ mkdir -p rollback-v0216 && chmod 700 rollback-v0216 &&
 **回滚。** 改名完成后 v0.2.15 用旧名登录不了这个库，换回旧 digest 已经不够。按日志分两种：
 
 - **A. 启动失败，日志说「业务库没有改动」**（或前置检查拒绝、说「数据没有改动」）：直接换回 v0.2.15，用原来的卷，什么都不丢。
-  先删掉卷上的「改名进行中」记录，以后再升级时才会重新备份：
+  先核对：日志里不能有「业务库已经改动」「已经改成新名字」「无法确认」，也不能有「已改名为 xiongbao」「改名迁移全部完成」
+  （容器失败后会自动重启，重启那次可能已经改名成功，那就要走 B）。先删掉卷上的「改名进行中」记录，以后再升级时才会重新备份：
 
   ```bash
   docker stop -t 30 xiongbao-local &&
@@ -783,20 +784,23 @@ mkdir -p rollback-v0216 && chmod 700 rollback-v0216 &&
     "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0215)"
   ```
 
-  B3. 还原最新的那份备份（就是这次升级前做的），再重启：
+  B3. 停掉这个容器，用 v0.2.15 镜像起一个只跑还原的一次性容器（挂同一个新卷和拷出来的备份目录），还原最新的那份备份（就是这次升级前做的），
+  完了再启动完整容器。不能在运行中的容器里还原：v0.2.15 的 api 服务一停，它的收尾脚本会让整个容器停机，还原做不完。
 
   ```bash
-  f=$(ls rollback-v0216/backup/pre-rebrand-*.dump | tail -n 1) &&
-    docker cp "$f" xiongbao-local:/tmp/restore.dump &&
-    docker exec -i xiongbao-local sh -s /tmp/restore.dump < rollback-v0216/rebrand-restore.sh &&
-    docker restart xiongbao-local
+  f=$(cd rollback-v0216/backup && ls pre-rebrand-*.dump | tail -n 1) &&
+    docker stop -t 30 xiongbao-local &&
+    docker run --rm -i --user root --entrypoint sh \
+      -v xiongbao-local-db-v0215:/var/lib/postgresql -v "$PWD/rollback-v0216/backup:/restore:ro" \
+      "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0215)" -s "/restore/$f" < rollback-v0216/rebrand-restore.sh &&
+    docker start xiongbao-local
   ```
 
-  还原脚本先核对：备份完整可读；目标是 v0.2.15 刚起来的新卷（不是 v0.2.16 的镜像、不是改过名或带着改名备份的原卷、应用角色已建好、
-  库里还没有对话）；数据目录所在盘放得下「备份展开后的大小 × 2」。任何一项不满足就什么都不动并说明原因。然后停掉 api 服务、
-  把备份灌进空的临时库（一个事务），在一个事务里把它换成原来的库名，再删掉被换下来的库；中途断了用同样的命令再执行一次 B3，
-  它会认出做到哪一步接着做。为什么不直接 `pg_restore --clean` 覆盖：v0.2.15 首次启动的迁移设了默认权限，覆盖重建的表会让应用角色
-  多出写权限（例如能改身份角色表）。
+  还原脚本先核对：不在 v0.2.16 的镜像里、不在运行中的完整容器里；备份完整可读；目标是 v0.2.15 起过一次的新卷（不是改过名或带着改名备份的原卷、
+  应用角色已建好、库里还没有对话）；数据目录所在盘放得下「备份时的库大小（含索引，记在备份旁边的 `.size` 文件里）与展开后大小取大，× 2」；
+  库上没有任何连接。任何一项不满足就什么都不动并说明原因。然后用镜像自己的初始化步骤写好连接信息、只启动数据库，把备份灌进空的临时库
+  （一个事务），在一个事务里把它换成原来的库名，删掉被换下来的库，最后停掉数据库。中途断了用同样的命令再执行一次 B3，它会认出做到哪一步
+  接着做。为什么不直接 `pg_restore --clean` 覆盖：v0.2.15 首次启动的迁移设了默认权限，覆盖重建的表会让应用角色多出写权限（例如能改身份角色表）。
 
   还原后应用角色应是 v0.2.15 的旧名（不是 `xiongbao_app`）、不是超级用户、不能改 `user_roles`：
 

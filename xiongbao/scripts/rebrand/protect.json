@@ -1031,6 +1031,12 @@
     "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，以及还原脚本的临时库名（旧库名加 _restoring）与替换下来的原库名（旧库名加 _before_restore），旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
   },
   {
+    "file": ".github/workflows/rebrand-rehearsal.yml",
+    "text": ".images.openbot",
+    "until": "R4",
+    "reason": "升级演练取起点版本的 GHCR 镜像：v0.2.16 之前的发布记录里 GHCR 镜像在这个旧键下（images.xiongbao 配了自有仓库时是同步过去的那份）；legacy-compat 到 R4 删除"
+  },
+  {
     "file": "xiongbao/scripts/ci/rebrand-rehearsal.sh",
     "pattern": "(?i:openbot)",
     "until": "R4",

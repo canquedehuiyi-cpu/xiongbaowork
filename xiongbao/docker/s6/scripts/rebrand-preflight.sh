@@ -45,7 +45,8 @@
 #         where the backup goes than twice the database size;
 #       - then `pg_dump -Fc` to $BACKUP_DIR/pre-rebrand-<UTC YYYYMMDDTHHMMSSZ>.dump, mode 0600, owner
 #         postgres, in a 0700 directory on the database volume, written as postgres under a temporary
-#         name, read back in full, renamed; then the in-progress record next to it.
+#         name, read back in full, renamed; the database's size beside it (<backup>.size, for the
+#         restore's space check); then the in-progress record next to it.
 #
 #   PGPASSWORD=<owner password> rebrand-preflight.sh step <step name> <kind of data> -- <command> [args...]
 #
@@ -325,6 +326,10 @@ check() {
     refuse "备份没有做成，不改名、不启动（数据没有改动）。报错：" "$(cat "$ERR")"
     exit 1
   fi
+  # Beside the backup, the database's size on disk as it was (indexes included): rebrand-restore.sh needs
+  # room for that much again, and the dump alone cannot say how large its indexes grow back. Only a
+  # number, 0600 like the backup; if it cannot be written, the restore estimates without it.
+  printf '%s\n' "$size" | as_pg sh -c 'umask 077 && cat >"$1"' sh "$final.size" 2>/dev/null || true
   sync
   printf 'started=%s\nbackup=%s\njournal=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$final" "$journal" | write_marker
   write_state 1 "$final"

@@ -306,6 +306,9 @@ if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
 elif [ "$named" -ne 1 ] || [ "$(dirname "$dump")" != "$BACKUP" ]; then fail "$what: unexpected path $dump"
 elif [ ! -f "$dump" ]; then fail "$what: $dump missing"
 elif [ "$(mode_of "$dump")" != 600 ]; then fail "$what: file mode $(mode_of "$dump")"
+elif [ ! -f "$dump.size" ] || [ "$(mode_of "$dump.size")" != 600 ]; then fail "$what: no 0600 size record beside the backup"
+elif [ "$(cat "$dump.size")" != "$(sql "$OLD" openbot openbot "SELECT pg_database_size(current_database());")" ]; then fail "$what: the size record is not the database's size: $(cat "$dump.size")"
+elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$dump.size")" != postgres ]; then fail "$what: size record owner $(stat -c %U "$dump.size")"
 elif [ "$(mode_of "$BACKUP")" != 700 ]; then fail "$what: directory mode $(mode_of "$BACKUP")"
 elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$dump")" != postgres ]; then fail "$what: owner $(stat -c %U "$dump")"
 elif [ "$(id -u)" = 0 ] && [ "$(stat -c %U "$BACKUP")" != postgres ]; then fail "$what: directory owner $(stat -c %U "$BACKUP")"
@@ -424,7 +427,8 @@ CLUSTERS="$CLUSTERS $T/v0215/data"
 migrated "$V15" openbot || exit 1
 migrated "$V15" plain || exit 1
 cp "$src_dump" "$T/restore.dump"
-chmod 644 "$T/restore.dump"
+cp "$src_dump.size" "$T/restore.dump.size"
+chmod 644 "$T/restore.dump" "$T/restore.dump.size"
 printf 'postgres://openbot:%s@127.0.0.1:%s/openbot' "$PW" "$V15" >"$T/v15-url"
 # A file that is not a complete backup is refused before the database is touched.
 head -c 2000 "$T/restore.dump" >"$T/cut.dump"
@@ -448,7 +452,7 @@ kill "$holder" 2>/dev/null
 wait "$holder" 2>/dev/null
 what="a restore with another session on the database is refused and touches nothing"
 if [ "$code" -eq 0 ]; then fail "$what: exit 0"
-elif ! grep -q "其它连接" "$T/err"; then fail "$what: $(cat "$T/err")"
+elif ! grep -q "客户端连接" "$T/err"; then fail "$what: $(cat "$T/err")"
 elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$before" ]; then fail "$what: the database changed"
 elif [ "$(databases "$V15")" != "openbot,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
 else pass "$what"; fi
@@ -463,6 +467,22 @@ refused_untouched "the restore refuses the volume v0.2.16 upgraded (its backup i
   REBRAND_RESTORE_BACKUP_DIR="$T/upgraded-backup"
 sql "$V15" openbot postgres "CREATE ROLE xiongbao_app NOLOGIN;"
 refused_untouched "the restore refuses a cluster that already carries the new names" "新名字的角色"
+# Inside the running full container (s6's api service directory is there): stopping the API there halts
+# v0.2.15's whole container, so the script refuses before anything and points to the one-shot container.
+mkdir -p "$T/api-service"
+refused_untouched "the restore refuses to run inside the running container" "正在运行的完整容器" \
+  REBRAND_RESTORE_API_SERVICE="$T/api-service"
+# A database under the replaced name that no restore of this backup left behind: not dropped, not used.
+sql "$V15" openbot postgres "CREATE DATABASE openbot_before_restore OWNER openbot;"
+before=$(security_print "$V15" openbot)$(data_print "$V15" openbot)
+restore "$T/restore.dump"
+what="the restore refuses a replaced-name database it did not leave"
+if [ "$code" -eq 0 ]; then fail "$what: exit 0: $(cat "$T/out")"
+elif ! grep -q "不知道它是怎么来的" "$T/err"; then fail "$what: $(cat "$T/out" "$T/err")"
+elif [ "$(security_print "$V15" openbot)$(data_print "$V15" openbot)" != "$before" ]; then fail "$what: the database changed"
+elif [ "$(databases "$V15")" != "openbot,openbot_before_restore,plain,postgres" ]; then fail "$what: databases now $(databases "$V15")"
+else pass "$what"; fi
+sql "$V15" openbot postgres "DROP DATABASE openbot_before_restore;"
 sql "$V15" openbot postgres "DROP ROLE xiongbao_app;"
 sql "$V15" openbot postgres "ALTER ROLE openbot_role_writer RENAME TO restore_probe_writer;"
 refused_untouched "the restore refuses a cluster v0.2.15 has not finished starting on (no app roles)" "还没有应用角色"
@@ -474,8 +494,17 @@ sql "$V15" openbot openbot "SET app.tenant_id = 'platform';
 refused_untouched "the restore refuses a database people already use (it has conversations)" "已经有 1 个对话"
 sql "$V15" openbot openbot "SET app.tenant_id = 'platform'; DELETE FROM threads; DELETE FROM agents WHERE id = 'restore-bot'; DELETE FROM users WHERE id = 'restore-person';" >/dev/null || exit 1
 # Not room for the restored copy beside the database: refused before anything, saying how much is needed.
-refused_untouched "the restore refuses when the disk cannot hold the copy" "空间不够" PATH="$FAKEBIN:$PATH" FAKE_AVAIL_KB=1
-grep -q "展开后的大小 × 2" "$T/err" || fail "the space refusal does not say what it needs: $(cat "$T/err")"
+# Room is the database's size as recorded beside the backup (indexes included), or the dump's text with
+# a margin when there is no record.
+src_kb=$(( ($(cat "$T/restore.dump.size") * 2 + 1023) / 1024 ))
+refused_untouched "the restore refuses when the disk cannot hold the database as it was" "空间不够" \
+  PATH="$FAKEBIN:$PATH" FAKE_AVAIL_KB=$((src_kb - 1))
+grep -q "备份时的库大小 .*（含索引）" "$T/err" || fail "the space refusal does not say what it needs: $(cat "$T/err")"
+mv "$T/restore.dump.size" "$T/restore.dump.size.kept"
+refused_untouched "without the size record the restore still checks room, from the dump" "空间不够" \
+  PATH="$FAKEBIN:$PATH" FAKE_AVAIL_KB=1
+grep -q "按展开后的 .* × 3 估" "$T/err" || fail "the estimate without a size record does not say so: $(cat "$T/err")"
+mv "$T/restore.dump.size.kept" "$T/restore.dump.size"
 # The restore itself.
 restore "$T/restore.dump"
 what="the backup restores every grant, policy, owner and row over a volume v0.2.15 has started on"
@@ -507,8 +536,20 @@ elif [ "$(databases "$V15")" != "openbot,plain,postgres" ] || ! is_backup; then 
 else pass "$what"; fi
 # Cut off after the swap committed, before the replaced database was dropped: only the drop is left to do.
 sql "$V15" openbot postgres "CREATE DATABASE openbot_before_restore OWNER openbot;"
+# The service already back on the restored database: its session does not stop dropping the other one.
+PGPASSWORD=$PW "$PG_BIN/psql" -X -q -w -h 127.0.0.1 -p "$V15" -U openbot_app -d openbot -c 'SELECT pg_sleep(120)' >/dev/null 2>&1 &
+holder=$!
+tries=0
+until [ "$(sql "$V15" openbot postgres "SELECT count(*) FROM pg_stat_activity WHERE usename = 'openbot_app';")" = 1 ]; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 50 ] || { echo "the holding session never connected" >&2; exit 1; }
+  sleep 0.2
+done
 restore "$T/restore.dump"
-what="a restore cut off after the swap only drops the replaced database when run again"
+sql "$V15" openbot postgres "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'openbot_app';" >/dev/null
+kill "$holder" 2>/dev/null
+wait "$holder" 2>/dev/null
+what="a restore cut off after the swap only drops the replaced database when run again, the service connected or not"
 if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
 elif ! grep -q "删掉了替换下来的原库" "$T/out"; then fail "$what: $(cat "$T/out")"
 elif grep -q "正在把" "$T/out"; then fail "$what: it restored again"
@@ -544,6 +585,41 @@ if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/err")"
 elif ! grep -q "正在把" "$T/out"; then fail "$what: $(cat "$T/out")"
 elif [ "$(databases "$V15")" != "openbot,plain,postgres" ] || ! is_backup; then fail "$what: the database under the original name is not the backup"
 else pass "$what"; fi
+# The one-shot container the steps use: the full container stopped, nothing running on the volume and no
+# connection strings yet. The script has the image's postgres-init write them (a stand-in here, writing
+# what v0.2.15's writes), starts PostgreSQL on the volume, restores, and stops it again.
+sql "$V15" openbot postgres "COMMENT ON DATABASE openbot IS NULL;"
+sql "$V15" openbot openbot "CREATE TABLE public.restore_target_marker ();"
+as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -m fast -w stop >/dev/null
+mkdir -p "$T/oneshot"
+cat >"$T/oneshot/postgres-init.sh" <<EOF
+[ "\${EMBEDDED_POSTGRES:-off}" = on ] || exit 0
+printf 'postgres://openbot:%s@127.0.0.1:%s/openbot' '$PW' '$V15' >"$T/oneshot/env/MIGRATION_DATABASE_URL"
+EOF
+restore "$T/restore.dump" REBRAND_RESTORE_URL_FILE="$T/oneshot/env/MIGRATION_DATABASE_URL" \
+  REBRAND_RESTORE_POSTGRES_INIT="$T/oneshot/postgres-init.sh" REBRAND_RESTORE_DATA_DIR="$T/v0215/data"
+what="in a one-shot container the restore starts the volume's database itself and stops it afterwards"
+if [ "$code" -ne 0 ]; then fail "$what: exit $code: $(cat "$T/out" "$T/err")"
+elif ! grep -q "正在启动这个卷上的 PostgreSQL" "$T/out" || ! grep -q "正在把" "$T/out" || ! grep -q "还原完成" "$T/out"; then fail "$what: $(cat "$T/out")"
+elif as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" status >/dev/null 2>&1; then fail "$what: the database is still running"
+else pass "$what"; fi
+as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -l "$T/v0215/server.log" -w -t 20 \
+  -o "-c listen_addresses=127.0.0.1 -c port=$V15 -c unix_socket_directories=$T/v0215" start >/dev/null ||
+  { echo "restarting the restored cluster failed" >&2; exit 1; }
+[ "$(databases "$V15")" = "openbot,plain,postgres" ] && is_backup &&
+  pass "the one-shot restore left exactly the backup under the original name" ||
+  fail "the one-shot restore left $(databases "$V15") / not the backup"
+# Without a cluster on the volume (a volume v0.2.15 never started on) the one-shot run refuses at once.
+as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -m fast -w stop >/dev/null
+rm -f "$T/oneshot/env/MIGRATION_DATABASE_URL"
+restore "$T/restore.dump" REBRAND_RESTORE_URL_FILE="$T/oneshot/env/MIGRATION_DATABASE_URL" \
+  REBRAND_RESTORE_POSTGRES_INIT="$T/oneshot/postgres-init.sh" REBRAND_RESTORE_DATA_DIR="$T/oneshot/no-cluster"
+[ "$code" -ne 0 ] && grep -q "里没有数据库" "$T/err" && [ ! -e "$T/oneshot/env/MIGRATION_DATABASE_URL" ] &&
+  pass "a one-shot run on a volume with no cluster refuses before anything" ||
+  fail "a one-shot run on a volume with no cluster: exit $code: $(cat "$T/err")"
+as_pg "$PG_BIN/pg_ctl" -D "$T/v0215/data" -l "$T/v0215/server.log" -w -t 20 \
+  -o "-c listen_addresses=127.0.0.1 -c port=$V15 -c unix_socket_directories=$T/v0215" start >/dev/null ||
+  { echo "restarting the restored cluster failed" >&2; exit 1; }
 # 8. migration failure leaves the backup and prints its path. The stand-in fails without committing
 #    anything (the journal is as it was), so the message says nothing changed and sends nobody to restore.
 preflight "$OLD" openbot openbot

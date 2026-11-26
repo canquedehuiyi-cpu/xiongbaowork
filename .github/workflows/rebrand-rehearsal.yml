@@ -69,7 +69,10 @@ jobs:
           fi
           mkdir -p "$RUNNER_TEMP/from" "$RUNNER_TEMP/rehearsal"
           gh release download "$FROM_TAG" -R "$GITHUB_REPOSITORY" --pattern container-images.json --dir "$RUNNER_TEMP/from"
-          reference="$(jq -er '(.ghcr // .images.xiongbao).reference' "$RUNNER_TEMP/from/container-images.json")"
+          # The GHCR image the release built: `ghcr` from v0.2.16 on; before that the record's former key
+          # (always GHCR), while `images.xiongbao` named our registry's copy once one was configured.
+          # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+          reference="$(jq -er '(.ghcr // .images.openbot // .images.xiongbao).reference' "$RUNNER_TEMP/from/container-images.json")"
           if [[ ! "$reference" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
             echo "::error::$FROM_TAG's container-images.json has no GHCR digest: '$reference'"
             exit 1

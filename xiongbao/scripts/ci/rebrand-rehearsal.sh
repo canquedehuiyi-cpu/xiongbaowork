@@ -24,8 +24,10 @@
 #      upgrade goes through. Step ④'s summary and backups (each 0600, postgres), step ⑤'s checks,
 #      every kind of data written in 1 read back under the new names, the API answering.
 #   5. A second start: nothing renamed, nothing backed up, nothing rekeyed.
-#   6. Rollback B: v0.2.15 on another new volume, the backup restored by the image's rebrand-restore.sh:
-#      it starts, the app role is v0.2.15's and cannot write user_roles, the data is as backed up.
+#   6. Rollback B: v0.2.15 started once on another new volume and stopped, the backup restored by the
+#      image's rebrand-restore.sh in a one-shot v0.2.15 container on that volume (v0.2.15's api finish
+#      script halts the whole container, so the restore never runs inside it), then v0.2.15 started again:
+#      its app role is v0.2.15's and cannot write user_roles, the data is as backed up.
 #
 # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the old names below are what v0.2.15 wrote and
 # what this rehearsal upgrades from; it goes with the rename migration.
@@ -255,6 +257,9 @@ grep -qx 'credentials_live_kid_k1=3' "$SHEET_OUT" && pass "step ①: three live 
   fail "step ①: the k1 count is not 3: $(grep '^credentials_' "$SHEET_OUT" | tr '\n' ' ')"
 grep -q 'xiongbao-db:/var/lib/postgresql' "$SHEET_OUT" && grep -q '3772->3001/tcp' "$SHEET_OUT" &&
   pass "step ①: the volumes and ports the sheet names are the container's" || fail "step ①: volumes or ports differ from the sheet"
+grep -Eq '^shm=67108864 memory=0 cpus=0 restart=unless-stopped network=(default|bridge) security=\[\] capadd=\[\] devices=0$' "$SHEET_OUT" &&
+  pass "step ①: the other run settings are the ones the sheet says to expect" ||
+  fail "step ①: other run settings: $(grep '^shm=' "$SHEET_OUT")"
 sheet v0216:credcheck
 grep -qF "要重新加密的旧格式凭据 3 条，能解开 2 条，解不开 1 条：$C9" "$SHEET_OUT" &&
   pass "step ①: the credential check finds the one that does not open" || fail "step ①: the credential check missed it"
@@ -325,6 +330,8 @@ expect "step ④: the backup copy ran" 0 "$SHEET_RC"
 expect "step ④: two backups on the volume (the failed attempt's and this one's)" 2 "$(backups)"
 expect "step ④: every backup is 0600 postgres:postgres" "600 postgres postgres
 600 postgres postgres" "$(docker exec xiongbao sh -c 'stat -c "%a %U %G" /var/lib/postgresql/backup/pre-rebrand-*.dump')"
+expect "step ④: each backup has its database size beside it, 0600 postgres:postgres" "600 postgres postgres
+600 postgres postgres" "$(docker exec xiongbao sh -c 'stat -c "%a %U %G" /var/lib/postgresql/backup/pre-rebrand-*.dump.size')"
 hostcopy=$(ls "$D"/pre-rebrand-*.dump 2>/dev/null | tail -n 1 || true)
 [ -n "$hostcopy" ] && expect "step ④: the host copy is 0600" 600 "$(stat -c '%a' "$hostcopy")" || fail "step ④: no host copy"
 
@@ -337,6 +344,13 @@ done
 expect "step ⑤: no role, database, function or trigger carries the old name" "" \
   "$(sed -n '/^# roles whose/,/^database_size_bytes/p' "$SHEET_OUT" | grep -v '^#\|^database_size_bytes' || true)"
 sheet v0216:recheck
+# Each key by name, so an empty answer (prod-inspect not reaching the database) cannot pass.
+for name in automation_hooks_signed opentag_chat_bindings web_bot_auth_env_named learning_settings_rows \
+  learning_person_spaces_rows shared_account_mcp_servers shared_account_composio_connections \
+  shared_account_brokered_accounts shared_account_pending_authorizations; do
+  grep -Eqx "$name=(0|n/a)" "$SHEET_OUT" && pass "step ⑦: $name has nothing to reconnect" ||
+    fail "step ⑦: $name is not 0: $(grep "^$name=" "$SHEET_OUT" || echo missing)"
+done
 expect "step ⑦: nothing to reconnect" "" "$(grep -E '=' "$SHEET_OUT" | grep -vE '=(0|n/a)$' || true)"
 
 expect "after the upgrade: the rows are as they were" "$PROBE" "$(probe owner_sql)"
@@ -381,7 +395,9 @@ sheet v0216:health
 wait_healthy "rollback B: v0.2.15 serves on the new volume"
 sheet v0216:rollback-b-restore
 expect "rollback B: the restore ran" 0 "$SHEET_RC"
-grep -q '还原完成' "$SHEET_OUT" && pass "rollback B: the restore says it is done" || fail "rollback B: the restore did not finish"
+grep -q '正在启动这个卷上的 PostgreSQL' "$SHEET_OUT" && grep -q '还原完成' "$SHEET_OUT" &&
+  pass "rollback B: the one-shot container started the volume's database and the restore says it is done" ||
+  fail "rollback B: the restore did not finish in the one-shot container"
 sheet v0216:health
 wait_healthy "rollback B: v0.2.15 serves the restored database"
 sheet v0216:rollback-b-check
