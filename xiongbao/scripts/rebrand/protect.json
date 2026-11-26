@@ -101,7 +101,7 @@
   },
   {
     "text": "\"openbot/ui@1\"",
-    "file": "xiongbao/app/src/lib/copilot/a2ui.ts",
+    "file": "xiongbao/app/src/lib/copilot/a2ui-catalog-id.ts",
     "until": "R4",
     "reason": "生成式界面目录的旧 id：迁移改写存量界面，网页到 R4 仍把旧 id 的界面按新目录画出来（迁移后旧页面画的）；legacy-compat 到 R4 删除"
   },

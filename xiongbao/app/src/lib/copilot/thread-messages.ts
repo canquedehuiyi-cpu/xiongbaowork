@@ -1,7 +1,7 @@
 import type { Message } from "@ag-ui/core";
 import { MessageSchema } from "@ag-ui/core/schemas";
 import { tryClient } from "@/lib/client";
-import { withCurrentCatalogId } from "./a2ui";
+import { withCurrentCatalogId } from "./a2ui-catalog-id";
 
 /**
  * The messages a thread already holds, for restoring a conversation somebody comes back to.

@@ -7,7 +7,7 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/copilot/a2ui.ts",
+    "file": "app/src/lib/copilot/a2ui-catalog-id.ts",
     "text": "\"openbot/ui@1\"",
     "reason": "persisted-identifier: A2UI catalogue id shared with the agents",
     "category": "peer-protocol",
