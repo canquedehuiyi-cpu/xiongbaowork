@@ -71,7 +71,7 @@ const model = runtimeModelForEnvironment(
   { provider: "openai", defaultModel: "gpt-5.6-terra" },
   {
     CLAUDE_CODE_OAUTH_TOKEN: "plan-token-the-server-never-reads",
-    PICKED_HARNESS_IMAGE: "ghcr.io/copilotkit/openbot-agent-claude-sdk:0.3.3",
+    PICKED_HARNESS_IMAGE: "ghcr.io/acme/xiongbao-agent-claude-sdk:0.3.3",
     PICKED_HARNESS_URL: harness.url.href,
     MANAGED_AGENT_TOKEN: "deployment-harness-token",
   },

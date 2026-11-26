@@ -93,7 +93,7 @@ afterAll(() => {
 /** What XiongBao Desktop writes for a Claude plan: a token, the installed harness, and no key. */
 const CLAUDE_PLAN = {
   CLAUDE_CODE_OAUTH_TOKEN: "plan-token-the-server-never-reads",
-  PICKED_HARNESS_IMAGE: "ghcr.io/copilotkit/openbot-agent-claude-sdk:0.3.3",
+  PICKED_HARNESS_IMAGE: "ghcr.io/acme/xiongbao-agent-claude-sdk:0.3.3",
   PICKED_HARNESS_URL: harness.url.href,
   MANAGED_AGENT_TOKEN: "deployment-harness-token",
 };
@@ -188,7 +188,7 @@ test("a ChatGPT plan with no key chooses too", async () => {
     {
       CHATGPT_AUTH_FILE: "/root/.langchain/chatgpt.json",
       PICKED_HARNESS_IMAGE:
-        "ghcr.io/copilotkit/openbot-agent-langgraph-agui:0.3.3",
+        "ghcr.io/acme/xiongbao-agent-langgraph-agui:0.3.3",
       PICKED_HARNESS_URL: harness.url.href,
       MANAGED_AGENT_TOKEN: "deployment-harness-token",
     },
@@ -217,7 +217,7 @@ test("the OpenAI key typed in setup chooses, read from where the desktop puts it
   const desktop = {
     OPENAI_API_KEY: "sk-typed-in-setup",
     PICKED_HARNESS_IMAGE:
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui:0.3.3",
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui:0.3.3",
     PICKED_HARNESS_URL: harness.url.href,
     MANAGED_AGENT_TOKEN: "deployment-harness-token",
     BOT_PROVIDER: "",

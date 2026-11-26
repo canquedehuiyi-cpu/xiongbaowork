@@ -469,7 +469,7 @@ describe("a Bot on a harness this deployment runs", () => {
 
   test.each([
     [
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:0123",
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui@sha256:0123",
       "LangChain",
       { provider: "openai", defaultModel: "gpt-5.5" },
       "GPT-6.1 Terra",
@@ -477,7 +477,7 @@ describe("a Bot on a harness this deployment runs", () => {
       "GPT-6.1 Sol",
     ],
     [
-      "ghcr.io/copilotkit/openbot-agent-claude-sdk:latest",
+      "ghcr.io/acme/xiongbao-agent-claude-sdk:latest",
       "Claude Agent SDK",
       { provider: "anthropic", defaultModel: "claude-sonnet-4-5" },
       "Claude Sonnet 5.5",
@@ -508,7 +508,7 @@ describe("a Bot on a harness this deployment runs", () => {
 
   test("a harness somebody brought themselves picks its own model, so none is named", async () => {
     process.env.PICKED_HARNESS_IMAGE =
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:0123";
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui@sha256:0123";
     process.env.PICKED_HARNESS_SOURCE = "byo";
     const model: RuntimeModel = { provider: "openai", defaultModel: "gpt-5.5" };
     const [role] = await standingRoles(
@@ -523,7 +523,7 @@ describe("a Bot on a harness this deployment runs", () => {
 
   test("a Bot on someone else's framework picks its own model, so none is named", async () => {
     process.env.PICKED_HARNESS_IMAGE =
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:0123";
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui@sha256:0123";
     const model: RuntimeModel = { provider: "openai", defaultModel: "gpt-5.5" };
     const [role] = await standingRoles(
       "https://their-bot.test/ag-ui",

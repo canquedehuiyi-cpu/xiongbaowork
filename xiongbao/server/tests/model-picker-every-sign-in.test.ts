@@ -252,7 +252,7 @@ function neverSentAway(asked: { url: string; headers: Headers }[]) {
 
 const claudePlan = {
   CLAUDE_CODE_OAUTH_TOKEN: CLAUDE_OAUTH,
-  PICKED_HARNESS_IMAGE: "ghcr.io/copilotkit/openbot-agent-claude-sdk:1.0.0",
+  PICKED_HARNESS_IMAGE: "ghcr.io/acme/xiongbao-agent-claude-sdk:1.0.0",
   PICKED_HARNESS_URL: HARNESS,
   MANAGED_AGENT_TOKEN: MANAGED,
 };
@@ -269,7 +269,7 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
     const { read, asked } = await catalogueFor({
       CHATGPT_AUTH_FILE: "/run/xiongbao/chatgpt-auth.json",
       PICKED_HARNESS_IMAGE:
-        "ghcr.io/copilotkit/openbot-agent-langgraph-agui:1.0.0",
+        "ghcr.io/acme/xiongbao-agent-langgraph-agui:1.0.0",
       PICKED_HARNESS_URL: HARNESS,
       MANAGED_AGENT_TOKEN: MANAGED,
     });

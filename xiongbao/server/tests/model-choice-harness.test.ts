@@ -178,7 +178,7 @@ beforeEach(() => {
     saved[name] = process.env[name];
   process.env.PICKED_HARNESS_URL = PICKED;
   process.env.PICKED_HARNESS_IMAGE =
-    "ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:0123";
+    "ghcr.io/acme/xiongbao-agent-langgraph-agui@sha256:0123";
   delete process.env.PICKED_HARNESS_SOURCE;
   process.env.MANAGED_AGENT_TOKEN = "managed-token";
 });

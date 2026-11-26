@@ -226,7 +226,7 @@ describe("a Bot at an address", () => {
 
   test.each([
     [
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:0123",
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui@sha256:0123",
       "LangChain",
       { provider: "openai", defaultModel: "gpt-5.5" },
       "GPT-6.1 Terra",
@@ -268,7 +268,7 @@ describe("a Bot at an address", () => {
 
   test("a harness somebody brought themselves is not named by the image setup would have run", async () => {
     process.env.PICKED_HARNESS_IMAGE =
-      "ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:0123";
+      "ghcr.io/acme/xiongbao-agent-langgraph-agui@sha256:0123";
     process.env.PICKED_HARNESS_SOURCE = "byo";
     const role = await standingRole(
       { endpoint: PICKED },
