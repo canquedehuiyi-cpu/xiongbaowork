@@ -130,62 +130,6 @@ describe("the Computer page", () => {
     return view;
   }
 
-  /**
-   * Teach a Bot's browser, as GET /api/computers/fleet lists it beside the Bots' browsers on the personal edition's one
-   * computer: a seat named by the person's browser id (`person-` and 32 hex digits), which is no Bot's.
-   */
-  const teachBrowser: ComputerFleet["computers"][number] = {
-    computer: "bot:person-5f0e3c1a9b7d4e2f8a6c0b1d3e5f7a9c",
-    kind: "bot",
-    botId: "person-5f0e3c1a9b7d4e2f8a6c0b1d3e5f7a9c",
-    running: true,
-    startedAt: "2026-11-07T04:15:46.000Z",
-    egress: "network policy filter",
-  };
-
-  /** One row of the browsers section, by its title. */
-  function browserRow(
-    view: Awaited<ReturnType<typeof renderPage>>,
-    title: string,
-  ) {
-    const section = view.getByRole("heading", {
-      name: /^(你的员工的浏览器|这个部署里的电脑)$/,
-    }).parentElement?.parentElement as HTMLElement;
-    return within(section)
-      .getByText(title)
-      .closest('[data-slot="item"]') as HTMLElement;
-  }
-
-  test("in the team edition names whose XiongBao browser it is, never a Bot that is gone", async () => {
-    const view = await renderPage("team", hostAccess, {
-      isolation: "per-person",
-      computers: [
-        {
-          ...teachBrowser,
-          person: { name: "Ada", email: "ada@acme.test" },
-        },
-        {
-          ...teachBrowser,
-          computer: "bot:person-00000000000000000000000000000000",
-          botId: "person-00000000000000000000000000000000",
-        },
-      ],
-    });
-    const ada = browserRow(view, "Ada 的熊宝浏览器");
-    expect(ada.textContent).toContain("这个人自己教员工做事时用的浏览器");
-    expect(ada.textContent).not.toContain("独立");
-    expect(view.getByText("某个人的熊宝浏览器")).toBeTruthy();
-    expect(view.container.textContent).not.toContain("已不在的员工");
-
-    within(ada).getByRole("button", { name: "重置" }).click();
-    const dialog = await view.findByRole("dialog");
-    expect(dialog.textContent).toContain("重置 Ada 的熊宝浏览器？");
-    expect(dialog.textContent).toContain(
-      "这个人在里面登录过的每个网站都会退出。",
-    );
-    expect(dialog.textContent).not.toContain("这位员工会退出所有服务");
-  });
-
   /** The section the desktop's folder picker is reached from. */
   function foldersSection(view: Awaited<ReturnType<typeof renderPage>>) {
     return view.getByRole("heading", { name: "这台电脑上的文件夹" })

@@ -168,9 +168,6 @@ tests/brokered-provenance-screens.test.ts
 tests/brokered-provenance.test.ts
 tests/browser-activity.test.ts
 tests/browser-address.test.ts
-tests/browser-narration.test.ts
-tests/browser-nav-item.test.tsx
-tests/browser-page.test.tsx
 tests/build-cache.test.ts
 tests/built-in-tool-steps.test.tsx
 tests/bunfig-preload.test.ts
@@ -444,8 +441,6 @@ tests/quote-card.test.tsx
 tests/reachability-parity.test.tsx
 tests/react-teardown.test.tsx
 tests/recent-deliveries.test.tsx
-tests/recorder-bridge.test.ts
-tests/recorder-browsers.test.tsx
 tests/relative-time-short.test.ts
 tests/repair-history.test.ts
 tests/reply-line-breaks.test.tsx
@@ -645,5 +640,4 @@ tests/workbench-tokens.test.ts
 tests/working-now.test.tsx
 tests/working-spinner.test.tsx
 tests/wp32-status-shots.test.tsx
-tests/your-recordings.test.tsx
 vite-listen-port.test.ts

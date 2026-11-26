@@ -9,11 +9,6 @@ const read = (file: string) =>
 // notification tag in lib/notifications/show.ts is checked by component-reply-notice.test.tsx.
 const NAMES = [
   {
-    file: "src/components/browser/learning-next.tsx",
-    now: "xiongbao-learned-",
-    before: "openbot-learned-",
-  },
-  {
     file: "src/components/computer/computer-view.tsx",
     now: 'id="xiongbao-secret"',
     before: "openbot-secret",

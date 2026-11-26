@@ -64,8 +64,8 @@ const EXPLORE_SHOWN = 4;
 
 export const Route = createFileRoute("/_authed/_app/")({
   /*
-   * `ask`: words to start the box with, as Teach a Bot's Try it hands over a task a Bot just learned. Only put in the
-   * box: nothing is sent until the person sends it.
+   * `ask`: words to start the box with, handed over by a link. Only put in the box: nothing is sent until the person
+   * sends it.
    */
   validateSearch: z.object({ ask: z.string().max(2000).optional() }),
   component: RouteComponent,

@@ -711,7 +711,7 @@ export function LiveScreen({
    * element does, by a click on it (or Tab to it), and gives it back on Escape or a click anywhere else.
    *
    * It used to take every keystroke on the window that was not aimed at a text field, because the canvas could not hold
-   * focus. So nothing else on the page could have a key: the Browser page's tabs never heard their arrows, Home, End or
+   * focus. So nothing else on the page could have a key: the browser bar's tabs never heard their arrows, Home, End or
    * Delete, no button took Enter or Space, and Tab never left anything. And every one of those keys went to the remote
    * browser instead, where a stray arrow is not harmless. Now the canvas holds focus, as noVNC's does (its keyboard
    * listens on the canvas it focuses on a click), and a key aimed anywhere else is that element's.

@@ -32,7 +32,6 @@ COPY worker/package.json worker/package.json
 COPY runner/package.json runner/package.json
 COPY shared/package.json shared/package.json
 COPY toolkit/package.json toolkit/package.json
-COPY extension/package.json extension/package.json
 RUN bun install --frozen-lockfile
 
 

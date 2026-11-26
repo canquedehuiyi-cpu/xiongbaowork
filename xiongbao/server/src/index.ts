@@ -8,7 +8,6 @@ import { commandTimeoutMs } from "../../shared/computer-tool-words";
 import { hardModelOf } from "../../shared/hard-model";
 import { lightModelOf } from "../../shared/light-model";
 import { workOwner } from "../../shared/work-owner";
-import { isPersonBrowserId } from "../../shared/xiongbao-browser";
 import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
 import { createActivityStore } from "./activity/activity";
 import {
@@ -150,7 +149,7 @@ import {
 } from "./audit";
 import { readAuditVocabulary } from "./audit-ask";
 import { startRetentionSweeps } from "./audit-retention";
-import { createAuth, sessionLifetimeMs } from "./auth";
+import { createAuth } from "./auth";
 import { createAdminScope } from "./auth/admin-scope";
 import {
   createDevRequireUser,
@@ -203,17 +202,7 @@ import {
   createAvatarSourceStore,
 } from "./avatar-sources";
 import { englishName, setBrand } from "./brand";
-import { xiongbaoAddress } from "./browser/address";
-import { botBrowserNetwork } from "./browser/bot-browser";
-import { originRules, personBrowserEgressPolicy } from "./browser/egress";
-import {
-  botRecordRefusal,
-  directBrowserComputers,
-  gatewayBrowserComputers,
-  personBrowserPlace,
-  withPersonBrowsers,
-} from "./browser/host";
-import { personBrowserId, personBrowserInstallId } from "./browser/person";
+import { originRules } from "./browser/egress";
 import {
   loadAttachmentForTurn,
   markAttachmentsSent,
@@ -264,10 +253,7 @@ import {
 import { createHeadlessComputerTools } from "./computer/headless-tools";
 import { createPageFrameStore } from "./computer/page-frames";
 import { startPolicyListener } from "./computer/policy-listener";
-import {
-  pushEgressPolicy,
-  withPolicyPushOnWake,
-} from "./computer/policy-network";
+import { withPolicyPushOnWake } from "./computer/policy-network";
 import {
   createPolicyStore,
   DEFAULT_ACTION_POLICY,
@@ -314,7 +300,6 @@ import {
   channelMemberships,
   channels,
   intelligenceChannelMappings,
-  recorderConnections,
   users,
 } from "./db/schema";
 import { deliveryMessageId } from "./delivery/message-id";
@@ -376,10 +361,6 @@ import { createIdentityStore } from "./identity/store";
 import { createKnowledgeRoutes } from "./knowledge/routes";
 import { createKnowledgeStore } from "./knowledge/store";
 import { KNOWLEDGE_TOOL_NAMES, knowledgeTools } from "./knowledge/tools";
-import {
-  type PersonalLearningSpaces,
-  personalLearningContainerId,
-} from "./learning/personal-space";
 import {
   cardRetroTurn,
   createRetroObserver,
@@ -518,7 +499,6 @@ import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
 import { createQuotaService, QuotaExceeded } from "./quota/limits";
 import { createQuotaRoutes } from "./quota/routes";
-import { createRecorderExtension } from "./recorder/wiring";
 import {
   abandonedWorkPhases,
   RECOVERY_PURGE_AFTER_MS,
@@ -802,15 +782,6 @@ await startupLifecycle.run(async (startup) => {
   const credentialStore = createCredentialStore(database);
   // People's linked Slack and GitHub accounts (upstream #763), each person's own rows (G01).
   const identityStore = createIdentityStore(database, credentialStore);
-  /*
-   * Each person's own Learning space, which the Recorder's capture pass names. Nothing here makes or
-   * reads one, so it is always off, and the Recorder tells the person so.
-   */
-  const personalLearningSpaces: PersonalLearningSpaces = {
-    containerFor: personalLearningContainerId,
-    state: async () => ({ state: "learning-off", containerId: null }),
-    kick: () => {},
-  };
   const agentVault = {
     store: credentialStore,
     reader: credentialStore,
@@ -1184,8 +1155,6 @@ await startupLifecycle.run(async (startup) => {
               by,
             ),
           ),
-        // Removing somebody ends their sessions, so it ends their browsers' Recorders too.
-        recorders: () => signOutRecorders(userId, "person_removed"),
       }),
   );
   const identityProviderStore = createIdentityProviderStore(database);
@@ -1194,24 +1163,12 @@ await startupLifecycle.run(async (startup) => {
    * store that receives those rows has to exist before anything can sign in.
    */
   const signInAuditStore = createAuditStore(database);
-  /*
-   * A person's sign-in ending here ends their browsers' Recorders with it, however it ends: they sign
-   * out, their sessions are ended (by them, an administrator, the directory, the identity provider),
-   * or they are removed. Retried, and when it still fails the sign-in does not end either
-   * (recorder/sign-out.ts). Called only once something ends, which comes after the Recorder's wiring
-   * below exists. Their connections are their own rows, so it runs as them (G01).
-   */
-  const signOutRecorders = (userId: string, ending: string) =>
-    runAsTenant(userId, () => recorderExtension.signOut(userId, ending));
-  // Its own const so the Recorder can re-check a stored session through `verifySessionQuietly`.
   const organizationAuth = config.organizationAuthUrl
     ? createOrganizationAuth({
         authorityUrl: config.organizationAuthUrl,
         materializeUser: organizationUserStore(database),
-        signOutRecorders,
       })
     : undefined;
-  // Its own const so the Recorder's connections can last as long as one of its sessions does.
   const betterAuth =
     !organizationAuth && config.auth
       ? createAuth(
@@ -1220,7 +1177,6 @@ await startupLifecycle.run(async (startup) => {
           (email) => peopleStore.isRevoked(email),
           signInAuditStore,
           {
-            signOutRecorders,
             // Read when somebody signs in, by which time `entra` below exists.
             vouchesForMicrosoftToken: (token: string): boolean =>
               entra?.vouches(token) ?? false,
@@ -1267,8 +1223,7 @@ await startupLifecycle.run(async (startup) => {
    * about the same person, whose threads and memory these are and which coworkers they may run.
    *
    * Asked of the identity tables, which are the deployment's, before there is anybody to act as:
-   * `platform`, like the request guard (G01). So is a Recorder's token, answered only on the capture
-   * pass, and only after the Recorder's wiring below exists.
+   * `platform`, like the request guard (G01).
    *
    * An unauthenticated request resolves to a person who owns nothing rather than an error
    * (`identifyActor`), so the runtime can still describe itself: `mountCopilotRuntime` reads that
@@ -1278,52 +1233,24 @@ await startupLifecycle.run(async (startup) => {
   const { resolveRequestActor, identifyUser, identifyActor } =
     createRequestActor({
       singleUser: config.singleUser,
-      // Framed as `platform` by the Recorder's wiring itself (recorder/wiring.ts).
-      resolveRecorder: (request) => recorderExtension.resolve(request),
       getSession: async (headers) =>
         (await asPlatform(() => auth?.api.getSession({ headers }))) ?? null,
       rolesForUser: (id) => asPlatform(() => roleRepository.rolesForUser(id)),
     });
-  // Where a person's own XiongBao browser may go: not where Bots may, but where their browser on their
-  // own laptop would (browser/egress.ts). On a host-side computer of people's browsers that is their
-  // own desktop, so everywhere.
-  const personBrowserPolicy = personBrowserEgressPolicy({
-    native: config.browser !== undefined,
-    allowPrivateHosts: config.computer?.allowPrivateHosts ?? false,
-    xiongbaoUrls: [config.publicUrl, config.appUrl],
-    // Without the optional Intelligence there is no gateway for the Recorder to stream to.
-    gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
-  });
   // Each computer is pushed its network policy on the way to the action that woke it, because a
   // computer refuses every connection until one arrives (see `withPolicyPushOnWake`).
   // Device mode with no container of its own still gets a gateway: its actions go to the tenant's
   // machines, and the provider only answers lifecycle questions (audit defect #12).
-  // A person's own browser is found where it runs (OPENBOT_BROWSER_URL, else the same provider) and
-  // pushed theirs.
   const computerProvider = computerProviderFor(
     config.tenantRuntime,
     config.computer
-      ? withPolicyPushOnWake(
-          withPersonBrowsers(
-            createComputerProvider(config.computer),
-            config.browser?.url,
-            config.edition,
-          ),
-          {
-            policyForBot: (botId) =>
-              isPersonBrowserId(botId)
-                ? Promise.resolve(personBrowserPolicy)
-                : enterpriseControls()?.policyForBot(botId),
-            ...(config.computer.token ? { token: config.computer.token } : {}),
-            ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
-          },
-        )
+      ? withPolicyPushOnWake(createComputerProvider(config.computer), {
+          policyForBot: (botId) => enterpriseControls()?.policyForBot(botId),
+          ...(config.computer.token ? { token: config.computer.token } : {}),
+          ...(config.webBotAuth ? { webBotAuth: config.webBotAuth } : {}),
+        })
       : undefined,
   );
-  /** Why Record is refused in a Bot's browser here, or undefined where each Bot has a computer of its
-   * own, or the one computer is the one person's (the personal edition). */
-  const recordRefused =
-    botRecordRefusal(computerProvider, config.edition) ?? undefined;
 
   if (computerProvider?.warm) {
     void computerProvider.warm();
@@ -1637,32 +1564,6 @@ await startupLifecycle.run(async (startup) => {
               )
             ).map((row) => [row.id, { name: row.name, email: row.email }]),
           ),
-        /*
-         * Whose XiongBao browser each one is: the server minted its Recorder connection under the
-         * browser's own install id. Every person's connections, so as `platform`.
-         */
-        browserOwners: async (computerIds) => {
-          const rows = await asPlatform(() =>
-            database
-              .selectDistinct({ userId: recorderConnections.userId })
-              .from(recorderConnections)
-              .where(
-                and(
-                  eq(recorderConnections.via, "openbot-browser"),
-                  inArray(
-                    recorderConnections.installId,
-                    computerIds.map(personBrowserInstallId),
-                  ),
-                ),
-              ),
-          );
-          const wanted = new Set(computerIds);
-          return new Map(
-            rows
-              .map((row) => [personBrowserId(row.userId), row.userId] as const)
-              .filter(([computerId]) => wanted.has(computerId)),
-          );
-        },
         // Device mode carries the action to the tenant's own machine; cloud mode is untouched.
         ...(config.tenantRuntime === "device"
           ? {
@@ -2593,46 +2494,6 @@ await startupLifecycle.run(async (startup) => {
   const personalMemoryStore = createMemoryStore(database);
   // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
   const knowledgeStore = createKnowledgeStore(database);
-  /*
-   * The Recorder extension (recorder/wiring.ts): a person's browser connected to XiongBao, its capture
-   * pass and its routes. Each person's recordings join their own Learning space (above).
-   */
-  const recorderExtension = createRecorderExtension({
-    config,
-    database,
-    organizationAuth,
-    roleRepository,
-    peopleStore,
-    personalSpaces: personalLearningSpaces,
-    auditStore: bootAuditStore,
-    ...(betterAuth
-      ? { sessionLifetimeMs: await sessionLifetimeMs(betterAuth) }
-      : {}),
-    // A connection is made or ended exactly when its row is written: both in one transaction.
-    auditFor: (executor) => createAuditStore(executor),
-  });
-  /*
-   * Connections whose lifetime has run out already resolve to nobody; this ends them for good, with
-   * the sealed organization session any of them still held, and writes their rows. Every replica runs
-   * it, and each row is ended once. Every person's connections, so as `platform` (the loop's frame).
-   */
-  startup.acquireSync(
-    () =>
-      repeatAfterEach(async () => {
-        try {
-          await recorderExtension.connections.expire();
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              type: "recorder-expiry-sweep-error",
-              error: error instanceof Error ? error.name : "UnknownError",
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }, 60_000),
-    (resource) => resource.stop(),
-  );
   const memoryIngestion = createMemoryIngestion({
     store: personalMemoryStore,
     plugins: pluginStore,
@@ -4202,8 +4063,6 @@ await startupLifecycle.run(async (startup) => {
             }),
           }
         : {}),
-      // The Recorder's capture pass: only a connected browser gets through (recorder/wiring.ts).
-      trajectoryCapture: recorderExtension.trajectoryCapture,
     },
   );
 
@@ -5846,16 +5705,8 @@ await startupLifecycle.run(async (startup) => {
         database,
         databaseUrl: config.databaseUrl,
         auditStore: bootAuditStore,
-        personBrowserPolicy,
         // An external employee's agent on its computer reaches the model proxy, whatever the list says.
         alwaysAllowed: originRules([agentModelComputerUrl]),
-        // While a person records in a Bot's browser, the Recorder there reaches XiongBao and the
-        // gateway; the Bot does not.
-        duringRecording: botBrowserNetwork({
-          connections: recorderExtension.connections,
-          xiongbaoUrls: [config.publicUrl, config.appUrl],
-          gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
-        }),
         ...(computerProvider ? { provider: computerProvider } : {}),
         ...(config.computer?.token
           ? { computerToken: config.computer.token }
@@ -5872,13 +5723,6 @@ await startupLifecycle.run(async (startup) => {
           (await modelChoices.forRun(actorId, threadId)).model,
         people: peopleStore,
         initialAdminEmails: config.auth?.initialAdminEmails ?? [],
-        // Every person's live Recorder connections are read as `platform`; ending one person's runs
-        // as them (see `signOutRecorders`).
-        recorders: {
-          holders: () =>
-            asPlatform(() => recorderExtension.connections.holders()),
-          signOut: signOutRecorders,
-        },
       }),
     (controls) => controls.stop(),
   );
@@ -6094,75 +5938,9 @@ await startupLifecycle.run(async (startup) => {
       approvals: approvalService,
       // M3: upstream also passes `shared: { modes, use }` (shared use and shared accounts); not adopted.
       ...(signInService ? { passwords: signInService } : {}),
-      recorder: recorderExtension,
-      // A Bot's browser, worked by the person holding its wheel: its bar and Record, wherever Bots
-      // have computers.
+      // A Bot's browser, worked by the person holding its wheel: its bar, wherever Bots have computers.
       ...(computerGateway
-        ? {
-            botBrowser: {
-              recorder: recorderExtension,
-              openbotUrl: xiongbaoAddress(config),
-              /*
-               * The Bot's policy, which `botBrowserNetwork` widens while a recording runs, to the
-               * computer of the seat the recording is on: the person's own, or the isolated Bot's.
-               * Under that computer's own token.
-               */
-              pushPolicy: async (seat) => {
-                const policy = await enterpriseControls()?.policyForBot(
-                  seat.botId,
-                );
-                if (!policy) return;
-                const token = computerGateway.tokenFor(seat);
-                await pushEgressPolicy(
-                  await computerGateway.locate(seat),
-                  seat.botId,
-                  policy,
-                  {
-                    ...(token ? { token } : {}),
-                    ...(config.webBotAuth
-                      ? { webBotAuth: config.webBotAuth }
-                      : {}),
-                  },
-                );
-              },
-              singleUser: config.singleUser,
-              // Where every Bot shares one computer, Record is refused in all their browsers.
-              ...(recordRefused ? { recordRefused } : {}),
-            },
-          }
-        : {}),
-      /*
-       * Only where a person's browser can run: a host-side computer of people's browsers, computers
-       * Bots run on that give each its own, or the personal edition's one computer. Where every Bot
-       * shares one, the routes have no computers and say why (browser/host.ts).
-       */
-      ...(computerGateway || config.browser
-        ? {
-            browser: {
-              ...personBrowserPlace({
-                provider: computerProvider,
-                browserUrl: config.browser?.url,
-                edition: config.edition,
-                computers: () =>
-                  computerGateway
-                    ? gatewayBrowserComputers(
-                        computerGateway,
-                        config.browser?.url,
-                      )
-                    : directBrowserComputers({
-                        browserUrl: (config.browser as { url: string }).url,
-                        policy: personBrowserPolicy,
-                        ...(config.browser?.token
-                          ? { token: config.browser.token }
-                          : {}),
-                      }),
-              }),
-              recorder: recorderExtension,
-              openbotUrl: xiongbaoAddress(config),
-              // On a single-user XiongBao the person is its admin: a setup failure is theirs to see to.
-              singleUser: config.singleUser,
-            },
-          }
+        ? { botBrowser: { singleUser: config.singleUser } }
         : {}),
       agentModel: agentModel.proxy,
       // Upstream #1372/#1381/#1396/#1397/#1398/#1399: drafts written from an admin's description.

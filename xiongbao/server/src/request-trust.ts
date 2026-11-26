@@ -1,8 +1,4 @@
 import {
-  extensionIdFromOrigin,
-  recorderExtensionIds,
-} from "@xiongbao/shared/recorder-extension";
-import {
   isAddressLiteral,
   isLoopbackHost,
 } from "@xiongbao/shared/this-machine";
@@ -70,21 +66,12 @@ export const SINGLE_USER_HOST_REFUSAL =
 export const SINGLE_USER_MACHINE_REFUSAL =
   "This deployment only answers on the computer it runs on. Open it there, or set up sign-in so other people can use it.";
 
-/**
- * Whether a browser origin is one of this deployment's own pages, or the Recorder extension.
- *
- * The deployment's origins are `config.browserOrigins`; the Recorder's are its fixed id and the configured
- * extras, the same list `/api/recorder/connections` admits, in both spellings Chrome and Edge use.
- */
+/** Whether a browser origin is one of this deployment's own pages (`config.browserOrigins`). */
 export function trustedOrigin(
-  config: Pick<DeploymentConfig, "browserOrigins" | "recorder">,
+  config: Pick<DeploymentConfig, "browserOrigins">,
 ): (origin: string) => boolean {
   const origins = new Set(config.browserOrigins);
-  const extensions = recorderExtensionIds({
-    extra: config.recorder?.extraExtensionIds,
-  });
-  return (origin) =>
-    origins.has(origin) || extensionIdFromOrigin(origin, extensions) !== null;
+  return (origin) => origins.has(origin);
 }
 
 /**
@@ -92,7 +79,7 @@ export function trustedOrigin(
  * nothing otherwise, so the runtime sets no CORS headers and the browser keeps its answer from the page.
  */
 export function corsOrigin(
-  config: Pick<DeploymentConfig, "browserOrigins" | "recorder">,
+  config: Pick<DeploymentConfig, "browserOrigins">,
 ): (origin: string) => string | null {
   const trusted = trustedOrigin(config);
   return (origin) => (trusted(origin) ? origin : null);
@@ -105,8 +92,8 @@ export function isWebSocketUpgrade(headers: Headers): boolean {
 /**
  * Whether a request was made by a page from another site.
  *
- * `Origin` first, because it names the page. Trusted, it passes whatever `Sec-Fetch-Site` says: the
- * Recorder is an extension, and an app served from its own origin names the API's. Otherwise it passes
+ * `Origin` first, because it names the page. Trusted, it passes whatever `Sec-Fetch-Site` says: an app
+ * served from its own origin names the API's. Otherwise it passes
  * only as the request's own origin, compared by host and not by scheme, because a proxy that ends TLS
  * in front of this server makes the request it forwards `http://` while the browser's page is
  * `https://`. `Origin: null` (a sandboxed frame, a file, a redirect across sites) is nobody's page.
@@ -146,16 +133,15 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /**
  * The cross-site guard, in front of every `/api` route.
  *
- * Two routes are left to their own, stricter checks. `/api/auth/*` is Better Auth's: it checks its own
+ * One route is left to its own, stricter checks: `/api/auth/*` is Better Auth's. It checks its own
  * trusted origins, and an identity provider's `form_post` callback arrives carrying the provider's
- * origin. `POST /api/recorder/connections` admits only the Recorder's origin and records every origin
- * it refuses, which a refusal here would leave off the trail.
+ * origin.
  *
  * Both spellings of the path, for the reason the enterprise gate gives: Hono routes on the decoded path
  * and the runtime reads the raw one. A route is exempt only when both name it.
  */
 export function createOriginGuard(
-  config: Pick<DeploymentConfig, "browserOrigins" | "recorder">,
+  config: Pick<DeploymentConfig, "browserOrigins">,
 ): MiddlewareHandler {
   const trusted = trustedOrigin(config);
   return async (context, next) => {
@@ -163,12 +149,9 @@ export function createOriginGuard(
     if (SAFE_METHODS.has(context.req.method) && !isWebSocketUpgrade(headers))
       return next();
     const paths = [context.req.path, new URL(context.req.url).pathname];
-    const exempt =
-      paths.every(
-        (path) => path === "/api/auth" || path.startsWith("/api/auth/"),
-      ) ||
-      (context.req.method === "POST" &&
-        paths.every((path) => path === "/api/recorder/connections"));
+    const exempt = paths.every(
+      (path) => path === "/api/auth" || path.startsWith("/api/auth/"),
+    );
     if (!exempt && crossSiteRequest(context.req.raw, trusted))
       return context.json({ error: CROSS_SITE_REFUSAL }, 403);
     return next();
@@ -261,43 +244,4 @@ export function createSingleUserGate(
     if (refused) return context.json({ error: refused }, 403);
     return next();
   };
-}
-
-/**
- * XiongBao's own origin as a caller on this machine reached it, or null.
- *
- * For an address handed to something that is not one of XiongBao's pages, and so has no page to
- * resolve a path against: the Recorder's capture pass names the Intelligence gateway's socket on
- * XiongBao's own address (intelligence-gateway-proxy.ts). Where no public URL is configured, as over a
- * `kubectl port-forward`, the only name that address has is the one the caller used to reach it.
- *
- * Made from `Host` only where nobody else could have written it. The caller is on loopback: the
- * socket's peer, which nobody can write, and what a port-forward's connection is inside the pod. The
- * Host is one of this machine's own loopback names, which no DNS answer can stand in for. And a
- * single-user XiongBao admits the request at all ({@link singleUserRefusal}). Any other caller's Host
- * is its own say-so, and it gets nothing made from it. The scheme is the connection's own, which over
- * a port-forward is plain HTTP.
- *
- * Undefined `caller` is the app called in-process, which has no connection to vouch for anything.
- */
-export function ownOriginOnThisMachine(
-  request: Request,
-  caller: NetworkCaller | undefined,
-  config: Pick<DeploymentConfig, "singleUser" | "singleUserAccess">,
-): string | null {
-  if (!caller?.address || !isLoopbackHost(caller.address)) return null;
-  if (
-    config.singleUser &&
-    singleUserRefusal(request, caller, config.singleUserAccess) !== null
-  )
-    return null;
-  const host = request.headers.get("host")?.trim().toLowerCase();
-  if (!host || !PLAIN_HOST.test(host)) return null;
-  let origin: URL;
-  try {
-    origin = new URL(`${new URL(request.url).protocol}//${host}`);
-  } catch {
-    return null;
-  }
-  return isLoopbackHost(origin.hostname) ? origin.origin : null;
 }

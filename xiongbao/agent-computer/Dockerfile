@@ -1,32 +1,9 @@
-# The Bot's computer installs only the Playwright browser it launches, and carries the built XiongBao
-# Recorder for the person's browser it opens (the XiongBao Browser).
+# The Bot's computer installs only the Playwright browser it launches.
 #
 # The image tag and Playwright dependency must be pinned to the same exact version. Bump both or
 # neither.
 FROM node:24.18.1-bookworm-slim AS node-toolchain
 FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS bun-toolchain
-
-# The Recorder, built here from the repository root as the root Dockerfile builds the app: the
-# workspace manifests and lockfile first, so a source edit does not reinstall the world, then the
-# sources the build reads. It needs the root install because the extension is a workspace and its
-# pages are drawn with the app's own components (`app/src`). Only `extension/dist` leaves this stage.
-FROM bun-toolchain AS recorder-build
-WORKDIR /src
-COPY package.json bun.lock ./
-# `patchedDependencies` in package.json names these files, and `bun install` refuses to run without them.
-COPY patches patches
-COPY tsconfig.base.json bunfig.toml ./
-COPY app/package.json app/package.json
-COPY server/package.json server/package.json
-COPY worker/package.json worker/package.json
-COPY shared/package.json shared/package.json
-COPY toolkit/package.json toolkit/package.json
-COPY extension/package.json extension/package.json
-RUN bun install --frozen-lockfile
-COPY app/src app/src
-COPY shared shared
-COPY extension extension
-RUN bun run --cwd extension build
 
 FROM ubuntu:24.04
 
@@ -97,15 +74,14 @@ RUN bun install --frozen-lockfile
 
 COPY agent-computer/src ./src
 # index.ts imports ../../shared/file-download at runtime (shared/computer-control is type-only and
-# erased), and the browser routes import ../../shared/xiongbao-browser and ../../shared/bot-browser,
+# erased), and the Bot's browser routes import ../../shared/xiongbao-browser and ../../shared/bot-browser,
 # so the files they need go where those paths resolve from /app/src.
 COPY shared/file-download.ts shared/env-aliases.ts shared/apply-env-aliases.ts /shared/
-# The XiongBao Browser's contract and a Bot's browser's, which the browser routes check requests
-# against. They import zod, and a module resolves its imports from its own directory upward, which
+# A Bot's browser's contract, and the tab and address requests it shares, which its routes check
+# requests against. They import zod, and a module resolves its imports from its own directory upward, which
 # from /shared never reaches /app/node_modules: so /shared is given that tree to resolve from, rather
 # than a second install.
 COPY shared/xiongbao-browser.ts shared/bot-browser.ts /shared/
-COPY shared/recorder-extension.ts shared/recorder-extension.json /shared/
 # The header names the server sends and src/wire-headers.ts reads (both sides take them from here).
 COPY shared/wire-headers.ts /shared/
 RUN ln -s /app/node_modules /shared/node_modules
@@ -119,11 +95,6 @@ RUN ln -s /app/node_modules /shared/node_modules
 COPY runner/src/acp /runner/src/acp
 COPY runner/src/idle.ts runner/src/mcp-client.ts runner/src/bundled-runtime.ts /runner/src/
 COPY shared/acp.ts /shared/
-
-# The built Recorder, put into every person's browser this computer opens. Without it the computer
-# still serves Bots and refuses to open a person's browser, saying why.
-COPY --from=recorder-build /src/extension/dist /recorder
-ENV OPENBOT_RECORDER_DIR=/recorder
 
 # The X server's socket directory and the keysym names its keyboard data needs, as the root Dockerfile
 # has them: Xvfb as any user but root refuses to make the first, and xkbcomp warns at every start

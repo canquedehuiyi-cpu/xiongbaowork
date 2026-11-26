@@ -158,7 +158,7 @@ function scriptText(path: string): string[] {
 
 function shown(): string[] {
   const found = [
-    ...["app/src", "extension/src", "shared"].flatMap((root) => [
+    ...["app/src", "shared"].flatMap((root) => [
       ...files(join(REPO, root), /\.tsx?$/),
     ]),
     // This tree keeps the plugin routes and the plugin store as one file each, where upstream split

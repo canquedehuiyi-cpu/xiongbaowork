@@ -7,11 +7,6 @@ import type {
   BrowserNavigateRequest,
   BrowserTabsRequest,
 } from "@xiongbao/shared/xiongbao-browser";
-import {
-  type NarrationAnswer,
-  type NarrationPost,
-  sendNarrationTo,
-} from "@/lib/browser/mutations";
 import { client } from "@/lib/client";
 import { botBrowserKeys } from "./queries";
 
@@ -20,64 +15,12 @@ import { botBrowserKeys } from "./queries";
  * sentence) to anyone else, so these carry no rule of their own about who may: the app shows the server's sentence.
  *
  * Each factory is for one Bot, as the screen it is pressed in is: the request bodies are then exactly the person's own
- * browser's, which is what lets the Bot's screen share the bar and the Record controls with the Browser page.
+ * browser's.
  */
 
 function invalidateBotBrowser(queryClient: QueryClient, botId: string) {
   return queryClient.invalidateQueries({
     queryKey: botBrowserKeys.state(botId),
-  });
-}
-
-/**
- * Starts recording the tab the person is on in the Bot's browser, named for the task, for the person alone.
- *
- * Whether they narrate is not passed on: a Bot's browser is narrated from this page (`external`), whose microphone opens
- * only by the person's choice (`useNarration`), and the Recorder there has no microphone to open.
- */
-export function startBotBrowserRecordingMutationOptions(
-  queryClient: QueryClient,
-  botId: string,
-) {
-  return mutationOptions({
-    mutationFn: async (variables: {
-      title: string;
-      language?: string;
-    }): Promise<BotBrowserApiState> =>
-      (
-        await client(botBrowserApiPaths.recording(botId), {
-          method: "POST",
-          body: {
-            action: "start",
-            title: variables.title,
-            ...(variables.language ? { language: variables.language } : {}),
-          },
-          fallback: "没能开始录制。请再试一次。",
-        })
-      ).json(),
-    onSuccess: () => invalidateBotBrowser(queryClient, botId),
-  });
-}
-
-/**
- * Stops the person's recording. Read again on a refusal as well as on success: the one refusal there is, a recording
- * that is not theirs or not running, means the computer ended it under them (the wheel went back), and the read is what
- * says so.
- */
-export function stopBotBrowserRecordingMutationOptions(
-  queryClient: QueryClient,
-  botId: string,
-) {
-  return mutationOptions({
-    mutationFn: async (): Promise<BotBrowserApiState> =>
-      (
-        await client(botBrowserApiPaths.recording(botId), {
-          method: "POST",
-          body: { action: "stop" },
-          fallback: "没能停止录制。请再试一次。",
-        })
-      ).json(),
-    onSettled: () => invalidateBotBrowser(queryClient, botId),
   });
 }
 
@@ -139,15 +82,4 @@ export function clearBotBrowserMutationOptions(
       ).json(),
     onSettled: () => invalidateBotBrowser(queryClient, botId),
   });
-}
-
-/**
- * One thing the person's narration says to the Recorder in the Bot's browser, exactly as `sendNarration` does for their
- * own: a plain function for the same reasons, answering rather than throwing.
- */
-export function sendBotBrowserNarration(
-  botId: string,
-  post: NarrationPost,
-): Promise<NarrationAnswer> {
-  return sendNarrationTo(botBrowserApiPaths.narration(botId), post);
 }

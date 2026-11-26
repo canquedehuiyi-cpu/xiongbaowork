@@ -14,41 +14,20 @@ import type { ComputerProvider } from "../../server/src/computer/provider";
 import { createComputerRoutes } from "../../server/src/computer/routes";
 import type { BotBrowserState } from "../../shared/bot-browser";
 import type { ComputerControlState } from "../../shared/computer-control";
-import type { LauncherConnection } from "../../shared/xiongbao-browser";
 import { reservePort } from "../../tests/support/reserved-port";
-import {
-  NOT_ITS_OWN_COMPUTER,
-  NOT_ITS_OWN_COMPUTER_RECORD,
-} from "../src/person-access";
 
 /**
  * A Bot's browser worked by a person, through the computer itself: the real process, its token, its dispatcher, its
- * control and the Bot's own routes, with bundled Chromium headless and the fixture Recorder (`fixtures/recorder`),
- * which reports every call it receives to the XiongBao it was connected to, so what these tests read about the
- * Recorder is the Recorder's side of each call.
+ * control and the Bot's own routes, with bundled Chromium headless.
  *
- * What it pins: the Bot works as it did with the Recorder in its browser; the bar and Record refuse anyone without the
- * wheel; a recording starts only for the person holding it; and the computer ends the recording, then disconnects the
- * Recorder, whenever the wheel leaves them.
+ * What it pins: the Bot reads, snapshots and screenshots its own page; the bar refuses anyone without the wheel and
+ * works for the person holding it; and only that person clears the browser.
  *
  *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/bot-browser-computer.test.ts
  */
 const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
 const TOKEN = "bot-browser-computer-token";
 const BOT = "sales-bot";
-const PERSON = "person-fedcba9876543210fedcba9876543210";
-const FIXTURE = join(import.meta.dir, "fixtures", "recorder");
-
-type FixtureCall = {
-  method: string;
-  input: unknown;
-  front: string;
-  /** Whether the last of a stopped recording was still on its way to Intelligence when the call came. */
-  sending?: boolean;
-};
-const calls: FixtureCall[] = [];
-/** How long the last of a stopped recording takes to reach Intelligence, as this XiongBao tells the fixture Recorder. */
-let tailMs = 0;
 
 type Computer = { base: string; child: ReturnType<typeof Bun.spawn> };
 const computers: Computer[] = [];
@@ -140,15 +119,6 @@ const state = async (on?: Computer) =>
   (await call<BotBrowserState>("/bot-browser/state", { on })).json;
 const activeTab = (current: BotBrowserState) =>
   current.tabs.find((tab) => tab.active);
-const callsFor = (method: string) =>
-  calls.filter((each) => each.method === method);
-
-const connection = (): LauncherConnection => ({
-  openbotUrl: origin,
-  token: "obr_bot-browser-fixture",
-  connectionId: "connection-bot-1",
-  user: { id: "user-1", name: "Pat Example", email: "pat@example.com" },
-});
 
 /** Ask for help and take the wheel as `by`, as the server does for the signed-in person. */
 async function takeWheel(by: string, on?: Computer): Promise<string> {
@@ -166,29 +136,15 @@ async function takeWheel(by: string, on?: Computer): Promise<string> {
   return requestId;
 }
 
-const start = (by: string, title = "File an expense report", on?: Computer) =>
-  call<BotBrowserState>("/bot-browser/recording", {
-    body: { action: "start", title, by, connection: connection() },
-    on,
-  });
-
 beforeAll(async () => {
   if (!asked) return;
   root = await mkdtemp(join(tmpdir(), "xiongbao-bot-browser-computer-"));
-  // The XiongBao the fixture Recorder reports to, and the pages the Bot and the person browse.
+  // The pages the Bot and the person browse.
   site = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     async fetch(request) {
       const url = new URL(request.url);
-      if (url.pathname === "/fixture/calls") {
-        calls.push((await request.json()) as FixtureCall);
-        return new Response("");
-      }
-      if (url.pathname === "/api/recorder/me")
-        return Response.json({ user: connection().user });
-      if (url.pathname === "/fixture/tail")
-        return Response.json({ ms: tailMs });
       // A cookie kept for an hour, as a site keeps a sign-in: it outlives the browser closing.
       if (url.pathname === "/set-cookie")
         return new Response("<!doctype html><title>set</title>", {
@@ -223,9 +179,8 @@ beforeAll(async () => {
     },
   });
   origin = `http://127.0.0.1:${site.port}`;
-  // A Bot's own computer, as a supervisor starts each container and a Sandbox each pod: Record runs only on one.
-  computer = await startComputer("with-recorder", {
-    OPENBOT_RECORDER_DIR: FIXTURE,
+  // A Bot's own computer, as a supervisor starts each container and a Sandbox each pod.
+  computer = await startComputer("bots-own", {
     COMPUTER_BOT_ID: BOT,
   });
 }, 30_000);
@@ -250,393 +205,132 @@ afterAll(async () => {
   if (root) await rm(root, { recursive: true, force: true });
 }, 60_000);
 
-describe.skipIf(!asked)(
-  "a Bot's browser on a computer with the Recorder",
-  () => {
-    test("launches with the Recorder idle in it, and the Bot reads, snapshots and screenshots its own page as before", async () => {
-      const navigated = await call<{ url: string; title: string }>(
-        "/navigate",
-        {
-          body: { url: page("start") },
-        },
-      );
-      expect(navigated.status).toBe(200);
-      expect(navigated.json).toMatchObject({
-        url: page("start"),
-        title: "start",
-      });
-
-      const snapshot = await call<{
-        url: string;
-        elements: { role: string; name: string }[];
-      }>("/snapshot", { body: {} });
-      expect(snapshot.status).toBe(200);
-      expect(snapshot.json.url).toBe(page("start"));
-      expect(snapshot.json.elements).toContainEqual(
-        expect.objectContaining({ role: "textbox", name: "Amount" }),
-      );
-      const screenshot = await call<{ url: string; base64: string }>(
-        "/screenshot",
-      );
-      expect(screenshot.status).toBe(200);
-      expect(screenshot.json.url).toBe(page("start"));
-      expect(screenshot.json.base64.length).toBeGreaterThan(0);
-
-      // One tab, the Bot's: the Recorder's setup page, which it opens at every install, never became one.
-      const current = await state();
-      expect(current.open).toBe(true);
-      expect(current.tabs).toEqual([
-        expect.objectContaining({
-          url: page("start"),
-          title: "start",
-          active: true,
-        }),
-      ]);
-      // Loaded and answering, connected to nobody, recording nothing.
-      expect(current.recorder).toMatchObject({
-        connected: false,
-        phase: "idle",
-      });
-      expect(current.recordingBy).toBeUndefined();
-      expect(calls).toEqual([]);
-    }, 60_000);
-
-    test("refuses a person's browser id: on a computer Bots share before any route, on the person's own at the Bot's", async () => {
-      // A computer Bots run on runs no person's browser at all (person-access.ts), so the id goes no further than that.
-      for (const [path, body] of [
-        ["/bot-browser/state", undefined],
-        ["/bot-browser/tabs", { action: "new" }],
-      ] as const) {
-        const refused = await call(path, { body, botId: PERSON });
-        expect([path, refused.status, refused.json]).toEqual([
-          path,
-          503,
-          { error: NOT_ITS_OWN_COMPUTER },
-        ]);
-      }
-      // A person's own computer takes their id, and the Bot's routes still refuse it: their browser has its own routes.
-      const own = await startComputer("persons-own", {
-        OPENBOT_RECORDER_DIR: FIXTURE,
-        COMPUTER_BOT_ID: PERSON,
-      });
-      for (const [path, body] of [
-        ["/bot-browser/state", undefined],
-        ["/bot-browser/tabs", { action: "new" }],
-      ] as const)
-        expect([
-          path,
-          (await call(path, { body, botId: PERSON, on: own })).status,
-        ]).toEqual([path, 400]);
-    }, 30_000);
-
-    test("refuses Record on the computer every Bot shares, before the person's connection reaches the Bot's profile", async () => {
-      const shared = await startComputer("shared", {
-        OPENBOT_RECORDER_DIR: FIXTURE,
-      });
-      await takeWheel("user-1", shared);
-      const before = calls.length;
-      const refused = await start("user-1", "File an expense report", shared);
-      expect([refused.status, refused.json]).toEqual([
-        403,
-        { error: NOT_ITS_OWN_COMPUTER_RECORD },
-      ]);
-      // The Recorder there was never handed the connection, nor asked to record.
-      expect(calls.slice(before)).toEqual([]);
-      // The bar is still the person's while they hold the wheel.
-      expect(
-        (
-          await call("/bot-browser/navigate", {
-            body: { url: page("shared") },
-            on: shared,
-          })
-        ).status,
-      ).toBe(200);
-    }, 60_000);
-
-    test("records on a person's own computer, where only their own Bots run", async () => {
-      // How the supervisor and a Sandbox start a person's computer: named for the person, no Bot.
-      const own = await startComputer("persons-computer", {
-        OPENBOT_RECORDER_DIR: FIXTURE,
-        COMPUTER_PERSON_ID: "user-1",
-      });
-      await takeWheel("user-1", own);
-      const before = calls.length;
-      const started = await start("user-1", "File an expense report", own);
-      expect(started.status).toBe(200);
-      expect(started.json.recordingBy).toBe("user-1");
-      // The Recorder there was handed the person's connection and asked to record.
-      expect(
-        calls
-          .slice(before)
-          .map((each) => each.method)
-          .filter((method) => method === "connect" || method === "record"),
-      ).toEqual(["connect", "record"]);
-      expect(
-        (
-          await call("/bot-browser/recording", {
-            body: { action: "stop" },
-            on: own,
-          })
-        ).status,
-      ).toBe(200);
-      // The fixture Recorder's calls are one list for the file; the tests after this one start from none.
-      calls.length = 0;
-    }, 60_000);
-
-    test("refuses the bar, Record and narration while the Bot holds the wheel", async () => {
-      for (const [path, body] of [
-        ["/bot-browser/tabs", { action: "new", url: page("sneaky") }],
-        ["/bot-browser/navigate", { url: page("sneaky") }],
-        ["/bot-browser/navigate", { action: "back" }],
-      ] as const)
-        expect((await call(path, { body })).status).toBe(409);
-      expect((await start("user-1")).status).toBe(409);
-      expect(
-        (await call("/bot-browser/recording", { body: { action: "stop" } }))
-          .status,
-      ).toBe(409);
-      expect(
-        (
-          await call("/bot-browser/narration", {
-            body: {
-              text: "Here",
-              startedAt: 1_760_000_000_000,
-              endedAt: 1_760_000_000_500,
-              sentAt: 1_760_000_001_000,
-            },
-          })
-        ).status,
-      ).toBe(409);
-      // Nothing moved, and the Recorder was never handed anybody's connection.
-      expect((await state()).tabs.map((tab) => tab.url)).toEqual([
-        page("start"),
-      ]);
-      expect(calls).toEqual([]);
+describe.skipIf(!asked)("a Bot's browser on its own computer", () => {
+  test("launches, and the Bot reads, snapshots and screenshots its own page", async () => {
+    const navigated = await call<{ url: string; title: string }>("/navigate", {
+      body: { url: page("start") },
+    });
+    expect(navigated.status).toBe(200);
+    expect(navigated.json).toMatchObject({
+      url: page("start"),
+      title: "start",
     });
 
-    test("names the person who takes the wheel, and the bar then works for them, with the Bot following the tab they leave in front", async () => {
-      const requestId = await takeWheel("user-1");
-      const control = (await call<ComputerControlState>("/control")).json;
-      expect(control).toMatchObject({ holder: "human", heldBy: "user-1" });
+    const snapshot = await call<{
+      url: string;
+      elements: { role: string; name: string }[];
+    }>("/snapshot", { body: {} });
+    expect(snapshot.status).toBe(200);
+    expect(snapshot.json.url).toBe(page("start"));
+    expect(snapshot.json.elements).toContainEqual(
+      expect.objectContaining({ role: "textbox", name: "Amount" }),
+    );
+    const screenshot = await call<{ url: string; base64: string }>(
+      "/screenshot",
+    );
+    expect(screenshot.status).toBe(200);
+    expect(screenshot.json.url).toBe(page("start"));
+    expect(screenshot.json.base64.length).toBeGreaterThan(0);
 
-      const two = answered(
-        "new tab",
-        await call<BotBrowserState>("/bot-browser/tabs", {
-          body: { action: "new", url: page("two") },
-        }),
+    // One tab, the Bot's.
+    const current = await state();
+    expect(current.open).toBe(true);
+    expect(current.tabs).toEqual([
+      expect.objectContaining({
+        url: page("start"),
+        title: "start",
+        active: true,
+      }),
+    ]);
+  }, 60_000);
+
+  test("refuses the bar while the Bot holds the wheel", async () => {
+    for (const [path, body] of [
+      ["/bot-browser/tabs", { action: "new", url: page("sneaky") }],
+      ["/bot-browser/navigate", { url: page("sneaky") }],
+      ["/bot-browser/navigate", { action: "back" }],
+    ] as const)
+      expect((await call(path, { body })).status).toBe(409);
+    // Nothing moved.
+    expect((await state()).tabs.map((tab) => tab.url)).toEqual([page("start")]);
+  });
+
+  test("names the person who takes the wheel, and the bar then works for them, with the Bot following the tab they leave in front", async () => {
+    const requestId = await takeWheel("user-1");
+    const control = (await call<ComputerControlState>("/control")).json;
+    expect(control).toMatchObject({ holder: "human", heldBy: "user-1" });
+
+    const two = answered(
+      "new tab",
+      await call<BotBrowserState>("/bot-browser/tabs", {
+        body: { action: "new", url: page("two") },
+      }),
+    );
+    expect(two.tabs).toHaveLength(2);
+    expect(activeTab(two)).toMatchObject({
+      url: page("two"),
+      title: "two",
+    });
+    const first = two.tabs.find((tab) => tab.url === page("start"));
+    const second = activeTab(two);
+    if (!first || !second) throw new Error("Both tabs should be listed.");
+
+    const switched = answered(
+      "activate",
+      await call<BotBrowserState>("/bot-browser/tabs", {
+        body: { action: "activate", tabId: first.id },
+      }),
+    );
+    expect(activeTab(switched)?.id).toBe(first.id);
+    // The Bot's page is the tab in front now: what it reads next is that tab.
+    expect((await call<{ url: string }>("/read")).json.url).toBe(page("start"));
+
+    // The address bar, back, forward and reload, in the tab in front.
+    const bar = async (path: string, body: Record<string, string>) =>
+      answered(
+        path,
+        await call<BotBrowserState>("/bot-browser/navigate", { body }),
       );
-      expect(two.tabs).toHaveLength(2);
-      expect(activeTab(two)).toMatchObject({
-        url: page("two"),
-        title: "two",
-      });
-      const first = two.tabs.find((tab) => tab.url === page("start"));
-      const second = activeTab(two);
-      if (!first || !second) throw new Error("Both tabs should be listed.");
+    const there = await bar("address", { url: page("three") });
+    expect(activeTab(there)).toMatchObject({
+      id: first.id,
+      url: page("three"),
+    });
+    const back = await bar("back", { action: "back" });
+    expect(activeTab(back)?.url).toBe(page("start"));
+    const forward = await bar("forward", { action: "forward" });
+    expect(activeTab(forward)?.url).toBe(page("three"));
+    await bar("reload", { action: "reload" });
+    expect(
+      (
+        await call("/bot-browser/navigate", {
+          body: { url: "javascript:alert(1)" },
+        })
+      ).status,
+    ).toBe(400);
 
-      const switched = answered(
-        "activate",
-        await call<BotBrowserState>("/bot-browser/tabs", {
-          body: { action: "activate", tabId: first.id },
-        }),
-      );
-      expect(activeTab(switched)?.id).toBe(first.id);
-      // The Bot's page is the tab in front now: what it reads next is that tab.
-      expect((await call<{ url: string }>("/read")).json.url).toBe(
-        page("start"),
-      );
+    const closed = answered(
+      "close tab",
+      await call<BotBrowserState>("/bot-browser/tabs", {
+        body: { action: "close", tabId: second.id },
+      }),
+    );
+    expect(closed.tabs.map((tab) => tab.id)).toEqual([first.id]);
 
-      // The address bar, back, forward and reload, in the tab in front.
-      const bar = async (path: string, body: Record<string, string>) =>
-        answered(
-          path,
-          await call<BotBrowserState>("/bot-browser/navigate", { body }),
-        );
-      const there = await bar("address", { url: page("three") });
-      expect(activeTab(there)).toMatchObject({
-        id: first.id,
-        url: page("three"),
-      });
-      const back = await bar("back", { action: "back" });
-      expect(activeTab(back)?.url).toBe(page("start"));
-      const forward = await bar("forward", { action: "forward" });
-      expect(activeTab(forward)?.url).toBe(page("three"));
-      await bar("reload", { action: "reload" });
-      expect(
-        (
-          await call("/bot-browser/navigate", {
-            body: { url: "javascript:alert(1)" },
-          })
-        ).status,
-      ).toBe(400);
-
-      const closed = answered(
-        "close tab",
-        await call<BotBrowserState>("/bot-browser/tabs", {
-          body: { action: "close", tabId: second.id },
-        }),
-      );
-      expect(closed.tabs.map((tab) => tab.id)).toEqual([first.id]);
-
-      // Handed back: nobody is named, and the bar refuses again.
-      expect(
-        (await call("/control/release", { body: { requestId } })).status,
-      ).toBe(200);
-      expect(
-        (await call<ComputerControlState>("/control")).json.heldBy,
-      ).toBeUndefined();
-      expect(
-        (await call("/bot-browser/tabs", { body: { action: "new" } })).status,
-      ).toBe(409);
-      // And the Bot carries on in the tab the person left in front.
-      expect((await call<{ url: string }>("/read")).json.url).toBe(
-        page("three"),
-      );
-    }, 60_000);
-
-    test("records the person holding the wheel and nobody else, narrates, and Stop ends it and disconnects the Recorder", async () => {
-      const requestId = await takeWheel("user-1");
-      calls.length = 0;
-      // Somebody who does not hold the wheel cannot record, and the Recorder is never handed their connection.
-      expect((await start("user-2")).status).toBe(409);
-      expect(calls).toEqual([]);
-
-      const started = await start("user-1");
-      expect(started.status).toBe(200);
-      expect(started.json.recordingBy).toBe("user-1");
-      expect(started.json.recorder).toMatchObject({
-        connected: true,
-        userId: "user-1",
-        phase: "recording",
-        title: "File an expense report",
-        narration: "external",
-      });
-      // The Recorder's side: connected with the person's connection for the app's narration, then recording the tab
-      // the person has in front.
-      expect(callsFor("connect").map((each) => each.input)).toEqual([
-        { connection: connection(), narration: "external" },
-      ]);
-      const [record] = callsFor("record");
-      expect(record?.input).toEqual({
-        action: "start",
-        title: "File an expense report",
-      });
-      expect(record?.front).toBe(activeTab(started.json)?.url ?? "missing");
-      expect((await start("user-1", "Again")).status).toBe(409);
-
-      const sentAt = 1_760_000_003_000;
-      const phrase = {
-        text: "This is where the receipts go",
-        startedAt: 1_760_000_000_000,
-        endedAt: 1_760_000_002_500,
-      };
-      expect(
-        (await call("/bot-browser/narration", { body: { ...phrase, sentAt } }))
-          .status,
-      ).toBe(200);
-      expect(
-        (
-          await call("/bot-browser/narration", {
-            body: { speaking: true, since: 1_760_000_004_000, sentAt },
-          })
-        ).status,
-      ).toBe(200);
-      expect(callsFor("narrate").map((each) => each.input)).toEqual([phrase]);
-      expect(callsFor("speaking").map((each) => each.input)).toEqual([
-        { since: 1_760_000_004_000 },
-      ]);
-      expect((await state()).recordingBy).toBe("user-1");
-
-      const stopped = await call<BotBrowserState>("/bot-browser/recording", {
-        body: { action: "stop" },
-      });
-      expect(stopped.status).toBe(200);
-      expect(stopped.json.recordingBy).toBeUndefined();
-      // Whose it was, beside the recording the Recorder names, and still so when the bar is read again.
-      expect(stopped.json.lastStoppedBy).toBe("user-1");
-      expect((await state()).lastStoppedBy).toBe("user-1");
-      expect(stopped.json.recorder).toMatchObject({
-        connected: false,
-        phase: "idle",
-        lastStopped: {
-          recordingId: started.json.recorder?.recordingId,
-          title: "File an expense report",
-        },
-      });
-      // Stopped, then disconnected, in that order.
-      expect(calls.map((each) => each.method).slice(-2)).toEqual([
-        "record",
-        "disconnect",
-      ]);
-      expect(callsFor("record").at(-1)?.input).toEqual({ action: "stop" });
-      expect(
-        (
-          await call("/bot-browser/narration", {
-            body: { ...phrase, sentAt },
-          })
-        ).status,
-      ).toBe(409);
-      await call("/control/release", { body: { requestId } });
-    }, 60_000);
-
-    test("handing the wheel back ends the recording, then disconnects the Recorder, before the hand-back answers", async () => {
-      const requestId = await takeWheel("user-1");
-      expect((await start("user-1", "Handed back")).status).toBe(200);
-      calls.length = 0;
-      const released = await call<ComputerControlState>("/control/release", {
-        body: { requestId },
-      });
-      expect(released.status).toBe(200);
-      expect(calls.map((each) => each.method)).toEqual([
-        "record",
-        "disconnect",
-      ]);
-      expect(calls[0]?.input).toEqual({ action: "stop" });
-      const after = await state();
-      expect(after.recordingBy).toBeUndefined();
-      expect(after.recorder).toMatchObject({
-        connected: false,
-        phase: "idle",
-        lastStopped: { title: "Handed back" },
-      });
-      expect(after.lastStoppedBy).toBe("user-1");
-    }, 60_000);
-
-    test("a cancelled request ends the recording though the person still has the page, and they cannot start another", async () => {
-      const requestId = await takeWheel("user-1");
-      expect((await start("user-1", "Cancelled")).status).toBe(200);
-      calls.length = 0;
-      expect(
-        (await call("/control/cancel", { body: { requestId } })).status,
-      ).toBe(200);
-      expect(calls.map((each) => each.method)).toEqual([
-        "record",
-        "disconnect",
-      ]);
-      expect((await state()).recordingBy).toBeUndefined();
-      expect((await start("user-1", "After the cancel")).status).toBe(409);
-      await call("/control/release", { body: { requestId } });
-    }, 60_000);
-
-    test("stopping the computer ends the recording while the Recorder can still be told", async () => {
-      await takeWheel("user-1");
-      expect((await start("user-1", "Stopped computer")).status).toBe(200);
-      calls.length = 0;
-      expect((await call("/computers/stop", { body: {} })).json).toMatchObject({
-        stopped: true,
-        wasRunning: true,
-      });
-      expect(calls.map((each) => each.method)).toEqual([
-        "record",
-        "disconnect",
-      ]);
-      expect(await state()).toEqual({ open: false, tabs: [] });
-      expect(
-        (await call<ComputerControlState>("/control")).json.heldBy,
-      ).toBeUndefined();
-    }, 60_000);
-  },
-);
+    // Handed back: nobody is named, and the bar refuses again.
+    expect(
+      (await call("/control/release", { body: { requestId } })).status,
+    ).toBe(200);
+    expect(
+      (await call<ComputerControlState>("/control")).json.heldBy,
+    ).toBeUndefined();
+    expect(
+      (await call("/bot-browser/tabs", { body: { action: "new" } })).status,
+    ).toBe(409);
+    // And the Bot carries on in the tab the person left in front.
+    expect((await call<{ url: string }>("/read")).json.url).toBe(page("three"));
+  }, 60_000);
+});
 
 describe.skipIf(!asked)("clearing a Bot's browser", () => {
   const botId = "clear-bot";
@@ -660,7 +354,7 @@ describe.skipIf(!asked)("clearing a Bot's browser", () => {
     return there.json.tabs.find((tab) => tab.active)?.title;
   };
 
-  test("only the person holding the wheel clears it: their recording ends first, the profile goes and the Bot's files stay, and the browser starts fresh under them", async () => {
+  test("only the person holding the wheel clears it: the profile goes and the Bot's files stay, and the browser starts fresh under them", async () => {
     // The Bot signs in somewhere (a cookie kept for an hour) and keeps a note in its files.
     expect(
       (
@@ -703,36 +397,13 @@ describe.skipIf(!asked)("clearing a Bot's browser", () => {
     });
     expect(await personSees()).toBe("cookies:signed-in=yes");
 
-    // A recording of theirs is running, and the last of it takes a moment to reach Intelligence after Stop.
-    expect(
-      (
-        await on("/bot-browser/recording", {
-          action: "start",
-          title: "Before the clear",
-          by: "user-1",
-          connection: connection(),
-        })
-      ).status,
-    ).toBe(200);
-    tailMs = 1_500;
-    calls.length = 0;
     const cleared = await clear("user-1");
-    tailMs = 0;
     expect(cleared.status).toBe(200);
-    // Stopped, waited for, and let go, before the browser was wiped.
-    expect(calls.map((each) => each.method)).toEqual(["record", "disconnect"]);
-    expect(calls[0]?.input).toEqual({ action: "stop" });
-    expect(calls[1]?.sending).toBe(false);
-    // Fresh: one empty tab, nothing recording, the Recorder in it again and connected to nobody.
+    // Fresh: one empty tab.
     expect(cleared.json.open).toBe(true);
-    expect(cleared.json.recordingBy).toBeUndefined();
     expect(cleared.json.tabs).toEqual([
       expect.objectContaining({ url: "about:blank", active: true }),
     ]);
-    expect(cleared.json.recorder).toMatchObject({
-      connected: false,
-      phase: "idle",
-    });
     // Still theirs: the wheel stayed with them, and the bar works the fresh browser.
     expect(
       (await call<ComputerControlState>("/control", { botId })).json,
@@ -745,9 +416,7 @@ describe.skipIf(!asked)("clearing a Bot's browser", () => {
     expect(await personSees()).toBe("cookies:");
     // The Bot's files are its own, and stay.
     expect(
-      await Bun.file(
-        join(root, "with-recorder", "workspace", "notes.md"),
-      ).text(),
+      await Bun.file(join(root, "bots-own", "workspace", "notes.md")).text(),
     ).toBe("Keep me.");
 
     expect(
@@ -948,78 +617,6 @@ describe.skipIf(!asked)("what a person types while they hold the wheel", () => {
     );
   }, 60_000);
 });
-
-describe.skipIf(!asked)(
-  "a Bot's browser on a computer without the Recorder",
-  () => {
-    let without: Computer;
-
-    beforeAll(async () => {
-      without = await startComputer("without-recorder", {
-        OPENBOT_RECORDER_DIR: "",
-        COMPUTER_BOT_ID: "other-bot",
-      });
-    }, 30_000);
-
-    test("launches as it always has, its bar works for the person holding the wheel, and Record says it cannot", async () => {
-      expect(
-        (
-          await call("/navigate", {
-            body: { url: page("plain") },
-            botId: "other-bot",
-            on: without,
-          })
-        ).status,
-      ).toBe(200);
-      const plain = (
-        await call<BotBrowserState>("/bot-browser/state", {
-          botId: "other-bot",
-          on: without,
-        })
-      ).json;
-      expect(plain).toEqual({
-        open: true,
-        tabs: [expect.objectContaining({ url: page("plain"), active: true })],
-      });
-
-      const asked = await call<ComputerControlState>("/control/request", {
-        body: { reason: "I want to take control of the browser." },
-        botId: "other-bot",
-        on: without,
-      });
-      await call("/control/take", {
-        body: { requestId: asked.json.request?.id, by: "user-1" },
-        botId: "other-bot",
-        on: without,
-      });
-      const opened = await call<BotBrowserState>("/bot-browser/tabs", {
-        body: { action: "new", url: page("second") },
-        botId: "other-bot",
-        on: without,
-      });
-      expect(opened.status).toBe(200);
-      expect(activeTab(opened.json)?.url).toBe(page("second"));
-
-      const record = await call<{ error: string }>("/bot-browser/recording", {
-        body: {
-          action: "start",
-          title: "Nothing to record with",
-          by: "user-1",
-          connection: connection(),
-        },
-        botId: "other-bot",
-        on: without,
-      });
-      expect(record).toEqual({
-        status: 503,
-        json: {
-          error:
-            "This Bot's browser cannot record: the XiongBao Recorder is not installed on its computer.",
-        },
-      });
-    }, 60_000);
-  },
-);
 
 /**
  * The server's control routes and gateway, against this computer: the path a person's take and a Bot's request for help

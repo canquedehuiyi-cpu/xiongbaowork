@@ -10,24 +10,14 @@
     "lines": 7
   },
   {
-    "rule": "copilotkit-handle",
-    "scope": "shared/recorder-extension.json",
-    "lines": 1
-  },
-  {
     "rule": "copilotkit-package",
     "scope": "app/src",
     "lines": 37
   },
   {
     "rule": "copilotkit-package",
-    "scope": "extension/src",
-    "lines": 2
-  },
-  {
-    "rule": "copilotkit-package",
     "scope": "server/src",
-    "lines": 17
+    "lines": 13
   },
   {
     "rule": "copilotkit-package",
@@ -38,11 +28,6 @@
     "rule": "crypto-name",
     "scope": "server/src",
     "lines": 14
-  },
-  {
-    "rule": "env-name",
-    "scope": "agent-computer/src",
-    "lines": 1
   },
   {
     "rule": "env-name",
@@ -57,16 +42,11 @@
   {
     "rule": "env-name",
     "scope": "server/src",
-    "lines": 43
+    "lines": 42
   },
   {
     "rule": "env-name",
     "scope": "shared/this-machine.ts",
-    "lines": 2
-  },
-  {
-    "rule": "env-name",
-    "scope": "shared/xiongbao-browser.ts",
     "lines": 2
   },
   {
@@ -91,18 +71,8 @@
   },
   {
     "rule": "identifier",
-    "scope": "extension/public",
-    "lines": 1
-  },
-  {
-    "rule": "identifier",
-    "scope": "extension/src",
-    "lines": 108
-  },
-  {
-    "rule": "identifier",
     "scope": "server/src",
-    "lines": 61
+    "lines": 41
   },
   {
     "rule": "identifier",
@@ -128,11 +98,6 @@
     "rule": "identifier",
     "scope": "shared/waiting.ts",
     "lines": 1
-  },
-  {
-    "rule": "identifier",
-    "scope": "shared/xiongbao-browser.ts",
-    "lines": 3
   },
   {
     "rule": "identifier",

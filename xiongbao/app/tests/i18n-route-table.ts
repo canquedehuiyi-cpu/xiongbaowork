@@ -560,9 +560,8 @@ export const UNCOVERED: readonly Uncovered[] = [
   },
   {
     why: "缺夹具",
-    note: "有地址，但要先造出状态（管理员/已有数据/能跑浏览器的部署）才画得出来",
+    note: "有地址，但要先造出状态（管理员/已有数据）才画得出来",
     files: [
-      "_authed/_app/browser.tsx",
       "_authed/_app/index.tsx",
       "_authed/_app/me.tsx",
       "_authed/_app/responsibilities.tsx",
@@ -576,7 +575,6 @@ export const UNCOVERED: readonly Uncovered[] = [
       "_authed/admin/what-if.tsx",
       "_authed/onboarding.tsx",
       "_authed/settings/_personal/activity.tsx",
-      "_authed/settings/browsers.tsx",
       "_authed/settings/learning.tsx",
       "_authed/_app/reachability.tsx",
       /*

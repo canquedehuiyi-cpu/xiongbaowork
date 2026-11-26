@@ -5,7 +5,6 @@ import { computerAccessCheck } from "./agents/computer-access";
 import type { AgentProfileStore } from "./agents/profile-store";
 import type { XiongBaoRole } from "./auth/roles";
 import { botBrowserRequestSeconds } from "./browser/bot-browser";
-import { browserRequestSeconds } from "./browser/routes";
 import { websocket as channelSocket } from "./channels/socket";
 import type { ComputerGateway } from "./computer/gateway";
 import { computerSocketPath } from "./computer/stream-path";
@@ -48,9 +47,6 @@ import {
  * device token in the query), and a person watching a coworker on such a machine, whose frames come up
  * the runner's socket (devices/screen.ts). The live screen's upgrade is answered in the signed-in
  * person's frame (computer/stream-upgrade.ts, G01-E P4).
- *
- * M3: upstream also carries the Intelligence gateway's client socket here (intelligence-gateway-proxy.ts).
- * This runtime keeps its threads in the local runner (R0) and has no gateway to proxy, so it is not.
  */
 
 /** What each proxied socket carries: where to connect inward, and the socket once opened. */
@@ -417,13 +413,9 @@ export function startHttpServer(deps: {
       }
       if (url.pathname === "/api/voice/calls") server.timeout(request, 30);
       if (url.pathname === "/api/voice/sessions") server.timeout(request, 30);
-      // The person's browser's routes wait on its computer for longer than Bun's 10 s: a cold open, a slow page. Kept
-      // open for each route's own budget, so its answer, or its sentence, reaches the person (browser/routes.ts). A
-      // Bot's browser's routes the same, for a start, a Stop waiting on the last of a recording, a slow page
-      // (browser/bot-browser.ts).
-      const browserSeconds =
-        browserRequestSeconds(url.pathname) ??
-        botBrowserRequestSeconds(url.pathname);
+      // A Bot's browser's routes wait on its computer for longer than Bun's 10 s: a clear, a slow page. Kept open for
+      // each route's own budget, so its answer, or its sentence, reaches the person (browser/bot-browser.ts).
+      const browserSeconds = botBrowserRequestSeconds(url.pathname);
       if (browserSeconds !== undefined) server.timeout(request, browserSeconds);
       if (devices && url.pathname === "/api/runner/ws") {
         // The device token, from the query: an upgrade carries no custom header for the guard to read,

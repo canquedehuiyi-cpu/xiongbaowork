@@ -41,7 +41,7 @@ import {
   computerFleetQueryOptions,
 } from "@/lib/computers/queries";
 
-// M4: 待接入 上游 manage/computers-page.tsx 的分区（InactiveComputersSection 空闲电脑何时停、NetworkSection 能连到哪里，fork 仍在企业管控页）与「教员工」浏览器命名（#1229）
+// M4: 待接入 上游 manage/computers-page.tsx 的分区（InactiveComputersSection 空闲电脑何时停、NetworkSection 能连到哪里，fork 仍在企业管控页）
 export const Route = createFileRoute("/_authed/admin/computers")({
   component: ComputersPage,
 });

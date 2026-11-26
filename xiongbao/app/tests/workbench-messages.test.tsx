@@ -203,7 +203,6 @@ function signIn(emphasis: "agent" | "thread") {
     preferences: {
       messageListEmphasis: emphasis,
       selfHostBannerDismissed: true,
-      narration: null,
       skin: null,
       proactive: "on",
     },

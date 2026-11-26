@@ -14,7 +14,6 @@ import { AnimatePresence } from "motion/react";
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { BotsNavBadge } from "@/components/bot-profile/attention";
-import { BrowserNavItem } from "@/components/browser/browser-nav-item";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -548,11 +547,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {resources.map((item) => (
               <NavRow item={item} key={item.id} />
             ))}
-            {/*
-             * 上游的「教员工做事」（自己的浏览器 + 录制器）。只在服务端说能为这个人跑浏览器时出现，
-             * 带录制中的红点，所以不进 navigation.ts，按上游组件原样挂在主导航后面。
-             */}
-            <BrowserNavItem />
           </SidebarMenu>
         </nav>
         {moreLinks.length > 0 ? (

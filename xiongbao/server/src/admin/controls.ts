@@ -18,7 +18,6 @@
  * never loaded refuses everything it is asked about. Every async check reads the database fresh.
  */
 
-import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import postgres from "postgres";
 import { ownerTenantOfBot } from "../agents/bot-owner";
@@ -97,19 +96,6 @@ export type EnterpriseDeps = {
   auditStore: AuditStore;
   provider?: ComputerProvider;
   computerToken?: string;
-  /** Where a person's own XiongBao browser may go (browser/egress.ts): pushed to it instead of a Bot's policy, which says
-   * where Bots may go. Absent, a person's browser is pushed `deny_all`, the answer for a computer with no policy. */
-  personBrowserPolicy?: EgressPolicy;
-  /**
-   * A Bot's policy as it must be for now, from the one its owner is under: wider while a person records in the Bot's
-   * browser, so the Recorder there reaches XiongBao and the gateway (browser/bot-browser.ts), and the Bot's own once
-   * nobody does. Applied to every push of a Bot's policy, the periodic one and the push on wake, so neither takes the
-   * Recorder's way out away mid-recording, and neither leaves it to the Bot afterwards. Absent: the owner's policy.
-   */
-  duringRecording?: (
-    botId: string,
-    policy: EgressPolicy,
-  ) => Promise<EgressPolicy>;
   /**
    * Destinations every Bot's policy allows besides the organization's own (`withDestinations`): the
    * address external employees on their computers reach the model proxy at. Absent: none.
@@ -142,14 +128,6 @@ export type EnterpriseDeps = {
     restore: (userId: string) => Promise<void>;
   };
   initialAdminEmails?: readonly string[];
-  /**
-   * The people's browsers' Recorders (recorder/wiring.ts): who holds a live connection, and the sign-out that ends a
-   * person's. Turning SSO-required on ends them for the people it signs out. Absent where there is no Recorder.
-   */
-  recorders?: {
-    holders: () => Promise<string[]>;
-    signOut: (userId: string, ending: string) => Promise<void>;
-  };
   env?: Record<string, string | undefined>;
   /** Optional typed clock seam; production keeps the native interval implementation. */
   clock?: {
@@ -712,9 +690,6 @@ async function initializeEnterpriseControls(
     };
 
     const policyForBot = async (botId: string): Promise<EgressPolicy> => {
-      // A person's own browser has no Bot and no owner to read a policy for, and the organization's is for Bots.
-      if (isPersonBrowserId(botId))
-        return deps.personBrowserPolicy ?? { mode: "deny_all", rules: [] };
       const current = snapshot;
       const owner = await networkMemberFor(botId);
       if (!current || !owner) return { mode: "deny_all", rules: [] };
@@ -723,12 +698,9 @@ async function initializeEnterpriseControls(
         owner.member,
         owner.cloudNetwork,
       );
-      const pushed = deps.duringRecording
-        ? await deps.duringRecording(botId, policy)
-        : policy;
       return deps.alwaysAllowed
-        ? withDestinations(pushed, deps.alwaysAllowed)
-        : pushed;
+        ? withDestinations(policy, deps.alwaysAllowed)
+        : policy;
     };
 
     // Tried again within seconds until it lands, quietly while a computer is likely still starting.

@@ -9,7 +9,7 @@ import { queryClient } from "@/query-client";
  *
  * Bun printed it by walking everything it reached, React's fiber and the window's globals among it, synchronously: one
  * failed `expect(dialog).toBeNull()` in a `waitFor` held the event loop for 3.3 s locally and 8.8 s on GitHub's runner,
- * where recorder-browsers.test.tsx then timed out. The time is not asserted closely, a runner's speed is not this test's
+ * where that test (since deleted) then timed out. The time is not asserted closely, a runner's speed is not this test's
  * to pin; what is printed is, and it is what made the time.
  */
 beforeAll(() => GlobalRegistrator.register());

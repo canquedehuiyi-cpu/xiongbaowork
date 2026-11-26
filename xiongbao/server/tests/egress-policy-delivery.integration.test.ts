@@ -114,7 +114,6 @@ async function startComputer(options: { seats?: string[] } = {}) {
         PORT: String(COMPUTER_PORT),
         PROFILES_DIR: join(dir, "profiles"),
         WORKSPACE_DIR: join(dir, "workspace"),
-        OPENBOT_RECORDER_DIR: join(dir, "recorder"),
       },
       stdout: "ignore",
       stderr: "ignore",

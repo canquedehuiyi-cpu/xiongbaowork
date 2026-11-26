@@ -14,7 +14,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { reservePort } from "../../tests/support/reserved-port";
 import { createApp } from "../src/app";
-import { withPersonBrowsers } from "../src/browser/host";
 import { withPolicyPushOnWake } from "../src/computer/policy-network";
 import { createComputerProvider } from "../src/computer/provider";
 import { loadConfig } from "../src/config";
@@ -1272,9 +1271,7 @@ describe("the personal edition's one computer", () => {
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), "xiongbao-setup-computer-"));
     await Promise.all(
-      ["profiles", "workspace", "recorder"].map((name) =>
-        mkdir(join(dir, name)),
-      ),
+      ["profiles", "workspace"].map((name) => mkdir(join(dir, name))),
     );
     await mkdir(join(dir, "profiles", usedSeat));
     const port = await reservePort();
@@ -1288,7 +1285,6 @@ describe("the personal edition's one computer", () => {
         PORT: String(port),
         PROFILES_DIR: join(dir, "profiles"),
         WORKSPACE_DIR: join(dir, "workspace"),
-        OPENBOT_RECORDER_DIR: join(dir, "recorder"),
         COMPUTER_BROWSER_BACKEND: "managed",
         COMPUTER_BROWSER_MODE: "headless",
         COMPUTER_TOKEN: token,
@@ -1331,11 +1327,7 @@ describe("the personal edition's one computer", () => {
       rules: [],
     });
     const provider = withPolicyPushOnWake(
-      withPersonBrowsers(
-        createComputerProvider(config.computer),
-        config.browser?.url,
-        config.edition,
-      ),
+      createComputerProvider(config.computer),
       { policyForBot, token: serverToken },
     );
     return appWith({

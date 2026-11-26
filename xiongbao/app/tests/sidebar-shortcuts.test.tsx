@@ -35,7 +35,6 @@ import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { avatarSourceKeys } from "@/lib/avatar/sources";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
-import { browserKeys } from "@/lib/browser/queries";
 import { channelKeys } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { portraitKeys } from "@/lib/portraits/queries";
@@ -131,7 +130,6 @@ function client(role: "user" | "admin" = "user") {
   queryClient.setQueryData(userPreferencesQueryOptions("user").queryKey, {
     messageListEmphasis: "thread",
     selfHostBannerDismissed: true,
-    narration: null,
     skin: "xiongbao",
     proactive: "on",
   });
@@ -166,12 +164,6 @@ function client(role: "user" | "admin" = "user") {
   queryClient.setQueryData(botLifecycleKeys.attention, {
     bots: [],
     lastPingId: null,
-  });
-  queryClient.setQueryData(browserKeys.state, {
-    available: false,
-    computerId: "",
-    open: false,
-    tabs: [],
   });
   queryClient.setQueryData(portraitKeys.all, []);
   queryClient.setQueryData(channelKeys.list(), {

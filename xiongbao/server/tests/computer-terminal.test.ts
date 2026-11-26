@@ -91,7 +91,7 @@ async function until(check: () => boolean, ms = 15_000) {
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "xiongbao-terminal-"));
   await Promise.all(
-    ["profiles", "workspace", "recorder"].map((name) => mkdir(join(dir, name))),
+    ["profiles", "workspace"].map((name) => mkdir(join(dir, name))),
   );
   const port = await reservePort();
   computerBase = `http://127.0.0.1:${port}`;
@@ -106,7 +106,6 @@ beforeAll(async () => {
       PROFILES_DIR: join(dir, "profiles"),
       WORKSPACE_DIR: join(dir, "workspace"),
       COMPUTER_SEPARATE_WORKSPACES: "on",
-      OPENBOT_RECORDER_DIR: join(dir, "recorder"),
       COMPUTER_BROWSER_BACKEND: "managed",
       COMPUTER_BROWSER_MODE: "headless",
     },

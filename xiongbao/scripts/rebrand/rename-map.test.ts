@@ -95,15 +95,6 @@ describe("renameText", () => {
     }
   });
 
-  test("扩展身份到 R2 就改：带引号的写法也不再被冻结", () => {
-    const r2 = loadProtect("R2");
-    expect(renameText('"openbot-recorder"', r2)).toBe('"xiongbao-recorder"');
-    expect(renameText('"ai.copilotkit.openbot.recorder"', r2)).toBe(
-      '"ai.copilotkit.xiongbao.recorder"',
-    );
-    expect(renameText('"openbot-recorder"', p)).toBe('"openbot-recorder"');
-  });
-
   test("连接串保护带边界：同一标识符不会改一半", () => {
     const text = "postgres://openbot_fixture:x@h/db -U openbot_fixture";
     expect(renameText(text, p)).toBe(

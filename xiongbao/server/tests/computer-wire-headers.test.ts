@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readWireHeader } from "../../agent-computer/src/wire-headers";
 import { reservePort } from "../../tests/support/reserved-port";
-import { computerCaller } from "../src/browser/routes";
+import { computerCaller } from "../src/browser/calls";
 import { createComputerTransport, seatHeaders } from "../src/computer/client";
 import { botsOn, pushEgressPolicy } from "../src/computer/policy-network";
 import {
@@ -224,8 +224,7 @@ describe("a real computer called by the server's transport", () => {
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), "server-wire-headers-"));
-    for (const name of ["profiles", "workspace", "recorder"])
-      await mkdir(join(root, name));
+    for (const name of ["profiles", "workspace"]) await mkdir(join(root, name));
     const port = await reservePort();
     base = `http://127.0.0.1:${port}`;
     child = Bun.spawn([process.execPath, "--no-env-file", "src/index.ts"], {
@@ -242,7 +241,6 @@ describe("a real computer called by the server's transport", () => {
         PORT: String(port),
         PROFILES_DIR: join(root, "profiles"),
         WORKSPACE_DIR: join(root, "workspace"),
-        OPENBOT_RECORDER_DIR: join(root, "recorder"),
       },
       stdout: "ignore",
       stderr: "ignore",

@@ -1,6 +1,5 @@
 export type MessageListEmphasis = "agent" | "thread";
 
-export type NarrationPreference = "on" | "off";
 /** Whether this person's Bots check in on their behalf at all. */
 export type ProactivePreference = "on" | "off";
 /**
@@ -50,12 +49,6 @@ export type UserPreferences = {
   messageListEmphasis: MessageListEmphasis;
   /** Whether this person closed the banner offering help self-hosting XiongBao. */
   selfHostBannerDismissed: boolean;
-  /**
-   * Whether this person narrates their recordings in XiongBao's Browser: the page listens to their microphone (hosted
-   * XiongBao), or the Recorder in their browser does (XiongBao Desktop), only when it is `on`. Null until they chose, which
-   * the Browser page asks before their first recording; the microphone stays closed until then.
-   */
-  narration: NarrationPreference | null;
   /** How XiongBao looks for this person, on every device they sign in from. */
   skin: SkinId;
   /**
@@ -69,7 +62,6 @@ export type UserPreferences = {
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   messageListEmphasis: "thread",
   selfHostBannerDismissed: false,
-  narration: null,
   skin: DEFAULT_SKIN,
   proactive: "on",
 };

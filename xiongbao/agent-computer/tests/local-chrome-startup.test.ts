@@ -6,7 +6,7 @@ import {
   requireAvailablePort,
   requireInstalledBrowser,
 } from "../../scripts/start-local-chrome-computer";
-import { browserExecutableCandidates } from "../src/person-launch";
+import { browserExecutableCandidates } from "../src/installed-browser";
 
 describe("starting the local computer", () => {
   test("requires the existing API token and never includes it in an error", () => {

@@ -7,8 +7,7 @@ import ts from "typescript";
  * Guard: no text a person reads names Intelligence. To a person it is all XiongBao, and the part of
  * XiongBao they mean is the back end (see .claude/skills/xiongbao-copy).
  *
- * Read are the string literals, template text and JSX text of the app, the server, the Recorder
- * extension and the shared Recorder disclosure.
+ * Read are the string literals, template text and JSX text of the app and the server.
  * Not read: code identifiers and env names (`intelligenceStack`, `INTELLIGENCE_API_URL`; the check
  * is for the capitalised word), comments, tests, log calls, and docs/ and charts/, which operators
  * read to configure Intelligence by name.
@@ -21,13 +20,7 @@ const WORD = /\bIntelligence\b/;
  * refused before the server serves anything. Each entry must still match, so one that goes stale
  * is removed rather than kept as a hole.
  */
-const NOT_SHOWN: { file: string; text: string; why: string }[] = [
-  {
-    file: "server/src/recorder/trajectory-connect.ts",
-    text: "Could not connect to Intelligence",
-    why: "the runtime's own reply, matched for the Recorder; it reads only the code and status (extension/src/offscreen/grant.ts)",
-  },
-];
+const NOT_SHOWN: { file: string; text: string; why: string }[] = [];
 
 /**
  * Text that names Intelligence and is shown only to an administrator. Upstream counts every screen
@@ -95,10 +88,9 @@ function scriptText(path: string): string[] {
 
 function shown(): string[] {
   const found = [
-    ...["app/src", "server/src", "extension/src"].flatMap((root) => [
+    ...["app/src", "server/src"].flatMap((root) => [
       ...files(join(REPO, root), /\.tsx?$/),
     ]),
-    join(REPO, "shared/recorder-disclosure.ts"),
   ].flatMap(scriptText);
   return found;
 }
@@ -108,7 +100,7 @@ const isNotShown = (hit: string) =>
     (entry) => hit.startsWith(`${entry.file}:`) && hit.includes(entry.text),
   );
 
-test("no text a person reads in the app, the server or the Recorder says Intelligence", () => {
+test("no text a person reads in the app or the server says Intelligence", () => {
   expect(shown().filter((hit) => !isNotShown(hit))).toEqual([]);
 });
 

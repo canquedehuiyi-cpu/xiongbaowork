@@ -330,18 +330,22 @@ describe("apply CLI", () => {
 
   test("带作用域的保护只在自己的文件里生效，别处同样的文字照改", () => {
     put(
-      "xiongbao/shared/learning.ts",
-      'export const AUTOMATIC_LEARNING_CONTAINER_ID = "openbot";\n',
+      "xiongbao/shared/staffing-proposal.ts",
+      'export const MARK = "<<openbot:staffing-proposal>>";\n',
     );
     put(
       "xiongbao/shared/elsewhere.ts",
-      'export const AUTOMATIC_LEARNING_CONTAINER_ID = "openbot";\n',
+      'export const MARK = "<<openbot:staffing-proposal>>";\n',
     );
     git("add", "-A");
     git("commit", "-q", "-m", "scoped");
     run(["--phase", "R1", "xiongbao/shared/"]);
-    expect(read("xiongbao/shared/learning.ts")).toContain('"openbot"');
-    expect(read("xiongbao/shared/elsewhere.ts")).toContain('"xiongbao"');
+    expect(read("xiongbao/shared/staffing-proposal.ts")).toContain(
+      '"<<openbot:staffing-proposal>>"',
+    );
+    expect(read("xiongbao/shared/elsewhere.ts")).toContain(
+      '"<<xiongbao:staffing-proposal>>"',
+    );
   });
 
   test("参数不合法时退出 2 并说明用法", () => {

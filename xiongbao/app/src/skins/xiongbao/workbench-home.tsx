@@ -3,7 +3,6 @@ import {
   IconAt,
   IconBolt,
   IconBoxSeam,
-  IconChalkboardTeacher,
   IconChecks,
   IconCircleCheck,
   IconCpu,
@@ -23,7 +22,6 @@ import {
   listedEmployees,
 } from "@/components/app-sidebar/roster";
 import { waitingCount } from "@/components/approvals/waiting";
-import { TEACH_A_BOT } from "@/components/browser/browser-nav-item";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import {
   SidebarToggleBar,
@@ -48,7 +46,6 @@ import {
   todayStats,
 } from "@/lib/workbench/today";
 import { TONE } from "./employee-card";
-import { useBrowserAvailable } from "./list-column";
 
 /**
  * 今天做完的卡，按全部时间读（`period=all`）。看板的时间窗按建卡时间算，月初建、今天做完的卡不能被它
@@ -198,16 +195,6 @@ const APP_TILES: readonly Tile[] = [
   },
 ];
 
-/** 「教员工做事」：只在服务端说能为这个人跑浏览器时才有，和列表栏、侧栏是同一个判断。 */
-const TEACH_TILE: Tile = {
-  id: "browser",
-  label: TEACH_A_BOT,
-  detail: "示范一遍给员工",
-  icon: IconChalkboardTeacher,
-  tone: "--wb-app-violet",
-  link: { to: "/browser" },
-};
-
 const MORE_TILES: readonly Tile[] = [
   {
     id: "pipelines",
@@ -349,7 +336,6 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
   const inbox = useQuery(approvalInboxOptions());
   const overview = useQuery(autonomousOverviewQueryOptions(true));
   const automations = useQuery(automationListQueryOptions());
-  const browser = useBrowserAvailable();
   const adminSection = useAdminSection();
 
   const names = new Map(
@@ -401,7 +387,7 @@ export function WorkbenchHome({ now: fixedNow }: { now?: Date } = {}) {
 
   const name = user?.name?.trim() || user?.email || "";
   const hello = greetingFor(now);
-  const apps = [...APP_TILES, ...(browser ? [TEACH_TILE] : []), ...MORE_TILES];
+  const apps = [...APP_TILES, ...MORE_TILES];
 
   return (
     <div

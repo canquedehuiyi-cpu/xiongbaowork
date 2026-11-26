@@ -213,7 +213,7 @@ tenant isolation would fall back to the application alone — see `docs/deployme
 
 ## Try it
 
-Pick a task you know well enough to review. For example, ask a Bot to check a hotel receipt against a travel policy in Drive. Have it show the room rate and tax separately so you can decide whether the claim meets the nightly limit. Use **Teach a Bot** to record the steps you want it to follow on the next claim.
+Pick a task you know well enough to review. For example, ask a Bot to check a hotel receipt against a travel policy in Drive. Have it show the room rate and tax separately so you can decide whether the claim meets the nightly limit.
 
 - Open `/bot` and ask: `Open news.ycombinator.com and tell me the top story.`
 - Ask the Bot to fill out <https://httpbin.org/forms/post>, then inspect `/admin/audit`.

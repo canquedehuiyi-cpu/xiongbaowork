@@ -83,7 +83,6 @@ async function profilesFor(
 const MIB = 1024 ** 2;
 const LIMIT = 1000 * MIB;
 const MINUTE = 60_000;
-const PERSON = "person-0123456789abcdef0123456789abcdef";
 
 /**
  * A container whose memory is its browsers, read the way the cgroup reads it.
@@ -275,43 +274,6 @@ describe.skipIf(!asked)("closing browsers when memory runs high", () => {
         expect(profiles.isLive("held")).toBe(true);
         expect(profiles.isLive("asking")).toBe(true);
         expect(profiles.liveCount()).toBe(2);
-      } finally {
-        await profiles.closeAll();
-      }
-    },
-    LAUNCH_TIMEOUT_MS,
-  );
-
-  test(
-    "a person's own browser is never closed for memory, even the one used longest ago",
-    async () => {
-      // Their Recorder runs in it, so closing it would end what they were recording without a word.
-      const { findRecorder } = await import("../src/recorder");
-      const found = await findRecorder(
-        join(import.meta.dir, "fixtures", "recorder"),
-      );
-      if (!found.ok) throw new Error(found.error);
-      const container = containerOf(30);
-      const time = clock();
-      const { profiles, told } = await profilesFor("memory-person", {
-        memory: container.memory,
-        now: time.now,
-      });
-      try {
-        container.holds(
-          await profiles.page(PERSON, { open: { recorder: found.recorder } }),
-        );
-        container.holds(await profiles.page("bot-a"));
-        container.holds(await profiles.page("bot-b"));
-        time.passes(10 * MINUTE);
-
-        container.holds(await profiles.page("bot-c"));
-
-        // The person's browser is the least recently used by ten minutes and stays; the quieter of
-        // the two Bots goes in its place.
-        expect(told).toEqual(["bot-a"]);
-        expect(profiles.isLive(PERSON)).toBe(true);
-        expect(profiles.person(PERSON)).toBeDefined();
       } finally {
         await profiles.closeAll();
       }

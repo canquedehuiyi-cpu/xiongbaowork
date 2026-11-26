@@ -2,7 +2,6 @@ import {
   IconArrowLeft,
   IconBell,
   IconBook,
-  IconBrowser,
   IconChecks,
   IconDeviceDesktop,
   IconDevices,
@@ -74,12 +73,6 @@ export const SETTINGS_SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     title: "我的设备",
     icon: IconDevices,
     linkOptions: { to: "/settings/devices" },
-  },
-  {
-    /* The browsers signed in to the Recorder extension as you; each can be disconnected here. */
-    title: "浏览器",
-    icon: IconBrowser,
-    linkOptions: { to: "/settings/browsers" },
   },
   {
     /* What the Bots learned from your conversations. */

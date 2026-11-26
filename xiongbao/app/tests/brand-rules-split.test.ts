@@ -53,7 +53,6 @@ describe("OPENBOT_ rules split by use", () => {
       "Dockerfile",
       "agent-computer/src/index.ts",
       "docker/xiongbao-apt",
-      "extension/scripts/build.ts",
     ])
       expect(files).toContain(path);
     expect(files.some((f) => f.startsWith("docker/tests/"))).toBe(false);

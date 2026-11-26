@@ -7,7 +7,7 @@ import {
   type InstalledBrowser,
   installedBrowser,
   NO_INSTALLED_BROWSER,
-} from "../agent-computer/src/person-launch";
+} from "../agent-computer/src/installed-browser";
 
 type Environment = Record<string, string | undefined>;
 
@@ -70,8 +70,8 @@ export function localChromeConfiguration(
  * at Playwright's stable-channel location and never an executable from a tool input.
  *
  * Edge because it ships with Windows, so a machine without Chrome still has a browser Google or
- * Microsoft keeps patched to open a person's own browser in. A Bot's browser here is Chrome, as
- * before: with only Edge installed, a person's browser opens and a Bot's does not.
+ * Microsoft keeps patched. A Bot's browser here is Chrome: with only Edge installed the helper
+ * starts, and a Bot's browser does not open.
  */
 export async function requireInstalledBrowser(
   env: Environment,

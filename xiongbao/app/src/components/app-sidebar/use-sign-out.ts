@@ -7,9 +7,8 @@ import { signOutMutationOptions } from "@/lib/auth/mutations";
 const SIGN_OUT_TOAST = "sign-out-unfinished";
 
 /**
- * Sign out, then go to the sign-in screen. A sign-out the server could not finish (it ends the person's Recorders
- * first, and does not sign out when it cannot) leaves the person signed in and where they were, told so in a toast that
- * stays until they close it; Sign out works again at once.
+ * Sign out, then go to the sign-in screen. A sign-out the server could not finish leaves the person signed in and where
+ * they were, told so in a toast that stays until they close it; Sign out works again at once.
  */
 export function useSignOut() {
   const queryClient = useQueryClient();

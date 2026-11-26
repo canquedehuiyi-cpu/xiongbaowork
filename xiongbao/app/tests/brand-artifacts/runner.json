@@ -28,11 +28,5 @@
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "设备端环境变量名，随报错文字出现；Task 13"
-  },
-  {
-    "word": "openbotUrl:_",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）；--minify 后的写法（附录 A 第 35 行，Task 13）"
   }
 ]

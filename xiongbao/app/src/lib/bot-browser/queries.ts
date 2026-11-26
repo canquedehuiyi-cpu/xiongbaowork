@@ -3,8 +3,11 @@ import {
   type BotBrowserApiState,
   botBrowserApiPaths,
 } from "@xiongbao/shared/bot-browser";
-import { BROWSER_POLL_MS } from "@/lib/browser/queries";
 import { client } from "@/lib/client";
+
+/** How often a Bot's browser's state is asked again while it is on screen, the same once a second the computer's control
+ * state is read. */
+const BROWSER_POLL_MS = 1000;
 
 export const botBrowserKeys = {
   all: ["bot-browser"] as const,
@@ -12,13 +15,11 @@ export const botBrowserKeys = {
 };
 
 /**
- * A Bot's browser as a person working in it sees it: its tabs, the Recorder's own report, and the server's verdicts on
- * the signed-in person, whether they hold the wheel (`mine`, so the bar and Record are live for them) and whether the
- * recording running is theirs (`recordingIsMine`).
+ * A Bot's browser as a person working in it sees it: its tabs, and the server's verdict on the signed-in person,
+ * whether they hold the wheel (`mine`, so the bar is live for them).
  *
- * Read every second while the Bot's screen is open full size, as the Browser page reads the person's own, because what
- * changes (where the Bot is, the tabs, a recording's actions, who holds the wheel) changes on the computer rather than
- * here. Reading it never launches the browser.
+ * Read every second while the Bot's screen is open full size, because what changes (where the Bot is, the tabs, who
+ * holds the wheel) changes on the computer rather than here. Reading it never launches the browser.
  */
 export function botBrowserStateQueryOptions(botId: string) {
   return queryOptions({

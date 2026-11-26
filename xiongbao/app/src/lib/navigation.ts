@@ -26,12 +26,10 @@ import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
  * ones in the sidebar's 「更多」 fold, `account` ones in the menu under the person's name. A skin may
  * group them its own way.
  *
- * 熊宝版（M5b，用户拍板）按上游的页面结构排：员工、任务看板、自主工作、@Waker、能力、连接，后面是教员工做事；
+ * 熊宝版（M5b，用户拍板）按上游的页面结构排：员工、任务看板、自主工作、@Waker、能力、连接；
  * 「更多」里是组团流程；账户菜单是我的分身、套餐与用量、设置、管理（仅管理员）。
  *
- * 不在这份清单里的两项：
- * - 教员工做事：只有服务端说能为这个人跑浏览器时才出现，带录制中的红点，由
- *   `components/browser/browser-nav-item.tsx` 的 `BrowserNavItem` 画，紧跟在主导航后面（沿用现有实现）。
+ * 不在这份清单里的一项：
  * - 我的分身：地址是这个人自己的分身员工（`/bots/avatar-<tenant>`，id 读自 `GET /api/me/avatar/sources`），
  *   不是固定页面，所以单独定义成 `AVATAR_MENU_ITEM`，由账户菜单解析出地址后画在最前面。
  */
@@ -227,7 +225,6 @@ const RAIL_PREFIXES: readonly (readonly [string, Rail])[] = [
   ["/reachability", "work"],
   ["/capabilities", "work"],
   ["/connections", "work"],
-  ["/browser", "work"],
   ["/pipelines", "work"],
   ["/team-bots", "work"],
   ["/approvals", "work"],

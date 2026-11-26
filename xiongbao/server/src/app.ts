@@ -71,11 +71,6 @@ import {
   createBotBrowser,
 } from "./browser/bot-browser";
 import {
-  type BrowserRouteDeps,
-  browserConnectionRevoked,
-  createBrowserRoutes,
-} from "./browser/routes";
-import {
   createAttachmentRoutes,
   createChannelAttachmentRoutes,
 } from "./channels/attachments";
@@ -126,7 +121,6 @@ import type { HostAccessBroker } from "./host-access/broker";
 import { createHostAccessRoutes } from "./host-access/routes";
 import { identityRoutes } from "./identity/routes";
 import type { IdentityStore } from "./identity/store";
-import { createCapturePassOrigin } from "./intelligence-gateway-proxy";
 import type { LocalLearningEngine } from "./local-learning/engine";
 import { createLocalLearningRoutes } from "./local-learning/routes";
 import type { MemoryIngestion } from "./memory/ingestion";
@@ -177,12 +171,6 @@ import {
   mountProviderOAuthProxy,
 } from "./provider-oauth";
 import type { QuotaService } from "./quota/limits";
-import {
-  createRequireRecorder,
-  RECORDER_BEARER_PREFIX,
-} from "./recorder/guard";
-import { createRecorderRoutes } from "./recorder/routes";
-import type { RecorderExtensionDeps } from "./recorder/wiring";
 import { createReleaseStatusRoutes } from "./release-status";
 import { createOriginGuard, createSingleUserGate } from "./request-trust";
 import type { ResponsibilityBindingStore } from "./responsibilities/bindings";
@@ -489,17 +477,9 @@ export function createApp(
     /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
     wakerflowAutomations?: boolean;
     approvals?: ApprovalService;
-    /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
-    recorder?: RecorderExtensionDeps;
-    /** A person's own XiongBao browser, with the Recorder in it already connected (browser/routes.ts). Absent, nothing
-     * about it is mounted and the app shows no Browser button. */
-    browser?: Omit<BrowserRouteDeps, "requireUser" | "auditStore">;
-    /** A Bot's browser worked by a person: its bar and Record (browser/bot-browser.ts), under the computer routes. Absent,
-     * or with no computer, nothing about it is mounted. */
-    botBrowser?: Omit<
-      BotBrowserRouteDeps,
-      "gateway" | "auditStore" | "botName"
-    >;
+    /** A Bot's browser worked by a person: its bar (browser/bot-browser.ts), under the computer routes. Absent, or with
+     * no computer, nothing about it is mounted. */
+    botBrowser?: Omit<BotBrowserRouteDeps, "gateway">;
     /** The private sign-in form and the Passwords vault. See passwords/service.ts. */
     passwords?: SignInService;
     delivery?: {
@@ -1829,27 +1809,10 @@ export function createApp(
     /*
      * The runtime admits the single-user administrator by itself (`resolveRequestActor`), from a
      * request its hooks may already have copied, so the connection it came on is checked here, in
-     * front of it. A Recorder bearer is not the administrator: it resolves to its own connection and
-     * is refused everywhere but the capture pass.
+     * front of it.
      */
     if (config.singleUser)
-      app.use(
-        "/api/runtime/*",
-        createSingleUserGate(config.singleUserAccess, (request) =>
-          Boolean(
-            request.headers
-              .get("authorization")
-              ?.startsWith(RECORDER_BEARER_PREFIX),
-          ),
-        ),
-      );
-    /*
-     * The Recorder's capture pass names the Intelligence gateway's socket, and where this server
-     * carries that socket with no public URL to write before it, as over a `kubectl port-forward`, the
-     * address is a path. The page resolves a path against itself; the Recorder is not on the page, so
-     * its pass is answered knowing this server's own origin as the Recorder reached it.
-     */
-    app.use("/api/runtime/*", createCapturePassOrigin(config));
+      app.use("/api/runtime/*", createSingleUserGate(config.singleUserAccess));
     // Mounted at the ROOT with the handler carrying its own basePath. Mounting it at
     // "/api/runtime" as well double-prefixes it: Hono strips the prefix before the handler sees
     // the path, so every route lands at /api/runtime/api/runtime/* and /info 404s. The browser
@@ -1913,13 +1876,6 @@ export function createApp(
           ? createBotBrowser({
               ...coworker.botBrowser,
               gateway: computerGateway,
-              ...(auditStore ? { auditStore } : {}),
-              ...(agentProfileStore
-                ? {
-                    botName: async (actor, botId) =>
-                      (await agentProfileStore.get(actor, botId))?.name ?? null,
-                  }
-                : {}),
             })
           : undefined,
         auditStore,
@@ -2164,29 +2120,6 @@ export function createApp(
       createDeliveryRoutes({ ...coworker.delivery.authenticated, requireUser }),
     );
   }
-  if (coworker?.recorder) {
-    app.route(
-      "/api/recorder",
-      createRecorderRoutes({
-        ...coworker.recorder,
-        // A Disconnect in Settings, Browsers reaches the person's own XiongBao browser at once.
-        ...(coworker.browser
-          ? { onRevoked: browserConnectionRevoked(coworker.browser) }
-          : {}),
-        requireUser,
-        requireRecorder: createRequireRecorder(
-          coworker.recorder.resolve,
-          coworker.recorder.onRefused,
-        ),
-        auditStore,
-      }),
-    );
-  }
-  if (coworker?.browser)
-    app.route(
-      "/api/browser",
-      createBrowserRoutes({ ...coworker.browser, requireUser, auditStore }),
-    );
   if (coworker?.lifecycle)
     app.route(
       "/api/bots",
@@ -2718,7 +2651,7 @@ export function createApp(
    *
    * WHY THE SAME PROCESS. The app's API calls get no CORS from this server, deliberately, so the app
    * has to reach `/api` on its own origin. (The runtime answers CORS for this deployment's own origins
-   * and the Recorder only; see `cors` in copilot.ts.) Two containers behind one ingress does that too, and costs a
+   * only; see `cors` in copilot.ts.) Two containers behind one ingress does that too, and costs a
    * path rule on every deployment plus a way for the two to disagree about which host they are on.
    * One process cannot disagree with itself.
    *

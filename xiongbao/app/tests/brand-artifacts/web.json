@@ -204,12 +204,6 @@
     "note": "租户 id（永久保留，Task 6 核实）；默认皮肤 id、data-orb 已在附录 A 第 2、13 行改成 xiongbao，旧皮肤 id 只在 normalizeSkinId 里认"
   },
   {
-    "word": "openbot-browser",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
     "word": "openbot/",
     "category": "peer-protocol",
     "plan": "keep",
@@ -247,12 +241,6 @@
   },
   {
     "word": "openbotTimeZone",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
-  },
-  {
-    "word": "openbotUrl:_",
     "category": "peer-protocol",
     "plan": "keep",
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"

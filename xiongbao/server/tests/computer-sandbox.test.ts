@@ -418,10 +418,9 @@ describe("a computer on an older image", () => {
 
 describe("which id a computer is for", () => {
   /*
-   * A computer of one id (a person's own browser, an isolated Bot) has to know it: it runs a person's browser only on a
-   * computer of its own (agent-computer's person-access.ts), and without `COMPUTER_BOT_ID` it reads as a computer Bots
-   * share and refuses. A person's computer carries several Bots and names none. Told on creation and on every new
-   * template, as the supervisor tells each container.
+   * A computer of one id (an isolated Bot) has to know it: without `COMPUTER_BOT_ID` it reads as a computer Bots share. A
+   * person's computer carries several Bots and names none. Told on creation and on every new template, as the
+   * supervisor tells each container.
    */
   const PERSON = "person-0123456789abcdef0123456789abcdef";
   const envOf = (template: unknown) =>

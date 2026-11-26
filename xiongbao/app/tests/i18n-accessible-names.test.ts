@@ -143,12 +143,6 @@ describe("量具本身认得该报的和不该报的", () => {
 
 const TOAST_ALLOW: { file: string; title: string; reason: string }[] = [
   {
-    file: "app/src/components/browser/browser-nav-item.tsx",
-    title: "storeTabSentence(store)",
-    reason:
-      "compute: 函数按标签页拼中文句子（用完的 / 正在用的），句子在 browser-bar.tsx 里",
-  },
-  {
     file: "app/src/components/app-sidebar/use-sign-out.ts",
     title: "error.message",
     reason: "server-message: 服务端拒绝的原文，前端原样转述、不改写",
@@ -165,7 +159,7 @@ describe("toast 标题是中文", () => {
   const all = everyToastHit(sources);
 
   test("每处 toast.add 都拿到了标题，量具没有扫空", () => {
-    expect(all.length).toBeGreaterThanOrEqual(6);
+    expect(all.length).toBeGreaterThanOrEqual(5);
   });
 
   test("标题要么含汉字，要么是允许表里的那句表达式", () => {

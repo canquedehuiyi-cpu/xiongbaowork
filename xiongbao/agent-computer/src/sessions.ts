@@ -72,8 +72,6 @@ export type SessionsOptions = {
   profilesDirectory?: string;
   /** Injected so a test can name the run it expects rather than match a uuid. */
   mintRun?: () => string;
-  /** Told when the wheel leaves the person who held this Bot's browser (see `createControl`'s `onWheelLeft`). */
-  onWheelLeft?: (botId: string) => Promise<unknown> | undefined;
   /** How long one action may hold a Bot's browser before the next goes ahead anyway (browser-turns.ts). */
   turnLimitMs?: number;
 };
@@ -141,7 +139,6 @@ export function createSessions(options: SessionsOptions) {
         invalidateSnapshot: () => {
           generation += 1;
         },
-        onWheelLeft: () => options.onWheelLeft?.(botId),
       }),
       get snapshotId() {
         return generation;

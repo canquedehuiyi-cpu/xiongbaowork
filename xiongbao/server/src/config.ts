@@ -1,13 +1,11 @@
 import { createHash } from "node:crypto";
 import { applyEnvironmentAliases, envName } from "@xiongbao/shared/env-aliases";
-import { intelligenceApiKey } from "@xiongbao/shared/intelligence-key";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import {
   addressesBeyondThisMachine,
   deploymentAddresses,
   isLoopbackHost,
 } from "@xiongbao/shared/this-machine";
-import { BROWSER_URL_ENV } from "@xiongbao/shared/xiongbao-browser";
 /**
  * What the runtime can do, and it has exactly one answer: durable threads and memory live in this
  * deployment's own PostgreSQL. Configuration the product cannot function without belongs at the boot
@@ -219,19 +217,6 @@ export type HandoffCaps = {
 };
 
 /**
- * The Recorder's back end, when this deployment is connected to one. OPTIONAL: threads stay in this
- * deployment's own PostgreSQL either way, and nothing here is read unless `INTELLIGENCE_API_KEY` is
- * set. Only the Recorder's capture pass and recording summaries read it (Task 14b removes them).
- *
- * `apiUrl` and `gatewayWsUrl` are optional because the managed back end has defaults for both.
- */
-export type IntelligenceSettings = {
-  apiUrl?: string;
-  gatewayWsUrl?: string;
-  apiKey: string;
-};
-
-/**
  * Which requests a single-user deployment admits as its one administrator.
  *
  * `thisMachineOnly` is true for a server running on the person's own machine (XiongBao Desktop,
@@ -252,11 +237,6 @@ export type SingleUserAccess = {
 };
 
 export type DeploymentConfig = {
-  /**
-   * Browser extension ids XiongBao trusts as the Recorder besides its own fixed id, for a fork or a
-   * build signed with another key. From OPENBOT_RECORDER_EXTRA_EXTENSION_IDS, never from NODE_ENV.
-   */
-  recorder: { extraExtensionIds: string[] };
   /**
    * Memory sources and background research XiongBao switches on for each person (memory/defaults.ts).
    * Both on unless OPENBOT_MEMORY_SOURCE_DEFAULTS or OPENBOT_PROACTIVE_DEFAULTS is "false" or "0".
@@ -376,8 +356,6 @@ export type DeploymentConfig = {
   appUrl: string | undefined;
   tenantPackageDirectory: string;
   runtime: RuntimeCapabilities;
-  /** The Recorder's back end, or undefined (the default): see {@link IntelligenceSettings}. */
-  intelligence?: IntelligenceSettings;
   /**
    * How long a Bot's stream may say nothing before this deployment ends the turn, in milliseconds.
    *
@@ -532,13 +510,6 @@ export type DeploymentConfig = {
    * for a paired machine can read the reason off the boot log instead of the source.
    */
   tenantRuntimeReason: string;
-  /**
-   * The computer that runs people's own XiongBao browsers here when it is not the Bots' (`OPENBOT_BROWSER_URL`): a
-   * host-side local Chrome computer (`scripts/start-local-chrome-computer.ts`), so a person's browser is a window on
-   * their own desktop while Bots' computers stay where they are. Called with the same COMPUTER_TOKEN as every computer.
-   * Absent, the Bots' computer provider runs people's browsers too, shown in the page.
-   */
-  browser?: { url: string; token?: string };
   /** How far one Bot handing work to another may go. */
   handoff: HandoffCaps;
   /**
@@ -1377,37 +1348,6 @@ function runtimeCapabilities(environment: Environment): RuntimeCapabilities {
 }
 
 /**
- * The Recorder's optional back end. No key, nothing: the deployment runs exactly as it did. A URL
- * given without the key is half configured, which is refused at boot with what is missing rather
- * than quietly ignored.
- */
-function intelligenceSettings(
-  environment: Environment,
-): IntelligenceSettings | undefined {
-  const apiKey = intelligenceApiKey(environment);
-  const apiUrl = url(environment, "INTELLIGENCE_API_URL");
-  const gatewayWsUrl = url(environment, "INTELLIGENCE_GATEWAY_WS_URL");
-  if (!apiKey) {
-    const given = Object.entries({
-      INTELLIGENCE_API_URL: apiUrl,
-      INTELLIGENCE_GATEWAY_WS_URL: gatewayWsUrl,
-    })
-      .filter(([, value]) => value)
-      .map(([name]) => name);
-    if (given.length > 0)
-      throw new Error(
-        `The Recorder's back end is optional, and is half configured: ${given.join(", ")} set without INTELLIGENCE_API_KEY. Set the key, or remove these.`,
-      );
-    return undefined;
-  }
-  return {
-    apiKey,
-    ...(apiUrl ? { apiUrl } : {}),
-    ...(gatewayWsUrl ? { gatewayWsUrl } : {}),
-  };
-}
-
-/**
  * `TENANT_RUNTIME`, with the two answers named so a typo cannot pick one of them for you.
  *
  * UNSET DEPENDS ON WHERE IT RUNS (F6). A deployed server — `NODE_ENV=production`, which the image
@@ -1593,15 +1533,6 @@ export function durationMs(value: string): number {
     default:
       return amount;
   }
-}
-
-function browserConfig(
-  environment: Environment,
-): Pick<DeploymentConfig, "browser"> {
-  const address = url(environment, BROWSER_URL_ENV);
-  if (!address) return {};
-  const token = optional(environment, "COMPUTER_TOKEN");
-  return { browser: { url: address, ...(token ? { token } : {}) } };
 }
 
 function computerConfig(environment: Environment): ComputerConfig | undefined {
@@ -2008,10 +1939,6 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     tenantPackageDirectory:
       optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/xiongbao",
     runtime: runtimeCapabilities(environment),
-    ...(intelligenceSettings(environment)
-      ? { intelligence: intelligenceSettings(environment) }
-      : {}),
-    recorder: { extraExtensionIds: recorderExtraExtensionIds(environment) },
     memoryDefaults: {
       sources: switchedOn(environment, "OPENBOT_MEMORY_SOURCE_DEFAULTS"),
       // Off unless asked for: a Bot offers a check-in in the conversation instead (`offer_check_in`).
@@ -2071,7 +1998,6 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
      * the operator believed it was running on theirs.
      */
     ...tenantRuntime(environment),
-    ...browserConfig(environment),
     handoff: handoffCaps(environment),
     ...(optional(environment, "AGENT_TOOL_TOKEN")
       ? { agentToolToken: optional(environment, "AGENT_TOOL_TOKEN") as string }
@@ -2143,20 +2069,6 @@ function personalEditionRequirements(
       ? `${envName("EDITION")}=personal runs one computer, so remove ${named} and set AGENT_COMPUTER_URL instead.`
       : `${envName("EDITION")}=personal runs one computer. Set AGENT_COMPUTER_URL to its address.`,
   );
-}
-
-/** Comma separated, each trimmed, each a Chrome extension id (32 letters a to p). */
-function recorderExtraExtensionIds(environment: Environment): string[] {
-  const value = optional(environment, "OPENBOT_RECORDER_EXTRA_EXTENSION_IDS");
-  if (!value) return [];
-  const ids = value.split(",").map((id) => id.trim());
-  for (const id of ids) {
-    if (!/^[a-p]{32}$/.test(id))
-      throw new Error(
-        `${envName("RECORDER_EXTRA_EXTENSION_IDS")} lists "${id}", which is not an extension id. An id is 32 letters from a to p; separate several with commas.`,
-      );
-  }
-  return ids;
 }
 
 /** On unless the variable is "false" or "0", the rule every default-on switch here follows. */

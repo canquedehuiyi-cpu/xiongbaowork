@@ -94,7 +94,6 @@ const workHours = (over: Record<string, unknown> = {}) => ({
 const preferences = (hours: Record<string, unknown>) => ({
   messageListEmphasis: "thread",
   selfHostBannerDismissed: false,
-  narration: null,
   skin: "xiongbao",
   proactive: "on",
   workHours: hours,

@@ -6,12 +6,9 @@ const COOKIE = ORGANIZATION_SESSION_COOKIE;
 const COOKIE_ATTRIBUTES = "Path=/; HttpOnly; SameSite=Lax";
 const HANDOFF_PATH = "/api/auth/organization/session";
 /** How long the organization session cookie lasts, in seconds: its Max-Age, set once at the handoff and never renewed,
- * so a person signs in to their organization again after this. The cookie says when it expires (`expiresAt`), and a
- * Recorder connection made with it ends then too (recorder/wiring.ts), since it carries a sealed copy of it. */
+ * so a person signs in to their organization again after this. The cookie says when it expires (`expiresAt`). */
 export const ORGANIZATION_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const COOKIE_AGE = ORGANIZATION_SESSION_MAX_AGE_SECONDS;
-/** What the person is told when their sign-out could not end everything they were signed in with, and so did not happen. */
-export const SIGN_OUT_UNFINISHED = "Signing out did not finish. Try again.";
 export class AuthorityUnavailable extends Error {}
 
 /** The organization session cookie's own record: the authority it is for, the authority's session cookie, and when it
@@ -113,12 +110,6 @@ function sessionCookie(value: unknown): value is string {
 export function createOrganizationAuth(options: {
   authorityUrl: string;
   materializeUser: (user: AuthenticatedActor) => Promise<AuthenticatedActor>;
-  /**
-   * Ends what else the person is signed in with here (their Recorder connections, index.ts) when they sign out, before
-   * the organization is asked to end their session. Throws when it could not, and then the sign-out does not happen:
-   * see the sign-out route below.
-   */
-  signOutRecorders?: (userId: string, ending: string) => Promise<void>;
 }): AuthService & {
   verifySessionQuietly: (
     cookieHeader: string,
@@ -183,8 +174,7 @@ export function createOrganizationAuth(options: {
       !sessionCookie(record.cookie)
     )
       return null;
-    // Past its own expiry it is not taken, wherever it was kept: the browser drops it then, and a sealed copy
-    // (recorder/wiring.ts) must not be worth more than the cookie it copies.
+    // Past its own expiry it is not taken, wherever it was kept: the browser drops it then.
     if (typeof record.expiresAt === "number" && record.expiresAt <= Date.now())
       return null;
     return record.cookie;
@@ -308,24 +298,6 @@ export function createOrganizationAuth(options: {
           if (!allowedOrigin()) return json({ error: "Origin refused." }, 403);
           const cookie = cookieFrom(request.headers);
           if (cookie) {
-            // Who is signing out, asked before the session ends: afterwards the organization no longer says.
-            const before = await verifyAtAuthority(cookie);
-            /*
-             * Their Recorders first, and the sign-out only once they have ended: a sign-out that answered success with a
-             * Recorder still signed in as them would be the one thing it must not be. When they could not be ended
-             * (signOutRecorders has retried, and written the security row), nothing has changed: the person is told,
-             * still signed in, and signing out again tries it all again.
-             */
-            if (before.kind === "actor" && options.signOutRecorders) {
-              try {
-                await options.signOutRecorders(
-                  before.actor.id,
-                  "organization-sign-out",
-                );
-              } catch {
-                return json({ error: SIGN_OUT_UNFINISHED }, 503);
-              }
-            }
             try {
               const response = await fetch(`${authority}/api/auth/sign-out`, {
                 method: "POST",

@@ -8,7 +8,6 @@ import {
   AuthorityUnavailable,
   createOrganizationAuth,
   organizationCookieExpiresAt,
-  SIGN_OUT_UNFINISHED,
 } from "../src/auth/organization";
 
 const employee = {
@@ -151,7 +150,7 @@ test("organization identity and current role come from the authority; expiry and
   }
 });
 
-test("signing out ends the person's Recorders first, and does not sign out when they could not be ended", async () => {
+test("signing out ends the organization's session and clears the cookie", async () => {
   const happened: string[] = [];
   const authority = Bun.serve({
     hostname: "127.0.0.1",
@@ -167,13 +166,10 @@ test("signing out ends the person's Recorders first, and does not sign out when 
     },
   });
   const app = "http://127.0.0.1:3010";
-  const signOut = async (
-    signOutRecorders: (userId: string, ending: string) => Promise<void>,
-  ) => {
+  const signOut = async () => {
     const auth = createOrganizationAuth({
       authorityUrl: authority.url.origin,
       materializeUser: async (user) => user,
-      signOutRecorders,
     });
     const start = await auth.handler(
       new Request(`${app}/api/auth/organization/session`, {
@@ -197,29 +193,13 @@ test("signing out ends the person's Recorders first, and does not sign out when 
     );
   };
   try {
-    const signedOut = await signOut(async (userId, ending) => {
-      happened.push(`Recorders of ${userId} ended by ${ending}`);
-    });
+    const signedOut = await signOut();
     expect(signedOut.status).toBe(200);
     expect(signedOut.headers.get("set-cookie")).toContain("Max-Age=0");
     expect(signedOut.headers.getSetCookie()).toEqual([
       "xiongbao.organization-session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
     ]);
-    // The Recorders before the organization's session: never a sign-out answered with a Recorder still signed in.
-    expect(happened).toEqual([
-      `Recorders of ${employee.id} ended by organization-sign-out`,
-      "organization signed out",
-    ]);
-
-    // When they could not be ended, nothing is: the organization's session and the cookie stay, and the person is told.
-    happened.length = 0;
-    const refused = await signOut(async () => {
-      throw new Error("the database is unavailable");
-    });
-    expect(refused.status).toBe(503);
-    expect(await refused.json()).toEqual({ error: SIGN_OUT_UNFINISHED });
-    expect(refused.headers.get("set-cookie")).toBeNull();
-    expect(happened).toEqual([]);
+    expect(happened).toEqual(["organization signed out"]);
   } finally {
     authority.stop(true);
   }

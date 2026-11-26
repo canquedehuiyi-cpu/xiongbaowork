@@ -1,10 +1,6 @@
 import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/client";
 import { type AbstractAgent, HttpAgent } from "@ag-ui/client";
-import type {
-  BuiltInAgentConfiguration,
-  CopilotRuntimeHooks,
-  GetTrajectoryLearningContainerIds,
-} from "@copilotkit/runtime/v2";
+import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
 import { CopilotRuntime, resolveModel } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
 import {
@@ -210,7 +206,6 @@ import {
 } from "./plugins/tools";
 import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
-import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
 import { acceptedDelivery, deliverEndsTurnOn } from "./tasks/delivery-end";
 import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
@@ -4427,40 +4422,14 @@ export function mountCopilotRuntime(
      * Stop to the tool in flight. Absent, the switch is off and the browser runs them all.
      */
     chatServerTools?: ChatServerTools;
-    /**
-     * The Recorder's capture pass (`trajectory/connect`): the gate that lets only a connected browser
-     * through, and the selector that assigns the trajectory to its person's own Learning space
-     * (`recorder/wiring.ts`).
-     *
-     * The runtime's own handler refuses every pass on a runtime without Intelligence (this one keeps
-     * its threads in the local runner, R0), so with an Intelligence key configured the pass is
-     * answered by `recorder/trajectory-connect.ts` instead: the gate in front, the selector on a
-     * client of its own. Without a key the gate still stands in front of the runtime's route, so only
-     * a connected browser ever hears its refusal.
-     */
-    trajectoryCapture?: {
-      gate: NonNullable<CopilotRuntimeHooks["onBeforeHandler"]>;
-      selectLearningContainers: GetTrajectoryLearningContainerIds;
-    };
   } = {},
 ): MountedCopilotRuntime {
   const {
     basePath = "/api/runtime",
     onRunBusy,
     localRunner,
-    trajectoryCapture,
     streamKeepAliveMs,
   } = options;
-  /** The Recorder's pass, answered here when there is an Intelligence to join it to. */
-  const trajectoryConnect =
-    config.intelligence && trajectoryCapture
-      ? createTrajectoryConnect({
-          intelligence: config.intelligence,
-          gate: trajectoryCapture.gate,
-          selectLearningContainers: trajectoryCapture.selectLearningContainers,
-          identifyUser,
-        })
-      : undefined;
   /*
    * Who one request is, asked once. The frame below and the agent factory inside it both need it,
    * and they must not disagree. The runtime hands the factory the `Request` it was given; where it
@@ -4619,25 +4588,18 @@ export function mountCopilotRuntime(
     runtime,
     basePath,
     /*
-     * This deployment's own origins and the Recorder, and nobody else.
+     * This deployment's own origins, and nobody else.
      *
      * Left out, the runtime answers `Access-Control-Allow-Origin: *` on every response and 204 to
      * every preflight, so any website the person visited could read their threads and messages
-     * here. The app calls the runtime on its own origin and needs no CORS at all; the Recorder is
-     * an extension, which its host permission lets past CORS anyway, and is named so that stays
-     * true whatever Chrome decides. An origin it does not name gets no CORS headers and the
-     * browser keeps the answer from the page.
+     * here. The app calls the runtime on its own origin and needs no CORS at all. An origin it does
+     * not name gets no CORS headers and the browser keeps the answer from the page.
      */
     cors: { origin: corsOrigin(config) },
     hooks: {
-      onBeforeHandler: async (context) => {
-        const prepared = await trajectoryCapture?.gate(context);
-        // Last, so nothing after it can drop the mark. See `isAskedRun`.
-        return (
-          (await markAskedRun(prepared ?? context.request, context.route)) ??
-          prepared
-        );
-      },
+      // Last, so nothing after it can drop the mark. See `isAskedRun`.
+      onBeforeHandler: async (context) =>
+        markAskedRun(context.request, context.route),
     },
   });
 
@@ -4682,18 +4644,6 @@ export function mountCopilotRuntime(
      * empties while the rows stay; so the person's first request that can touch a thread loads their
      * stored threads, in their frame, and every later one finds that load done. `/info` touches none.
      */
-    const trajectoryId =
-      trajectoryConnect && request.method === "POST"
-        ? trajectoryIdOf(new URL(request.url).pathname, basePath)
-        : undefined;
-    if (trajectoryConnect && trajectoryId !== undefined)
-      return withRuntimeCors(
-        request,
-        await runAsRuntimeActor(actor, () =>
-          trajectoryConnect(request, trajectoryId),
-        ),
-        corsOrigin(config),
-      );
     /*
      * What arrives here is a person's own chat, and the runner is told so (`asPersonChat`): it is what
      * makes a turn "a person's chat" for whoever watches turns end (automatic memory), instead of
@@ -4776,46 +4726,6 @@ export function mountCopilotRuntime(
       return runner.getThreadMessages(input.threadId);
     },
   };
-}
-
-/** The trajectory a capture-pass path names (`<base>/trajectory/:id/connect`), or undefined for any other path. */
-function trajectoryIdOf(
-  pathname: string,
-  basePath: string,
-): string | undefined {
-  const base = basePath.replace(/\/+$/, "");
-  if (!pathname.startsWith(`${base}/trajectory/`)) return undefined;
-  const match = /^\/trajectory\/([^/]+)\/connect\/?$/.exec(
-    pathname.slice(base.length),
-  );
-  if (!match?.[1]) return undefined;
-  try {
-    return decodeURIComponent(match[1]);
-  } catch {
-    return match[1];
-  }
-}
-
-/**
- * The runtime's CORS answer on a response the runtime did not write: the request's origin echoed when
- * it is one of this deployment's own or the Recorder (`corsOrigin`), nothing otherwise. The capture pass
- * answered by `recorder/trajectory-connect.ts` bypasses the runtime's routes, and so its `cors` too.
- */
-function withRuntimeCors(
-  request: Request,
-  response: Response,
-  allowed: (origin: string) => string | null,
-): Response {
-  const origin = request.headers.get("origin");
-  const echoed = origin ? allowed(origin) : null;
-  const headers = new Headers(response.headers);
-  headers.append("Vary", "Origin");
-  if (echoed) headers.set("Access-Control-Allow-Origin", echoed);
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
 
 /** The checklist a routine's firing in these messages carries, as words, or nothing. */

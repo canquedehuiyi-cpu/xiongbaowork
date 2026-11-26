@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { BrowserState } from "../../shared/xiongbao-browser";
 import type { BrowserRuntime } from "../src/browser-runtime";
 import {
   setEgressPolicy,
@@ -18,20 +17,14 @@ import type { Profiles } from "../src/profiles";
  * The filter knew a browser's connections only by the credentials in them, and a browser sends a
  * proxy its credentials only when the proxy asks, which this one never did. So every browser's
  * connections arrived anonymous and were judged by every policy on the computer, strictest first:
- * with a person's browser open, a Bot allowed to reach an internal service was refused, and two Bots
- * on one computer refused each other the same way. Here a Bot allowed everything, a Bot allowed
- * nothing and a person's hosted browser allowed only its XiongBao are all open at once, in real
- * Chromium, through the real filter, and each reaches exactly what its own policy allows.
- *
- * The person's browser comes first and its Recorder's worker reports to XiongBao as it connects,
- * before any page has loaded: the worker's own requests have to answer the filter's question too.
+ * two Bots on one computer refused each other what only one of them was allowed. Here a Bot allowed
+ * everything and a Bot allowed nothing are both open at once, in real Chromium, through the real
+ * filter, and each reaches exactly what its own policy allows.
  *
  *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/egress-browsers.test.ts
  */
 const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
 
-const FIXTURE = join(import.meta.dir, "fixtures", "recorder");
-const PERSON = "person-0123456789abcdef0123456789abcdef";
 const ALLOWED_BOT = "bot-allowed-everything";
 const STRICT_BOT = "bot-allowed-nothing";
 
@@ -42,25 +35,6 @@ const RUNTIME: BrowserRuntime = {
   useVirtualDisplay: false,
   allowExec: true,
 };
-
-const reports: { method: string }[] = [];
-
-/** The XiongBao the person's browser may reach, which the fixture Recorder reports its calls to. */
-const xiongbao = asked
-  ? Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      async fetch(request) {
-        if (new URL(request.url).pathname === "/fixture/calls") {
-          reports.push((await request.json()) as { method: string });
-          return new Response("");
-        }
-        return new Response("<!doctype html><title>XiongBao</title>XiongBao", {
-          headers: { "content-type": "text/html" },
-        });
-      },
-    })
-  : undefined;
 
 /** An internal service, which only the Bot allowed everything may reach. */
 const internal = asked
@@ -85,8 +59,6 @@ const internal = asked
 describe.skipIf(!asked)("browsers sharing a computer's egress filter", () => {
   let root = "";
   let profiles: Profiles;
-  let routes: ReturnType<typeof Bun.serve>;
-  const XIONGBAO = `http://127.0.0.1:${xiongbao?.port ?? 0}`;
   const INTERNAL = `http://127.0.0.1:${internal?.port ?? 0}/`;
 
   beforeAll(async () => {
@@ -100,52 +72,21 @@ describe.skipIf(!asked)("browsers sharing a computer's egress filter", () => {
     setEgressResolver(async () => ["127.0.0.1"]);
     setEgressPolicy(ALLOWED_BOT, { mode: "allow_all", rules: [] });
     setEgressPolicy(STRICT_BOT, { mode: "allowlist_only", rules: [] });
-    setEgressPolicy(PERSON, {
-      mode: "allowlist_only",
-      rules: [
-        { type: "cidr", value: "127.0.0.1/32", ports: String(xiongbao?.port) },
-      ],
-    });
     // A fresh copy of the module, as the other real-browser tests load it.
     const copy = "egress-browsers";
     const { createProfiles } = (await import(
       `../src/profiles?${copy}`
     )) as typeof import("../src/profiles");
-    const { createBrowserHost } = await import("../src/browser-host");
     profiles = createProfiles(root, () => undefined, { runtime: RUNTIME });
-    const host = createBrowserHost({
-      profiles,
-      recorderDir: () => FIXTURE,
-      navigationTimeoutMs: 15_000,
-    });
-    routes = Bun.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      fetch: (request) =>
-        host.handle(
-          request,
-          new URL(request.url).pathname,
-          request.headers.get("x-xiongbao-bot-id") ?? "",
-        ),
-    });
   }, 30_000);
 
   afterAll(async () => {
-    routes?.stop(true);
     await profiles?.closeAll();
     setEgressResolver(null);
     await stopEgressFilter();
-    xiongbao?.stop(true);
     internal?.stop(true);
     if (root) await rm(root, { recursive: true, force: true });
   }, 60_000);
-
-  const person = (path: string, body: unknown) =>
-    fetch(`http://127.0.0.1:${routes.port}${path}`, {
-      method: "POST",
-      headers: { "x-xiongbao-bot-id": PERSON },
-      body: JSON.stringify(body),
-    });
 
   /** What a page shows: the site's own text, or the filter's refusal. */
   const shown = async (botId: string, url: string): Promise<string> => {
@@ -154,25 +95,10 @@ describe.skipIf(!asked)("browsers sharing a computer's egress filter", () => {
     return page.evaluate(() => document.body?.innerText ?? "");
   };
 
-  test("the person's browser opens and its Recorder reaches XiongBao before any page has loaded", async () => {
-    const opening = await person("/browser/open", {
-      connection: {
-        openbotUrl: XIONGBAO,
-        token: "obr_fixture-token",
-        connectionId: "connection-1",
-        user: { id: "user-1", name: "Pat Example", email: "pat@example.com" },
-      },
-    });
-    expect(opening.status).toBe(200);
-    expect(((await opening.json()) as BrowserState).recorder?.connected).toBe(
-      true,
-    );
-    // The Recorder's worker told XiongBao about the connect, through the filter.
-    expect(reports.map((report) => report.method)).toContain("connect");
-  }, 60_000);
-
-  test("a Bot allowed everything reaches the internal service while the person's browser is open", async () => {
-    expect(profiles.isLive(PERSON)).toBe(true);
+  test("a Bot allowed everything reaches the internal service while another Bot's browser is open", async () => {
+    // The strict Bot's browser first, so both are open when the Bot allowed everything asks.
+    await profiles.page(STRICT_BOT);
+    expect(profiles.isLive(STRICT_BOT)).toBe(true);
     expect(await shown(ALLOWED_BOT, INTERNAL)).toContain(
       "the internal service",
     );
@@ -191,28 +117,9 @@ describe.skipIf(!asked)("browsers sharing a computer's egress filter", () => {
     expect(echoed).toBe("echo hello");
   }, 60_000);
 
-  test("neither the person's browser nor another Bot borrows that Bot's allowance", async () => {
-    const opened = await person("/browser/navigate", { url: INTERNAL });
-    // Plain HTTP: the browser shows the filter's refusal, worded for a person.
-    expect(opened.status).toBe(200);
-    const page = await profiles.page(PERSON);
-    expect(await page.evaluate(() => document.body.innerText)).toContain(
-      `This browser may not open 127.0.0.1:${internal?.port}.`,
-    );
+  test("the other Bot does not borrow that Bot's allowance", async () => {
     expect(await shown(STRICT_BOT, INTERNAL)).toContain(
       `127.0.0.1:${internal?.port} is not on this deployment's network allowlist.`,
-    );
-  }, 60_000);
-
-  test("and no Bot borrows the person's allowance for their XiongBao", async () => {
-    expect(await shown(STRICT_BOT, XIONGBAO)).toContain(
-      "is not on this deployment's network allowlist.",
-    );
-    const opened = await person("/browser/navigate", { url: XIONGBAO });
-    expect(opened.status).toBe(200);
-    const page = await profiles.page(PERSON);
-    expect(await page.evaluate(() => document.body.innerText)).toContain(
-      "XiongBao",
     );
   }, 60_000);
 });

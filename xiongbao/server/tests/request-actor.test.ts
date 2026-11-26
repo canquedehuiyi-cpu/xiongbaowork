@@ -2,7 +2,6 @@
 import { describe, expect, test } from "bun:test";
 import { DEV_ACTOR } from "../src/auth/dev-actor";
 import type { XiongBaoRole } from "../src/auth/roles";
-import type { RecorderResolver } from "../src/recorder/guard";
 import { actorName, createRequestActor } from "../src/request-actor";
 
 type User = {
@@ -16,11 +15,9 @@ function actorFor(options: {
   singleUser?: boolean;
   user?: User;
   roles?: XiongBaoRole[];
-  resolveRecorder?: RecorderResolver;
 }) {
   const calls = { getSession: 0, rolesForUser: 0 };
   const functions = createRequestActor({
-    resolveRecorder: options.resolveRecorder,
     singleUser: options.singleUser ?? false,
     async getSession() {
       calls.getSession += 1;
@@ -128,119 +125,5 @@ describe("createRequestActor", () => {
       id: "",
       role: "user",
     });
-  });
-
-  describe("a Recorder bearer", () => {
-    const bearer = `Bearer obr_${"a".repeat(43)}`;
-    const passRequest = (pathname = "/api/runtime/trajectory/t-1/connect") =>
-      new Request(`http://127.0.0.1${pathname}`, {
-        method: "POST",
-        headers: { authorization: bearer },
-      });
-    const recorderActor = {
-      id: "r1",
-      name: "Rae",
-      email: "rae@example.test",
-      image: null,
-      role: "user" as const,
-      connectionId: "c1",
-    };
-
-    test("is answered on the capture pass through the resolver, before single-user mode", async () => {
-      for (const singleUser of [false, true]) {
-        const seen: Request[] = [];
-        const { resolveRequestActor, calls } = actorFor({
-          singleUser,
-          resolveRecorder: async (request) => {
-            seen.push(request);
-            return { actor: recorderActor };
-          },
-        });
-        expect(await resolveRequestActor(passRequest())).toEqual({
-          id: "r1",
-          name: "Rae",
-          role: "user",
-        });
-        expect(seen).toHaveLength(1);
-        expect(calls.getSession).toBe(0);
-      }
-    });
-
-    test("is refused on any other path without asking the resolver", async () => {
-      for (const singleUser of [false, true]) {
-        let asked = 0;
-        const { resolveRequestActor, identifyActor } = actorFor({
-          singleUser,
-          resolveRecorder: async () => {
-            asked += 1;
-            return { actor: recorderActor };
-          },
-        });
-        for (const path of [
-          "/api/runtime/agent/bot/run",
-          "/api/runtime/trajectory/t-1/connect/extra",
-          "/api/runtime/trajectory/connect",
-          // The id the runtime would decode: one that does not decode is no trajectory.
-          "/api/runtime/trajectory/%E0%A4%A/connect",
-        ]) {
-          await expect(resolveRequestActor(passRequest(path))).rejects.toThrow(
-            "An agent run requires a signed-in user.",
-          );
-          expect(await identifyActor(passRequest(path))).toEqual({
-            id: "",
-            role: "user",
-          });
-        }
-        expect(asked).toBe(0);
-      }
-    });
-
-    test("is refused when the resolver refuses, is unavailable or has no answer", async () => {
-      for (const resolution of [
-        { refused: "unknown" as const },
-        { refused: "organization" as const, userId: "r1" },
-        { unavailable: true as const },
-        null,
-      ]) {
-        const { resolveRequestActor } = actorFor({
-          user: { id: "u1", role: "admin" },
-          resolveRecorder: async () => resolution,
-        });
-        await expect(resolveRequestActor(passRequest())).rejects.toThrow(
-          "An agent run requires a signed-in user.",
-        );
-      }
-    });
-
-    test("never falls through to the cookie session or the dev actor", async () => {
-      const { resolveRequestActor, calls } = actorFor({
-        singleUser: true,
-        resolveRecorder: async () => ({ refused: "removed" }),
-      });
-      await expect(resolveRequestActor(passRequest())).rejects.toThrow();
-      expect(calls.getSession).toBe(0);
-    });
-
-    test("with no resolver wired is refused", async () => {
-      const { resolveRequestActor } = actorFor({
-        user: { id: "u1", role: "admin" },
-      });
-      await expect(resolveRequestActor(passRequest())).rejects.toThrow(
-        "An agent run requires a signed-in user.",
-      );
-    });
-  });
-
-  test("a request without a Recorder bearer is unchanged when a resolver is wired", async () => {
-    let asked = 0;
-    const { resolveRequestActor } = actorFor({
-      singleUser: true,
-      resolveRecorder: async () => {
-        asked += 1;
-        return null;
-      },
-    });
-    expect((await resolveRequestActor(request())).id).toBe(DEV_ACTOR.id);
-    expect(asked).toBe(0);
   });
 });

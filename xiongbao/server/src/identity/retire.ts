@@ -142,15 +142,11 @@ export async function retireIdentityLinks(
  * left every linked account's token live, with a retry hitting the same refusal first. The failure
  * is still thrown afterwards (the first one alone, or an AggregateError of them all whose message
  * names every cause, since callers log `String(error)`, which shows the message and not `.errors`), so
- * the caller's error handling sees it. On success, the count is the accounts retired; the person's
- * Recorder connections, which end with their sign-in (recorder/sign-out.ts), are not accounts and are
- * not counted.
+ * the caller's error handling sees it. On success, the count is the accounts retired.
  */
 export async function retireOwnedAccounts(retirers: {
   plugins: () => Promise<{ retired: number }>;
   identities: () => Promise<number>;
-  /** The person's browsers' Recorders, signed out with them. Absent where there is no Recorder. */
-  recorders?: () => Promise<void>;
 }): Promise<{ retired: number }> {
   const failures: Array<{ part: string; error: unknown }> = [];
   let retired = 0;
@@ -163,13 +159,6 @@ export async function retireOwnedAccounts(retirers: {
     retired += await retirers.identities();
   } catch (error) {
     failures.push({ part: "linked accounts", error });
-  }
-  if (retirers.recorders) {
-    try {
-      await retirers.recorders();
-    } catch (error) {
-      failures.push({ part: "Recorder connections", error });
-    }
   }
   if (failures.length === 1) throw failures[0]?.error;
   if (failures.length > 1)

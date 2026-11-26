@@ -57,9 +57,6 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
-# The Recorder extension's signing key never enters the repository (Decision 9).
-extension/**/*.pem
-
 # L1 capability fetch cache: the marketplace snapshots fetch-capabilities.ts materialises for the
 # converter (--source). Content stays out of git by design — the lock file (capability-lock.yaml) is
 # what enters the repository (§2.2 of docs/plans/2026-11-12-能力资源移植方案.md). No trailing slash

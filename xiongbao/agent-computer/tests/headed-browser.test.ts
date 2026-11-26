@@ -85,7 +85,7 @@ beforeAll(async () => {
   else process.env.COMPUTER_BROWSER_MODE = "headed";
   process.env.PORT = String(port);
   // No API server pushes this computer a network policy, so it browses before one arrives, as in
-  // person-browser-computer.test.ts. The page is served over http because `/navigate` refuses data: URLs.
+  // bot-browser-computer.test.ts. The page is served over http because `/navigate` refuses data: URLs.
   process.env.EGRESS_POLICY_REQUIRED = "0";
   // A short action timeout, so the cases below that wait it out take seconds rather than ten.
   process.env.ACTION_TIMEOUT_MS = "3000";

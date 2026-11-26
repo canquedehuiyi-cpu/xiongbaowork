@@ -5,9 +5,6 @@ import { loadConfig } from "../src/config";
 const environment = {
   DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "b3BlbmJvdC1wcm9kdWN0aW9uLXRlc3Qta2V5LTMyMzI=",
-  INTELLIGENCE_API_URL: "https://api.intelligence.copilotkit.ai",
-  INTELLIGENCE_GATEWAY_WS_URL: "wss://realtime.intelligence.copilotkit.ai",
-  INTELLIGENCE_API_KEY: "test-project-key",
   OPENBOT_SINGLE_USER: "true",
 };
 
@@ -29,17 +26,17 @@ describe("envName", () => {
 describe("a start-up refusal names the setting by its new name", () => {
   // The EDITION refusal is the same shape, but the existing config.test.ts still asserts its old spelling
   // (appendix A of the gradual-rewrite plan), so it is held back; this one setting stands for the rest.
-  const bad = "not-an-extension-id";
+  const bad = "not-a-provider";
 
   test("set under the new name", () => {
-    const message = refusal({ XIONGBAO_RECORDER_EXTRA_EXTENSION_IDS: bad });
-    expect(message).toContain("XIONGBAO_RECORDER_EXTRA_EXTENSION_IDS");
+    const message = refusal({ XIONGBAO_BROKER_PROVIDER: bad });
+    expect(message).toContain("XIONGBAO_BROKER_PROVIDER");
     expect(message).not.toContain("OPENBOT_");
   });
 
   test("set only under the old name, the refusal still says the new one", () => {
-    const message = refusal({ OPENBOT_RECORDER_EXTRA_EXTENSION_IDS: bad });
-    expect(message).toContain("XIONGBAO_RECORDER_EXTRA_EXTENSION_IDS");
+    const message = refusal({ OPENBOT_BROKER_PROVIDER: bad });
+    expect(message).toContain("XIONGBAO_BROKER_PROVIDER");
     expect(message).not.toContain("OPENBOT_");
   });
 });

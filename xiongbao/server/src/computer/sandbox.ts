@@ -109,7 +109,7 @@ export function imagesOf(podTemplate: unknown): string {
  * (agent-computer's `workspaces.ts`).
  *
  * A PERSON'S COMPUTER carries every Bot they use, so it names no Bot (anything it was given is taken out), is told whose
- * it is (`COMPUTER_PERSON_ID`, so Record runs in its Bots' browsers), and gives each Bot a folder of its own
+ * it is (`COMPUTER_PERSON_ID`), and gives each Bot a folder of its own
  * (`COMPUTER_SEPARATE_WORKSPACES=on`), as each has a browser profile of its own.
  *
  * EVERY COMPUTER IS GIVEN ITS OWN TOKEN (`token`, computer-token.ts), and never the deployment's: whatever token the
