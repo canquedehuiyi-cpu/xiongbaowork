@@ -352,6 +352,7 @@ tests/join-thread.test.ts
 tests/key-only-apps-directory.test.tsx
 tests/knowledge-screen.test.tsx
 tests/late-renderers.test.tsx
+tests/legacy-address-settings.test.ts
 tests/legacy-agent-routes.test.ts
 tests/live-screen-app-shortcuts.test.tsx
 tests/live-screen-keyboard.test.tsx

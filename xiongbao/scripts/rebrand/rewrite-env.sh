@@ -7,8 +7,12 @@
 # 只是启动时会点名提醒；改完提醒就没了。到 v0.2.17 旧名不再认，在那之前改掉。
 #
 # - 先把原文件复制成 <文件>.bak-<UTC 时间 YYYYMMDDTHHMMSSZ>（0600），再原地改写（保留原文件的权限与属主）。
-# - 文件里已经有同名的 XIONGBAO_<X>= 行时，旧行不改名而是注释掉（加「# 」前缀，旧值留在文件里），并在标准错误
-#   点名；运行时本来也是新名赢，所以注释掉不改变效果。没有新行时，同一个旧名的每一行都改名，最后一行仍然生效。
+# - 改写前后生效的值完全一样，规则与运行时相同（同名的行最后一行生效；新名的值为空等于没设，旧值生效）：
+#   - 同名 XIONGBAO_<X> 最后一行的值非空：运行时新名赢，旧行不改名而是注释掉（加「# 」前缀，旧值留在文件里），
+#     并在标准错误点名。
+#   - 同名 XIONGBAO_<X> 只有空值（`XIONGBAO_X=`、`=""`、`=''`，或值只有空白与 # 注释）：运行时用的是旧值，
+#     所以把空的新行注释掉，再把旧行改名。
+#   - 没有新行：同一个旧名的每一行都改名，最后一行仍然生效。
 # - OPENBOT_IMAGE / OPENBOT_TAG / OPENBOT_PORT（Compose 与 README 命令读的变量）同样处理。
 # - OPENBOT_POOL_<X>（平台模型的密钥变量）不改：数据库里的模型池行写着这个名字，随数据库迁移一起改。
 # - 只认设置行：可带前导空白与 `export `；注释行、空行与其它行原样保留。
@@ -16,6 +20,8 @@
 # - 没有要改的行时什么都不写，也不留备份。
 #
 # 退出码：0 成功（含无事可做）；1 文件不存在或不可读写；2 用法错误。
+#
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，旧名在 v0.2.17 不再认，本脚本随之移走
 set -eu
 
 if [ $# -ne 1 ]; then
@@ -43,13 +49,27 @@ awk -v report="$plan" '
     }
     return ""
   }
+  function blank(line,   value) {
+    # 设置行的值是否为空：去掉行尾 CR 后，什么都没有、只有一对空引号，或只有空白与 # 注释。
+    value = substr(line, index(line, "=") + 1)
+    sub(/\r$/, "", value)
+    return value ~ /^[ \t]*(#.*)?$/ || value ~ /^("|\047)("|\047)[ \t]*(#.*)?$/
+  }
   NR == FNR {
     name = setting($0)
-    if (name ~ /^XIONGBAO_./) present[name] = 1
+    # 同名的行最后一行生效：只记最后一行的值是不是空。
+    if (name ~ /^XIONGBAO_./) filled[name] = !blank($0)
+    else if (name ~ /^OPENBOT_./) old["XIONGBAO_" substr(name, 9)] = 1
     next
   }
   {
     name = setting($0)
+    if (name ~ /^XIONGBAO_./ && (name in old) && !filled[name] && substr(name, 10) !~ /^POOL_/) {
+      # 只有空值的新行：运行时等于没设，生效的是旧值。注释掉它，旧行改名后接着生效。
+      print "# " $0
+      if (!(name in emptied)) { emptied[name] = 1; print "emptied " name > report }
+      next
+    }
     if (name !~ /^OPENBOT_./) { print; next }
     suffix = substr(name, 9)
     if (suffix ~ /^POOL_/) {
@@ -58,7 +78,7 @@ awk -v report="$plan" '
       next
     }
     renamed = "XIONGBAO_" suffix
-    if (renamed in present) {
+    if (filled[renamed]) {
       print "# " $0
       if (!(name in commented)) { commented[name] = 1; print "commented " name " " renamed > report }
       next
@@ -96,6 +116,7 @@ while read -r what name new; do
       case $name in OPENBOT_IMAGE | OPENBOT_PORT) compose=1 ;; esac
       ;;
     commented) commented=$((commented + 1)); echo "rewrite-env: $name 已注释掉：文件里已有 $new，运行时本来就以它为准" >&2 ;;
+    emptied) commented=$((commented + 1)); echo "rewrite-env: $name 只有空值（运行时等于没设），已注释掉，改名后的旧值接着生效" >&2 ;;
     kept) echo "rewrite-env: $name 保持原名（数据库里的模型池行写着这个名字，随数据库迁移一起改）" >&2 ;;
   esac
 done < "$plan"

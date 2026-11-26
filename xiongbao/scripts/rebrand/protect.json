@@ -1787,15 +1787,15 @@
   },
   {
     "file": "xiongbao/tests/compose.test.ts",
-    "pattern": "OPENBOT_(?:IMAGE|PORT|EDITION|TOOL_URL|HOST_GATEWAY)(?![A-Z0-9_])",
+    "pattern": "OPENBOT_(?:IMAGE|PORT|EDITION|TOOL_URL|HOST_GATEWAY|MODEL_OAUTH_FILE|BUILD_VERSION|BUILD_COMMIT)(?![A-Z0-9_])",
     "until": "R4",
-    "reason": "证明 Compose 文件对旧名的插值回退仍生效（交付 compose 的镜像与端口、开发 compose 的版本/回调/网关）；legacy-compat 到 R4 删除"
+    "reason": "证明 Compose 文件对旧名的插值回退仍生效（交付 compose 的镜像与端口、开发 compose 的版本/回调/网关/模型登录文件/构建标识）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/scripts/start-restart-guard.test.ts",
-    "text": "OPENBOT_ONE_COMPUTER_EACH",
     "until": "R4",
-    "reason": "证明 start.sh 仍从 .env 读旧名；legacy-compat 到 R4 删除"
+    "reason": "证明 start.sh 仍从 .env 读旧名，并认 v0.2.15 更新器设的旧名更新操作；legacy-compat 到 R4 删除",
+    "pattern": "OPENBOT_(?:ONE_COMPUTER_EACH|UPDATE_OPERATION)(?![A-Z0-9_])"
   },
   {
     "file": "xiongbao/agent-langgraph-agui/src/tool_runtime.py",
@@ -1862,5 +1862,53 @@
     "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
     "until": "R4",
     "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start.sh",
+    "text": "OPENBOT_UPDATE_OPERATION",
+    "until": "R4",
+    "reason": "已安装的 v0.2.15 本机更新器用旧名把更新操作交给新版 start.sh；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/update.ts",
+    "text": "OPENBOT_UPDATE_OPERATION",
+    "until": "R4",
+    "reason": "已安装的 v0.2.15 本机更新器用旧名运行新版 start.sh，assert-start 新名优先、旧名其次；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/tests/update-local.test.ts",
+    "text": "OPENBOT_UPDATE_OPERATION",
+    "until": "R4",
+    "reason": "证明 v0.2.15 更新器只设旧名时 assert-start 仍放行；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker-compose.yml",
+    "text": "OPENBOT_MODEL_OAUTH_FILE",
+    "until": "R4",
+    "reason": "Compose 不能把 :+ 嵌进 :- 回退，旧名单独成键，服务器别名层复制；v0.2.15 更新器的 preservedState 也比较这个键；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/vite.config.ts",
+    "pattern": "OPENBOT_(?:PUBLIC_URL|APP_URL)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "说明 dev server 自己跑别名层、认旧名地址的注释；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/tests/legacy-address-settings.test.ts",
+    "pattern": "OPENBOT_(?:PUBLIC_URL|APP_URL)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "证明 dev server 与 app/serve.ts 认旧名地址；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start-local-chrome-computer.ts",
+    "text": "OPENBOT_LOCAL_COMPUTER_DIR",
+    "until": "R4",
+    "reason": "说明这个独立脚本自己跑别名层的注释；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/local-chrome-startup.test.ts",
+    "text": "OPENBOT_LOCAL_COMPUTER_DIR",
+    "until": "R4",
+    "reason": "证明本机 Chrome 电脑脚本认旧名数据目录；legacy-compat 到 R4 删除"
   }
 ]

@@ -574,6 +574,8 @@ COMMIT;
    后面列出要改的名字。只列名字，不列值。
 2. **新旧名都写了且值不同：以新名为准**，日志对每个这样的旧名打一行，例如
    `OPENBOT_PUBLIC_URL and XIONGBAO_PUBLIC_URL are both set and differ; using XIONGBAO_PUBLIC_URL.`，服务照常启动。值相同不算冲突。
+   **空的新名等于没设**：`XIONGBAO_PUBLIC_URL=` 这样的空行挡不住旧名，生效的仍是旧值。想去掉某个旧设置，要删掉（或注释掉）那一行旧名，
+   不能靠写一个空的新名。
 3. **Compose 的镜像与端口变量**：v0.2.16 起的 `docker/compose.delivery.yml` 新名优先、旧名其次：`XIONGBAO_IMAGE` 没设时读
    `OPENBOT_IMAGE`，端口写成 `${XIONGBAO_PORT:-${OPENBOT_PORT:-3772}}`，`.env.delivery` 里的旧名照样生效。更早的 Compose 文件只认旧名，所以**先按第 2 节换上新标签的 `compose.delivery.yml`，再改 env 文件**。
 4. **平台模型的密钥变量不改名**（用 `server/scripts/platform-models.ts add --api-key-env` 登记的那些）：模型池在数据库里记着变量名，
@@ -587,7 +589,8 @@ COMMIT;
    ```
 
    脚本先把原文件复制成 `.env.delivery.bak-<UTC 时间>`（权限 0600），再把每个旧名的行改成新名，例如
-   `OPENBOT_PUBLIC_URL=` 改成 `XIONGBAO_PUBLIC_URL=`；文件里已经有同名新行时，旧行加 `# ` 注释掉（运行时本来就以新名为准，效果不变）。
+   `OPENBOT_PUBLIC_URL=` 改成 `XIONGBAO_PUBLIC_URL=`。改写前后生效的值完全一样：文件里已经有同名新行且有值时，旧行加 `# ` 注释掉
+   （运行时本来就以新名为准）；同名新行只有空值时，运行时生效的是旧值，所以注释掉的是空的新行，旧行照常改名。
    平台模型的密钥变量保持原样。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
    改完照常 `up -d`。要退回，把备份文件改回原名即可。源码目录的 `.env` 也可以这样改，`scripts/start.sh` 同样新名优先、旧名其次。
 6. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。

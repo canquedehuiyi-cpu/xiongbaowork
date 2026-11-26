@@ -4,6 +4,10 @@ import { homedir } from "node:os";
 import { join, posix, win32 } from "node:path";
 import { browserRuntimeFromEnv } from "../agent-computer/src/browser-runtime";
 import {
+  applyEnvironmentAliases,
+  reportEnvironmentAliases,
+} from "../shared/env-aliases";
+import {
   type InstalledBrowser,
   installedBrowser,
   NO_INSTALLED_BROWSER,
@@ -100,7 +104,11 @@ export async function requireAvailablePort(port: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const config = localChromeConfiguration(process.env);
+  // A standalone process: it runs the alias step itself, so a data directory still named under the
+  // old prefix (OPENBOT_LOCAL_COMPUTER_DIR) is found where it was.
+  const environment = { ...process.env };
+  reportEnvironmentAliases(applyEnvironmentAliases(environment));
+  const config = localChromeConfiguration(environment);
   await requireInstalledBrowser(config.env);
   await requireAvailablePort(config.port);
   await mkdir(config.root, { recursive: true, mode: 0o700 });

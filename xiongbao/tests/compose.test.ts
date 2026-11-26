@@ -258,6 +258,7 @@ function runComposeConfig(env: Record<string, string>) {
         environment: Record<string, string>;
         extra_hosts?: string[];
         volumes?: Array<{ type: string; source: string; target: string }>;
+        build?: { args?: Record<string, string> };
       }
     >;
   };
@@ -693,6 +694,47 @@ test("a host setting under its old name still reaches the containers, and the ne
     OPENBOT_EDITION: "personal",
   }).services;
   expect(both["agent-computer"]?.environment.XIONGBAO_EDITION).toBe("team");
+});
+
+/*
+ * A model sign-in file named in `.env` under the old name. Compose cannot nest the `:+` that turns it
+ * into the container's path inside a fallback, so the server gets it under the old name too and its
+ * alias step copies it over the empty new one. The old key carries exactly what the v0.2.15 file gave
+ * it, which is what the v0.2.15 local updater compares before it accepts a new Compose file.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("a model sign-in file named under the old name still reaches the server", () => {
+  const legacy = runComposeConfig({
+    OPENBOT_MODEL_OAUTH_FILE: "/home/someone/.openbot/model-oauth.json",
+  }).services.server?.environment;
+  expect(legacy?.OPENBOT_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
+  expect(legacy?.XIONGBAO_MODEL_OAUTH_FILE ?? "").toBe("");
+  const renamed = runComposeConfig({
+    XIONGBAO_MODEL_OAUTH_FILE: "/home/someone/.openbot/model-oauth.json",
+  }).services.server?.environment;
+  expect(renamed?.XIONGBAO_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
+  expect(renamed?.OPENBOT_MODEL_OAUTH_FILE ?? "").toBe("");
+});
+
+/*
+ * The v0.2.15 local updater, already installed, hands a release's identity to `up --build` under the
+ * old names. The image it builds must still carry it, or the candidate answers /release without one
+ * and the update is never accepted.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("a build identity under the old names still reaches the server image's build", () => {
+  const args = runComposeConfig({
+    OPENBOT_BUILD_VERSION: "v0.2.16",
+    OPENBOT_BUILD_COMMIT: "abc123",
+  }).services.migrate?.build?.args;
+  expect(args?.XIONGBAO_BUILD_VERSION).toBe("v0.2.16");
+  expect(args?.XIONGBAO_BUILD_COMMIT).toBe("abc123");
+  expect(
+    runComposeConfig({
+      XIONGBAO_BUILD_VERSION: "v0.2.17",
+      OPENBOT_BUILD_VERSION: "v0.2.16",
+    }).services.migrate?.build?.args?.XIONGBAO_BUILD_VERSION,
+  ).toBe("v0.2.17");
 });
 
 test("gives the selected harness the same governed callback as the framework Bot", () => {

@@ -17,13 +17,17 @@ bash scripts/start.sh
 ### Setting names before the rename
 
 Every setting is read under its `XIONGBAO_` name. A deployment written before the rename may still
-spell it with the old `OPENBOT_` prefix: at startup the server, the container's own environment step
-and the other processes copy each old name onto its new one when the new one is unset or empty, and
-the server logs one line listing the old names in use (names only, never values). When both are set
-and differ, the `XIONGBAO_` value wins and the server names the old one. A platform model key's
-variable (`OPENBOT_POOL_*`) keeps its name, because the model pool stores it. The old names stop
-working in v0.2.17; `scripts/rebrand/rewrite-env.sh <file>` renames them in an env file and keeps a
-backup (see docs/deployment-xiongbao.md, section 6.3).
+spell it with the old `OPENBOT_` prefix. At startup the API server, the worker, the supervisor, the
+computer, the runner, the container's own environment step, the app's dev server, `app/serve.ts` and
+`scripts/start-local-chrome-computer.ts` copy each old name onto its new one when the new one is unset
+or empty. The Compose files, `scripts/start.sh`, `scripts/update.ts` and the callback address of the
+Python harness and of `agent-langgraph` fall back to the old name the same way. The server logs one
+line listing the old names in use (names only, never values). When both are set and differ, the
+`XIONGBAO_` value wins and the server names the old one. An empty `XIONGBAO_` value counts as unset,
+so it does not hide the old one: to drop an old setting, delete its line rather than writing the new
+name empty. A platform model key's variable (`OPENBOT_POOL_*`) keeps its name, because the model pool
+stores it. The old names stop working in v0.2.17; `scripts/rebrand/rewrite-env.sh <file>` renames them
+in an env file and keeps a backup (see docs/deployment-xiongbao.md, section 6.3).
 
 ## Required API server variables
 

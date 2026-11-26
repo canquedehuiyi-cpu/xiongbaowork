@@ -398,6 +398,39 @@ test("manual startup refuses an interrupted journal while the exact update opera
   expect(() => assertLocalStartAllowed(f.root, "this-operation")).not.toThrow();
 });
 
+/*
+ * The update that brings in this source is run by the updater already installed, and the v0.2.15 one
+ * names the operation OPENBOT_UPDATE_OPERATION. Its start of the new source must still be allowed, and
+ * an operation under neither name still refused.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("the start an older updater runs is allowed by the operation it names under the old name", () => {
+  const f = fixture();
+  writeFileSync(
+    join(f.root, ".openbot-update-journal.json"),
+    JSON.stringify({ phase: "starting", operation: "this-operation" }),
+  );
+  const assertStart = (environment: Record<string, string>) =>
+    Bun.spawnSync(
+      [
+        process.execPath,
+        "--no-env-file",
+        join(import.meta.dir, "../scripts/update.ts"),
+        "local",
+        "assert-start",
+        "--root",
+        f.root,
+      ],
+      { env: { PATH: process.env.PATH ?? "", ...environment } },
+    ).exitCode;
+  expect(assertStart({ OPENBOT_UPDATE_OPERATION: "this-operation" })).toBe(0);
+  expect(assertStart({ XIONGBAO_UPDATE_OPERATION: "this-operation" })).toBe(0);
+  expect(assertStart({})).not.toBe(0);
+  expect(
+    assertStart({ OPENBOT_UPDATE_OPERATION: "another-operation" }),
+  ).not.toBe(0);
+});
+
 test("binary subprocess backups stream to disk and close without hanging", () => {
   const f = fixture();
   const output = join(f.root, "binary.dump");

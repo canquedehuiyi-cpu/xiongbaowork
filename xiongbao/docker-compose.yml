@@ -55,12 +55,15 @@ services:
     build: &server-build
       context: .
       dockerfile: server/Dockerfile
+      # The v0.2.15 local updater hands the release's identity in under the old names; the image
+      # it builds must still answer /release with it.
+      # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
       args:
-        XIONGBAO_BUILD_VERSION: ${XIONGBAO_BUILD_VERSION:-}
-        XIONGBAO_BUILD_COMMIT: ${XIONGBAO_BUILD_COMMIT:-}
-        XIONGBAO_BUILD_DISTRIBUTION_ID: ${XIONGBAO_BUILD_DISTRIBUTION_ID:-}
-        XIONGBAO_BUILD_REPOSITORY: ${XIONGBAO_BUILD_REPOSITORY:-}
-        XIONGBAO_BUILD_CHANNEL: ${XIONGBAO_BUILD_CHANNEL:-}
+        XIONGBAO_BUILD_VERSION: ${XIONGBAO_BUILD_VERSION:-${OPENBOT_BUILD_VERSION:-}}
+        XIONGBAO_BUILD_COMMIT: ${XIONGBAO_BUILD_COMMIT:-${OPENBOT_BUILD_COMMIT:-}}
+        XIONGBAO_BUILD_DISTRIBUTION_ID: ${XIONGBAO_BUILD_DISTRIBUTION_ID:-${OPENBOT_BUILD_DISTRIBUTION_ID:-}}
+        XIONGBAO_BUILD_REPOSITORY: ${XIONGBAO_BUILD_REPOSITORY:-${OPENBOT_BUILD_REPOSITORY:-}}
+        XIONGBAO_BUILD_CHANNEL: ${XIONGBAO_BUILD_CHANNEL:-${OPENBOT_BUILD_CHANNEL:-}}
     # Named, and pullable, for the same reason as agent-computer below: a release publishes this
     # image, and a machine that can name it does not need a toolchain to build it. `pull_policy`
     # is what decides between the two, because a service carrying a `build` section builds by
@@ -216,6 +219,11 @@ services:
       # at `.openbot/model-oauth.json` beside this one, and reaches the container through the mount
       # below, so a host path here becomes the mount's. Empty stays empty: no sign-in, no file.
       XIONGBAO_MODEL_OAUTH_FILE: ${XIONGBAO_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
+      # The same under the old name, because Compose cannot nest a `:+` inside a `:-`: a `.env` that
+      # still says OPENBOT_MODEL_OAUTH_FILE gets it here, and the server's alias step copies it over the
+      # empty new one. The v0.2.15 local updater also refuses a Compose file that drops this key while
+      # the installation uses it. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+      OPENBOT_MODEL_OAUTH_FILE: ${OPENBOT_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
       # The secret local Intelligence's Learning agent sends when it asks the person's Claude or
       # ChatGPT plan for a step (server/src/learning/model-endpoint.ts). The desktop app mints it
       # once per installation and gives it to this service and that agent alone.

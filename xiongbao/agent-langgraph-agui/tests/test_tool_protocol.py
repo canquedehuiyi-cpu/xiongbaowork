@@ -50,6 +50,7 @@ def boundary(monkeypatch):
         "GOOGLE_GENERATIVE_AI_BASE_URL",
         "CLAUDE_CODE_OAUTH_TOKEN",
         "XIONGBAO_TOOL_URL",
+        # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the callback address's old name
         "OPENBOT_TOOL_URL",
         "AGENT_TOOL_TOKEN",
     ]:

@@ -13,6 +13,8 @@ import { join } from "node:path";
 
 const script = join(import.meta.dir, "rewrite-env.sh");
 
+// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，改写旧名的工具与其测试一起移走
+
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "rewrite-env-"));
@@ -111,6 +113,44 @@ describe("rewrite-env.sh", () => {
     expect(stderr).toContain("OPENBOT_PUBLIC_URL");
     expect(stdout + stderr).not.toContain("old.example");
     expect(stdout + stderr).not.toContain("new.example");
+  });
+
+  test("keeps the effective value when the new line is empty", () => {
+    // 运行时空的新值等于没设、生效的是旧值；同名的行最后一行生效。改写后生效的值必须一样。
+    const file = write(".env", [
+      "XIONGBAO_PUBLIC_URL=",
+      "OPENBOT_PUBLIC_URL=https://public.example",
+      'XIONGBAO_RLS_ENFORCE=""',
+      "OPENBOT_RLS_ENFORCE=warn",
+      "XIONGBAO_SINGLE_USER=true",
+      "XIONGBAO_SINGLE_USER=",
+      "OPENBOT_SINGLE_USER=false",
+      "XIONGBAO_EDITION=",
+      "XIONGBAO_EDITION=personal",
+      "OPENBOT_EDITION=team",
+      "XIONGBAO_CONTENT_PORT=",
+    ]);
+    const { code, stdout, stderr } = run(file);
+    expect(code).toBe(0);
+    expect(readFileSync(file, "utf8").split("\n")).toEqual([
+      "# XIONGBAO_PUBLIC_URL=",
+      "XIONGBAO_PUBLIC_URL=https://public.example",
+      '# XIONGBAO_RLS_ENFORCE=""',
+      "XIONGBAO_RLS_ENFORCE=warn",
+      "# XIONGBAO_SINGLE_USER=true",
+      "# XIONGBAO_SINGLE_USER=",
+      "XIONGBAO_SINGLE_USER=false",
+      "XIONGBAO_EDITION=",
+      "XIONGBAO_EDITION=personal",
+      "# OPENBOT_EDITION=team",
+      // 没有同名旧行的空新行与改名无关，原样留着。
+      "XIONGBAO_CONTENT_PORT=",
+      "",
+    ]);
+    expect(stderr).toContain("XIONGBAO_PUBLIC_URL");
+    const printed = stdout + stderr;
+    for (const value of ["public.example", "warn", "personal", "team"])
+      expect(printed).not.toContain(value);
   });
 
   test("the compose variables for image, tag and port are renamed like the rest", () => {
