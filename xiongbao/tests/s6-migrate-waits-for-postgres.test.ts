@@ -115,3 +115,38 @@ test("migrate.sh runs the rename preflight once the database is ready and the mi
   for (const script of ["rebrand-preflight.sh", "rebrand-restore.sh"])
     expect(statSync(join(SCRIPTS, script)).mode & 0o111).toBe(0o111);
 });
+
+test("migrate.sh renames the superuser and the database last, then writes the connection strings the API reads", () => {
+  // The rename and the strings themselves are tested against real PostgreSQL by
+  // docker/tests/rebrand-superuser.test.sh.
+  const migrate = readFileSync(join(SCRIPTS, "migrate.sh"), "utf8");
+  // The names this boot connects with come from the database, before anything else talks to it.
+  const names = migrate.indexOf('"$SUPERUSER" names ');
+  const check = migrate.indexOf(
+    '"$PREFLIGHT" check -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"',
+  );
+  expect(names).toBeGreaterThan(-1);
+  expect(check).toBeGreaterThan(names);
+  // The first ask is the readiness wait; a refusal waiting cannot change (exit 3) stops at once instead
+  // of being reported as a database that never came up. Both are tested in rebrand-superuser.test.sh.
+  expect(migrate).toContain('"$SUPERUSER" names --wait 30 ');
+  expect(migrate).toMatch(/\n {2}3\) exit 1 ;;\n/);
+  // After the migrations and the application roles' passwords: no other session on the database.
+  const rename = migrate.indexOf(
+    '"$PREFLIGHT" step 超级用户与库改名 数据库超级用户名与库名 -- \\\n  "$SUPERUSER" rename ',
+  );
+  expect(rename).toBeGreaterThan(migrate.indexOf("scripts/migrate.ts"));
+  expect(rename).toBeGreaterThan(migrate.lastIndexOf("psql"));
+  // Then the strings, under the names the database answers to after it, and then finish.
+  const urls = migrate.indexOf('"$(dirname "$0")/database-urls.sh" ');
+  expect(urls).toBeGreaterThan(rename);
+  expect(migrate.lastIndexOf('"$SUPERUSER" names ')).toBeGreaterThan(rename);
+  expect(migrate.lastIndexOf('"$SUPERUSER" names ')).toBeLessThan(urls);
+  expect(migrate.indexOf('"$PREFLIGHT" finish')).toBeGreaterThan(urls);
+  // migrate.sh no longer reads an owner URL postgres-init wrote with names it could not know yet.
+  expect(migrate).not.toContain("MIGRATION_DATABASE_URL");
+  const init = readFileSync(join(SCRIPTS, "postgres-init.sh"), "utf8");
+  expect(init).not.toContain("/run/s6/container_environment");
+  for (const script of ["rebrand-superuser.sh", "database-urls.sh"])
+    expect(statSync(join(SCRIPTS, script)).mode & 0o111).toBe(0o111);
+});

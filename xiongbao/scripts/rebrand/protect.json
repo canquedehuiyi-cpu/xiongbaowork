@@ -12,38 +12,20 @@
   {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
     "pattern": "-d openbot\\b",
-    "until": "R3",
-    "reason": "postgres-init.sh：交付容器里现网数据卷已存在的库名（-d）"
+    "until": "R4",
+    "reason": "postgres-init.sh：新装卷初次建库时的库名（psql -d，在库里装 pgvector）；R4 基线化之前新装卷仍用改名前的超级用户与库名跑迁移，首启迁移后由 migrate.sh 改名；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/docker/s6/scripts/migrate.sh",
     "pattern": "-d openbot\\b",
-    "until": "R3",
-    "reason": "migrate.sh：交付容器里现网数据卷已存在的库名（-d）"
-  },
-  {
-    "file": "xiongbao/scripts/ci/image-smoke.sh",
-    "pattern": "-d openbot\\b",
-    "until": "R3",
-    "reason": "image-smoke.sh：交付容器里现网数据卷已存在的库名（-d）"
+    "until": "R4",
+    "reason": "migrate.sh：v0.2.16 改名前的卷上的库名（传给 rebrand-superuser.sh 的 -d，查名字与改名用；新装卷首启也是这个名字）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
     "pattern": "-U openbot openbot\\b",
-    "until": "R3",
-    "reason": "postgres-init.sh：交付容器里现网数据卷已存在的库名（createdb 的库名参数）"
-  },
-  {
-    "file": "xiongbao/docker/s6/scripts/migrate.sh",
-    "pattern": "-U openbot openbot\\b",
-    "until": "R3",
-    "reason": "migrate.sh：交付容器里现网数据卷已存在的库名（createdb 的库名参数）"
-  },
-  {
-    "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
-    "pattern": ":5432/openbot(?![\\w-])",
-    "until": "R3",
-    "reason": "postgres-init.sh：交付容器里现网数据卷已存在的库名（连接串库名）"
+    "until": "R4",
+    "reason": "postgres-init.sh：新装卷初次建库时的库名（createdb 的库名参数）；R4 基线化之前新装卷仍用改名前的超级用户与库名跑迁移，首启迁移后由 migrate.sh 改名；legacy-compat 到 R4 删除"
   },
   {
     "text": ".openbot-carried-over",
@@ -1730,9 +1712,15 @@
   },
   {
     "file": "xiongbao/docker/tests/rebrand-preflight.test.sh",
+    "pattern": "\\bopenbot(?:_app|_role_writer|_restoring)?\\b",
+    "until": "R4",
+    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，以及还原脚本的临时库名（旧库名加 _restoring），旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+  },
+  {
+    "file": "xiongbao/docker/tests/rebrand-superuser.test.sh",
     "pattern": "\\bopenbot(?:_app|_role_writer)?\\b",
     "until": "R4",
-    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+    "reason": "v0.2.16 超级用户与库改名（s6 rebrand-superuser.sh）的测试：用 initdb 造出新装卷与 v0.2.15 形状的旧名集群（超级用户、库、应用角色），旧名就是被测对象，并检查启动日志里不再出现旧名；legacy-compat 到 R4 随迁移代码删除"
   },
   {
     "file": "xiongbao/docker/s6/scripts/env-aliases.sh",
