@@ -13,7 +13,7 @@
  *    database outlives the namespace a generated key lives in;
  *  - an upgrade keeps every generated value, and one from a release installed with these supplied
  *    keeps what that release was installed with. That is `lookup`'s job, which needs a cluster: the
- *    last block runs against one when OPENBOT_KIND_KUBECONFIG names a disposable cluster.
+ *    last block runs against one when XIONGBAO_KIND_KUBECONFIG names a disposable cluster.
  */
 import { describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
-const kubeconfig = process.env.OPENBOT_KIND_KUBECONFIG;
+const kubeconfig = process.env.XIONGBAO_KIND_KUBECONFIG;
 const chart = join(import.meta.dir, "../charts/xiongbao");
 
 type EnvVar = {

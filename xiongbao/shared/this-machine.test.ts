@@ -68,9 +68,9 @@ describe("a deployment reached from beyond this machine", () => {
   test("is any address on the network an operator names, and one nobody could read", () => {
     expect(
       addressesBeyondThisMachine({
-        OPENBOT_APP_URL: "http://192.168.1.10:3010",
+        XIONGBAO_APP_URL: "http://192.168.1.10:3010",
         TRUSTED_ORIGINS: "http://localhost:3010, https://box.tailnet.ts.net",
-        OPENBOT_PUBLIC_URL: "not a url",
+        XIONGBAO_PUBLIC_URL: "not a url",
       }),
     ).toEqual([
       "not a url",

@@ -120,7 +120,7 @@ export const COMPUTER_ACTION_EVENT_TYPES = [
  */
 export {
   CALLS_RECORDED_AS_CHANGES,
-  OPENBOT_WORKING_EVENT_TYPES,
+  XIONGBAO_WORKING_EVENT_TYPES,
   oneRowPerAction,
 } from "@xiongbao/shared/activity-rows";
 

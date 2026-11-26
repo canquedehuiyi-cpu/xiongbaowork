@@ -201,11 +201,11 @@ export function acceptedBuildEnvironment(root: string): Record<string, string> {
     JSON.parse(readFileSync(join(root, ACCEPTED), "utf8")),
   );
   return {
-    OPENBOT_BUILD_VERSION: manifest.version,
-    OPENBOT_BUILD_COMMIT: manifest.source.commit,
-    OPENBOT_BUILD_DISTRIBUTION_ID: manifest.distribution.id,
-    OPENBOT_BUILD_REPOSITORY: manifest.distribution.repository,
-    OPENBOT_BUILD_CHANNEL: manifest.distribution.channel,
+    XIONGBAO_BUILD_VERSION: manifest.version,
+    XIONGBAO_BUILD_COMMIT: manifest.source.commit,
+    XIONGBAO_BUILD_DISTRIBUTION_ID: manifest.distribution.id,
+    XIONGBAO_BUILD_REPOSITORY: manifest.distribution.repository,
+    XIONGBAO_BUILD_CHANNEL: manifest.distribution.channel,
   };
 }
 /** What the candidate runs with. A host install builds its own images from the checked-out source
@@ -218,11 +218,11 @@ function candidateEnvironment(
 ): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {
     ...env,
-    OPENBOT_BUILD_VERSION: manifest.version,
-    OPENBOT_BUILD_COMMIT: manifest.source.commit,
-    OPENBOT_BUILD_DISTRIBUTION_ID: manifest.distribution.id,
-    OPENBOT_BUILD_REPOSITORY: manifest.distribution.repository,
-    OPENBOT_BUILD_CHANNEL: manifest.distribution.channel,
+    XIONGBAO_BUILD_VERSION: manifest.version,
+    XIONGBAO_BUILD_COMMIT: manifest.source.commit,
+    XIONGBAO_BUILD_DISTRIBUTION_ID: manifest.distribution.id,
+    XIONGBAO_BUILD_REPOSITORY: manifest.distribution.repository,
+    XIONGBAO_BUILD_CHANNEL: manifest.distribution.channel,
   };
   if (topology === "host") return result;
   // `missing`, not `never`: `docker compose pull` skips a service whose policy is `never`, so the
@@ -404,7 +404,7 @@ function preservedState(
     for (const key of [
       "COMPUTER_NAMESPACE",
       "TENANT_PACKAGE_DIR",
-      "OPENBOT_MODEL_OAUTH_FILE",
+      "XIONGBAO_MODEL_OAUTH_FILE",
     ]) {
       const existing = service.environment?.[key];
       if (existing && existing !== after.services[name]?.environment?.[key])
@@ -1015,7 +1015,7 @@ export async function applyLocalUpdate(
     env,
   );
   const operation = randomUUID();
-  candidateEnv.OPENBOT_UPDATE_OPERATION = operation;
+  candidateEnv.XIONGBAO_UPDATE_OPERATION = operation;
   // What a host install's own processes run with: the owner URL is handed only to its backup, its
   // migration and `start.sh`, which takes it out of its environment at once and passes it to its
   // Compose migration alone (an override may interpolate it into `migrate`), never to `bun install`

@@ -9,9 +9,9 @@ import { join } from "node:path";
  * than at the top of the file for the same reason.
  *
  *   cd agent-computer && bunx playwright install chromium
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/follows-popup.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/follows-popup.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const LAUNCH_TIMEOUT_MS = 120_000;
 
 const html = (title: string, body: string) =>

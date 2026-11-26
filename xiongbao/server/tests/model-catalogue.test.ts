@@ -620,7 +620,7 @@ describe("the default and the thinking levels, from the providers' own data", ()
       environment: {
         OPENAI_BASE_URL: "https://api.x.ai/v1",
         BOT_MODEL: "grok-4.7",
-        OPENBOT_MODEL_CAPABILITIES_URL: "off",
+        XIONGBAO_MODEL_CAPABILITIES_URL: "off",
       },
       fetch: fetcher,
     });

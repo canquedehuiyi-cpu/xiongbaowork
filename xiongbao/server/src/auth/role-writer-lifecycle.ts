@@ -13,7 +13,7 @@ export type RlsEnforcementMode = "refuse" | "warn";
 /**
  * Whether an unenforced or unconfirmed RLS role stops the server (audit defect #8).
  *
- * Refuse unless somebody wrote `OPENBOT_RLS_ENFORCE=warn`, or `NODE_ENV` says development or test.
+ * Refuse unless somebody wrote `XIONGBAO_RLS_ENFORCE=warn`, or `NODE_ENV` says development or test.
  * Not "warn unless production": `NODE_ENV` is unset on a hand-written server env file, which is
  * exactly the deployment that connects with the owner string by mistake (see dev-actor.ts for the
  * same lesson). Anything other than the two words refuses to start rather than being read as warn,
@@ -22,7 +22,7 @@ export type RlsEnforcementMode = "refuse" | "warn";
 export function resolveRlsEnforcementMode(
   environment: Record<string, string | undefined>,
 ): RlsEnforcementMode {
-  const written = environment.OPENBOT_RLS_ENFORCE?.trim().toLowerCase();
+  const written = environment.XIONGBAO_RLS_ENFORCE?.trim().toLowerCase();
   if (written === "refuse" || written === "warn") return written;
   if (written)
     throw new Error(

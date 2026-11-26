@@ -61,19 +61,19 @@
 需要 Bash、Docker Engine、curl 和 OpenSSL；不需要 Git、GitHub 账号或 Bun。
 WSL 使用 Docker Desktop 时先启用该发行版的 WSL Integration，并确认 `docker version` 同时显示 Client / Server。
 在一个新建的空目录中执行下面的命令。它拉取发布镜像、下载同一标签的配置模板、生成随机密钥，
-只在本机开放 `127.0.0.1:3772`，不配置模型密钥。换版本时先设置 `OPENBOT_TAG=<发布标签>`。
+只在本机开放 `127.0.0.1:3772`，不配置模型密钥。换版本时先设置 `XIONGBAO_TAG=<发布标签>`。
 这段命令在每次发布后由 CI 原样执行（干净机器、未登录 GHCR）。
 
 <!-- g7:linux:begin -->
 ```bash
-OPENBOT_TAG=${OPENBOT_TAG:-v0.2.13}
-OPENBOT_IMAGE=${OPENBOT_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OPENBOT_TAG}
-docker pull "$OPENBOT_IMAGE"
+XIONGBAO_TAG=${XIONGBAO_TAG:-v0.2.13}
+XIONGBAO_IMAGE=${XIONGBAO_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$XIONGBAO_TAG}
+docker pull "$XIONGBAO_IMAGE"
 if [ -e .env.delivery ]; then
   echo '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
 else
   curl --fail --silent --show-error --location -o .env.delivery \
-    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/xiongbao/docker/delivery.env.example"
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${XIONGBAO_TAG}/xiongbao/docker/delivery.env.example"
   chmod 600 .env.delivery
   printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
 fi
@@ -82,7 +82,7 @@ docker run -d --name xiongbao-local --env-file .env.delivery \
   -v xiongbao-local-db:/var/lib/postgresql \
   -v xiongbao-local-workspace:/workspace \
   -v xiongbao-local-profiles:/profiles \
-  "$OPENBOT_IMAGE"
+  "$XIONGBAO_IMAGE"
 deadline=$((SECONDS+60))
 until curl --fail --silent --max-time 2 http://127.0.0.1:3772/health; do
   if [ "$SECONDS" -ge "$deadline" ]; then docker logs xiongbao-local; exit 1; fi
@@ -108,15 +108,15 @@ echo
 
 <!-- g7:windows:begin -->
 ```powershell
-$OpenbotTag = if ($env:OPENBOT_TAG) { $env:OPENBOT_TAG } else { 'v0.2.13' }
-$OpenbotImage = if ($env:OPENBOT_IMAGE) { $env:OPENBOT_IMAGE } else { "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OpenbotTag" }
-docker pull $OpenbotImage
+$XiongbaoTag = if ($env:XIONGBAO_TAG) { $env:XIONGBAO_TAG } else { 'v0.2.13' }
+$XiongbaoImage = if ($env:XIONGBAO_IMAGE) { $env:XIONGBAO_IMAGE } else { "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$XiongbaoTag" }
+docker pull $XiongbaoImage
 if ($LASTEXITCODE -ne 0) { throw '拉取镜像失败' }
 if (Test-Path .env.delivery) {
   Write-Output '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
 } else {
   Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
-    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($OpenbotTag)/xiongbao/docker/delivery.env.example"
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($XiongbaoTag)/xiongbao/docker/delivery.env.example"
   $keyBytes = New-Object byte[] 32
   $keyGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
   $keyGenerator.GetBytes($keyBytes)
@@ -128,7 +128,7 @@ docker run -d --name xiongbao-local --env-file .env.delivery `
   -v xiongbao-local-db:/var/lib/postgresql `
   -v xiongbao-local-workspace:/workspace `
   -v xiongbao-local-profiles:/profiles `
-  $OpenbotImage
+  $XiongbaoImage
 if ($LASTEXITCODE -ne 0) { throw '启动容器失败' }
 $healthReady = $false
 $healthDeadline = (Get-Date).AddSeconds(60)
@@ -166,9 +166,9 @@ Git Bash 若使用 `docker -v/-w` 的绝对路径，先设置 `MSYS_NO_PATHCONV=
 | `DATABASE_URL` | 运行期连接串，角色必须是非超级用户、没有 `BYPASSRLS` |
 | `MIGRATION_DATABASE_URL` | 只给迁移用的 owner 连接串；内嵌数据库由启动脚本生成 |
 | `BOT_MODEL` / `OPENAI_BASE_URL` | 模型名和兼容 OpenAI 接口的地址；模型名必须来自供应商当前目录 |
-| `OPENBOT_PUBLIC_URL` | 用户实际访问的地址；本机体验为 `http://localhost:3772` |
-| `OPENBOT_SINGLE_USER` | 本机体验用 `true`（不用登录）；对外部署用 `false` 并配置登录 |
-| `OPENBOT_RLS_ENFORCE` | 镜像默认 `refuse`：发现运行期角色能绕过行级安全就拒绝启动 |
+| `XIONGBAO_PUBLIC_URL` | 用户实际访问的地址；本机体验为 `http://localhost:3772` |
+| `XIONGBAO_SINGLE_USER` | 本机体验用 `true`（不用登录）；对外部署用 `false` 并配置登录 |
+| `XIONGBAO_RLS_ENFORCE` | 镜像默认 `refuse`：发现运行期角色能绕过行级安全就拒绝启动 |
 | `COMPOSIO_API_KEY` / `ARCADE_API_KEY` | 接入应用目录的连接器提供商（可选） |
 | `TENANT_PACKAGE_DIR` | 品牌包目录，构建期写进网页；运行期更换不改变已构建的网页 |
 
@@ -186,7 +186,7 @@ Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 | 页面能开但员工回复报错 | 核对 `BOT_MODEL`、接口地址和模型授权；改完重建容器 |
 | 设备端显示「已暂停自动执行」 | 有动作结果不明；到「设置 › 我的设备 › 核查并恢复」核对后恢复 |
 | 换品牌包后页面还是旧品牌 | 品牌在构建期写进网页，按附录从源码构建并换镜像 |
-| 端口 3772 被占用 | 改宿主映射和 `OPENBOT_PUBLIC_URL`，容器内端口仍是 3001 |
+| 端口 3772 被占用 | 改宿主映射和 `XIONGBAO_PUBLIC_URL`，容器内端口仍是 3001 |
 
 停止体验容器：`docker rm -f xiongbao-local`（命名卷保留）。升级不要用 `docker compose down -v`，
 备份前不要删数据库卷；备份、恢复与升级步骤见部署手册第 6 节。
@@ -225,7 +225,7 @@ cd xiongbaowork/xiongbao
 docker build -f Dockerfile -t xiongbao-digital-employee:local .
 ```
 
-之后先设置 `OPENBOT_IMAGE=xiongbao-digital-employee:local`，再执行快速上手命令中除 `docker pull` 以外的各行。
+之后先设置 `XIONGBAO_IMAGE=xiongbao-digital-employee:local`，再执行快速上手命令中除 `docker pull` 以外的各行。
 本机构建的镜像没有发布 digest 和来源证明，不能作为交付验收证据。
 
 ## 开源许可

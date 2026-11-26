@@ -29,7 +29,7 @@ docker start openbot-postgres-1        # 已存在则直接起；别新建
 
 `openbot_app` 能读写数据、能在 `public` schema 里建表（迁移 `0054` 给了 `CREATE`），但**不能 `TRUNCATE`**——清库脚本因此必须用 owner 串跑。RLS 对所有带 `tenant_id` 的表开启 `FORCE`，并且**读和写各自一条策略**（迁移 `0072`）：`FOR SELECT` 允许"本租户 / `system` / `platform`"，所以平台内置目录人人可读；`FOR INSERT`/`UPDATE`/`DELETE` 只认"本租户，或当前处于 `platform` 作用域"，所以拿着别人的 id 也改不动、删不掉平台行。应用层仍然比对 `currentTenant()`（`src/waker-groups/store.ts` 是范例），但那是副防线而不是唯一的防线。
 
-> **两个坑（本仓库当前实况）**：① 角色决定主防线是否存在——`openbot` 是超级用户，**RLS 不约束超级用户**（`FORCE` 只管表 owner），照 owner 串起服务端就只剩应用层一道，且静默。`.env.example` 现已默认 `openbot_app`；`docker-compose.yml` 里只有一次性的 `migrate` 服务用 owner 串（建角色必须它）。服务端启动时会查 `pg_roles`，发现自己是超级用户或 `BYPASSRLS` 就 `console.error` 一条 `rls-not-enforced`，设 `OPENBOT_RLS_ENFORCE=refuse` 则直接拒绝启动（判定函数与绊线测试在 `src/db/rls-role.ts` / `tests/rls-role.test.ts`）。② `deployment_packages` 被豁免于 FORCE 策略（`0062`：部署包目录是平台发给所有租户的内容，不是租户数据）。
+> **两个坑（本仓库当前实况）**：① 角色决定主防线是否存在——`openbot` 是超级用户，**RLS 不约束超级用户**（`FORCE` 只管表 owner），照 owner 串起服务端就只剩应用层一道，且静默。`.env.example` 现已默认 `openbot_app`；`docker-compose.yml` 里只有一次性的 `migrate` 服务用 owner 串（建角色必须它）。服务端启动时会查 `pg_roles`，发现自己是超级用户或 `BYPASSRLS` 就 `console.error` 一条 `rls-not-enforced`，设 `XIONGBAO_RLS_ENFORCE=refuse` 则直接拒绝启动（判定函数与绊线测试在 `src/db/rls-role.ts` / `tests/rls-role.test.ts`）。② `deployment_packages` 被豁免于 FORCE 策略（`0062`：部署包目录是平台发给所有租户的内容，不是租户数据）。
 
 集成测试用**另一个库** `openbot_test`：跑测试时 `DATABASE_URL` 与 `TEST_DATABASE_URL` 都指它。`openbot` 是开发库，不要拿它当测试库。
 
@@ -66,7 +66,7 @@ docker compose up -d postgres   # 或复用已存在的 openbot-postgres-1
 | `DATABASE_URL` | 见 §1 运行期串 | 服务端与 RLS 的租户注入都走它 |
 | `TENANT_RUNTIME` | `cloud` \| `device` | `device` 时动作下发到租户自己的设备（runner），无可达设备就**拒绝**而不是悄悄在云端做；`cloud` 走部署自带的 agent-computer。不设这个键时：`NODE_ENV=production` 取 `device`，开发和测试取 `cloud`（F6，canquedehuiyi-cpu/xiongbaowork#169）；服务启动时打印一行 `tenant-runtime` 日志说明取值和原因。已登记进 `.env.example`（2026-10-08 之前只在 `src/config.ts` 里读、示例文件没有它，现已补上） |
 | `TENANT_PACKAGE_DIR` | 例 `examples/xiongbao` | 品牌包（品牌/员工/技能/渠道/主题），启动时按 checksum 同步 |
-| `OPENBOT_SINGLE_USER` | `true` 仅限本机单用户 | 关掉才走真实登录与租户隔离 |
+| `XIONGBAO_SINGLE_USER` | `true` 仅限本机单用户 | 关掉才走真实登录与租户隔离 |
 
 多租户口径：**个人用户即租户**，注册即 `provisionTenant`（Free 订阅 + 一个"分身"），分身不计入座位配额。套餐与配额在写入路径拦截（`src/quota/limits.ts`），**不做支付**：`/plans` 页的动词是"切换"。
 
@@ -150,7 +150,7 @@ done
 ## 8. G2（单用户全栈）在本机的实测状态（2026-10-07，容器路线）
 **结论：全栈起得来，走查还没走通。** 已证实的事实（不是"应该能跑"）：
 - server 容器起来并打印 `XiongBao Work server listening on http://127.0.0.1:3001`；app 容器 `VITE ready`，`http://localhost:3010/` 回 **200**，`/src/main.tsx` 与 `/src/routes/__root.tsx` 都 **200**（模块图能编译，不是 500 白屏）。
-- `.env` 里 `OPENBOT_SINGLE_USER=true` 已开、`OPENBOT_ORGANIZATION_AUTHORITY` 是注释掉的（按 `auth/dev-actor.ts` 的口径，此时访客即管理员）。
+- `.env` 里 `XIONGBAO_SINGLE_USER=true` 已开、`XIONGBAO_ORGANIZATION_AUTHORITY` 是注释掉的（按 `auth/dev-actor.ts` 的口径，此时访客即管理员）。
 - **但**：`curl http://localhost:3001/api/tasks` 回 **401**，而浏览器里 `/tasks` 的 DOM 只有空的 `RootWebArea`（React 没挂载完）。所以 **G2 的"跑通"这件事目前没有证据**，卡点在这两条之一：单用户 actor 需要先拿到 dev session cookie，或前端 boot 依赖某个请求没回来。**下一步就从这条查起**，别看别的。
 - 三个必须踩的坑（每个都对应我这次真实撞上的现象）：
   1. **app 容器也要挂 `examples`**。只给 server 挂 ⇒ app 的 `predev`（`scripts/generate-app-config.ts` → `loadTenantPackage`）在 `/app/examples/xiongbao/channels.yaml` 上 ENOENT，报的是镜像里的旧副本缺文件，不是仓库缺文件（仓库里 `examples/xiongbao/channels.yaml` 确实在）。
@@ -163,7 +163,7 @@ done
     -e DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot" \
     -e BETTER_AUTH_SECRET=<openssl rand -base64 32> -e BETTER_AUTH_URL=http://localhost:3001 \
     -e KEY_ENCRYPTION_KEY=<openssl rand -base64 32> -e INITIAL_ADMIN_EMAILS=admin@example.test \
-    -e OPENBOT_PUBLIC_URL=http://localhost:3001 -e OPENBOT_SINGLE_USER=true -e INTELLIGENCE_MODE=local \
+    -e XIONGBAO_PUBLIC_URL=http://localhost:3001 -e XIONGBAO_SINGLE_USER=true -e INTELLIGENCE_MODE=local \
     -p 3001:3001 -p 3010:3010 \
     -v $B/server/src:/app/server/src -v $B/server/drizzle:/app/server/drizzle \
     -v $B/server/scripts:/app/server/scripts -v $B/shared:/app/shared \
@@ -184,16 +184,16 @@ done
 ## 9. **G2 单用户已经真跑通了**（2026-10-07，附可复现证据）
 上一条记的"起得来但走查不通"已解决，**根因是我自己配错**：
 - `config.ts:1407` 的 `singleUser = !organizationAuthUrl && singleUserAllowed(environment, auth !== undefined)`，而 `hasProvider` 就是 **`auth !== undefined`**；只要给了 `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`，better-auth 实例就存在 ⇒ **单用户被判定为"有登录方式"而关闭**，`/api/tasks` 回 401、SPA 停在空壳。`.env.example` 里那四行"选哪种 provider 都要填"的键是**给 provider 模式用的**，单用户模式**一个都别给**。
-- 正确起法：`OPENBOT_SINGLE_USER=true` + `KEY_ENCRYPTION_KEY` + `OPENBOT_PUBLIC_URL=http://localhost:3001`（loopback；`singleUserAllowed` 遇到公网地址会**拒绝启动**，这是设计），**不传 BETTER_AUTH_\*、不传 INITIAL_ADMIN_EMAILS**；`INTELLIGENCE_MODE=local` 可给可不给（见 §上一条）。
+- 正确起法：`XIONGBAO_SINGLE_USER=true` + `KEY_ENCRYPTION_KEY` + `XIONGBAO_PUBLIC_URL=http://localhost:3001`（loopback；`singleUserAllowed` 遇到公网地址会**拒绝启动**，这是设计），**不传 BETTER_AUTH_\*、不传 INITIAL_ADMIN_EMAILS**；`INTELLIGENCE_MODE=local` 可给可不给（见 §上一条）。
 - 证据（不是推断）：启动日志 `No identity provider is configured, so every request is treated as dev@openbot.local (administrator)`；`GET /api/me` 回 `{"user":{"id":"dev-local-user","email":"dev@openbot.local","role":"admin",…}}`；`GET /api/capabilities` 回 `{"mode":"local","authProviders":[],"emailPassword":false,"selfHostBanner":false,…}`；`/api/tasks` 经 vite 代理回 **200** 与 `{"tasks":[]}`。
 - **首屏有一道真实门禁**：`onboarding.completedAt === null` 会把 `/tasks` 弹回 `/onboarding`（`app/src/lib/auth/queries.ts:27`）。浏览器里点 Continue 没生效，走产品自己的端点才过：`POST /api/me/onboarding {"completed":true}` ⇒ `completedAt` 落值（`{"step":99,"completedAt":"2026-10-07T04:22:29.580Z"}`）。**走查任何页面之前先过这道**，否则每条都只会看到 onboarding。
 - **A1 实测通过**（结构快照，本机浏览器没有可见 surface，截不了图）：`/tasks` 渲染出 `heading "任务看板"`、副标题「从工作本身出发：员工做了什么、什么需要你、什么等你查收。」、筛选「全部/进行中/需要操作/查收结果/已完成/失败」、`region "需要关注"` 里两个计数页签「需要操作 (0)」「查收结果 (0)」与 A7 的原句「暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里」、空态「看板上还没有任务——和员工说句话，工作就会出现在这里。」、设备筛选出现「studio-pc · 休眠」，URL 带 `?machineId=&crew=`（与 CONTEXT.md 记的两轴口径一致）。
 - **A1 与 spec 字面有一处差异要认**：spec 写的是"统计条：任务总数/进行中/需要操作/已结束"，实屏是**筛选页签 + 需要关注区的双计数**，没有并列的四个总数。0 任务时也不见周期选择器（一周/一月/全部）。**这是渲染分支还是缺功能，下一轮要用有数据的库验**，别现在写成已符合。
-- **白标的一处真缺陷（已定位、属配置不属代码）**：跑起来后页面顶部挂着一条英文的自托管推广条（链到外部的联系工程师页面）。它是**能力位控制的**（`self-host-banner.tsx:30` 读 `capabilities.selfHostBanner`），开关是 `OPENBOT_SELF_HOST_BANNER=false`，`.env.example:54` 的注释正好写着"为自己组织部署时可以给所有人关掉"。**本部署现已带上这个开关**，`/api/capabilities` 回 `selfHostBanner:false`。
+- **白标的一处真缺陷（已定位、属配置不属代码）**：跑起来后页面顶部挂着一条英文的自托管推广条（链到外部的联系工程师页面）。它是**能力位控制的**（`self-host-banner.tsx:30` 读 `capabilities.selfHostBanner`），开关是 `XIONGBAO_SELF_HOST_BANNER=false`，`.env.example:54` 的注释正好写着"为自己组织部署时可以给所有人关掉"。**本部署现已带上这个开关**，`/api/capabilities` 回 `selfHostBanner:false`。
 - 另一处品牌残留（**未修**）：`app/index.html:6` 的 `<title>` 硬编码了英文产品名，浏览器标签与 `RootWebArea` 的名字都是它；而 `appConfig.brand.productName`（生成物 `src/lib/generated/application-config.ts` 里已是「熊宝数字员工」）已经被侧栏、登录页、onboarding 用了三处。走查时页面标题仍是硬编码的英文名，属 024 未完项。
 
 ## 10. D1（数字员工页）实测 + 走查工具的本机限制（2026-10-07）
-- **白标那条推广条确实没了**：带上 `OPENBOT_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有那条自托管推广条（`complementary`），`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
+- **白标那条推广条确实没了**：带上 `XIONGBAO_SELF_HOST_BANNER=false` 重启后，`/wakers` 的结构快照里不再有那条自托管推广条（`complementary`），`/api/capabilities` 也回 `selfHostBanner:false`。**配置生效，不需要改代码**。
 - **D1 成立**：`heading "数字员工"` + 双页签「员工 / 小组」（小组 = D3 的入口已存在）+ 状态筛选带计数「全部 (16) / 运行中 (0) / 待命 (16) / 已停用 (0)」，卡片「打开」链到 `/agents?agent=<id>`（D5 的入口）。
 - **品牌包真的同步进来了**：16 位员工里有 `后端工程师/Backend Engineer`、`代码审核员/Code Reviewer`、`运营助手/Operations`、`测试工程师/QA Engineer`、`我的分身/个人分身`（当时以为是 CONTEXT.md 里 `avatar-<tenant>` 那位；**更正（2026-11-06）**：这张卡其实是品牌包的公共员工 `general-assistant`，它和本人的分身同名。现在它叫「通用助手/General Assistant」，默认对话「我的分身」由本人的 `avatar-<tenant>` 接，见 #283）。
 - ⚠️ **024 的实证缺口（新found，具体到名字）**：这 16 位里**只有 5 位是中文显示名**，其余 11 位仍是 fintech 示例包的英文名与英文角色标签——`Expense Review / Finance Operations`、`Feedback Digest / Product Research`、`Interview Notes / Recruiting`、`Knowledge / Company Knowledge`、`Meeting Follow-ups / Meetings`、`Onboarding Buddy / People Operations`、`On-call Handover / Reliability`、`Release Notes / Release Communications`、`Research Desk / Briefings`、`Ticket Triage / Support Operations`、`Vendor Review / Procurement`。**下一刀就是这些**：改 `examples/xiongbao/agents.yaml` 的显示名/角色（品牌包路径，不是改界面文案），因为界面是从包读的名字。

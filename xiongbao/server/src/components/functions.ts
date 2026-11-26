@@ -1,7 +1,7 @@
 import {
   ACTION_ENDINGS,
   CALLS_RECORDED_AS_CHANGES,
-  OPENBOT_WORKING_EVENT_TYPES,
+  XIONGBAO_WORKING_EVENT_TYPES,
 } from "@xiongbao/shared/activity-rows";
 import { outcomeForPerson } from "@xiongbao/shared/approval-outcomes";
 import { sql } from "drizzle-orm";
@@ -95,7 +95,7 @@ async function personalBotActivity(database: Database, days: number) {
                  ) as bot
           from audit_events
           where ${window}
-            and event_type not in (${list(OPENBOT_WORKING_EVENT_TYPES)})
+            and event_type not in (${list(XIONGBAO_WORKING_EVENT_TYPES)})
             and not (
               event_type = 'mcp.call_succeeded'
               and target_id in (${list(CALLS_RECORDED_AS_CHANGES)})

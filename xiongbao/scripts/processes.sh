@@ -31,8 +31,8 @@ xiongbao_powershell() {
 # What is listening on a TCP port, as "name (address)", or nothing when the port is free.
 holder() {
   if xiongbao_windows_without lsof; then
-    OPENBOT_PORT="$1" xiongbao_powershell '
-      Get-NetTCPConnection -State Listen -LocalPort $env:OPENBOT_PORT -ErrorAction SilentlyContinue |
+    XIONGBAO_PORT="$1" xiongbao_powershell '
+      Get-NetTCPConnection -State Listen -LocalPort $env:XIONGBAO_PORT -ErrorAction SilentlyContinue |
         Select-Object -First 1 |
         ForEach-Object { "{0} ({1}:{2})" -f (Get-Process -Id $_.OwningProcess).ProcessName, $_.LocalAddress, $_.LocalPort }'
     return 0
@@ -43,8 +43,8 @@ holder() {
 # The ids of whatever is listening on a TCP port, one per line.
 port_pids() {
   if xiongbao_windows_without lsof; then
-    OPENBOT_PORT="$1" xiongbao_powershell '
-      Get-NetTCPConnection -State Listen -LocalPort $env:OPENBOT_PORT -ErrorAction SilentlyContinue |
+    XIONGBAO_PORT="$1" xiongbao_powershell '
+      Get-NetTCPConnection -State Listen -LocalPort $env:XIONGBAO_PORT -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique'
     return 0
   fi
@@ -56,8 +56,8 @@ port_pids() {
 # up to five seconds, rather than let the next check see it still there.
 kill_pids() {
   if xiongbao_windows_without lsof; then
-    OPENBOT_PIDS="$*" xiongbao_powershell '
-      $ids = @($env:OPENBOT_PIDS -split " " | Where-Object { $_ -match "^[0-9]+$" })
+    XIONGBAO_PIDS="$*" xiongbao_powershell '
+      $ids = @($env:XIONGBAO_PIDS -split " " | Where-Object { $_ -match "^[0-9]+$" })
       if ($ids) {
         Stop-Process -Force -Id $ids -ErrorAction SilentlyContinue
         Wait-Process -Id $ids -Timeout 5 -ErrorAction SilentlyContinue
@@ -72,12 +72,12 @@ kill_pids() {
 # `C:\...\bun.exe` and sometimes quoted, so the first word is matched against the process name and
 # the rest against its command line.
 xiongbao_windows_matching() {
-  OPENBOT_PATTERN="$1" OPENBOT_STOP="${2:-}" xiongbao_powershell '
-    $name, $rest = $env:OPENBOT_PATTERN -split " ", 2
+  XIONGBAO_PATTERN="$1" XIONGBAO_STOP="${2:-}" xiongbao_powershell '
+    $name, $rest = $env:XIONGBAO_PATTERN -split " ", 2
     $ids = @(Get-CimInstance Win32_Process |
       Where-Object { $_.Name -eq "$name.exe" -and $_.CommandLine -and $_.CommandLine.Contains(" $rest") } |
       ForEach-Object { $_.ProcessId })
-    if ($ids -and $env:OPENBOT_STOP) {
+    if ($ids -and $env:XIONGBAO_STOP) {
       Stop-Process -Force -Id $ids -ErrorAction SilentlyContinue
       Wait-Process -Id $ids -Timeout 5 -ErrorAction SilentlyContinue
     }

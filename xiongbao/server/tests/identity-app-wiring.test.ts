@@ -17,8 +17,8 @@ const SESSION = {
 const GITHUB_ENVIRONMENT = {
   GITHUB_APP_CLIENT_ID: "Iv1.x",
   GITHUB_APP_CLIENT_SECRET: "s",
-  OPENBOT_PUBLIC_URL: "https://api.test",
-  OPENBOT_APP_URL: "https://app.test",
+  XIONGBAO_PUBLIC_URL: "https://api.test",
+  XIONGBAO_APP_URL: "https://app.test",
 };
 
 /** Builds the app with only what the identity routes need; later tests can extend the options. */

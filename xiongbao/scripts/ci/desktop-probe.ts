@@ -9,7 +9,7 @@
  * macOS: Chinese typed into TextEdit and read back, a write voiding the window's refs, and a key
  * that needs the window in front; and (Task 25) text put on the clipboard and read back exactly, and
  * `desktop.wait` seeing TextEdit's save dialog after cmd+s in a new document. Windows, on the
- * agent-desktop engine (Task 28, `OPENBOT_DESKTOP_ENGINE=agent-desktop`): Chinese put into Notepad
+ * agent-desktop engine (Task 28, `XIONGBAO_DESKTOP_ENGINE=agent-desktop`): Chinese put into Notepad
  * with `set-value` and read back, a write voiding the window's refs, ctrl+s with Notepad in front
  * landing on disk, 1 2 × 3 4 = clicked in Calculator reading 408, and an append going through
  * `--headed` inside the device's begin, ack and end. Each write is sent once and never again: a write
@@ -1475,11 +1475,11 @@ if (import.meta.main) {
   if (!platform) throw new Error(`No desktop engine on ${process.platform}.`);
   const engine = desktopEngineFor(
     process.platform,
-    process.env.OPENBOT_DESKTOP_ENGINE,
+    process.env.XIONGBAO_DESKTOP_ENGINE,
   );
   if (engine !== "agent-desktop")
     throw new Error(
-      "This probe drives agent-desktop; on Windows set OPENBOT_DESKTOP_ENGINE=agent-desktop.",
+      "This probe drives agent-desktop; on Windows set XIONGBAO_DESKTOP_ENGINE=agent-desktop.",
     );
   const root = resolve(rootArg);
   const fetched = resolve(helperArg);

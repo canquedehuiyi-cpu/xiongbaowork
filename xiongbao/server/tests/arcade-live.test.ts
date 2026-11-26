@@ -78,7 +78,7 @@ import { mintDeploymentVendorUserId } from "../src/plugins/shared-accounts";
  * `requirements.authorization.oauth2.scopes`, never `requirements.met`.
  */
 const key = process.env.ARCADE_API_KEY?.trim();
-const live = process.env.OPENBOT_LIVE_ARCADE === "1" && Boolean(key);
+const live = process.env.XIONGBAO_LIVE_ARCADE === "1" && Boolean(key);
 
 const PORT = Number(process.env.ARCADE_LIVE_VERIFIER_PORT ?? "8765");
 const TOOLKIT = process.env.ARCADE_LIVE_TOOLKIT?.trim() || "Github";

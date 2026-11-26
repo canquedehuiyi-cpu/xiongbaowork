@@ -1728,7 +1728,7 @@
   },
   {
     "file": "xiongbao/scripts/start.sh",
-    "text": "setting OPENBOT_",
+    "pattern": "(?<=setting )OPENBOT_[A-Z0-9_]+",
     "until": "R4",
     "reason": "源码启动从 .env 读设置时新名优先、旧名回退（setting XIONGBAO_X \"$(setting OPENBOT_X …)\"）；legacy-compat 到 R4 删除"
   },
@@ -1761,5 +1761,106 @@
     "text": "old=OPENBOT_",
     "until": "R4",
     "reason": "docker/s6/scripts/env-aliases.sh 的旧前缀；legacy-compat 到 R4 删除"
+  },
+  {
+    "pattern": "(?<=:-\\$\\{)OPENBOT_[A-Z0-9_]+",
+    "until": "R4",
+    "reason": "Compose 插值的旧名回退 ${XIONGBAO_X:-${OPENBOT_X:-…}}（docker/compose.delivery.yml、docker-compose.yml 与其测试）：旧 env 文件照样生效；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/wire-codes.test.ts",
+    "text": "const OLD = \"OPENBOT_\"",
+    "until": "R3",
+    "reason": "RUN_ERROR 错误码的旧前缀（发送方仍发旧码、存进 thread_run_events，出口改新前缀），随错误码一起在 R3 改"
+  },
+  {
+    "file": "xiongbao/app/tests/web-visible-names.test.ts",
+    "text": "旧名 OPENBOT_",
+    "until": "R4",
+    "reason": "断言页面源码里不再写「旧名 OPENBOT_」，到 R4 随兼容代码一起删除"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-on-this-machine.test.ts",
+    "text": "OPENBOT_THIS_MACHINE_HOST",
+    "until": "R4",
+    "reason": "证明旧名 OPENBOT_THIS_MACHINE_HOST 仍被读取；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/tests/compose.test.ts",
+    "pattern": "OPENBOT_(?:IMAGE|PORT|EDITION|TOOL_URL|HOST_GATEWAY)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "证明 Compose 文件对旧名的插值回退仍生效（交付 compose 的镜像与端口、开发 compose 的版本/回调/网关）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start-restart-guard.test.ts",
+    "text": "OPENBOT_ONE_COMPUTER_EACH",
+    "until": "R4",
+    "reason": "证明 start.sh 仍从 .env 读旧名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-langgraph-agui/src/tool_runtime.py",
+    "text": "OPENBOT_TOOL_URL",
+    "until": "R4",
+    "reason": "Python 框架不经别名步骤，回调地址新名优先、旧名其次；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-langgraph-agui/tests/test_tool_protocol.py",
+    "text": "OPENBOT_TOOL_URL",
+    "until": "R4",
+    "reason": "测试清掉旧名回调地址变量，免得宿主环境里的旧名漏进来；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-langgraph/src/index.ts",
+    "text": "OPENBOT_TOOL_URL",
+    "until": "R4",
+    "reason": "agent-langgraph 进程不经别名步骤，回调地址新名优先、旧名其次；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/templates/validation.yaml",
+    "text": "\"OPENBOT_RLS_ENFORCE\"",
+    "until": "R4",
+    "reason": "chart 渲染检查认 values 里旧名的 RLS 设置（用户手里的 values 文件）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/ci/chart-check.sh",
+    "text": "OPENBOT_RLS_ENFORCE",
+    "until": "R4",
+    "reason": "CI 证明 chart 仍认 values 里旧名的 RLS 设置；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker/compose.delivery.yml",
+    "pattern": "OPENBOT_(?:IMAGE|PORT)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "交付 compose 的说明与旧名回退：.env.delivery 里的 OPENBOT_IMAGE/OPENBOT_PORT 照样生效；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "pattern": "OPENBOT_(?:X|IMAGE|PORT|RLS_ENFORCE)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "部署手册 6.3 节向运维说明旧名仍被认与怎样改名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/.env.example",
+    "text": "connected as `openbot`",
+    "until": "R4",
+    "reason": "指的是数据库超级用户角色 openbot（历史迁移 0054 引用，R4 基线化前全仓不改）"
+  },
+  {
+    "file": "xiongbao/docker/delivery.env.example",
+    "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
+    "until": "R4",
+    "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/configuration.md",
+    "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
+    "until": "R4",
+    "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
+    "until": "R4",
+    "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
   }
 ]

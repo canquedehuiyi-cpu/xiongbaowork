@@ -119,10 +119,14 @@ describe("rewrite-env.sh", () => {
       "OPENBOT_TAG=v0.2.13",
       "OPENBOT_PORT=3780",
     ]);
-    expect(run(file).code).toBe(0);
+    const { code, stderr } = run(file);
+    expect(code).toBe(0);
     expect(readFileSync(file, "utf8")).toBe(
       "XIONGBAO_IMAGE=ghcr.io/example/xiongbaowork@sha256:abc\nXIONGBAO_TAG=v0.2.13\nXIONGBAO_PORT=3780\n",
     );
+    // 更早的 compose.delivery.yml 只认旧名：改了这两个就得换新 Compose 文件，脚本要说出来。
+    expect(stderr).toContain("compose.delivery.yml");
+    expect(stderr).not.toContain("sha256:abc");
   });
 
   test("every line of a repeated old name is renamed, so the last one still wins", () => {

@@ -65,7 +65,7 @@ import {
   HeadlessToolSuspension,
   HeadlessToolsMiddleware,
   type HeadlessWaiting,
-  OPENBOT_WAITING_METADATA,
+  XIONGBAO_WAITING_METADATA,
 } from "./headless-tools";
 import { sanitizeSeededHistory } from "./history-sanitize";
 import type { AuditInitiator } from "./initiator";
@@ -613,7 +613,7 @@ export function settle(evidence: TurnEvidence): TurnOutcome {
 
   // The waiting details, when the CUSTOM event did not survive the trip, ride on the interrupt.
   const carried = evidence.pendingInterrupts
-    .map((interrupt) => interrupt.metadata?.[OPENBOT_WAITING_METADATA])
+    .map((interrupt) => interrupt.metadata?.[XIONGBAO_WAITING_METADATA])
     .find(
       (value): value is HeadlessWaiting & { message?: string } =>
         !!value &&

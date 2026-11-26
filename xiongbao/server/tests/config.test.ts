@@ -49,8 +49,8 @@ describe("deployment configuration", () => {
   test("organization authority disables the standalone actor without requiring local provider secrets", () => {
     const config = loadConfig({
       ...withoutSignIn,
-      OPENBOT_SINGLE_USER: "true",
-      OPENBOT_ORGANIZATION_AUTH_URL: "https://xiongbao.company.example",
+      XIONGBAO_SINGLE_USER: "true",
+      XIONGBAO_ORGANIZATION_AUTH_URL: "https://xiongbao.company.example",
     });
     expect(config.singleUser).toBe(false);
     expect(config.auth).toBeUndefined();
@@ -120,7 +120,7 @@ describe("deployment configuration", () => {
       MANAGED_AGENT_TOKEN: baseEnvironment.MANAGED_AGENT_TOKEN,
       // Explicit, because no provider means every visitor is the administrator and a deployment has
       // to say it meant that. See single-user.test.ts.
-      OPENBOT_SINGLE_USER: "true",
+      XIONGBAO_SINGLE_USER: "true",
     });
 
     expect(config.auth).toBeUndefined();
@@ -487,7 +487,7 @@ describe("deployment configuration", () => {
   };
 
   /** What a deployment with no provider has to say before it is allowed to come up. */
-  const OPEN = { OPENBOT_SINGLE_USER: "true" };
+  const OPEN = { XIONGBAO_SINGLE_USER: "true" };
 
   test("enables Microsoft, and admits any account until told a directory", () => {
     const config = loadConfig({
@@ -708,19 +708,22 @@ describe("deployment configuration", () => {
   // NODE_ENV: the image and the chart both set it to production for every deployment, the local
   // trial included, so it says nothing about who can reach this.
   test.each([
-    ["a public URL", { OPENBOT_PUBLIC_URL: "https://xiongbao.example.com" }],
-    ["an app URL", { OPENBOT_APP_URL: "https://xiongbao.example.com" }],
+    ["a public URL", { XIONGBAO_PUBLIC_URL: "https://xiongbao.example.com" }],
+    ["an app URL", { XIONGBAO_APP_URL: "https://xiongbao.example.com" }],
     ["a trusted origin", { TRUSTED_ORIGINS: "https://xiongbao.example.com" }],
     [
       "one published origin among loopback ones",
       { TRUSTED_ORIGINS: "http://localhost:3010,https://xiongbao.example.com" },
     ],
-    ["an address that is not a URL at all", { OPENBOT_PUBLIC_URL: "xiongbao" }],
+    [
+      "an address that is not a URL at all",
+      { XIONGBAO_PUBLIC_URL: "xiongbao" },
+    ],
     [
       "a public URL missing its scheme",
-      { OPENBOT_PUBLIC_URL: "example.com:3010" },
+      { XIONGBAO_PUBLIC_URL: "example.com:3010" },
     ],
-    ["an app URL missing its scheme", { OPENBOT_APP_URL: "example.com:3010" }],
+    ["an app URL missing its scheme", { XIONGBAO_APP_URL: "example.com:3010" }],
     [
       "a trusted origin missing its scheme",
       { TRUSTED_ORIGINS: "http://localhost:3010,example.com:3010" },
@@ -737,11 +740,14 @@ describe("deployment configuration", () => {
    * this feature's own audience. They are allowed and warned about, not refused.
    */
   test.each([
-    ["a home LAN address", { OPENBOT_PUBLIC_URL: "http://192.168.1.10:3001" }],
-    ["a 10/8 address", { OPENBOT_PUBLIC_URL: "http://10.0.0.5:3001" }],
-    ["a 172.16/12 address", { OPENBOT_PUBLIC_URL: "http://172.20.1.4:3001" }],
-    ["a Tailscale address", { OPENBOT_PUBLIC_URL: "http://100.101.102.103" }],
-    ["a unique-local IPv6 address", { OPENBOT_PUBLIC_URL: "http://[fd00::1]" }],
+    ["a home LAN address", { XIONGBAO_PUBLIC_URL: "http://192.168.1.10:3001" }],
+    ["a 10/8 address", { XIONGBAO_PUBLIC_URL: "http://10.0.0.5:3001" }],
+    ["a 172.16/12 address", { XIONGBAO_PUBLIC_URL: "http://172.20.1.4:3001" }],
+    ["a Tailscale address", { XIONGBAO_PUBLIC_URL: "http://100.101.102.103" }],
+    [
+      "a unique-local IPv6 address",
+      { XIONGBAO_PUBLIC_URL: "http://[fd00::1]" },
+    ],
     ["an mDNS name", { TRUSTED_ORIGINS: "http://xiongbao.local:3010" }],
     ["a single-label LAN name", { TRUSTED_ORIGINS: "http://nas:3010" }],
   ])("still runs with no sign-in on %s", (_label, reachable) => {
@@ -753,8 +759,8 @@ describe("deployment configuration", () => {
   // 172.32 is outside 172.16/12, and 100.128 is outside 100.64/10. The near miss is the case a
   // hand-written range check gets wrong, so both are pinned as refused.
   test.each([
-    ["just outside 172.16/12", { OPENBOT_PUBLIC_URL: "http://172.32.0.1" }],
-    ["just outside 100.64/10", { OPENBOT_PUBLIC_URL: "http://100.128.0.1" }],
+    ["just outside 172.16/12", { XIONGBAO_PUBLIC_URL: "http://172.32.0.1" }],
+    ["just outside 100.64/10", { XIONGBAO_PUBLIC_URL: "http://100.128.0.1" }],
   ])("refuses no sign-in on %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
@@ -766,7 +772,7 @@ describe("deployment configuration", () => {
   test.each([
     [
       "a public name starting 127.",
-      { OPENBOT_PUBLIC_URL: "https://127.example.com" },
+      { XIONGBAO_PUBLIC_URL: "https://127.example.com" },
     ],
     [
       "a wildcard DNS name that starts 127.",
@@ -783,7 +789,7 @@ describe("deployment configuration", () => {
     {},
     { TRUSTED_ORIGINS: "http://localhost:3010" },
     { TRUSTED_ORIGINS: "http://127.0.0.1:3010,http://[::1]:3010" },
-    { OPENBOT_PUBLIC_URL: "http://127.0.0.1:3001" },
+    { XIONGBAO_PUBLIC_URL: "http://127.0.0.1:3001" },
     // The chart and the image both set this for every install; it must decide nothing. A real key
     // comes with it because the gate beside this one refuses the example key under production, and
     // this case is about sign-in rather than about that.
@@ -1145,12 +1151,12 @@ describe("accessibility", () => {
   });
 
   test.each(["true", "1"])(
-    "is off on OPENBOT_ACCESSIBILITY_DISABLED=%p",
+    "is off on XIONGBAO_ACCESSIBILITY_DISABLED=%p",
     (value) => {
       expect(
         loadConfig({
           ...baseEnvironment,
-          OPENBOT_ACCESSIBILITY_DISABLED: value,
+          XIONGBAO_ACCESSIBILITY_DISABLED: value,
         }).accessibility,
       ).toBe(false);
     },
@@ -1160,12 +1166,12 @@ describe("accessibility", () => {
   // else has not opted out, and silently treating it as opt-out would be a
   // setting that appears to work and does not.
   test.each(["false", "no", "", "yes"])(
-    "stays on for OPENBOT_ACCESSIBILITY_DISABLED=%p",
+    "stays on for XIONGBAO_ACCESSIBILITY_DISABLED=%p",
     (value) => {
       expect(
         loadConfig({
           ...baseEnvironment,
-          OPENBOT_ACCESSIBILITY_DISABLED: value,
+          XIONGBAO_ACCESSIBILITY_DISABLED: value,
         }).accessibility,
       ).toBe(true);
     },
@@ -1185,25 +1191,28 @@ describe("generated interfaces", () => {
     expect(loadConfig(baseEnvironment).generativeUi).toBe(true);
   });
 
-  test.each(["true", "1"])("stay on for OPENBOT_GENERATIVE_UI=%p", (value) => {
+  test.each(["true", "1"])("stay on for XIONGBAO_GENERATIVE_UI=%p", (value) => {
     expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_GENERATIVE_UI: value })
+      loadConfig({ ...baseEnvironment, XIONGBAO_GENERATIVE_UI: value })
         .generativeUi,
     ).toBe(true);
   });
 
-  test.each(["false", "0"])("are off for OPENBOT_GENERATIVE_UI=%p", (value) => {
-    expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_GENERATIVE_UI: value })
-        .generativeUi,
-    ).toBe(false);
-  });
-
-  test.each(["no", "", "yes", "TRUE", "on"])(
-    "stay on for OPENBOT_GENERATIVE_UI=%p",
+  test.each(["false", "0"])(
+    "are off for XIONGBAO_GENERATIVE_UI=%p",
     (value) => {
       expect(
-        loadConfig({ ...baseEnvironment, OPENBOT_GENERATIVE_UI: value })
+        loadConfig({ ...baseEnvironment, XIONGBAO_GENERATIVE_UI: value })
+          .generativeUi,
+      ).toBe(false);
+    },
+  );
+
+  test.each(["no", "", "yes", "TRUE", "on"])(
+    "stay on for XIONGBAO_GENERATIVE_UI=%p",
+    (value) => {
+      expect(
+        loadConfig({ ...baseEnvironment, XIONGBAO_GENERATIVE_UI: value })
           .generativeUi,
       ).toBe(true);
     },
@@ -1215,7 +1224,7 @@ describe("generated interfaces", () => {
     expect(
       loadConfig({
         ...baseEnvironment,
-        OPENBOT_GENERATIVE_UI_DISABLED: "false",
+        XIONGBAO_GENERATIVE_UI_DISABLED: "false",
       }).generativeUi,
     ).toBe(true);
   });
@@ -1226,18 +1235,18 @@ describe("the self-host banner", () => {
     expect(loadConfig(baseEnvironment).selfHostBanner).toBe(false);
   });
 
-  test("is on only for an explicit OPENBOT_SELF_HOST_BANNER=true", () => {
+  test("is on only for an explicit XIONGBAO_SELF_HOST_BANNER=true", () => {
     expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_SELF_HOST_BANNER: "true" })
+      loadConfig({ ...baseEnvironment, XIONGBAO_SELF_HOST_BANNER: "true" })
         .selfHostBanner,
     ).toBe(true);
   });
 
   test.each(["false", "0", "1", "", "no"])(
-    "stays off for OPENBOT_SELF_HOST_BANNER=%p",
+    "stays off for XIONGBAO_SELF_HOST_BANNER=%p",
     (value) => {
       expect(
-        loadConfig({ ...baseEnvironment, OPENBOT_SELF_HOST_BANNER: value })
+        loadConfig({ ...baseEnvironment, XIONGBAO_SELF_HOST_BANNER: value })
           .selfHostBanner,
       ).toBe(false);
     },
@@ -1254,7 +1263,7 @@ describe("memory sources and background research", () => {
 
   test.each(["false", "0"])("memory sources switch off with %p", (value) => {
     expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_MEMORY_SOURCE_DEFAULTS: value })
+      loadConfig({ ...baseEnvironment, XIONGBAO_MEMORY_SOURCE_DEFAULTS: value })
         .memoryDefaults,
     ).toEqual({ sources: false, research: false });
   });
@@ -1263,7 +1272,7 @@ describe("memory sources and background research", () => {
     "research by default comes back only with %p",
     (value) => {
       expect(
-        loadConfig({ ...baseEnvironment, OPENBOT_PROACTIVE_DEFAULTS: value })
+        loadConfig({ ...baseEnvironment, XIONGBAO_PROACTIVE_DEFAULTS: value })
           .memoryDefaults,
       ).toEqual({ sources: true, research: true });
     },
@@ -1528,15 +1537,15 @@ describe("the model name a deployment actually reads", () => {
 describe("edition", () => {
   const personalEnvironment = {
     ...withoutSignIn,
-    OPENBOT_EDITION: "personal",
-    OPENBOT_SINGLE_USER: "true",
+    XIONGBAO_EDITION: "personal",
+    XIONGBAO_SINGLE_USER: "true",
     AGENT_COMPUTER_URL: "http://127.0.0.1:7000",
   };
 
   test("defaults to team", () => {
     expect(loadConfig(baseEnvironment).edition).toBe("team");
     expect(
-      loadConfig({ ...baseEnvironment, OPENBOT_EDITION: "" }).edition,
+      loadConfig({ ...baseEnvironment, XIONGBAO_EDITION: "" }).edition,
     ).toBe("team");
   });
 
@@ -1551,8 +1560,8 @@ describe("edition", () => {
   test("personal edition takes the app's own loopback address as its public URL", () => {
     const config = loadConfig({
       ...personalEnvironment,
-      OPENBOT_IN_CONTAINER: "true",
-      OPENBOT_PUBLIC_URL: "http://127.0.0.1:3010",
+      XIONGBAO_IN_CONTAINER: "true",
+      XIONGBAO_PUBLIC_URL: "http://127.0.0.1:3010",
       TRUSTED_ORIGINS:
         "http://localhost:3010,http://127.0.0.1:3010,http://[::1]:3010",
     });
@@ -1565,12 +1574,12 @@ describe("edition", () => {
 
   test("refuses an unknown value", () => {
     expect(() =>
-      loadConfig({ ...personalEnvironment, OPENBOT_EDITION: "consumer" }),
+      loadConfig({ ...personalEnvironment, XIONGBAO_EDITION: "consumer" }),
     ).toThrow(/XIONGBAO_EDITION.*"team".*"personal"/);
   });
 
   test("personal edition refuses without single-user mode", () => {
-    const { OPENBOT_SINGLE_USER: _, ...environment } = personalEnvironment;
+    const { XIONGBAO_SINGLE_USER: _, ...environment } = personalEnvironment;
     expect(() => loadConfig(environment)).toThrow("XIONGBAO_SINGLE_USER=true");
   });
 

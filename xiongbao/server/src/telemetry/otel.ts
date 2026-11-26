@@ -9,7 +9,7 @@
  * Configured with the standard OpenTelemetry environment variables, read by the SDK itself:
  * `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`
  * (for a collector's API key), `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`. Nothing set means
- * nothing is exported and nothing is loaded. `OPENBOT_OTEL_EXPORT=off` turns it off with an endpoint
+ * nothing is exported and nothing is loaded. `XIONGBAO_OTEL_EXPORT=off` turns it off with an endpoint
  * still configured.
  *
  * Every record carries `xiongbao.surface`, the counterpart of Grok Bot's `cursor.surface=grok_bot`:
@@ -131,7 +131,7 @@ export function parseHeaders(raw: string | undefined): Record<string, string> {
 export function otelConfigured(
   env: Record<string, string | undefined>,
 ): boolean {
-  if (env.OPENBOT_OTEL_EXPORT?.trim().toLowerCase() === "off") return false;
+  if (env.XIONGBAO_OTEL_EXPORT?.trim().toLowerCase() === "off") return false;
   return Boolean(
     env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT?.trim() ||
       env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim(),

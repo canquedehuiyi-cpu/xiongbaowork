@@ -420,9 +420,9 @@ Called with (dict "root" . "seconds" <how long> "securityContext" <the main cont
 {{ $root.Files.Get "files/wait-for-database.mjs" | indent 6 }}
   env:
 {{ include "xiongbao.databaseUrlEnv" $root | indent 4 }}
-    - name: OPENBOT_DATABASE_WAIT_SECONDS
+    - name: XIONGBAO_DATABASE_WAIT_SECONDS
       value: {{ .seconds | int64 | quote }}
-    - name: OPENBOT_DATABASE_WAIT_HINT
+    - name: XIONGBAO_DATABASE_WAIT_HINT
       {{- if $root.Values.migrations.enabled }}
       value: {{ printf "This release's migrations run in the %s-<revision> Job, whose log says why they have not been applied: kubectl logs job/%s-<revision>." (include "xiongbao.componentName" (dict "root" $root "component" "migrations")) (include "xiongbao.componentName" (dict "root" $root "component" "migrations")) | quote }}
       {{- else }}
@@ -532,7 +532,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 - name: EMBEDDED_POSTGRES
   value: "off"
 {{- /*
-  No OPENBOT_RLS_ENFORCE here, on purpose: unset under NODE_ENV=production, the server refuses to
+  No XIONGBAO_RLS_ENFORCE here, on purpose: unset under NODE_ENV=production, the server refuses to
   start when DATABASE_URL names a superuser or a BYPASSRLS role (audit defect #8). An operator who
   accepts that writes it in `config.extraEnv`, which renders after this block and so wins; the
   bundled `postgres` superuser is refused at install in validation.yaml until somebody does.
@@ -553,7 +553,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 - name: TENANT_RUNTIME
   value: {{ .Values.config.tenantRuntime | quote }}
 {{- if .Values.config.publicUrl }}
-- name: OPENBOT_PUBLIC_URL
+- name: XIONGBAO_PUBLIC_URL
   value: {{ .Values.config.publicUrl | quote }}
 - name: BETTER_AUTH_URL
   value: {{ .Values.config.publicUrl | quote }}
@@ -582,7 +582,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   value: {{ .Values.config.allowedEmailDomains | quote }}
 {{- end }}
 {{- if .Values.config.singleUser }}
-- name: OPENBOT_SINGLE_USER
+- name: XIONGBAO_SINGLE_USER
   value: "true"
 {{- end }}
 {{- if .Values.config.logLevel }}
@@ -642,11 +642,11 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 {{- /* Absent, as under `--reuse-values`, means on: only an explicit false is written. */}}
 {{- $memory := .Values.config.memory | default dict }}
 {{- if eq (toString $memory.sourceDefaults) "false" }}
-- name: OPENBOT_MEMORY_SOURCE_DEFAULTS
+- name: XIONGBAO_MEMORY_SOURCE_DEFAULTS
   value: "false"
 {{- end }}
 {{- if eq (toString $memory.researchDefaults) "false" }}
-- name: OPENBOT_PROACTIVE_DEFAULTS
+- name: XIONGBAO_PROACTIVE_DEFAULTS
   value: "false"
 {{- end }}
 {{- with .Values.config.managedAgent.url }}
@@ -830,11 +830,11 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 {{- end }}
 {{- $inboundEmail := .Values.config.inboundEmail | default dict }}
 {{- with $inboundEmail.domain }}
-- name: OPENBOT_INBOUND_EMAIL_DOMAIN
+- name: XIONGBAO_INBOUND_EMAIL_DOMAIN
   value: {{ . | quote }}
 {{- end }}
 {{- with $inboundEmail.snsTopicArns }}
-- name: OPENBOT_INBOUND_EMAIL_SNS_TOPIC_ARNS
+- name: XIONGBAO_INBOUND_EMAIL_SNS_TOPIC_ARNS
   value: {{ . | quote }}
 {{- end }}
 {{- $otel := .Values.config.otel | default dict }}
@@ -852,7 +852,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   value: {{ . | quote }}
 {{- end }}
 {{- if $otel.paused }}
-- name: OPENBOT_OTEL_EXPORT
+- name: XIONGBAO_OTEL_EXPORT
   value: "off"
 {{- end }}
 - name: OTEL_EXPORTER_OTLP_LOGS_HEADERS

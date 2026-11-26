@@ -24,7 +24,7 @@ import { reservePort } from "../../tests/support/reserved-port";
  * the lane that has the dependency.
  */
 
-const asked = process.env.OPENBOT_LIVE_SCREEN === "1";
+const asked = process.env.XIONGBAO_LIVE_SCREEN === "1";
 
 const TOKEN = "test-computer-token";
 

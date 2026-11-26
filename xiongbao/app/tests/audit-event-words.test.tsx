@@ -14,7 +14,7 @@ import {
   withoutXiongBaoWorking,
 } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
-import { OPENBOT_WORKING_EVENT_TYPES } from "@/lib/audit/outcome";
+import { XIONGBAO_WORKING_EVENT_TYPES } from "@/lib/audit/outcome";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
@@ -100,7 +100,7 @@ const STORED = [
 ];
 
 /** What Activity's query leaves out: XiongBao's own working. */
-const LEFT_OUT = new Set<string>(OPENBOT_WORKING_EVENT_TYPES);
+const LEFT_OUT = new Set<string>(XIONGBAO_WORKING_EVENT_TYPES);
 
 /** Each row's words and stored name, for the rows Activity is answered with. */
 const ACTIVITY = ROWS.map((row, index) => ({

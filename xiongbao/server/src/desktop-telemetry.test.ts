@@ -5,23 +5,23 @@ describe("desktop runtime metadata", () => {
   test("leaves ordinary server deployments untagged", () => {
     expect(desktopTelemetryProperties({})).toEqual({});
     expect(
-      desktopTelemetryProperties({ OPENBOT_DISTRIBUTION: "server" }),
+      desktopTelemetryProperties({ XIONGBAO_DISTRIBUTION: "server" }),
     ).toEqual({});
   });
 
   test("carries only the shell's bounded metadata", () => {
     expect(
       desktopTelemetryProperties({
-        OPENBOT_DISTRIBUTION: "desktop",
-        OPENBOT_VERSION: "0.0.9",
-        OPENBOT_PLATFORM: "macos",
-        OPENBOT_ARCH: "aarch64",
-        OPENBOT_OS_VERSION: "15.6.1",
-        OPENBOT_ENGINE: "podman",
+        XIONGBAO_DISTRIBUTION: "desktop",
+        XIONGBAO_VERSION: "0.0.9",
+        XIONGBAO_PLATFORM: "macos",
+        XIONGBAO_ARCH: "aarch64",
+        XIONGBAO_OS_VERSION: "15.6.1",
+        XIONGBAO_ENGINE: "podman",
         OPENAI_API_KEY: "synthetic-secret",
         TELEMETRY_ID: "identity-belongs-in-the-transport",
         HOME: "/Users/private-name",
-        OPENBOT_BASE_URL: "https://private.example",
+        XIONGBAO_BASE_URL: "https://private.example",
       }),
     ).toEqual({
       xiongbao_distribution: "desktop",
@@ -36,9 +36,9 @@ describe("desktop runtime metadata", () => {
   test("keeps a release candidate's label on the app version only", () => {
     expect(
       desktopTelemetryProperties({
-        OPENBOT_DISTRIBUTION: "desktop",
-        OPENBOT_VERSION: "1.0.0-rc.5",
-        OPENBOT_OS_VERSION: "15.6.1-rc.5",
+        XIONGBAO_DISTRIBUTION: "desktop",
+        XIONGBAO_VERSION: "1.0.0-rc.5",
+        XIONGBAO_OS_VERSION: "15.6.1-rc.5",
       }),
     ).toEqual({
       xiongbao_distribution: "desktop",
@@ -47,8 +47,8 @@ describe("desktop runtime metadata", () => {
     for (const value of ["1.0.0-beta", "0.3.4", "1.0.0-canary.12"]) {
       expect(
         desktopTelemetryProperties({
-          OPENBOT_DISTRIBUTION: "desktop",
-          OPENBOT_VERSION: value,
+          XIONGBAO_DISTRIBUTION: "desktop",
+          XIONGBAO_VERSION: value,
         }).xiongbao_version,
       ).toBe(value);
     }
@@ -68,12 +68,12 @@ describe("desktop runtime metadata", () => {
   ])("rejects arbitrary text in every metadata field: %s", (value) => {
     expect(
       desktopTelemetryProperties({
-        OPENBOT_DISTRIBUTION: "desktop",
-        OPENBOT_VERSION: value,
-        OPENBOT_OS_VERSION: value,
-        OPENBOT_PLATFORM: value,
-        OPENBOT_ARCH: value,
-        OPENBOT_ENGINE: value,
+        XIONGBAO_DISTRIBUTION: "desktop",
+        XIONGBAO_VERSION: value,
+        XIONGBAO_OS_VERSION: value,
+        XIONGBAO_PLATFORM: value,
+        XIONGBAO_ARCH: value,
+        XIONGBAO_ENGINE: value,
       }),
     ).toEqual({ xiongbao_distribution: "desktop" });
   });

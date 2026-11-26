@@ -11,13 +11,13 @@ const keys = [
   "CHANNEL",
 ] as const;
 const previous = new Map(
-  keys.map((key) => [key, process.env[`OPENBOT_BUILD_${key}`]]),
+  keys.map((key) => [key, process.env[`XIONGBAO_BUILD_${key}`]]),
 );
 afterEach(() => {
   for (const key of keys) {
     const value = previous.get(key);
-    if (value === undefined) delete process.env[`OPENBOT_BUILD_${key}`];
-    else process.env[`OPENBOT_BUILD_${key}`] = value;
+    if (value === undefined) delete process.env[`XIONGBAO_BUILD_${key}`];
+    else process.env[`XIONGBAO_BUILD_${key}`] = value;
   }
 });
 const identity = {
@@ -30,8 +30,8 @@ const identity = {
 function appWithBuild(env: Partial<Record<(typeof keys)[number], string>>) {
   for (const key of keys) {
     const value = env[key];
-    if (value === undefined) delete process.env[`OPENBOT_BUILD_${key}`];
-    else process.env[`OPENBOT_BUILD_${key}`] = value;
+    if (value === undefined) delete process.env[`XIONGBAO_BUILD_${key}`];
+    else process.env[`XIONGBAO_BUILD_${key}`] = value;
   }
   return createReleaseStatusRoutes();
 }

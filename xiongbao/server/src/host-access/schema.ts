@@ -58,7 +58,7 @@ export type HostAccessStatus = {
 
 /**
  * What `GET /api/host-access` answers: the broker's status, and whether this XiongBao has a desktop
- * host at all. Only XiongBao Desktop gives the server one (`OPENBOT_DESKTOP_HOST_TOKEN`), so a server
+ * host at all. Only XiongBao Desktop gives the server one (`XIONGBAO_DESKTOP_HOST_TOKEN`), so a server
  * started any other way can never reach a folder, and the page says so instead of waiting for it.
  */
 export type HostAccessRouteStatus = HostAccessStatus & { desktop: boolean };

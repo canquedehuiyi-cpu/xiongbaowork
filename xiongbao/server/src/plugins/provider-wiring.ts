@@ -55,7 +55,7 @@ export type ProviderWiring<C extends BuiltClient, A extends BuiltClient> = {
  * 很久以后才表现为功能不工作。拒绝里只说变量名，从不说值。`unconfigured`（一个 key 都没配）
  * 是唯一接到「什么都没有」的情况。
  *
- * 不设 `OPENBOT_BROKER_PROVIDER`、只配 `COMPOSIO_API_KEY` 时，构造的就是以前那一个 Composio 客户端。
+ * 不设 `XIONGBAO_BROKER_PROVIDER`、只配 `COMPOSIO_API_KEY` 时，构造的就是以前那一个 Composio 客户端。
  */
 export function selectProviderWiring<
   C extends BuiltClient,

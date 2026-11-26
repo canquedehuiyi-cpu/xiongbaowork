@@ -21,9 +21,9 @@ import { setWebBotAuth } from "../src/web-bot-auth";
  * (`control.ts`) holding the wheel for a person. `bot-browser-computer.test.ts` drives the same routes through the
  * running computer.
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/bot-browser.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/bot-browser.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const BOT = "bot-with-a-bar";
 
 const HOSTED: BrowserRuntime = {

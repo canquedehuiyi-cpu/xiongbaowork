@@ -64,7 +64,7 @@ async function runStartWithStaleServerProbe(
     "MANAGED_AGENT_TOKEN=managed-token",
     "AGENT_TOOL_TOKEN=agent-tool-token",
     "MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui",
-    "OPENBOT_ONE_COMPUTER_EACH=true",
+    "XIONGBAO_ONE_COMPUTER_EACH=true",
     "DATABASE_URL=postgres://openbot:openbot@localhost:5432/xiongbao",
   ].filter(
     (line) =>
@@ -318,7 +318,7 @@ describe("start.sh settings with no line in .env", () => {
 
 describe("start.sh one computer each", () => {
   /**
-   * `OPENBOT_ONE_COMPUTER_EACH=false` IN `.env` TURNS THE SUPERVISOR OFF, AS THE DOCS SAY.
+   * `XIONGBAO_ONE_COMPUTER_EACH=false` IN `.env` TURNS THE SUPERVISOR OFF, AS THE DOCS SAY.
    *
    * The key was read from the environment alone, so a `.env` line was ignored: the supervisor was
    * still started and the server still told to use it. docs/configuration.md says to set it "in
@@ -329,7 +329,7 @@ describe("start.sh one computer each", () => {
    */
   test("false in .env starts no supervisor", async () => {
     const result = await runStartWithStaleServerProbe(401, {
-      settings: { OPENBOT_ONE_COMPUTER_EACH: "false" },
+      settings: { XIONGBAO_ONE_COMPUTER_EACH: "false" },
     });
 
     expect({ exitCode: result.exitCode, stderr: result.stderr }).toEqual({
@@ -344,8 +344,19 @@ describe("start.sh one computer each", () => {
 
   test("false in the process environment starts no supervisor either", async () => {
     const result = await runStartWithStaleServerProbe(401, {
-      settings: { OPENBOT_ONE_COMPUTER_EACH: "true" },
-      processEnvironment: { OPENBOT_ONE_COMPUTER_EACH: "false" },
+      settings: { XIONGBAO_ONE_COMPUTER_EACH: "true" },
+      processEnvironment: { XIONGBAO_ONE_COMPUTER_EACH: "false" },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.dockerLog).not.toContain("supervisor");
+  });
+
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，a .env written before the rename
+  test("the old name in .env is still read when the new one is absent", async () => {
+    const result = await runStartWithStaleServerProbe(401, {
+      omitFromEnv: ["XIONGBAO_ONE_COMPUTER_EACH"],
+      settings: { OPENBOT_ONE_COMPUTER_EACH: "false" },
     });
 
     expect(result.exitCode).toBe(0);
@@ -353,7 +364,7 @@ describe("start.sh one computer each", () => {
   });
 
   test("true, or absent, still starts it", async () => {
-    for (const omitFromEnv of [[], ["OPENBOT_ONE_COMPUTER_EACH"]] as const) {
+    for (const omitFromEnv of [[], ["XIONGBAO_ONE_COMPUTER_EACH"]] as const) {
       const result = await runStartWithStaleServerProbe(401, { omitFromEnv });
 
       expect(result.exitCode).toBe(0);

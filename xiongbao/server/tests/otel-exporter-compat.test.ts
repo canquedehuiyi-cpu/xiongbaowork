@@ -78,7 +78,7 @@ function isolated(body: string) {
 test("wiring/unit: off and absent/blank endpoints construct no SDK objects", () =>
   isolated(`
 for (const env of [{}, { OTEL_EXPORTER_OTLP_ENDPOINT: "  " },
-  { ...endpoint, OPENBOT_OTEL_EXPORT: " OFF " }]) {
+  { ...endpoint, XIONGBAO_OTEL_EXPORT: " OFF " }]) {
   assert.equal(otelConfigured(env), false);
   assert.equal(createOtelEventExporter(env), undefined);
 }

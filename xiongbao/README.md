@@ -101,7 +101,7 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
      --namespace xiongbao --create-namespace \
      --values charts/xiongbao/ci/vanilla-values.yaml \
      --values xiongbao-secrets.yaml \
-     --set config.extraEnv[0].name=OPENBOT_RLS_ENFORCE \
+     --set config.extraEnv[0].name=XIONGBAO_RLS_ENFORCE \
      --set config.extraEnv[0].value=warn \
      --timeout 15m
    ```
@@ -140,7 +140,7 @@ To run the open-source template locally, you’ll need the following.
 
 ### Quick start
 
-The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the app as a local administrator. Configure [sign-in](#sign-in) before giving anyone else access.
+The example configuration sets `XIONGBAO_SINGLE_USER=true`, so you can try the app as a local administrator. Configure [sign-in](#sign-in) before giving anyone else access.
 
 > **Setting up with an AI assistant?** Paste [`prompt.txt`](prompt.txt) into it first. It carries the
 > same steps as below plus the things that are easy to get wrong: which of the blank keys in
@@ -331,13 +331,13 @@ See [docs/configuration.md](docs/configuration.md) and [docs/coworkers.md](docs/
 - `KEY_ENCRYPTION_KEY`
 
 Sign-in adds `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`, which are needed as soon as
-`OPENBOT_SINGLE_USER` is off. Threads, memory and skills live in the PostgreSQL above.
+`XIONGBAO_SINGLE_USER` is off. Threads, memory and skills live in the PostgreSQL above.
 
 Settings worth knowing:
 
 | Variable                             | Use                                                                       |
 | ------------------------------------ | ------------------------------------------------------------------------- |
-| `OPENBOT_SINGLE_USER`                | Admits every request as one administrator. Required when no identity provider is configured; `.env.example` ships it on. |
+| `XIONGBAO_SINGLE_USER`                | Admits every request as one administrator. Required when no identity provider is configured; `.env.example` ships it on. |
 | `OPENAI_BASE_URL`                    | Answers the OpenAI-shaped calls from somewhere else: a gateway, a proxy.  |
 | `XIONGBAO_OPENAI_API`              | `responses` or `chat`: the OpenAI API the built-in Bots call behind that `OPENAI_BASE_URL`. Unset, models that take tools only through the Responses API (`gpt-5.6` and later) get `responses` and the rest get `chat`. |
 | `ANTHROPIC_BASE_URL`, `GOOGLE_GENERATIVE_AI_BASE_URL` | The same, for those two APIs.            |
@@ -353,7 +353,7 @@ Settings worth knowing:
 | `AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated. A host, optionally with a port. |
 | `TENANT_PACKAGE_DIR`                 | Directory containing tenant YAML. Defaults to `../examples/xiongbao`.    |
 | `DEPLOYMENT_ID`                      | Names the deployment that minted a thread, when several share one PostgreSQL. |
-| `OPENBOT_SELF_HOST_BANNER`           | Set `true` to show the support bar (off by default; it also needs a tenant `supportUrl`). |
+| `XIONGBAO_SELF_HOST_BANNER`           | Set `true` to show the support bar (off by default; it also needs a tenant `supportUrl`). |
 
 Full reference: [docs/configuration.md](docs/configuration.md).
 
@@ -379,7 +379,7 @@ More detail: [docs/architecture.md](docs/architecture.md).
 
 ## Sign in
 
-`.env.example` ships `OPENBOT_SINGLE_USER=true`, which is one administrator and no sign-in: how a
+`.env.example` ships `XIONGBAO_SINGLE_USER=true`, which is one administrator and no sign-in: how a
 fresh clone reaches the product without registering an OAuth client first. Delete that line and
 configure **any one** of Google, Microsoft or Okta before anybody else can reach the deployment.
 With neither, it refuses to start rather than admitting everybody as an administrator. Configure
@@ -444,7 +444,7 @@ provider's discovery document listed in `TRUSTED_ORIGINS`, not only the issuer.
 
 For an employee desktop, provision a XiongBao Work authority using the Google, Microsoft or Okta
 settings above (your Kubernetes XiongBao Work can serve this role). Set **Organization XiongBao Work URL**
-in the desktop connection screen, or `OPENBOT_ORGANIZATION_AUTH_URL=https://xiongbao.company.example`
+in the desktop connection screen, or `XIONGBAO_ORGANIZATION_AUTH_URL=https://xiongbao.company.example`
 in its public configuration. Use an HTTPS origin; HTTP is accepted only on loopback for local tests.
 Provider client secrets stay on that authority. Template and white-label deployments can supply
 the same setting without changing their own model credentials.

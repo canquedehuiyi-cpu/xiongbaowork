@@ -23,9 +23,9 @@ import { reservePort } from "../../tests/support/reserved-port";
  * What it pins: the Bot reads, snapshots and screenshots its own page; the bar refuses anyone without the wheel and
  * works for the person holding it; and only that person clears the browser.
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/bot-browser-computer.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/bot-browser-computer.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const TOKEN = "bot-browser-computer-token";
 const BOT = "sales-bot";
 

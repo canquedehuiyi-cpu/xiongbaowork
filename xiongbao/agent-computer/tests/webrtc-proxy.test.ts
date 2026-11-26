@@ -16,9 +16,9 @@ import { startEgressFilter, stopEgressFilter } from "../src/egress";
  * Asked for by name, like `follows-popup.test.ts`: it launches a real Chromium.
  *
  *   cd agent-computer && bunx playwright install chromium
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/webrtc-proxy.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/webrtc-proxy.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const lan = Object.values(networkInterfaces())
   .flat()
   .find(

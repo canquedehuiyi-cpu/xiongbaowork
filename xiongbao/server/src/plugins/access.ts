@@ -6,7 +6,7 @@ import type { TransportKind } from "./transport";
 
 /**
  * 一个连接应用提供商（上游 #770）。两个都是传输层种类，类型由编译器约束为 TransportKind 的子集。
- * 默认仍是 Composio；Arcade 只在 `OPENBOT_BROKER_PROVIDER=arcade` 或只配了 `ARCADE_API_KEY` 时启用。
+ * 默认仍是 Composio；Arcade 只在 `XIONGBAO_BROKER_PROVIDER=arcade` 或只配了 `ARCADE_API_KEY` 时启用。
  */
 export type BrokerProvider = Extract<TransportKind, "composio" | "arcade">;
 

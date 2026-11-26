@@ -34,13 +34,13 @@ const config = loadConfig(
   testEnvironment({
     DATABASE_URL: testDatabaseUrl(),
     // As XiongBao Desktop writes it: the personal edition, with no Bot in the box.
-    OPENBOT_EDITION: "personal",
+    XIONGBAO_EDITION: "personal",
     GOOGLE_OAUTH_CLIENT_ID: undefined,
     GOOGLE_OAUTH_CLIENT_SECRET: undefined,
     BETTER_AUTH_SECRET: undefined,
     BETTER_AUTH_URL: undefined,
     INITIAL_ADMIN_EMAILS: undefined,
-    OPENBOT_SINGLE_USER: "true",
+    XIONGBAO_SINGLE_USER: "true",
     AGENT_COMPUTER_URL: "http://127.0.0.1:4100",
     MANAGED_AGENT_AG_UI_URL: "",
   }),

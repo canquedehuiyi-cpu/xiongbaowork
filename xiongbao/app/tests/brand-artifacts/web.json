@@ -292,17 +292,5 @@
     "category": "third-party-name",
     "plan": "keep",
     "note": "第三方库自带的 CopilotKit 字样"
-  },
-  {
-    "word": "window.__OPENBOT_WS_PORT__",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "开发服务器注入的全局名，不进构建后的 HTML"
-  },
-  {
-    "word": "window.__OPENBOT_WS_PORT__:",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "开发服务器注入的全局名，不进构建后的 HTML"
   }
 ]

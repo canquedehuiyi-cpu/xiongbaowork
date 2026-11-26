@@ -20,9 +20,9 @@ import { OnboardingFrame } from "../src/components/onboarding/onboarding-frame";
  * the page out. The markup is the real frame's, and the stylesheet is Tailwind's build of exactly
  * the classes it wears, over the app's own theme.
  *
- *   OPENBOT_APP_BROWSER=1 bun test app/tests/onboarding-window-buttons.test.tsx
+ *   XIONGBAO_APP_BROWSER=1 bun test app/tests/onboarding-window-buttons.test.tsx
  */
-const asked = process.env.OPENBOT_APP_BROWSER === "1";
+const asked = process.env.XIONGBAO_APP_BROWSER === "1";
 
 /** Where macOS draws the window's buttons over the page, as measured in XiongBao Desktop on macOS 26. */
 const WINDOW_BUTTONS = { left: 19, top: 25, right: 81, bottom: 41 };

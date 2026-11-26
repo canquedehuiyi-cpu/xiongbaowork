@@ -25,9 +25,9 @@ import { ToolLine } from "../src/components/channels/tool-line";
  * line wears are declared the way Tailwind v4 emits them, in `@layer utilities`, which an unlayered
  * rule outranks.
  *
- *   OPENBOT_APP_BROWSER=1 bun test app/tests/tool-line-reduced-motion.test.tsx
+ *   XIONGBAO_APP_BROWSER=1 bun test app/tests/tool-line-reduced-motion.test.tsx
  */
-const asked = process.env.OPENBOT_APP_BROWSER === "1";
+const asked = process.env.XIONGBAO_APP_BROWSER === "1";
 
 const read = (path: string) =>
   readFileSync(new URL(path, import.meta.url), "utf8");

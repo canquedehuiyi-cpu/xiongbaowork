@@ -12,9 +12,9 @@ import { reservePort } from "../../tests/support/reserved-port";
  * a superseded snapshot, a ref that names nothing, and a link that now goes elsewhere are all refused as stale, and
  * the browser stays where it was.
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/link-follow-computer.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/link-follow-computer.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const TOKEN = "link-follow-computer-token";
 const BOT = "link-bot";
 

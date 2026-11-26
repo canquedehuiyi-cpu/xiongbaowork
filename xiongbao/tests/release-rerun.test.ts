@@ -140,11 +140,11 @@ function attempt(
       GITHUB_REPOSITORY: "acme/xiongbao",
       GITHUB_SHA: rel.commit,
       VERSION: "v0.3.0",
-      OPENBOT_DISTRIBUTION_ID: "acme.xiongbao",
+      XIONGBAO_DISTRIBUTION_ID: "acme.xiongbao",
       OPENBOT_UPSTREAM_COMMIT: rel.upstream,
-      OPENBOT_CHART_PATH: "release-assets/xiongbao-0.1.4.tgz",
-      OPENBOT_CHART_VERSION: "0.1.4",
-      ...(published ? { OPENBOT_PUBLISHED_ASSETS: published } : {}),
+      XIONGBAO_CHART_PATH: "release-assets/xiongbao-0.1.4.tgz",
+      XIONGBAO_CHART_VERSION: "0.1.4",
+      ...(published ? { XIONGBAO_PUBLISHED_ASSETS: published } : {}),
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -379,7 +379,7 @@ describe("the release workflow", () => {
       index("Archive exact source and write release manifest"),
     );
     expect(steps[fetch]!.run).toContain(
-      'echo "OPENBOT_PUBLISHED_ASSETS=$published" >> "$GITHUB_ENV"',
+      'echo "XIONGBAO_PUBLISHED_ASSETS=$published" >> "$GITHUB_ENV"',
     );
     expect(steps[index("Save portable provenance bundle")]!.run).toContain(
       "bun scripts/release-manifest.ts --adopt-provenance release-assets/release-provenance.sigstore.json",

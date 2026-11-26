@@ -142,7 +142,7 @@ const waitOf = (doc: Doc) =>
 const waitSeconds = (container: Container | undefined) =>
   Number(
     container?.env?.find(
-      (entry) => entry.name === "OPENBOT_DATABASE_WAIT_SECONDS",
+      (entry) => entry.name === "XIONGBAO_DATABASE_WAIT_SECONDS",
     )?.value,
   );
 
@@ -288,7 +288,7 @@ describe.skipIf(!helm)("every database reader waits for the database", () => {
     expect(migrationsJob(docs)).toBeUndefined();
     const server = readers(docs).find((doc) => component(doc) === "server");
     const hint = waitOf(server as Doc)?.env?.find(
-      (entry) => entry.name === "OPENBOT_DATABASE_WAIT_HINT",
+      (entry) => entry.name === "XIONGBAO_DATABASE_WAIT_HINT",
     )?.value;
     expect(hint).toContain("migrations.enabled");
   });
@@ -352,9 +352,9 @@ function startWait(url: string, seconds: number) {
       PATH: process.env.PATH ?? "",
       HOME: process.env.HOME ?? "",
       DATABASE_URL: url,
-      OPENBOT_DATABASE_WAIT_SECONDS: String(seconds),
-      OPENBOT_DATABASE_WAIT_HINT:
-        wait.env?.find((entry) => entry.name === "OPENBOT_DATABASE_WAIT_HINT")
+      XIONGBAO_DATABASE_WAIT_SECONDS: String(seconds),
+      XIONGBAO_DATABASE_WAIT_HINT:
+        wait.env?.find((entry) => entry.name === "XIONGBAO_DATABASE_WAIT_HINT")
           ?.value ?? "",
     },
     stdout: "pipe",

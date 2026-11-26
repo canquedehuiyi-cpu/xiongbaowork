@@ -104,7 +104,7 @@ await exporter.forceFlush(); await exporter.shutdown();
 test("real production wrapper: off/absent config and enabled idle shutdown without headers", () =>
   isolated(`
 assert.equal(createOtelEventExporter({}), undefined);
-assert.equal(createOtelEventExporter({OPENBOT_OTEL_EXPORT: " OFF ", OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:1"}), undefined);
+assert.equal(createOtelEventExporter({XIONGBAO_OTEL_EXPORT: " OFF ", OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:1"}), undefined);
 const api = createOtelEventExporter({OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:1"});
 assert.ok(api); await api.shutdown();
 `));

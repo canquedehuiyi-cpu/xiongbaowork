@@ -26,7 +26,7 @@ Setting it up takes three hands, and none of them can do another's:
 | Who              | Does                                                         | Where                                                                            |
 | ---------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | Whoever deploys  | Sets `ARCADE_API_KEY`                                        | The deployment's environment. There is no screen for it                          |
-| Whoever deploys  | Sets `OPENBOT_BROKER_PROVIDER`, only where both keys are set | The deployment's environment                                                     |
+| Whoever deploys  | Sets `XIONGBAO_BROKER_PROVIDER`, only where both keys are set | The deployment's environment                                                     |
 | Whoever deploys  | Registers an OAuth app per provider, and sets the verifier   | Arcade's dashboard, below                                                        |
 | An administrator | Enables an app and grants its actions to a Bot               | `/admin/plugins/composio`, then the app's own page, `/admin/plugins/arcade-<Toolkit>` |
 | Each person      | Connects their own account to that app                       | `/connections`                                                                   |
@@ -43,14 +43,14 @@ comes back. An enabled Arcade app is the row
 case-sensitive.
 
 **A single-user deployment can use Arcade too**, the personal edition included
-(`OPENBOT_SINGLE_USER=true`). Each such install is filed at Arcade under its own name, not under
+(`XIONGBAO_SINGLE_USER=true`). Each such install is filed at Arcade under its own name, not under
 `dev-local-user`, so several of them on one `ARCADE_API_KEY` do not use each other's consents; see
 [Configuration](../configuration.md). It also owns its Arcade project and points the verifier at
 itself; see [The verifier URL](#the-verifier-url).
 
 ### Choosing the provider
 
-A deployment runs one broker at a time. `OPENBOT_BROKER_PROVIDER` takes `composio` or `arcade`, and
+A deployment runs one broker at a time. `XIONGBAO_BROKER_PROVIDER` takes `composio` or `arcade`, and
 anything else stops the server at startup.
 
 **Where exactly one of the two keys is set and the variable is unset, that provider is the active
@@ -78,12 +78,12 @@ Four refusals protect the choice, and all are deliberate. The sentences are
 in Chinese, and name variables, never values:
 
 - **A named provider whose key is not set stops the server at startup.** An operator sees:
-  _OPENBOT_BROKER_PROVIDER=arcade 指明的提供商没有配置 ARCADE_API_KEY。请把 ARCADE_API_KEY 设为这个部署的
-  key，或者修改、去掉 OPENBOT_BROKER_PROVIDER。_ It does not fall back to a deployment with no
+  _XIONGBAO_BROKER_PROVIDER=arcade 指明的提供商没有配置 ARCADE_API_KEY。请把 ARCADE_API_KEY 设为这个部署的
+  key，或者修改、去掉 XIONGBAO_BROKER_PROVIDER。_ It does not fall back to a deployment with no
   broker, because that would send somebody looking for a broken vendor instead of at their own
   environment.
 - **Both keys set with the variable unset stops the server at startup.** The message names both
-  keys and says to set `OPENBOT_BROKER_PROVIDER` to `composio` or `arcade`. Nobody wants that state
+  keys and says to set `XIONGBAO_BROKER_PROVIDER` to `composio` or `arcade`. Nobody wants that state
   on purpose — the deployment would hold two vendor keys and broker nothing — and wiring no broker
   silently would surface much later and far away, as brokered features that simply do not work.
 - **Activating a provider is refused while the other one still holds connections.** It is keyed on
@@ -92,7 +92,7 @@ in Chinese, and name variables, never values:
   provider being activated and how many connections still belong to the other. Switching by editing
   the environment would leave accounts nobody can revoke. **There is no one-step migration**; what
   ends the old provider's connections is keeping it active (both keys set,
-  `OPENBOT_BROKER_PROVIDER` naming the old provider) and using the ordinary ways a connection ends,
+  `XIONGBAO_BROKER_PROVIDER` naming the old provider) and using the ordinary ways a connection ends,
   each of which revokes at the vendor and deletes the row: each person disconnects their own under
   连接, an administrator disconnects a Shared app's team account, or an administrator removes
   an app (which ends every account connected to it). When the old provider holds no connections,
@@ -150,7 +150,7 @@ verifier, and that has to be this deployment's verify route:**
 <this deployment's public origin>/api/plugins/arcade/verify
 ```
 
-The origin is this API's public origin, `OPENBOT_PUBLIC_URL`, which defaults to `BETTER_AUTH_URL`.
+The origin is this API's public origin, `XIONGBAO_PUBLIC_URL`, which defaults to `BETTER_AUTH_URL`.
 It is the API's origin, not the browser app's, where the two differ. A browser that arrives there is
 sent on to the app's page under 连接 (`/connections`), or to the list with a reason beside it if the consent
 was refused.
@@ -191,7 +191,7 @@ call here (auth providers, user connections) already needs. A consent minted wit
 be spent on a page that does not exist.
 
 **A deployment that does not know its own origin cannot check the setting.** With neither
-`OPENBOT_PUBLIC_URL` nor `BETTER_AUTH_URL` set, it logs a warning at startup naming the variables to
+`XIONGBAO_PUBLIC_URL` nor `BETTER_AUTH_URL` set, it logs a warning at startup naming the variables to
 set, and consents come back to whatever address the project names.
 
 **If the project were left at Arcade's built-in verifier, this deployment's verify route would never

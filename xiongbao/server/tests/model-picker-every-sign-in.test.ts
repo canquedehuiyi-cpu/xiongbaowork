@@ -50,7 +50,7 @@ const CLEARED = {
   ANTHROPIC_API_KEY: "",
   CLAUDE_CODE_OAUTH_TOKEN: "",
   CHATGPT_AUTH_FILE: "",
-  OPENBOT_MODEL_OAUTH_FILE: "",
+  XIONGBAO_MODEL_OAUTH_FILE: "",
   BOT_PROVIDER: "",
   CHATGPT_OAUTH_TOKEN: "",
 };
@@ -349,7 +349,7 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
   test("a Google sign-in: Google's own listing, through XiongBao's sign-in proxy", async () => {
     const { read } = await catalogueFor(
       {
-        OPENBOT_MODEL_OAUTH_FILE: "/ignored/by/this/test",
+        XIONGBAO_MODEL_OAUTH_FILE: "/ignored/by/this/test",
         OPENAI_API_KEY: PROXY_TOKEN,
         OPENAI_BASE_URL: `${SERVER}/api/model-provider/v1`,
         BOT_PROVIDER: "openai",

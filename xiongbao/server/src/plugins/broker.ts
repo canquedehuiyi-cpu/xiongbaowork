@@ -701,7 +701,7 @@ export class BrokerUnconfiguredError extends BrokerRefusalError {
  * ITS OWN CLASS BECAUSE ITS REMEDY IS ITS OWN. Every other refusal in this file is about Composio —
  * a key that is not set, a config this deployment never made, a consent the vendor answered with no
  * page. This one is about this deployment's own address for itself, and the person who can act on it
- * is an operator with `OPENBOT_APP_URL` in front of them. A caller that could not tell the two apart
+ * is an operator with `XIONGBAO_APP_URL` in front of them. A caller that could not tell the two apart
  * would send somebody to check a Composio key that is perfectly fine.
  *
  * A {@link BrokerRefusalError} because it keeps that class's promise about the message: the sentence
@@ -727,7 +727,7 @@ export class BrokerReturnUrlError extends BrokerRefusalError {
  *
  * TWO REFUSALS, BECAUSE THEY ARE TWO DIFFERENT MISTAKES. An empty address is a caller that built
  * none — the guard in front of this one did not run, or ran against the wrong value. An address that
- * is not a web page is a configured one that cannot work: `OPENBOT_APP_URL` set to
+ * is not a web page is a configured one that cannot work: `XIONGBAO_APP_URL` set to
  * `xiongbao.example.com`, which no browser can resolve from Composio's origin, or to `localhost:3001`,
  * where `localhost:` is read as the scheme. Both are reachable from the settings this deployment
  * actually ships — the variable is an environment string and nothing between it and the vendor looks
@@ -816,9 +816,9 @@ export type ProviderDecision =
   | { kind: "active"; provider: BrokerProvider }
   /** 一个 key 都没配：这个部署没有 broker。 */
   | { kind: "unconfigured" }
-  /** 两个 key 都配了，`OPENBOT_BROKER_PROVIDER` 没有指明。 */
+  /** 两个 key 都配了，`XIONGBAO_BROKER_PROVIDER` 没有指明。 */
   | { kind: "ambiguous"; configured: BrokerProvider[] }
-  /** `OPENBOT_BROKER_PROVIDER` 指明的提供商没有配 key。 */
+  /** `XIONGBAO_BROKER_PROVIDER` 指明的提供商没有配 key。 */
   | { kind: "misnamed"; named: BrokerProvider };
 
 /** 空串或全是空白的 key 不是 key。`providerDecision` 与 `./provider-wiring` 用同一个定义。 */
@@ -829,7 +829,7 @@ export const credential = (key: string | undefined): boolean =>
  * 只看配置（不读数据库）决定这个部署用哪个 broker。只配一个 key 就是它；两个都配时由
  * `brokerProvider` 决定——两个都配是合法的，因为在旧厂商那边结束账号还需要它的 key。
  *
- * 不设 `OPENBOT_BROKER_PROVIDER` 且只配了 `COMPOSIO_API_KEY` 时答 Composio，与以前完全一样。
+ * 不设 `XIONGBAO_BROKER_PROVIDER` 且只配了 `COMPOSIO_API_KEY` 时答 Composio，与以前完全一样。
  */
 export function providerDecision(c: {
   composioApiKey?: string;

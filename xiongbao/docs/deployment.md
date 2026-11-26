@@ -120,7 +120,7 @@ and the fix would not be available.
 
 | Variable | |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL with the `vector` extension, or where the owner that migrates can create it. Not needed with `EMBEDDED_POSTGRES=on`. **The role it names must not be a superuser or hold `BYPASSRLS`** — PostgreSQL does not apply row-level security to either, not even under `FORCE ROW LEVEL SECURITY` (FORCE binds the table's owner, not the connected role), so an owner credentials string leaves tenant isolation resting on the application's tenant context alone. `0054_app_role.sql` creates `openbot_app` with the data privileges the server needs; migration and test-database reset are the two jobs that do need the owner, because creating a role and `TRUNCATE` are not data privileges. The server checks its own role at boot, prints `{"type":"rls-not-enforced", …}` on stderr and exits; `OPENBOT_RLS_ENFORCE=warn` (or `NODE_ENV=development`/`test` with it unset) keeps it running instead. Under `NODE_ENV=production` it also refuses a `DATABASE_URL` whose password is still `0054`'s public `openbot`. See [the database role](configuration.md#the-database-role-and-openbot_rls_enforce). |
+| `DATABASE_URL` | PostgreSQL with the `vector` extension, or where the owner that migrates can create it. Not needed with `EMBEDDED_POSTGRES=on`. **The role it names must not be a superuser or hold `BYPASSRLS`** — PostgreSQL does not apply row-level security to either, not even under `FORCE ROW LEVEL SECURITY` (FORCE binds the table's owner, not the connected role), so an owner credentials string leaves tenant isolation resting on the application's tenant context alone. `0054_app_role.sql` creates `openbot_app` with the data privileges the server needs; migration and test-database reset are the two jobs that do need the owner, because creating a role and `TRUNCATE` are not data privileges. The server checks its own role at boot, prints `{"type":"rls-not-enforced", …}` on stderr and exits; `XIONGBAO_RLS_ENFORCE=warn` (or `NODE_ENV=development`/`test` with it unset) keeps it running instead. Under `NODE_ENV=production` it also refuses a `DATABASE_URL` whose password is still `0054`'s public `openbot`. See [the database role](configuration.md#the-database-role-and-xiongbao_rls_enforce). |
 | an identity provider | `GOOGLE_OAUTH_*`, `MICROSOFT_OAUTH_*` or `OKTA_OAUTH_*`, with `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `INITIAL_ADMIN_EMAILS`. See the README |
 | `EMBEDDED_POSTGRES` | `on` to run the database inside the container. Off by default |
 | `KEY_ENCRYPTION_KEY` | base64 32 bytes. `openssl rand -base64 32`. The example key is refused in production |
@@ -137,11 +137,11 @@ reachable from this container. Unset it if your `.env` still has the laptop defa
 
 **Authentication is required.** With no identity provider configured, the deployment refuses to start,
 because a public URL where every visitor is an administrator fails silently: it looks like it works.
-Configure Google, Microsoft or Okta, or set `OPENBOT_SINGLE_USER=true` to say you meant an open
+Configure Google, Microsoft or Okta, or set `XIONGBAO_SINGLE_USER=true` to say you meant an open
 deployment. `NODE_ENV` does not affect this.
 
-That flag does not cover a public address. `OPENBOT_SINGLE_USER=true` alongside an
-`OPENBOT_PUBLIC_URL`, `OPENBOT_APP_URL` or `TRUSTED_ORIGINS` entry that the public internet routes
+That flag does not cover a public address. `XIONGBAO_SINGLE_USER=true` alongside an
+`XIONGBAO_PUBLIC_URL`, `XIONGBAO_APP_URL` or `TRUSTED_ORIGINS` entry that the public internet routes
 to now refuses to start and names the address, because an open deployment on a public address is
 one where every visitor is the administrator. A private address is a different thing and still
 runs: a home LAN, a Tailscale or VPN address, or a `.local` name is allowed, with a warning at boot

@@ -576,20 +576,20 @@ export function readReleaseConfiguration(
     repositoryRoot: resolve(repositoryRoot),
     outputDirectory: resolve(
       repositoryRoot,
-      env.OPENBOT_RELEASE_OUTPUT || "release-assets",
+      env.XIONGBAO_RELEASE_OUTPUT || "release-assets",
     ),
     repository: env.GITHUB_REPOSITORY,
-    distributionId: env.OPENBOT_DISTRIBUTION_ID || env.GITHUB_REPOSITORY,
-    channel: env.OPENBOT_RELEASE_CHANNEL || "stable",
+    distributionId: env.XIONGBAO_DISTRIBUTION_ID || env.GITHUB_REPOSITORY,
+    channel: env.XIONGBAO_RELEASE_CHANNEL || "stable",
     version: env.VERSION,
     commit: env.GITHUB_SHA,
     upstreamRepository,
     upstreamCommit,
-    ...(env.OPENBOT_CHART_PATH || env.OPENBOT_CHART_VERSION
+    ...(env.XIONGBAO_CHART_PATH || env.XIONGBAO_CHART_VERSION
       ? {
           chart: {
-            path: resolve(repositoryRoot, env.OPENBOT_CHART_PATH || ""),
-            version: env.OPENBOT_CHART_VERSION || "",
+            path: resolve(repositoryRoot, env.XIONGBAO_CHART_PATH || ""),
+            version: env.XIONGBAO_CHART_VERSION || "",
           },
         }
       : {}),
@@ -639,8 +639,8 @@ function readImages(path: string): ReleaseManifest["artifacts"]["images"] {
 }
 
 if (import.meta.main) {
-  const published = process.env.OPENBOT_PUBLISHED_ASSETS
-    ? resolve(process.env.OPENBOT_PUBLISHED_ASSETS)
+  const published = process.env.XIONGBAO_PUBLISHED_ASSETS
+    ? resolve(process.env.XIONGBAO_PUBLISHED_ASSETS)
     : undefined;
   const provenance = process.argv.indexOf("--adopt-provenance");
   if (provenance !== -1) {
@@ -671,7 +671,7 @@ if (import.meta.main) {
       );
     } else {
       const imageManifest = resolve(
-        process.env.OPENBOT_IMAGE_MANIFEST || "container-images.json",
+        process.env.XIONGBAO_IMAGE_MANIFEST || "container-images.json",
       );
       adoptPublishedImageManifest(imageManifest, published);
       const images = parseReleaseManifest({

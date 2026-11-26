@@ -28,7 +28,7 @@ import { reservePort } from "../../tests/support/reserved-port";
  * to start, and whether input reaches a page it does not belong to.
  */
 
-const asked = process.env.OPENBOT_LIVE_SCREEN === "1";
+const asked = process.env.XIONGBAO_LIVE_SCREEN === "1";
 
 const TOKEN = "test-computer-token";
 

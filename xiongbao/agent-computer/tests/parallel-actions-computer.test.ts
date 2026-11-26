@@ -15,9 +15,9 @@ import { reservePort } from "../../tests/support/reserved-port";
  * And the Bot reads the form back to check its work: a field that shows a placeholder read as empty however often it
  * was filled, so the Bot typed it again and again.
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/parallel-actions-computer.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/parallel-actions-computer.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const TOKEN = "parallel-actions-computer-token";
 const BOT = "parallel-bot";
 /** Short, so the test of an action that never finishes does not wait the default ten seconds. */

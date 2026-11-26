@@ -12,8 +12,8 @@ import { useEffect } from "react";
 import {
   generativeUiProviderOptions,
   OMITTED_STANDARD_COMPONENTS,
-  OPENBOT_UI,
-  OPENBOT_UI_THEME,
+  XIONGBAO_UI,
+  XIONGBAO_UI_THEME,
 } from "@/lib/copilot/a2ui";
 
 beforeAll(() => GlobalRegistrator.register());
@@ -31,7 +31,7 @@ function Committed() {
     runtime.manager.ingest(THREAD, undefined, {
       surfaceId: "trip",
       target: "trip",
-      catalogId: OPENBOT_UI.id,
+      catalogId: XIONGBAO_UI.id,
       status: "ready",
       rejected: [],
       operations: [
@@ -39,7 +39,7 @@ function Committed() {
           version: "1.0",
           createSurface: {
             surfaceId: "trip",
-            catalogId: OPENBOT_UI.id,
+            catalogId: XIONGBAO_UI.id,
             dataModel: { destination: "Paris" },
           },
         },
@@ -92,18 +92,18 @@ test("disabled and unresolved deployments do not send the catalog", () => {
   expect(generativeUiProviderOptions(false)).toEqual({});
   expect(generativeUiProviderOptions(undefined)).toEqual({});
   expect(generativeUiProviderOptions(true).generativeUI).toEqual({
-    ui: OPENBOT_UI,
-    theme: OPENBOT_UI_THEME,
+    ui: XIONGBAO_UI,
+    theme: XIONGBAO_UI_THEME,
   });
 });
 
 test("the catalog is the standard one, less the omitted components, plus Breakdown and without the gallery", () => {
-  expect(OPENBOT_UI.id).toBe("openbot/ui@1");
+  expect(XIONGBAO_UI.id).toBe("openbot/ui@1");
   const expected = Object.keys(standardUI.manifestComponents).filter(
     (name) =>
       !(OMITTED_STANDARD_COMPONENTS as readonly string[]).includes(name),
   );
-  expect([...OPENBOT_UI.components.keys()].sort()).toEqual(
+  expect([...XIONGBAO_UI.components.keys()].sort()).toEqual(
     [...expected, "Breakdown"].sort(),
   );
   expect(expected).toHaveLength(65);
@@ -128,15 +128,15 @@ test("the catalog is the standard one, less the omitted components, plus Breakdo
     "ChoicePicker",
     "Slider",
   ])
-    expect(OPENBOT_UI.components.has(name)).toBe(true);
-  expect(OPENBOT_UI.components.has("Table")).toBe(true);
-  expect(OPENBOT_UI.components.has("Chart")).toBe(true);
+    expect(XIONGBAO_UI.components.has(name)).toBe(true);
+  expect(XIONGBAO_UI.components.has("Table")).toBe(true);
+  expect(XIONGBAO_UI.components.has("Chart")).toBe(true);
   // Map needs maplibre-gl; the other three send linked domains to Google's favicon service.
   for (const name of ["Map", "Favicon", "LinkCard", "Citation"])
-    expect(OPENBOT_UI.components.has(name)).toBe(false);
+    expect(XIONGBAO_UI.components.has(name)).toBe(false);
   // The gallery components keep their separate per-Bot tool and grant path.
-  expect(OPENBOT_UI.components.has("showTable")).toBe(false);
-  expect(OPENBOT_UI.components.has("askForm")).toBe(false);
+  expect(XIONGBAO_UI.components.has("showTable")).toBe(false);
+  expect(XIONGBAO_UI.components.has("askForm")).toBe(false);
 });
 
 /** The trip budget a starter task asks for: three number fields and a total the Bot computes. */
@@ -155,7 +155,7 @@ function Budget() {
     runtime.manager.ingest(THREAD, undefined, {
       surfaceId: "budget",
       target: "budget",
-      catalogId: OPENBOT_UI.id,
+      catalogId: XIONGBAO_UI.id,
       status: "ready",
       rejected: [],
       operations: [
@@ -163,7 +163,7 @@ function Budget() {
           version: "1.0",
           createSurface: {
             surfaceId: "budget",
-            catalogId: OPENBOT_UI.id,
+            catalogId: XIONGBAO_UI.id,
             dataModel: { transport: 100, lodging: 200, food: 80, note: "" },
           },
         },

@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { SERIES_COLOURS } from "@/components/gallery/palette";
-import { generativeUiProviderOptions, OPENBOT_UI } from "@/lib/copilot/a2ui";
+import { generativeUiProviderOptions, XIONGBAO_UI } from "@/lib/copilot/a2ui";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
@@ -29,7 +29,7 @@ function TripBudget() {
     runtime.manager.ingest(THREAD, undefined, {
       surfaceId: "budget",
       target: "budget",
-      catalogId: OPENBOT_UI.id,
+      catalogId: XIONGBAO_UI.id,
       status: "ready",
       rejected: [],
       operations: [
@@ -37,7 +37,7 @@ function TripBudget() {
           version: "1.0",
           createSurface: {
             surfaceId: "budget",
-            catalogId: OPENBOT_UI.id,
+            catalogId: XIONGBAO_UI.id,
             dataModel: {
               items: [
                 { label: "Transport", amount: 100 },

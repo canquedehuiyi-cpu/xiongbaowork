@@ -7,7 +7,7 @@ import { reservePort } from "../../tests/support/reserved-port";
 
 // A real HTTP dispatcher and shell lease, without launching Chromium. Opt in like live-screen tests
 // because agent-computer's own Playwright dependency is not installed by the root unit-test lane.
-const asked = process.env.OPENBOT_CONTROL_HTTP === "1";
+const asked = process.env.XIONGBAO_CONTROL_HTTP === "1";
 let root = "";
 let base = "";
 let child: ReturnType<typeof Bun.spawn> | undefined;

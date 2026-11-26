@@ -3,7 +3,7 @@
  * "Which provider" has THREE ways of having no answer, and none of them is "Composio is active".
  *
  * `activeProvider` answers null when no key is set, when both keys are set and
- * `OPENBOT_BROKER_PROVIDER` names neither, and when the variable names a provider whose key is
+ * `XIONGBAO_BROKER_PROVIDER` names neither, and when the variable names a provider whose key is
  * unset. The entrypoint and the plugins routes both used to flatten all three with `?? "composio"`,
  * so a deployment part-way through a migration — both keys set, variable not yet set, which
  * `docs/plugins/arcade.md` calls legal — read its live Arcade rows through Composio's filter and

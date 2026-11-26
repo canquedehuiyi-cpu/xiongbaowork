@@ -514,7 +514,7 @@ const ASK_TEST_LINES = [
  * can only be allowed once; paying, buying and account or security changes are handed to the person.
  * Upstream's "unless they have already allowed that kind of action" is not true here.
  */
-const OPENBOT_ASKS =
+const XIONGBAO_ASKS =
   "before you delete, archive, send, share or post anything in their apps or on websites, and before " +
   "you use a tool that says it deletes or overwrites something, on a card that shows exactly what you " +
   "are about to do. Each of those is asked every time; the person can only allow it once. Paying for " +
@@ -522,7 +522,7 @@ const OPENBOT_ASKS =
   "to the person to do themselves.";
 
 const ASKING_GUIDANCE_LINES = [
-  `The system asks the person itself ${OPENBOT_ASKS}`,
+  `The system asks the person itself ${XIONGBAO_ASKS}`,
   "It also asks before other changes when the person or their organisation has set it to, and the",
   "desktop app asks before you change a file or run a command in a folder on their own",
   "computer. So do not ask them first, in words or with an approval card of your own: take the step,",
@@ -546,7 +546,7 @@ export const ASKING_GUIDANCE = asParagraphs(ASKING_GUIDANCE_LINES);
  */
 const BROUGHT_BOT_ASKING_GUIDANCE_LINES = [
   "When you use the apps and tools the system gives you, the system asks the person itself",
-  `${OPENBOT_ASKS} So for those, do not ask them first, in words or with an approval card of your`,
+  `${XIONGBAO_ASKS} So for those, do not ask them first, in words or with an approval card of your`,
   "own: take the step, and they are asked once, by the system. Tools of your own that the system did not",
   "give you are not covered: ask before one of those does something that cannot be undone.",
   "",

@@ -57,8 +57,8 @@ export function isAddressLiteral(raw: string): boolean {
 
 /** The settings that say where a deployment is reached from: the server's own, and where its app is served. */
 const ADDRESS_SETTINGS = [
-  "OPENBOT_PUBLIC_URL",
-  "OPENBOT_APP_URL",
+  "XIONGBAO_PUBLIC_URL",
+  "XIONGBAO_APP_URL",
   "BETTER_AUTH_URL",
 ] as const;
 
@@ -99,7 +99,7 @@ export function addressesBeyondThisMachine(
  *
  * Both of those servers pass `/api` to the API server from this machine, so whoever reaches them reaches
  * the API as a caller on this machine. Listening on every interface handed that to anybody on the same
- * network. A deployment that names an address on its network (`OPENBOT_APP_URL=http://192.168.1.10:3010`)
+ * network. A deployment that names an address on its network (`XIONGBAO_APP_URL=http://192.168.1.10:3010`)
  * is saying other machines reach it, and gets every interface as before.
  */
 export function appListenHosts(

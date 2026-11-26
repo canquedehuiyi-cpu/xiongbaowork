@@ -26,7 +26,7 @@ function singleUserEnvironment() {
     INITIAL_ADMIN_EMAILS: _admins,
     ...rest
   } = baseEnvironment;
-  return { ...rest, OPENBOT_SINGLE_USER: "true" };
+  return { ...rest, XIONGBAO_SINGLE_USER: "true" };
 }
 
 describe("GitHub App sign-in configuration", () => {
@@ -84,7 +84,7 @@ describe("GitHub App sign-in configuration", () => {
   test("accepts a GitHub App when a public URL resolves", () => {
     const config = loadConfig({
       ...baseEnvironment,
-      OPENBOT_PUBLIC_URL: "https://xiongbao.example.com",
+      XIONGBAO_PUBLIC_URL: "https://xiongbao.example.com",
       GITHUB_APP_CLIENT_ID: "gh-id",
       GITHUB_APP_CLIENT_SECRET: "gh-secret",
     });

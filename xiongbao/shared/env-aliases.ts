@@ -3,15 +3,15 @@ export const NEW_PREFIX = "XIONGBAO_";
 export const LEGACY_PREFIX = "OPENBOT_";
 
 /**
- * Old names that are not aliased: a platform model key's variable is named by its database row
- * (`platform_model_pool.api_key_env`), so the server keeps reading it under the name stored there
- * until that row is renamed with it.
+ * What follows the old prefix in names that are not aliased: a platform model key's variable is
+ * named by its database row (`platform_model_pool.api_key_env`), so the server keeps reading it under
+ * the name stored there until that row is renamed with it.
  */
-const STORED_LEGACY_PREFIXES = [`${LEGACY_PREFIX}POOL_`];
+const STORED_SUFFIXES = ["POOL_"];
 
 /**
- * Lets a deployment written before the rename keep its `OPENBOT_<X>` settings while the code reads
- * `XIONGBAO_<X>`.
+ * Lets a deployment written before the rename keep its settings under {@link LEGACY_PREFIX} while
+ * the code reads each under {@link NEW_PREFIX}.
  *
  * Copying the old name onto the new one before any config is read means every read is of the new
  * name, and a deployment that only knows the old names behaves exactly as before. New wins when both
@@ -34,11 +34,11 @@ export function applyEnvironmentAliases(
   for (const name of Object.keys(environment).sort()) {
     if (!name.startsWith(LEGACY_PREFIX) || name.length === LEGACY_PREFIX.length)
       continue;
-    if (STORED_LEGACY_PREFIXES.some((prefix) => name.startsWith(prefix)))
-      continue;
+    const suffix = name.slice(LEGACY_PREFIX.length);
+    if (STORED_SUFFIXES.some((stored) => suffix.startsWith(stored))) continue;
     const value = environment[name];
     if (value === undefined || value === "") continue;
-    const renamed = NEW_PREFIX + name.slice(LEGACY_PREFIX.length);
+    const renamed = NEW_PREFIX + suffix;
     const current = environment[renamed];
     if (current === undefined || current === "") {
       environment[renamed] = value;

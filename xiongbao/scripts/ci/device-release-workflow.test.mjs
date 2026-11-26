@@ -1110,7 +1110,7 @@ test("the desktop probe runs on three platforms, fetches the pinned binary and m
   expect(linux.run).toContain("xvfb-run");
   expect(linux.run).toContain("dbus-run-session");
   const windows = probeOn("Windows");
-  expect(windows.env?.OPENBOT_DESKTOP_ENGINE).toBe("agent-desktop");
+  expect(windows.env?.XIONGBAO_DESKTOP_ENGINE).toBe("agent-desktop");
   expect(windows.shell).toBe("pwsh");
   probeOn("macOS");
   const install = steps.find((s) =>
@@ -2299,7 +2299,7 @@ test("clean-deploy fetches from our download page when configured", () => {
   ])
     expect(recordEnv[name]).toBe(expression(`vars.${name}`));
   // delivery.env.example comes from the same place in both database shapes (delivery-env, below);
-  // the customer run starts our registry's copy through the README's OPENBOT_IMAGE when it is
+  // the customer run starts our registry's copy through the README's XIONGBAO_IMAGE when it is
   // configured. Both run as written.
   const roles = (env, existing) => {
     const customer = scratch();
@@ -2432,7 +2432,7 @@ test("clean-deploy fetches from our download page when configured", () => {
     // Stands in for the README block: records the image it was told to run.
     writeFileSync(
       join(evidence, "g7-linux.sh"),
-      `printf '%s' "\${OPENBOT_IMAGE-unset}" > "$EVIDENCE/image.txt"\nprintf 'A=1\\n' > .env.delivery\n`,
+      `printf '%s' "\${XIONGBAO_IMAGE-unset}" > "$EVIDENCE/image.txt"\nprintf 'A=1\\n' > .env.delivery\n`,
     );
     const result = run(
       "linux",

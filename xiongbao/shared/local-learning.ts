@@ -59,7 +59,7 @@ export type LocalSkillCandidateDetail = LocalSkillCandidateSummary & {
 };
 
 export type LocalLearningOverview = {
-  /** 这个部署开着本地学习（`OPENBOT_LOCAL_LEARNING` 不是 `off`）。 */
+  /** 这个部署开着本地学习（`XIONGBAO_LOCAL_LEARNING` 不是 `off`）。 */
   available: boolean;
   /** 这个人开着。 */
   enabled: boolean;

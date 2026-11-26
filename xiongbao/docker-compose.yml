@@ -2,6 +2,9 @@
 # SPIRE_AGENT_SOCKET_VOLUME's default below keep the same names (-p or COMPOSE_PROJECT_NAME still
 # override it). A stack started under the previous project name keeps its volumes under that name.
 name: xiongbao
+# A host setting read below as `${XIONGBAO_X:-${OPENBOT_X:-…}}` falls back to its name before the
+# rename, so a `.env` written then still works; the new name wins when both are set.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -53,11 +56,11 @@ services:
       context: .
       dockerfile: server/Dockerfile
       args:
-        OPENBOT_BUILD_VERSION: ${OPENBOT_BUILD_VERSION:-}
-        OPENBOT_BUILD_COMMIT: ${OPENBOT_BUILD_COMMIT:-}
-        OPENBOT_BUILD_DISTRIBUTION_ID: ${OPENBOT_BUILD_DISTRIBUTION_ID:-}
-        OPENBOT_BUILD_REPOSITORY: ${OPENBOT_BUILD_REPOSITORY:-}
-        OPENBOT_BUILD_CHANNEL: ${OPENBOT_BUILD_CHANNEL:-}
+        XIONGBAO_BUILD_VERSION: ${XIONGBAO_BUILD_VERSION:-}
+        XIONGBAO_BUILD_COMMIT: ${XIONGBAO_BUILD_COMMIT:-}
+        XIONGBAO_BUILD_DISTRIBUTION_ID: ${XIONGBAO_BUILD_DISTRIBUTION_ID:-}
+        XIONGBAO_BUILD_REPOSITORY: ${XIONGBAO_BUILD_REPOSITORY:-}
+        XIONGBAO_BUILD_CHANNEL: ${XIONGBAO_BUILD_CHANNEL:-}
     # Named, and pullable, for the same reason as agent-computer below: a release publishes this
     # image, and a machine that can name it does not need a toolchain to build it. `pull_policy`
     # is what decides between the two, because a service carrying a `build` section builds by
@@ -184,7 +187,7 @@ services:
       # it, an agent a person registers on their own loopback (`http://127.0.0.1:8765/ag-ui`) is
       # dialled there rather than at this container. A container name only, so a host server reading
       # the same `.env` never translates its own loopback.
-      OPENBOT_THIS_MACHINE_HOST: ${OPENBOT_THIS_MACHINE_CONTAINER_HOST:-}
+      XIONGBAO_THIS_MACHINE_HOST: ${XIONGBAO_THIS_MACHINE_CONTAINER_HOST:-${OPENBOT_THIS_MACHINE_CONTAINER_HOST:-}}
       # The deployment's secrets, from the environment Compose runs in and then from `.env`, which
       # Compose reads for these `${...}` and the host server reads for itself. The desktop app keeps
       # them out of that file and hands them to Compose in its environment, so they reach this
@@ -204,7 +207,7 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       # The desktop's host-access broker proves itself with this. Minted per start and given to the
       # server alone, so it is named here and nowhere else in this file.
-      OPENBOT_DESKTOP_HOST_TOKEN: ${OPENBOT_DESKTOP_HOST_TOKEN:-}
+      XIONGBAO_DESKTOP_HOST_TOKEN: ${XIONGBAO_DESKTOP_HOST_TOKEN:-${OPENBOT_DESKTOP_HOST_TOKEN:-}}
       # The app broker's settings. A Composio key the desktop provisioned at sign-in lives
       # in its protected store, never in `.env`, so it reaches this container only by being named
       # here. A key the person put in `.env` wins and arrives the same way.
@@ -212,11 +215,11 @@ services:
       # A Google or xAI sign-in, which the server reads and renews itself. The file is on the host,
       # at `.openbot/model-oauth.json` beside this one, and reaches the container through the mount
       # below, so a host path here becomes the mount's. Empty stays empty: no sign-in, no file.
-      OPENBOT_MODEL_OAUTH_FILE: ${OPENBOT_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
+      XIONGBAO_MODEL_OAUTH_FILE: ${XIONGBAO_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
       # The secret local Intelligence's Learning agent sends when it asks the person's Claude or
       # ChatGPT plan for a step (server/src/learning/model-endpoint.ts). The desktop app mints it
       # once per installation and gives it to this service and that agent alone.
-      OPENBOT_LEARNING_MODEL_TOKEN: ${LEARNING_MODEL_TOKEN:-}
+      XIONGBAO_LEARNING_MODEL_TOKEN: ${LEARNING_MODEL_TOKEN:-}
       # 员工的联网搜索（web_search）：默认用下面自带的 `searxng` 服务。
       XIONGBAO_SEARCH_PROVIDER: ${XIONGBAO_SEARCH_PROVIDER:-searxng}
       XIONGBAO_SEARCH_URL: ${XIONGBAO_SEARCH_CONTAINER_URL:-http://searxng:8080}
@@ -229,7 +232,7 @@ services:
     # there keeps the host's numbers; Docker Desktop's file sharing on macOS and Windows does not.
     # Under rootless Podman on Linux it names container root, which that user namespace maps to the
     # host user; any other uid there is one of their subordinate ids and cannot read the file.
-    user: "${OPENBOT_SERVER_USER:-1001:1001}"
+    user: "${XIONGBAO_SERVER_USER:-${OPENBOT_SERVER_USER:-1001:1001}}"
     volumes:
       # The directory, not the file: the server renews the token by writing a sibling and renaming it
       # over the original, which a single-file mount cannot take. Not created here, because Docker
@@ -257,10 +260,10 @@ services:
       - "[::1]:${XIONGBAO_CONTENT_HOST_PORT:-3773}:3773"
     # For whatever stays on the host and is addressed as such: a model endpoint on this machine, and
     # anything else the Bots below already reach the same way. The desktop app sets
-    # `OPENBOT_HOST_GATEWAY` under rootless Podman on Linux, where `host-gateway` is not this
+    # `XIONGBAO_HOST_GATEWAY` under rootless Podman on Linux, where `host-gateway` is not this
     # machine's loopback and the address it gives is.
     extra_hosts:
-      - "host.docker.internal:${OPENBOT_HOST_GATEWAY:-host-gateway}"
+      - "host.docker.internal:${XIONGBAO_HOST_GATEWAY:-${OPENBOT_HOST_GATEWAY:-host-gateway}}"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -435,7 +438,7 @@ services:
       # person's: whose computer this is. Empty everywhere else, where the Bots here may be anybody's.
       COMPUTER_PERSON_ID: ${COMPUTER_PERSON_ID:-}
       # The edition, read beside it.
-      OPENBOT_EDITION: ${OPENBOT_EDITION:-}
+      XIONGBAO_EDITION: ${XIONGBAO_EDITION:-${OPENBOT_EDITION:-}}
     volumes:
       - agent-workspace:/workspace
       # Chromium's user-data directory is volume-backed so logins survive container restarts.
@@ -640,7 +643,7 @@ services:
       # Every harness refuses without this; it is what makes the endpoint the server's alone.
       MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
       # Deployment-owned tools use the same signed callback as agent-langgraph.
-      OPENBOT_TOOL_URL: ${OPENBOT_TOOL_URL:-http://host.docker.internal:3001/api/agent-tools/call}
+      XIONGBAO_TOOL_URL: ${XIONGBAO_TOOL_URL:-${OPENBOT_TOOL_URL:-http://host.docker.internal:3001/api/agent-tools/call}}
       AGENT_TOOL_TOKEN: ${AGENT_TOOL_TOKEN:-}
       # Whichever the model screen chose. A harness reads the one its provider needs and ignores the
       # rest, and the ones the choice did not imply are written empty rather than left stale: see
@@ -662,7 +665,7 @@ services:
       # plan ran gpt-5.5, which it refuses.
       BOT_MODEL: ${BOT_MODEL:-}
     extra_hosts:
-      - "host.docker.internal:${OPENBOT_HOST_GATEWAY:-host-gateway}"
+      - "host.docker.internal:${XIONGBAO_HOST_GATEWAY:-${OPENBOT_HOST_GATEWAY:-host-gateway}}"
     volumes:
       # A bind mount, not a named volume, and read-write on purpose. The signed-in plan's access
       # token expires within the hour and the harness renews it, so the renewal has to land back on
@@ -712,10 +715,10 @@ services:
       # Left as the default even though `server` above is now in this file, because the default is
       # what `scripts/start.sh` relies on and that server is on the host. A deployment that starts
       # `server` sets this to `http://server:3001/api/agent-tools/call`, for every Bot at once.
-      OPENBOT_TOOL_URL: ${OPENBOT_TOOL_URL:-http://host.docker.internal:3001/api/agent-tools/call}
+      XIONGBAO_TOOL_URL: ${XIONGBAO_TOOL_URL:-${OPENBOT_TOOL_URL:-http://host.docker.internal:3001/api/agent-tools/call}}
       AGENT_TOOL_TOKEN: ${AGENT_TOOL_TOKEN:-}
     extra_hosts:
-      - "host.docker.internal:${OPENBOT_HOST_GATEWAY:-host-gateway}"
+      - "host.docker.internal:${XIONGBAO_HOST_GATEWAY:-${OPENBOT_HOST_GATEWAY:-host-gateway}}"
     healthcheck:
       test: ["CMD-SHELL", "bun -e \"await fetch('http://localhost:4201/health')\""]
       interval: 10s

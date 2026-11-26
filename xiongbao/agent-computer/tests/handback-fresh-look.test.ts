@@ -14,9 +14,9 @@ import { reservePort } from "../../tests/support/reserved-port";
  * too, and every restart set it again, so the first page a later conversation opened came back as
  * "Take a fresh browser snapshot after handback before acting."
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/handback-fresh-look.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/handback-fresh-look.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const TOKEN = "handback-fresh-look-token";
 const BOT = "handback-bot";
 

@@ -21,9 +21,9 @@ import type { Profiles } from "../src/profiles";
  * everything and a Bot allowed nothing are both open at once, in real Chromium, through the real
  * filter, and each reaches exactly what its own policy allows.
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/egress-browsers.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/egress-browsers.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 
 const ALLOWED_BOT = "bot-allowed-everything";
 const STRICT_BOT = "bot-allowed-nothing";

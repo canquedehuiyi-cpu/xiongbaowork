@@ -72,7 +72,7 @@ function singleUserEnvironment(overrides: Record<string, string | undefined>) {
     BETTER_AUTH_SECRET: undefined,
     BETTER_AUTH_URL: undefined,
     INITIAL_ADMIN_EMAILS: undefined,
-    OPENBOT_SINGLE_USER: "true",
+    XIONGBAO_SINGLE_USER: "true",
     TRUSTED_ORIGINS: "http://localhost:3010",
     APP_PORT: "3010",
     AGENT_TOOL_TOKEN,
@@ -595,7 +595,7 @@ describe("a page whose name was pointed at this machine (DNS rebinding)", () => 
 
 describe("the app opened at an address on the network, the only one configured", () => {
   /*
-   * `OPENBOT_PUBLIC_URL` alone, as somebody making a single-user XiongBao reachable on their network
+   * `XIONGBAO_PUBLIC_URL` alone, as somebody making a single-user XiongBao reachable on their network
    * writes it. Another machine opens the app on the same host at the app's port, and the app opens its
    * sockets straight to this server's port from there, so `Origin` names the app's port and `Host` this
    * server's. The address is written out rather than read from this machine: what is asked is the
@@ -607,7 +607,7 @@ describe("the app opened at an address on the network, the only one configured",
   let lan: Booted;
   beforeAll(async () => {
     lan = await boot({
-      OPENBOT_PUBLIC_URL: `http://${HOST}`,
+      XIONGBAO_PUBLIC_URL: `http://${HOST}`,
       TRUSTED_ORIGINS: undefined,
     });
   });
@@ -764,7 +764,7 @@ describe.skipIf(!lanIsPrivate)("another machine on the network", () => {
 
   test("is the administrator where the operator named an address on the network", async () => {
     const shared = await boot({
-      OPENBOT_APP_URL: `http://${lanAddress}:3010`,
+      XIONGBAO_APP_URL: `http://${lanAddress}:3010`,
     });
     const posted = await overTheNetwork({
       port: shared.port,
@@ -778,7 +778,7 @@ describe.skipIf(!lanIsPrivate)("another machine on the network", () => {
   });
 
   test("is the administrator of an XiongBao in a container, where every caller comes through the engine", async () => {
-    const contained = await boot({ OPENBOT_IN_CONTAINER: "true" });
+    const contained = await boot({ XIONGBAO_IN_CONTAINER: "true" });
     const posted = await overTheNetwork({
       port: contained.port,
       method: "POST",

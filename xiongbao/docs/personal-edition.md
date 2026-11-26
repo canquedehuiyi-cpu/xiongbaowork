@@ -1,6 +1,6 @@
 # Personal edition
 
-`OPENBOT_EDITION=personal` runs XiongBao Work for one person on their own machine: nobody signs in, there
+`XIONGBAO_EDITION=personal` runs XiongBao Work for one person on their own machine: nobody signs in, there
 is one computer, and the deployment starts with a single Bot, the Personal Assistant. Unset, or
 `team`, is XiongBao Work as an organization runs it, unchanged.
 
@@ -24,7 +24,7 @@ because the Personal Assistant runs inside the server on the model in
 
 ## XiongBao Work Desktop
 
-XiongBao Work Desktop installs the personal edition: it writes `OPENBOT_EDITION=personal` and the settings
+XiongBao Work Desktop installs the personal edition: it writes `XIONGBAO_EDITION=personal` and the settings
 below into its deployment's `.env` on every Start (`desktop/src-tauri/src/env.rs`). It runs
 PostgreSQL, the one computer, the server and the worker, and no supervisor and no bundled Bot
 containers.
@@ -74,8 +74,8 @@ variable to change:
 
 | Requirement | Why |
 | --- | --- |
-| `OPENBOT_SINGLE_USER=true` | Nobody signs in. Single-user mode is still refused on a public address. |
-| No `GOOGLE_OAUTH_*`, `MICROSOFT_OAUTH_*`, `OKTA_OAUTH_*` or `OPENBOT_ORGANIZATION_AUTH_URL` | There is no sign-in to configure. |
+| `XIONGBAO_SINGLE_USER=true` | Nobody signs in. Single-user mode is still refused on a public address. |
+| No `GOOGLE_OAUTH_*`, `MICROSOFT_OAUTH_*`, `OKTA_OAUTH_*` or `XIONGBAO_ORGANIZATION_AUTH_URL` | There is no sign-in to configure. |
 | `AGENT_COMPUTER_URL` set, and no `COMPUTER_SUPERVISOR_URL` or `COMPUTER_SANDBOX_NAMESPACE` | One computer, shared by every Bot. |
 
 ## What is fixed
@@ -111,7 +111,7 @@ your own machine. Every safeguard the team edition has applies here too:
   **Stop folder access**. Nothing is remembered across a restart.
 
 Only the desktop can open a folder. It hands the server a token minted on every Start
-(`OPENBOT_DESKTOP_HOST_TOKEN`), and its folder worker answers the server with it. A personal edition
+(`XIONGBAO_DESKTOP_HOST_TOKEN`), and its folder worker answers the server with it. A personal edition
 started with `scripts/start.sh` has no such token, so the section says it needs XiongBao Work Desktop and
 offers no picker, and the server refuses a folder request at once (`409`) rather than waiting for a
 desktop that will never answer. See `server/src/host-access/` and

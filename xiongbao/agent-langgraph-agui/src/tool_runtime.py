@@ -48,7 +48,7 @@ RUN_EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "m
 
 # Server-only props, read here and never passed to the integration, so none of them can reach
 # graph state, a checkpoint or a snapshot.
-OPENBOT_PROPS = {
+XIONGBAO_PROPS = {
     "openbotRun",
     "xiongbaoDeploymentTools",
     "xiongbaoModel",
@@ -271,7 +271,7 @@ class ToolAwareAgent(WholeThreadAgent):
         ended = False
         try:
             clean_props = {
-                key: value for key, value in props.items() if key not in OPENBOT_PROPS
+                key: value for key, value in props.items() if key not in XIONGBAO_PROPS
             }
             async with aclosing(
                 super().run(input.model_copy(update={"forwarded_props": clean_props}))
@@ -445,7 +445,9 @@ async def _call_tool(call, context):
                 True,
             )
         url = (
-            os.environ.get("OPENBOT_TOOL_URL")
+            os.environ.get("XIONGBAO_TOOL_URL")
+            # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the name before the rename
+            or os.environ.get("OPENBOT_TOOL_URL")
             or "http://127.0.0.1:3001/api/agent-tools/call"
         )
         try:

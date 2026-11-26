@@ -32,7 +32,7 @@ const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR cu
  * something that keeps changing (`offer_check_in`), and the row is written when they accept. A Bot
  * can hold several, one per thing it watches (`subject`). Rows XiongBao wrote by itself before that,
  * when a person first talked to a Bot alone (memory/defaults.ts, now only with
- * OPENBOT_PROACTIVE_DEFAULTS=true), are left as they were. Bounded by `interval_minutes` (one to twenty-four hours) so a Bot never
+ * XIONGBAO_PROACTIVE_DEFAULTS=true), are left as they were. Bounded by `interval_minutes` (one to twenty-four hours) so a Bot never
  * reads a person's apps more often than they chose; hourly unless they chose otherwise. Rows written
  * while the default was four hours keep it, because a person's choice and the old default look the
  * same.

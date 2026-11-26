@@ -5,7 +5,7 @@
  *
  * Opt-in, because it needs a cluster it may write to. Point it at a disposable one, for example:
  *   kind create cluster --name xiongbao-promotion --kubeconfig /tmp/xiongbao-kind.kubeconfig
- *   OPENBOT_KIND_KUBECONFIG=/tmp/xiongbao-kind.kubeconfig bun test tests/promote-kubernetes-kind.test.ts
+ *   XIONGBAO_KIND_KUBECONFIG=/tmp/xiongbao-kind.kubeconfig bun test tests/promote-kubernetes-kind.test.ts
  * It installs into its own namespace and deletes that namespace afterwards. The server image is
  * pulled by digest from Docker Hub.
  */
@@ -35,7 +35,7 @@ import currentFixture from "../shared/fixtures/releases/installed.json";
 import { parseReleaseManifest } from "../shared/release-manifest";
 
 setDefaultTimeout(600_000);
-const kubeconfig = process.env.OPENBOT_KIND_KUBECONFIG;
+const kubeconfig = process.env.XIONGBAO_KIND_KUBECONFIG;
 const namespace = `xiongbao-promotion-${randomBytes(3).toString("hex")}`;
 // oven/bun:1.4.3-slim, pinned. Any image with bun on its PATH would do.
 const image =

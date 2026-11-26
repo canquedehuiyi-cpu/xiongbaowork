@@ -19,13 +19,13 @@ import { compile } from "tailwindcss";
  * interfaces arrive as the runtime's activities and the agent SDK's renderer draws them; the
  * stylesheets are the agent SDK's and the app's own, in the order main.tsx imports them.
  *
- *   OPENBOT_APP_BROWSER=1 bun test app/tests/a2ui-frame.test.tsx
+ *   XIONGBAO_APP_BROWSER=1 bun test app/tests/a2ui-frame.test.tsx
  *
- * With OPENBOT_APP_SHOTS=<dir> it also saves the trip budget and the bare interface at a chat's
+ * With XIONGBAO_APP_SHOTS=<dir> it also saves the trip budget and the bare interface at a chat's
  * width, light and dark, as budget-light.png and so on.
  */
-const asked = process.env.OPENBOT_APP_BROWSER === "1";
-const shots = process.env.OPENBOT_APP_SHOTS;
+const asked = process.env.XIONGBAO_APP_BROWSER === "1";
+const shots = process.env.XIONGBAO_APP_SHOTS;
 
 const APP = join(import.meta.dir, "..");
 const ORIGIN = "http://xiongbao.test";

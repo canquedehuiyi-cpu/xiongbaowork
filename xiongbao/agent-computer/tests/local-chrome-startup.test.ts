@@ -19,7 +19,7 @@ describe("starting the local computer", () => {
     const config = localChromeConfiguration(
       {
         COMPUTER_TOKEN: "test-token",
-        OPENBOT_LOCAL_COMPUTER_DIR: "/tmp/xiongbao-local-test",
+        XIONGBAO_LOCAL_COMPUTER_DIR: "/tmp/xiongbao-local-test",
         PROFILES_DIR:
           "/Users/operator/Library/Application Support/Google/Chrome",
         WORKSPACE_DIR: "/Users/operator",
@@ -64,7 +64,7 @@ describe("starting the local computer", () => {
     expect(() =>
       localChromeConfiguration({
         ...env,
-        OPENBOT_LOCAL_COMPUTER_DIR: "profiles",
+        XIONGBAO_LOCAL_COMPUTER_DIR: "profiles",
       }),
     ).toThrow("absolute");
     expect(() => localChromeConfiguration({ ...env, PORT: "0" })).toThrow(

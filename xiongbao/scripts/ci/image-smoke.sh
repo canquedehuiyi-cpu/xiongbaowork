@@ -48,7 +48,7 @@ docker run -d --name "$name" -p 127.0.0.1:3772:3001 \
   -v "$volume:/var/lib/postgresql" \
   -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
   -e TENANT_PACKAGE_DIR=../examples/xiongbao \
-  -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
+  -e XIONGBAO_SINGLE_USER=true -e XIONGBAO_PUBLIC_URL=http://localhost:3772 \
   -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
 deadline=$((SECONDS+60))
 healthy=false
@@ -91,7 +91,7 @@ if [ "$healthy" = true ]; then
   docker run -d --name "$name" -p 127.0.0.1:3772:3001 \
     -v "$volume:/var/lib/postgresql" \
     -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
-    -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
+    -e XIONGBAO_SINGLE_USER=true -e XIONGBAO_PUBLIC_URL=http://localhost:3772 \
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
   check wait_health "$name"
   check docker exec "$name" sh -c 'sha256sum -c /var/lib/postgresql/.trackb-hashes >/dev/null'
@@ -105,7 +105,7 @@ if [ "$healthy" = true ]; then
   docker run -d --name "$auth" -p 127.0.0.1:3772:3001 \
     -v "$volume:/var/lib/postgresql" \
     -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
-    -e OPENBOT_SINGLE_USER=false -e OPENBOT_PUBLIC_URL=http://127.0.0.1:3772 \
+    -e XIONGBAO_SINGLE_USER=false -e XIONGBAO_PUBLIC_URL=http://127.0.0.1:3772 \
     -e BETTER_AUTH_URL=http://127.0.0.1:3772 -e BETTER_AUTH_SECRET="$auth_secret" \
     -e INITIAL_ADMIN_EMAILS=delivery-admin@example.test \
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
@@ -125,14 +125,14 @@ if [ "$healthy" = true ]; then
     -v "$volume:/var/lib/postgresql" \
     -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
     -e TENANT_PACKAGE_DIR=../examples/xiongbao \
-    -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
+    -e XIONGBAO_SINGLE_USER=true -e XIONGBAO_PUBLIC_URL=http://localhost:3772 \
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
   deadline=$((SECONDS+60))
   while [ "$(docker inspect -f '{{.State.Running}}' "$bad")" = true ] && [ "$SECONDS" -lt "$deadline" ]; do sleep 1; done
   check test "$(docker inspect -f '{{.State.Running}}' "$bad")" = false
   check test "$(docker inspect -f '{{.State.ExitCode}}' "$bad")" -ne 0
   docker logs "$bad" > "$evidence/owner.log" 2>&1
-  # The readiness gate's own structured refusal (OPENBOT_RLS_ENFORCE=refuse in the image).
+  # The readiness gate's own structured refusal (XIONGBAO_RLS_ENFORCE=refuse in the image).
   check grep -aq '"type":"rls-not-enforced"' "$evidence/owner.log"
 else
   failures=$((failures+1))

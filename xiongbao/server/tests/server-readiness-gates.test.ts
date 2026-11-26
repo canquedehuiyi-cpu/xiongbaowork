@@ -351,7 +351,7 @@ describe("the RLS enforcement mode a deployment runs with", () => {
     expect(
       resolveRlsEnforcementMode({
         NODE_ENV: "development",
-        OPENBOT_RLS_ENFORCE: "refuse",
+        XIONGBAO_RLS_ENFORCE: "refuse",
       }),
     ).toBe("refuse");
   });
@@ -360,7 +360,7 @@ describe("the RLS enforcement mode a deployment runs with", () => {
     expect(
       resolveRlsEnforcementMode({
         NODE_ENV: "production",
-        OPENBOT_RLS_ENFORCE: " warn ",
+        XIONGBAO_RLS_ENFORCE: " warn ",
       }),
     ).toBe("warn");
   });
@@ -371,7 +371,7 @@ describe("the RLS enforcement mode a deployment runs with", () => {
       expect(() =>
         resolveRlsEnforcementMode({
           NODE_ENV: "development",
-          OPENBOT_RLS_ENFORCE: value,
+          XIONGBAO_RLS_ENFORCE: value,
         }),
       ).toThrow("XIONGBAO_RLS_ENFORCE");
     },
@@ -381,7 +381,7 @@ describe("the RLS enforcement mode a deployment runs with", () => {
     expect(
       resolveRlsEnforcementMode({
         NODE_ENV: "production",
-        OPENBOT_RLS_ENFORCE: "  ",
+        XIONGBAO_RLS_ENFORCE: "  ",
       }),
     ).toBe("refuse");
   });

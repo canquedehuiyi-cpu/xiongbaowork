@@ -1656,7 +1656,7 @@ await startupLifecycle.run(async (startup) => {
    */
   /*
    * X5：按配置选出唯一的连接应用提供商（上游 `selectProviderWiring`）。只配 COMPOSIO_API_KEY、不设
-   * OPENBOT_BROKER_PROVIDER 时构造的就是以前那一个 Composio 客户端；指明了却没 key、或两个 key 都配了
+   * XIONGBAO_BROKER_PROVIDER 时构造的就是以前那一个 Composio 客户端；指明了却没 key、或两个 key 都配了
    * 却没指明，服务起不来（只说变量名，不说值）。Arcade 时它的 broker 桥接成 fork 的形状交给 store 与路由。
    */
   const brokerWiring = selectProviderWiring(config, {
@@ -4683,7 +4683,7 @@ await startupLifecycle.run(async (startup) => {
    * 本地学习（L1，local-learning/engine.ts）：每人每天读自己最近的对话，用那位员工的模型提出技能
    * 草案，等本人在设置「学习」里审。对话不出库；模型调用经 `resolveAgentModel` 计到这个人名下，
    * 本月任务额度用完就跳过。多副本时同一个人只有一个副本认领（带条件的 upsert）。
-   * `OPENBOT_LOCAL_LEARNING=off` 时不建、不扫。
+   * `XIONGBAO_LOCAL_LEARNING=off` 时不建、不扫。
    */
   const localLearningEngine = config.localLearning
     ? createLocalLearningEngine({
@@ -5847,7 +5847,7 @@ await startupLifecycle.run(async (startup) => {
     // Native host-folder sessions are session-only: grants disappear with this server process and the
     // desktop worker must authenticate with a fresh token for this run.
     hostAccessBroker,
-    process.env.OPENBOT_DESKTOP_HOST_TOKEN,
+    process.env.XIONGBAO_DESKTOP_HOST_TOKEN,
     async (input) => {
       const proactiveRefusal = await guardProactiveCallback(
         input,
@@ -5922,8 +5922,8 @@ await startupLifecycle.run(async (startup) => {
           sharedUse: { store: sharedUseStore, audience: sharedAudience },
         }
       : undefined,
-    process.env.OPENBOT_MODEL_OAUTH_FILE?.trim()
-      ? createProviderOAuthProxy(process.env.OPENBOT_MODEL_OAUTH_FILE.trim())
+    process.env.XIONGBAO_MODEL_OAUTH_FILE?.trim()
+      ? createProviderOAuthProxy(process.env.XIONGBAO_MODEL_OAUTH_FILE.trim())
       : undefined,
     createUserPreferencesStore(database),
     {

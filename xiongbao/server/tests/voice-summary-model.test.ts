@@ -255,7 +255,7 @@ test.each(["google", "xai"] as const)(
         BOT_MODEL: "selected-model",
         OPENAI_BASE_URL: `${server.url.origin}/api/model-provider/v1`,
         OPENAI_API_KEY: record.proxyToken,
-        OPENBOT_MODEL_OAUTH_FILE: file,
+        XIONGBAO_MODEL_OAUTH_FILE: file,
       };
       expect(await summarizer(environment)(transcript)).toBe(answer);
       expect(received).toHaveLength(1);

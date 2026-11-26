@@ -87,11 +87,19 @@ cat "$out" > "$file"
 
 renamed=0
 commented=0
+compose=
 while read -r what name new; do
   case $what in
-    renamed) renamed=$((renamed + 1)); echo "rewrite-env: $name → $new" >&2 ;;
+    renamed)
+      renamed=$((renamed + 1))
+      echo "rewrite-env: $name → $new" >&2
+      case $name in OPENBOT_IMAGE | OPENBOT_PORT) compose=1 ;; esac
+      ;;
     commented) commented=$((commented + 1)); echo "rewrite-env: $name 已注释掉：文件里已有 $new，运行时本来就以它为准" >&2 ;;
     kept) echo "rewrite-env: $name 保持原名（数据库里的模型池行写着这个名字，随数据库迁移一起改）" >&2 ;;
   esac
 done < "$plan"
 echo "rewrite-env: 改名 $renamed 个，注释 $commented 个；原文件备份在 $backup" >&2
+if [ -n "$compose" ]; then
+  echo "rewrite-env: 镜像或端口变量改了名：Compose 要用 v0.2.16 起的 docker/compose.delivery.yml（更早的只认旧名）" >&2
+fi

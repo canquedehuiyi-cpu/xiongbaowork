@@ -35,7 +35,7 @@ import {
   COMPUTER_ACTION_EVENT_TYPES,
   DID_NOT_HAPPEN_EVENT_TYPES,
   eventTypeFilter,
-  OPENBOT_WORKING_EVENT_TYPES,
+  XIONGBAO_WORKING_EVENT_TYPES,
   oneRowPerAction,
   REFUSED_EVENT_TYPES,
 } from "@/lib/audit/outcome";
@@ -105,7 +105,7 @@ export function withoutXiongBaoWorking(search: string): string {
   const params = new URLSearchParams(
     search.startsWith("?") ? search.slice(1) : search,
   );
-  params.set("excludeEventType", OPENBOT_WORKING_EVENT_TYPES.join(","));
+  params.set("excludeEventType", XIONGBAO_WORKING_EVENT_TYPES.join(","));
   // A Routines call whose routine change has its own row: one action, drawn once.
   params.set("excludeCalls", CALLS_RECORDED_AS_CHANGES.join(","));
   return `?${params.toString()}`;

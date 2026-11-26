@@ -112,8 +112,8 @@ describe("content origin configuration", () => {
 
   test("refuses a domain that is, or is above, the application's own host", () => {
     for (const [name, value] of [
-      ["OPENBOT_PUBLIC_URL", "https://app.example.com"],
-      ["OPENBOT_APP_URL", "https://app.example.com/"],
+      ["XIONGBAO_PUBLIC_URL", "https://app.example.com"],
+      ["XIONGBAO_APP_URL", "https://app.example.com/"],
       ["TRUSTED_ORIGINS", "https://other.test,https://app.example.com:8443"],
     ] as const) {
       for (const domain of ["example.com", "app.example.com"]) {
@@ -127,13 +127,13 @@ describe("content origin configuration", () => {
   test("accepts a domain beside the application, or below it by its own name", () => {
     expect(
       configWith({
-        OPENBOT_PUBLIC_URL: "https://app.example.com",
+        XIONGBAO_PUBLIC_URL: "https://app.example.com",
         XIONGBAO_CONTENT_DOMAIN: "apps.example.com",
       }).content.domain,
     ).toBe("apps.example.com");
     expect(
       configWith({
-        OPENBOT_PUBLIC_URL: "https://app.example.com",
+        XIONGBAO_PUBLIC_URL: "https://app.example.com",
         XIONGBAO_CONTENT_DOMAIN: "notexample.com",
       }).content.domain,
     ).toBe("notexample.com");

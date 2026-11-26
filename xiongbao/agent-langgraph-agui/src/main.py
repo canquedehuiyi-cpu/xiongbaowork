@@ -71,7 +71,7 @@ MODEL_PROVIDERS = {
     "xai",
 }
 
-OPENBOT_PROVIDER_ALIASES = {
+XIONGBAO_PROVIDER_ALIASES = {
     "google": "google_genai",
 }
 
@@ -97,7 +97,7 @@ def _google_genai_kwargs(provider: str):
 
 
 def _resolve_provider(provider: str):
-    return OPENBOT_PROVIDER_ALIASES.get(provider, provider)
+    return XIONGBAO_PROVIDER_ALIASES.get(provider, provider)
 
 
 # `requiresResponsesApi` in shared/model-providers.ts, the rule every Bot in the box decides by:

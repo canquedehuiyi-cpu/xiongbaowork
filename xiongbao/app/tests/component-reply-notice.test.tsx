@@ -28,7 +28,7 @@ import {
   channelKeys,
 } from "@/lib/channels/queries";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
-import { OPENBOT_UI } from "@/lib/copilot/a2ui";
+import { XIONGBAO_UI } from "@/lib/copilot/a2ui";
 import { GALLERY_COMPONENTS } from "@/lib/copilot/gallery-registry";
 import { CopilotProvider } from "@/lib/copilot/provider";
 import { deploymentKeys } from "@/lib/deployment/queries";
@@ -92,7 +92,7 @@ const RENDERED_BUDGET = {
       version: "1.0",
       createSurface: {
         surfaceId: "budget",
-        catalogId: OPENBOT_UI.id,
+        catalogId: XIONGBAO_UI.id,
         dataModel: { transport: 100, lodging: 200, food: 80 },
       },
     },
@@ -279,7 +279,7 @@ function runEvents(input: RunAgentInput): unknown[] {
         content: {
           surfaceId: "budget",
           target: "chat",
-          catalogId: OPENBOT_UI.id,
+          catalogId: XIONGBAO_UI.id,
           operations: RENDERED_BUDGET.operations,
           status: "ready",
           rejected: [],

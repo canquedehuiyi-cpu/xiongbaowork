@@ -40,12 +40,12 @@ describe("brokerSentence", () => {
  * `authorize`'s `returnUrl` is documented as required and spelled `string`, and `""`, `"   "` and
  * `xiongbao.example.com/settings/...` all satisfy that: they reach Composio as a callback nobody
  * returns through, and the person who finds out is the one who has just granted a third party
- * access to their mailbox. The route assembles the address at run time from `OPENBOT_APP_URL`, an
+ * access to their mailbox. The route assembles the address at run time from `XIONGBAO_APP_URL`, an
  * unvalidated environment string, so `string` really is the strongest promise it can make and the
  * check belongs here rather than in the type.
  *
  * Each refusal is asserted by the half of its sentence that only it says. Both name
- * `OPENBOT_APP_URL`, because both are fixed there, so a test that asked only for the setting would
+ * `XIONGBAO_APP_URL`, because both are fixed there, so a test that asked only for the setting would
  * pass just as well if the two branches collapsed into one — and they are two different mistakes:
  * an address nobody built, and a configured one that cannot work.
  */
@@ -77,7 +77,7 @@ describe("brokerReturnUrl", () => {
    * the path: a refusal that echoed the host back would have matched the message's own example and
    * looked, to this test, exactly like one that had not.
    *
-   * The host is the half that carries the most. `OPENBOT_APP_URL` is an environment string and an
+   * The host is the half that carries the most. `XIONGBAO_APP_URL` is an environment string and an
    * environment string carries whatever was put in it: a customer's name in a tenant subdomain, an
    * internal hostname that says how this deployment is reached, a preview host with a token in it.
    * This refusal goes to whoever asked — it is a `BrokerRefusalError`, which is a promise
@@ -115,7 +115,7 @@ describe("brokerReturnUrl", () => {
    * The address handed back is the one that was checked, which is the whole of what the check is
    * worth.
    *
-   * A guard that reads one value and returns another has approved nothing. `OPENBOT_APP_URL` is an
+   * A guard that reads one value and returns another has approved nothing. `XIONGBAO_APP_URL` is an
    * environment string, and an environment string carries whatever was pasted into it: a leading
    * space from a copied address, a trailing newline from a file read line by line, a tab or a
    * carriage return from a variable assembled by a shell. Every one of those is invisible where it

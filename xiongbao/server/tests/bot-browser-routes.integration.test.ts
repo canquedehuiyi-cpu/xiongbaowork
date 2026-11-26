@@ -289,7 +289,7 @@ const profiles = {
 
 const config = loadConfig(
   testEnvironment({
-    OPENBOT_PUBLIC_URL: PUBLIC,
+    XIONGBAO_PUBLIC_URL: PUBLIC,
     AGENT_COMPUTER_URL: `http://127.0.0.1:${COMPUTER_PORT}`,
     COMPUTER_TOKEN,
   }),

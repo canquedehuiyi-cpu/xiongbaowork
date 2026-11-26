@@ -10,7 +10,7 @@ config:
   # The bundled database connects the API as its superuser, which row-level security does not bind,
   # and the chart refuses that unless it is said (the README's install passes the same entry).
   extraEnv:
-    - name: OPENBOT_RLS_ENFORCE
+    - name: XIONGBAO_RLS_ENFORCE
       value: warn
 postgresql:
   enabled: true

@@ -134,7 +134,7 @@ export async function main(args: string[]) {
     return 0;
   }
   if (mode === "local" && action === "assert-start") {
-    assertLocalStartAllowed(root, process.env.OPENBOT_UPDATE_OPERATION);
+    assertLocalStartAllowed(root, process.env.XIONGBAO_UPDATE_OPERATION);
     return 0;
   }
   if (mode === "local" && action === "status") {

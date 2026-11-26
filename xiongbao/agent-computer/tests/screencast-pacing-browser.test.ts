@@ -17,9 +17,9 @@ import { startScreencast } from "../src/screencast";
  * colour changes 40 ms apart, the second and third arrived and the last never did. A click aimed at what the person
  * saw then lands on what the page has since become.
  *
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/screencast-pacing-browser.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/screencast-pacing-browser.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const TOKEN = "screencast-pacing-token";
 const FINAL = [0, 0, 255] as const;
 

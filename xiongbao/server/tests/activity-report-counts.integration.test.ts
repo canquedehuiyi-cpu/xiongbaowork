@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   CALLS_RECORDED_AS_CHANGES,
-  OPENBOT_WORKING_EVENT_TYPES,
+  XIONGBAO_WORKING_EVENT_TYPES,
   oneRowPerAction,
 } from "@xiongbao/shared/activity-rows";
 import { sql } from "drizzle-orm";
@@ -128,7 +128,7 @@ async function shownOnActivity() {
   const { events } = await reader.list({
     limit: ACTIONS + 100,
     bot: BOT,
-    excludeEventType: OPENBOT_WORKING_EVENT_TYPES.join(","),
+    excludeEventType: XIONGBAO_WORKING_EVENT_TYPES.join(","),
     excludeCalls: CALLS_RECORDED_AS_CHANGES.join(","),
   });
   return oneRowPerAction(events);

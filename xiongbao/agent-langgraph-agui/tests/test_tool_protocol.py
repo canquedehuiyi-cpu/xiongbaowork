@@ -49,6 +49,7 @@ def boundary(monkeypatch):
         "GOOGLE_GENERATIVE_AI_API_KEY",
         "GOOGLE_GENERATIVE_AI_BASE_URL",
         "CLAUDE_CODE_OAUTH_TOKEN",
+        "XIONGBAO_TOOL_URL",
         "OPENBOT_TOOL_URL",
         "AGENT_TOOL_TOKEN",
     ]:
@@ -201,7 +202,7 @@ def boundary(monkeypatch):
     thread.start()
     base = f"http://127.0.0.1:{server.server_port}"
     monkeypatch.setenv("OPENAI_BASE_URL", base + "/v1")
-    monkeypatch.setenv("OPENBOT_TOOL_URL", base + "/api/agent-tools/call")
+    monkeypatch.setenv("XIONGBAO_TOOL_URL", base + "/api/agent-tools/call")
     monkeypatch.setenv("AGENT_TOOL_TOKEN", "synthetic-callback-token")
     try:
         yield captured

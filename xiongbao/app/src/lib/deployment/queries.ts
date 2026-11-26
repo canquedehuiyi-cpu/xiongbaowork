@@ -24,7 +24,7 @@ export type DeploymentCapabilities = {
    */
   generativeUi: boolean;
   /**
-   * Whether the operator turned the support banner on (OPENBOT_SELF_HOST_BANNER=true; off by
+   * Whether the operator turned the support banner on (XIONGBAO_SELF_HOST_BANNER=true; off by
    * default). The server answers false for a deployment on a paid Intelligence plan, and the banner
    * itself stays hidden without a tenant `supportUrl`.
    */
