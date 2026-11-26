@@ -748,7 +748,7 @@
   },
   {
     "file": "xiongbao/server/tests/upgrade-gate.test.ts",
-    "pattern": "\"openbot_(?:app|role_writer)\"|openbot_app、openbot_role_writer",
+    "pattern": "\\bopenbot_(?:app|role_writer)\\b",
     "until": "R5",
     "reason": "测试证明迁移前的判定点名改名前的应用角色并拒绝（旧名就是被测输入）；随拒绝代码在 R5 导出新仓库前删除"
   },
