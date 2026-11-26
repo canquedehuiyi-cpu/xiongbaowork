@@ -189,8 +189,13 @@ if ! "$PG_BIN/pg_isready" -q -h "$host" -p "$port" 2>/dev/null; then
   # start a second postmaster on the same files. Any lock file at all is a refusal here.
   if [ -e "$DATA_DIR/postmaster.pid" ]; then
     echo "$DATA_DIR/postmaster.pid 在：可能还有别的容器正在用这个数据库卷（完整容器，或上一次还没结束的还原容器）。没有动数据库。" >&2
-    echo "先用 docker ps 看还有没有挂着这个卷在跑的容器（docker ps --filter volume=<新卷>）：有就等它结束或 docker stop 它，再重跑。" >&2
-    echo "确实一个都没有，说明上一次没有正常停库：把完整容器 docker start 一次、等它健康，再 docker stop（这样会正常停库、删掉这个文件），然后重跑。" >&2
+    echo "先在宿主机上确认没有容器在用这个卷：" >&2
+    echo "  docker ps --filter volume=<新卷>          应该什么都不列（停着的完整容器不算，它不会列出来）" >&2
+    echo "  docker ps -a --filter name=<还原容器名>    应该什么都不列（异常终止时 --rm 可能没执行，留下停着的还原容器：确认是 Exited 后 docker rm 它）" >&2
+    echo "有在跑的就等它结束或 docker stop 它，再重跑。确认一个都没有，说明上一次没有正常停库，锁文件是残留的：用一次性容器删掉它" >&2
+    echo "（不起服务、不对外），再原样重跑本步骤，PostgreSQL 会自己做崩溃恢复：" >&2
+    echo "  docker run --rm --user root --entrypoint rm -v <新卷>:/var/lib/postgresql <v0.2.15 镜像> -f /var/lib/postgresql/data/postmaster.pid" >&2
+    echo "不要为了清掉它去启动完整容器：还原没做完时那是一个空库，会直接对外服务。" >&2
     exit 1
   fi
   [ "$(id -u)" != 0 ] || chown postgres:postgres "$work"

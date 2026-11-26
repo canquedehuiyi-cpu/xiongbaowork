@@ -906,14 +906,18 @@ docker logs xiongbao 2>&1 | grep -E 'rebrand-|credentials-rekeyed|migrations-app
   docker exec xiongbao ls -l /var/lib/postgresql/backup
   f=$(docker exec xiongbao sh -c 'ls /var/lib/postgresql/backup/pre-rebrand-*.dump | tail -n 1')
   docker cp "xiongbao:$f" "$D/"
-  docker cp "xiongbao:$f.size" "$D/"
-  chmod 600 "$D/$(basename "$f")" "$D/$(basename "$f").size"
+  chmod 600 "$D/$(basename "$f")"
+  if docker cp "xiongbao:$f.size" "$D/" 2>/dev/null; then
+    chmod 600 "$D/$(basename "$f").size"
+  else
+    echo '（卷上这份备份旁边没有 .size，跳过；还原时会按展开后的大小 × 3 估空间）'
+  fi
   ls -l "$D"
 )
 ```
 <!-- v0216:backup:end -->
 
-备份文件在卷里是 `-rw------- postgres postgres`，在宿主机上是 `-rw-------`；旁边的 `.size` 是备份时的库大小（还原时估算空间用），一起留着。
+备份文件在卷里是 `-rw------- postgres postgres`，在宿主机上是 `-rw-------`；旁边的 `.size` 是备份时的库大小（还原时估算空间用），有就一起拷出来留着；万一没有，这一块会提示跳过，不影响别的。
 
 ### 21.⑤ 核对
 
@@ -1074,7 +1078,7 @@ B3. 停掉刚起来的 v0.2.15 容器，用 v0.2.15 镜像起一个**只跑还�
   if ! docker run --rm -i --name xiongbao-v0215-restoring --user root --entrypoint sh \
     -v xiongbao-db-v0215-restore:/var/lib/postgresql -v "$D/backup-from-volume:/restore:ro" \
     "$OLD_IMAGE" -s "/restore/$f" < "$D/rebrand-restore.sh"; then
-    echo '还原没有完成（原因见上方），容器先停着：按提示处理后原样再执行一次 B3。若提示名字 xiongbao-v0215-restoring 已被占用，说明上一次的还原还在跑：docker ps 看到它结束（消失）后再执行。'
+    echo '还原没有完成（原因见上方），容器先停着：按提示处理后原样再执行一次 B3。若提示名字 xiongbao-v0215-restoring 已被占用：docker ps -a --filter name=xiongbao-v0215-restoring 看它，还在跑（Up）就等它消失；已经停了（Exited）就 docker rm xiongbao-v0215-restoring 后再执行。'
     exit 1
   fi
   docker start xiongbao
@@ -1082,7 +1086,28 @@ B3. 停掉刚起来的 v0.2.15 容器，用 v0.2.15 镜像起一个**只跑还�
 ```
 <!-- v0216:rollback-b-restore:end -->
 
-还原脚本先核对：备份完整可读、这是 v0.2.15 起过一次的新卷（不是原来那个卷、库里还没有对话）、盘上放得下一份副本（按备份旁边记下的库大小，含索引）、库上没有任何连接；任何一项不满足就什么都不动并说明原因。然后它用镜像自己的初始化步骤写好连接信息、只启动数据库，把备份灌进一个临时库，成功后在一个事务里换上，打印「还原完成」，再把数据库停掉。中途断了就原样再执行一次 B3，它会从断开的地方接着做；断开时上一次的还原可能还在后台跑，这时 Docker 会因为一次性容器重名（`xiongbao-v0215-restoring`）直接拒绝，等 `docker ps` 里它消失再执行，脚本也会在数据目录被占用（有 `postmaster.pid`）时拒绝起库。
+还原脚本先核对：备份完整可读、这是 v0.2.15 起过一次的新卷（不是原来那个卷、库里还没有对话）、盘上放得下一份副本（按备份旁边记下的库大小，含索引）、库上没有任何连接；任何一项不满足就什么都不动并说明原因。然后它用镜像自己的初始化步骤写好连接信息、只启动数据库，把备份灌进一个临时库，成功后在一个事务里换上，打印「还原完成」，再把数据库停掉。中途断了就原样再执行一次 B3，它会从断开的地方接着做；断开时上一次的还原可能还在后台跑，这时 Docker 会因为一次性容器重名（`xiongbao-v0215-restoring`）直接拒绝，用 `docker ps -a --filter name=xiongbao-v0215-restoring` 看它：还在跑（Up）就等它消失，已经停了（Exited，异常终止时 `--rm` 可能没执行）就 `docker rm` 掉它再执行。
+
+脚本还会在数据目录里有 `postmaster.pid` 时拒绝起库（可能有别的容器正在用这个卷）。这时**不要**为了清掉它去启动完整容器（还原没做完时那是一个空库，会直接对外服务），按下面这块处理：它先确认没有在跑的容器挂着这个卷、也没有残留的还原容器，确认无误才用一次性容器（不起服务）删掉残留的锁文件；之后原样再执行一次 B3，数据库会自己做崩溃恢复。
+
+<!-- v0216:rollback-b-unlock:begin -->
+```bash
+(
+  set -eu
+  . /opt/xiongbao/upgrade-v0.2.16/images.env
+  running=$(docker ps --filter volume=xiongbao-db-v0215-restore --format '{{.Names}}')
+  leftover=$(docker ps -a --filter name='^xiongbao-v0215-restoring$' --format '{{.Names}} {{.Status}}')
+  if [ -n "$running" ] || [ -n "$leftover" ]; then
+    echo "还有容器在用这个卷或残留的还原容器，这次什么都没动：$running $leftover"
+    echo '在跑（Up）的等它结束或 docker stop；停着（Exited）的还原容器 docker rm xiongbao-v0215-restoring；然后再执行这一块。'
+    exit 1
+  fi
+  docker run --rm --user root --entrypoint rm -v xiongbao-db-v0215-restore:/var/lib/postgresql \
+    "$OLD_IMAGE" -f /var/lib/postgresql/data/postmaster.pid
+  echo '已删掉残留的 postmaster.pid：原样再执行一次 B3。'
+)
+```
+<!-- v0216:rollback-b-unlock:end -->
 
 再用第 ④ 步的第一条命令等它起来，然后核对：
 

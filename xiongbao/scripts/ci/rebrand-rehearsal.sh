@@ -334,8 +334,13 @@ expect "step ④: each backup has its database size beside it, 0600 postgres:pos
 600 postgres postgres" "$(docker exec xiongbao sh -c 'stat -c "%a %U %G" /var/lib/postgresql/backup/pre-rebrand-*.dump.size')"
 hostcopy=$(ls "$D"/pre-rebrand-*.dump 2>/dev/null | tail -n 1 || true)
 [ -n "$hostcopy" ] && expect "step ④: the host copy is 0600" 600 "$(stat -c '%a' "$hostcopy")" || fail "step ④: no host copy"
-[ -n "$hostcopy" ] && [ -f "$hostcopy.size" ] && expect "step ④: the host copy's size record is 0600" 600 "$(stat -c '%a' "$hostcopy.size")" ||
-  fail "step ④: no size record beside the host copy"
+# The size record is copied when the volume has one (the step skips it otherwise); when copied, 0600.
+if [ -n "$hostcopy" ] && [ -f "$hostcopy.size" ]; then
+  expect "step ④: the host copy's size record is 0600" 600 "$(stat -c '%a' "$hostcopy.size")"
+else
+  grep -q '没有 .size，跳过' "$SHEET_OUT" && pass "step ④: no size record on the volume, and the step says it skipped it" ||
+    fail "step ④: no size record beside the host copy, and the step did not say why"
+fi
 
 sheet v0216:verify
 grep -qx 'xiongbao_app|f|f' "$SHEET_OUT" && pass "step ⑤: the API connects as xiongbao_app, no superuser, no BYPASSRLS" ||
