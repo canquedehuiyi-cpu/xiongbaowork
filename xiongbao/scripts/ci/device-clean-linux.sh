@@ -152,7 +152,7 @@ phase_server() {
     cd "$product/server"
     export KEY_ENCRYPTION_KEY="$key" BETTER_AUTH_SECRET="$secret"
     export DATABASE_URL="$APP_DATABASE_URL" ROLE_WRITER_DATABASE_URL="$ROLE_WRITER_URL"
-    export BETTER_AUTH_URL="$ORIGIN" OPENBOT_PUBLIC_URL="$ORIGIN" PORT="${ORIGIN##*:}"
+    export BETTER_AUTH_URL="$ORIGIN" XIONGBAO_PUBLIC_URL="$ORIGIN" PORT="${ORIGIN##*:}"
     # Sign-in refuses to start without a named administrator (audit defect #3). Nobody signs in as
     # this address: the person under test is an ordinary sign-up, as a customer would be.
     export INITIAL_ADMIN_EMAILS=device-clean-admin@example.test

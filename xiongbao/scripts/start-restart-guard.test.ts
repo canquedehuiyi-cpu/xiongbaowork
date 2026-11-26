@@ -26,6 +26,8 @@ type Run = {
   settings?: Record<string, string>;
   processEnvironment?: Record<string, string>;
   unavailableHealthPorts?: readonly number[];
+  /** An installation an update has accepted: `.openbot-release.json` is there. */
+  acceptedRelease?: boolean;
 };
 
 async function runStartWithStaleServerProbe(
@@ -37,6 +39,7 @@ async function runStartWithStaleServerProbe(
     settings = {},
     processEnvironment = {},
     unavailableHealthPorts = [],
+    acceptedRelease = false,
   }: Run = {},
 ) {
   const root =
@@ -64,7 +67,7 @@ async function runStartWithStaleServerProbe(
     "MANAGED_AGENT_TOKEN=managed-token",
     "AGENT_TOOL_TOKEN=agent-tool-token",
     "MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui",
-    "OPENBOT_ONE_COMPUTER_EACH=true",
+    "XIONGBAO_ONE_COMPUTER_EACH=true",
     "DATABASE_URL=postgres://openbot:openbot@localhost:5432/xiongbao",
   ].filter(
     (line) =>
@@ -76,6 +79,8 @@ async function runStartWithStaleServerProbe(
     ...Object.entries(settings).map(([key, value]) => `${key}=${value}`),
   );
   await writeFile(join(directory, ".env"), `${environment.join("\n")}\n`);
+  if (acceptedRelease)
+    await writeFile(join(directory, ".openbot-release.json"), "{}\n");
   await writeFile(
     join(scripts, "start.sh"),
     await readFile("scripts/start.sh"),
@@ -146,7 +151,7 @@ exit 0
   await writeExecutable(
     join(fakeBin, "bun"),
     // biome-ignore lint/suspicious/noTemplateCurlyInString: a bash parameter expansion, written to the fake as is.
-    '#!/usr/bin/env bash\nprintf "bun %s|%s\\n" "$*" "${MIGRATION_DATABASE_URL-<unset>}" >> "$OWNER_URL_LOG"\nif [ "$1" = run ] && [ "$2" = - ]; then\n  exec "$REAL_BUN" "$@"\nfi\nexit 0\n',
+    '#!/usr/bin/env bash\nprintf "bun %s|%s\\n" "$*" "${MIGRATION_DATABASE_URL-<unset>}" >> "$OWNER_URL_LOG"\nif [ "$1" = run ] && [ "$2" = - ]; then\n  exec "$REAL_BUN" "$@"\nfi\ncase "$*" in *"local build-environment"*) echo XIONGBAO_BUILD_VERSION=v-accepted ;; esac\nexit 0\n',
   );
   // What `python3` is on a stock Windows machine: the Microsoft Store alias, which runs nothing. A
   // script that still needed it would stop at the health check in every test in this file.
@@ -318,7 +323,7 @@ describe("start.sh settings with no line in .env", () => {
 
 describe("start.sh one computer each", () => {
   /**
-   * `OPENBOT_ONE_COMPUTER_EACH=false` IN `.env` TURNS THE SUPERVISOR OFF, AS THE DOCS SAY.
+   * `XIONGBAO_ONE_COMPUTER_EACH=false` IN `.env` TURNS THE SUPERVISOR OFF, AS THE DOCS SAY.
    *
    * The key was read from the environment alone, so a `.env` line was ignored: the supervisor was
    * still started and the server still told to use it. docs/configuration.md says to set it "in
@@ -329,7 +334,7 @@ describe("start.sh one computer each", () => {
    */
   test("false in .env starts no supervisor", async () => {
     const result = await runStartWithStaleServerProbe(401, {
-      settings: { OPENBOT_ONE_COMPUTER_EACH: "false" },
+      settings: { XIONGBAO_ONE_COMPUTER_EACH: "false" },
     });
 
     expect({ exitCode: result.exitCode, stderr: result.stderr }).toEqual({
@@ -344,8 +349,19 @@ describe("start.sh one computer each", () => {
 
   test("false in the process environment starts no supervisor either", async () => {
     const result = await runStartWithStaleServerProbe(401, {
-      settings: { OPENBOT_ONE_COMPUTER_EACH: "true" },
-      processEnvironment: { OPENBOT_ONE_COMPUTER_EACH: "false" },
+      settings: { XIONGBAO_ONE_COMPUTER_EACH: "true" },
+      processEnvironment: { XIONGBAO_ONE_COMPUTER_EACH: "false" },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.dockerLog).not.toContain("supervisor");
+  });
+
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，a .env written before the rename
+  test("the old name in .env is still read when the new one is absent", async () => {
+    const result = await runStartWithStaleServerProbe(401, {
+      omitFromEnv: ["XIONGBAO_ONE_COMPUTER_EACH"],
+      settings: { OPENBOT_ONE_COMPUTER_EACH: "false" },
     });
 
     expect(result.exitCode).toBe(0);
@@ -353,7 +369,7 @@ describe("start.sh one computer each", () => {
   });
 
   test("true, or absent, still starts it", async () => {
-    for (const omitFromEnv of [[], ["OPENBOT_ONE_COMPUTER_EACH"]] as const) {
+    for (const omitFromEnv of [[], ["XIONGBAO_ONE_COMPUTER_EACH"]] as const) {
       const result = await runStartWithStaleServerProbe(401, { omitFromEnv });
 
       expect(result.exitCode).toBe(0);
@@ -361,6 +377,32 @@ describe("start.sh one computer each", () => {
         "compose up -d --build postgres supervisor agent-computer agent-bot agent-langgraph",
       );
     }
+  });
+});
+
+describe("start.sh during an update", () => {
+  /*
+   * An ordinary restart of an accepted installation takes the accepted build identity; the start an
+   * update runs must not, or the candidate reports the old release and is never accepted. The v0.2.15
+   * local updater, already installed, names its operation under the old prefix.
+   * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+   */
+  test("an update operation under either name skips the accepted identity, and a plain restart takes it", async () => {
+    const takesAccepted = async (
+      processEnvironment: Record<string, string>,
+    ) => {
+      const result = await runStartWithStaleServerProbe(401, {
+        acceptedRelease: true,
+        processEnvironment,
+      });
+      expect(result.exitCode).toBe(0);
+      return result.ownerUrlLog.includes("local build-environment");
+    };
+    expect(await takesAccepted({})).toBe(true);
+    expect(await takesAccepted({ XIONGBAO_UPDATE_OPERATION: "op" })).toBe(
+      false,
+    );
+    expect(await takesAccepted({ OPENBOT_UPDATE_OPERATION: "op" })).toBe(false);
   });
 });
 

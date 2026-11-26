@@ -134,7 +134,13 @@ export async function main(args: string[]) {
     return 0;
   }
   if (mode === "local" && action === "assert-start") {
-    assertLocalStartAllowed(root, process.env.OPENBOT_UPDATE_OPERATION);
+    assertLocalStartAllowed(
+      root,
+      process.env.XIONGBAO_UPDATE_OPERATION ||
+        // The v0.2.15 local updater, already installed, starts the new source with the old name.
+        // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+        process.env.OPENBOT_UPDATE_OPERATION,
+    );
     return 0;
   }
   if (mode === "local" && action === "status") {

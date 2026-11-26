@@ -258,6 +258,7 @@ function runComposeConfig(env: Record<string, string>) {
         environment: Record<string, string>;
         extra_hosts?: string[];
         volumes?: Array<{ type: string; source: string; target: string }>;
+        build?: { args?: Record<string, string> };
       }
     >;
   };
@@ -265,14 +266,14 @@ function runComposeConfig(env: Record<string, string>) {
 
 test("ordinary Compose ignores telemetry settings in the host environment", () => {
   const telemetry = {
-    OPENBOT_DISTRIBUTION: "desktop",
-    OPENBOT_VERSION: "1.0.0",
-    OPENBOT_PLATFORM: "macos",
-    OPENBOT_ARCH: "aarch64",
-    OPENBOT_OS_VERSION: "26.0",
-    OPENBOT_ENGINE: "docker",
+    XIONGBAO_DISTRIBUTION: "desktop",
+    XIONGBAO_VERSION: "1.0.0",
+    XIONGBAO_PLATFORM: "macos",
+    XIONGBAO_ARCH: "aarch64",
+    XIONGBAO_OS_VERSION: "26.0",
+    XIONGBAO_ENGINE: "docker",
     DO_NOT_TRACK: "1",
-    OPENBOT_PRODUCT_TELEMETRY: "0",
+    XIONGBAO_PRODUCT_TELEMETRY: "0",
   };
   const services = runComposeConfig(telemetry).services;
   for (const key of Object.keys(telemetry)) {
@@ -283,8 +284,8 @@ test("ordinary Compose ignores telemetry settings in the host environment", () =
 test("leaves optional telemetry settings absent for ordinary Compose startup", () => {
   const env = runComposeConfig({}).services.server.environment;
   for (const key of [
-    "OPENBOT_DISTRIBUTION",
-    "OPENBOT_PRODUCT_TELEMETRY",
+    "XIONGBAO_DISTRIBUTION",
+    "XIONGBAO_PRODUCT_TELEMETRY",
     "DO_NOT_TRACK",
   ]) {
     expect(env[key] ?? undefined).toBeUndefined();
@@ -660,23 +661,89 @@ test("starts the shared computer as one person's only when told whose it is", ()
 /** The edition in `.env` reaches the shared computer, as it reaches the server. */
 test("tells the shared computer which edition it runs in", () => {
   expect(
-    runComposeConfig({ OPENBOT_EDITION: "personal" }).services["agent-computer"]
-      ?.environment.OPENBOT_EDITION,
+    runComposeConfig({ XIONGBAO_EDITION: "personal" }).services[
+      "agent-computer"
+    ]?.environment.XIONGBAO_EDITION,
   ).toBe("personal");
   expect(
     runComposeConfig({}).services["agent-computer"]?.environment
-      .OPENBOT_EDITION,
+      .XIONGBAO_EDITION,
   ).toBe("");
+});
+
+/*
+ * A `.env` written before the rename spells these with the old prefix; Compose reads it for the
+ * interpolation, so each host setting falls back to its old name.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("a host setting under its old name still reaches the containers, and the new name wins", () => {
+  const legacy = runComposeConfig({
+    OPENBOT_EDITION: "personal",
+    OPENBOT_TOOL_URL: "http://old.example/api/agent-tools/call",
+    OPENBOT_HOST_GATEWAY: "10.0.2.2",
+  }).services;
+  expect(legacy["agent-computer"]?.environment.XIONGBAO_EDITION).toBe(
+    "personal",
+  );
+  expect(legacy["agent-langgraph"]?.environment.XIONGBAO_TOOL_URL).toBe(
+    "http://old.example/api/agent-tools/call",
+  );
+  expect(legacy.server?.extra_hosts).toContain("host.docker.internal=10.0.2.2");
+  const both = runComposeConfig({
+    XIONGBAO_EDITION: "team",
+    OPENBOT_EDITION: "personal",
+  }).services;
+  expect(both["agent-computer"]?.environment.XIONGBAO_EDITION).toBe("team");
+});
+
+/*
+ * A model sign-in file named in `.env` under the old name. Compose cannot nest the `:+` that turns it
+ * into the container's path inside a fallback, so the server gets it under the old name too and its
+ * alias step copies it over the empty new one.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("a model sign-in file named under the old name still reaches the server", () => {
+  const legacy = runComposeConfig({
+    OPENBOT_MODEL_OAUTH_FILE: "/home/someone/.openbot/model-oauth.json",
+  }).services.server?.environment;
+  expect(legacy?.OPENBOT_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
+  expect(legacy?.XIONGBAO_MODEL_OAUTH_FILE ?? "").toBe("");
+  const renamed = runComposeConfig({
+    XIONGBAO_MODEL_OAUTH_FILE: "/home/someone/.openbot/model-oauth.json",
+  }).services.server?.environment;
+  expect(renamed?.XIONGBAO_MODEL_OAUTH_FILE).toBe("/xiongbao/model-oauth.json");
+  expect(renamed?.OPENBOT_MODEL_OAUTH_FILE ?? "").toBe("");
+});
+
+/*
+ * The v0.2.15 local updater, already installed, hands a release's identity to `up --build` under the
+ * old names. The image it builds must still carry it, or the candidate answers /release without one
+ * and the update is never accepted.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("a build identity under the old names still reaches the server image's build", () => {
+  const args = runComposeConfig({
+    OPENBOT_BUILD_VERSION: "v0.2.16",
+    OPENBOT_BUILD_COMMIT: "abc123",
+  }).services.migrate?.build?.args;
+  expect(args?.XIONGBAO_BUILD_VERSION).toBe("v0.2.16");
+  expect(args?.XIONGBAO_BUILD_COMMIT).toBe("abc123");
+  expect(
+    runComposeConfig({
+      XIONGBAO_BUILD_VERSION: "v0.2.17",
+      OPENBOT_BUILD_VERSION: "v0.2.16",
+    }).services.migrate?.build?.args?.XIONGBAO_BUILD_VERSION,
+  ).toBe("v0.2.17");
 });
 
 test("gives the selected harness the same governed callback as the framework Bot", () => {
   const config = runComposeConfig({
-    OPENBOT_TOOL_URL: "http://callback.example/api/agent-tools/call",
+    XIONGBAO_TOOL_URL: "http://callback.example/api/agent-tools/call",
     AGENT_TOOL_TOKEN: "synthetic-callback-token",
   });
   for (const service of ["agent-harness", "agent-langgraph"] as const) {
     expect(config.services[service].environment).toMatchObject({
-      OPENBOT_TOOL_URL: "http://callback.example/api/agent-tools/call",
+      XIONGBAO_TOOL_URL: "http://callback.example/api/agent-tools/call",
       AGENT_TOOL_TOKEN: "synthetic-callback-token",
     });
     expect(config.services[service].extra_hosts).toContain(
@@ -687,12 +754,12 @@ test("gives the selected harness the same governed callback as the framework Bot
 
 /**
  * Rootless Podman on Linux gives `host-gateway` an address that is not this machine's loopback, where
- * the person's browser and a local Intelligence listen. The desktop app sets `OPENBOT_HOST_GATEWAY`
+ * the person's browser and a local Intelligence listen. The desktop app sets `XIONGBAO_HOST_GATEWAY`
  * there, to the address its Podman configuration maps to loopback, and every service that calls the
  * host by name takes it.
  */
-test("sends host.docker.internal where OPENBOT_HOST_GATEWAY says", () => {
-  const config = runComposeConfig({ OPENBOT_HOST_GATEWAY: "10.0.2.2" });
+test("sends host.docker.internal where XIONGBAO_HOST_GATEWAY says", () => {
+  const config = runComposeConfig({ XIONGBAO_HOST_GATEWAY: "10.0.2.2" });
   for (const service of [
     "server",
     "agent-harness",
@@ -888,7 +955,7 @@ test("hands the desktop's host-access token to the server and nothing else", () 
   const holders = Object.entries(composeServices())
     .filter(([, service]) =>
       Object.keys(service.environment ?? {}).includes(
-        "OPENBOT_DESKTOP_HOST_TOKEN",
+        "XIONGBAO_DESKTOP_HOST_TOKEN",
       ),
     )
     .map(([name]) => name);
@@ -906,11 +973,11 @@ test("addresses the server's Bots and endpoints from inside the network", () => 
       "http://host.docker.internal:3001/api/model-provider/v1",
     INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:14401",
     INTELLIGENCE_CONTAINER_GATEWAY_WS_URL: "ws://host.docker.internal:14401",
-    OPENBOT_THIS_MACHINE_CONTAINER_HOST: "host.docker.internal",
+    XIONGBAO_THIS_MACHINE_CONTAINER_HOST: "host.docker.internal",
   });
   expect(withBots.services.server.environment).toMatchObject({
     // How the server reaches an agent the person registered on their own loopback.
-    OPENBOT_THIS_MACHINE_HOST: "host.docker.internal",
+    XIONGBAO_THIS_MACHINE_HOST: "host.docker.internal",
     MANAGED_AGENT_AG_UI_URL: "http://agent-langgraph:4201/ag-ui",
     PICKED_HARNESS_URL: "http://agent-harness:4202/run",
     OPENAI_BASE_URL: "http://host.docker.internal:3001/api/model-provider/v1",
@@ -925,7 +992,7 @@ test("addresses the server's Bots and endpoints from inside the network", () => 
     PICKED_HARNESS_URL: "https://agents.example/run",
   });
   expect(without.services.server.environment).toMatchObject({
-    OPENBOT_THIS_MACHINE_HOST: "",
+    XIONGBAO_THIS_MACHINE_HOST: "",
     MANAGED_AGENT_AG_UI_URL: "",
     PICKED_HARNESS_URL: "https://agents.example/run",
   });
@@ -945,12 +1012,14 @@ test("mounts the model sign-in folder into the server, and only there", () => {
     target: "/xiongbao",
     bind: { create_host_path: false },
   });
-  expect(server.environment?.OPENBOT_MODEL_OAUTH_FILE).toBe(
+  expect(server.environment?.XIONGBAO_MODEL_OAUTH_FILE).toBe(
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
-    "${OPENBOT_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}",
+    "${XIONGBAO_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}",
   );
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
-  expect(server.user).toBe("${OPENBOT_SERVER_USER:-1001:1001}");
+  expect(server.user).toBe(
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
+    "${XIONGBAO_SERVER_USER:-${OPENBOT_SERVER_USER:-1001:1001}}",
+  );
   for (const [name, service] of Object.entries(services)) {
     if (name === "server") continue;
     expect(JSON.stringify(service.volumes ?? [])).not.toContain(".openbot");
@@ -1063,4 +1132,93 @@ test("points the server at the bundled search and crawl services, without depend
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
     XIONGBAO_SEARCH_URL: "${XIONGBAO_SEARCH_URL:-http://searxng:8080}",
   });
+});
+
+/*
+ * The delivery file as Compose resolves it from an env file alone: a copy of compose.delivery.yml beside
+ * an `.env.delivery` holding `lines`, the way docs/deployment-xiongbao.md runs it.
+ */
+function deliveryConfig(lines: string[]) {
+  const dir = mkdtempSync(join(tmpdir(), "compose-delivery-"));
+  try {
+    mkdirSync(join(dir, "docker"));
+    writeFileSync(
+      join(dir, "docker", "compose.delivery.yml"),
+      readFileSync(
+        join(import.meta.dir, "..", "docker", "compose.delivery.yml"),
+        "utf8",
+      ),
+    );
+    writeFileSync(join(dir, ".env.delivery"), `${lines.join("\n")}\n`);
+    const output = execFileSync(
+      "docker",
+      [
+        "compose",
+        "--project-name",
+        "xiongbao-local",
+        "--env-file",
+        join(dir, ".env.delivery"),
+        "-f",
+        join(dir, "docker", "compose.delivery.yml"),
+        "config",
+        "--format",
+        "json",
+      ],
+      { env: { PATH: process.env.PATH ?? "" }, encoding: "utf8" },
+    );
+    const app = (
+      JSON.parse(output) as {
+        services: Record<
+          string,
+          {
+            image: string;
+            ports: Array<{
+              host_ip: string;
+              published: string;
+              target: number;
+            }>;
+          }
+        >;
+      }
+    ).services.app;
+    return {
+      image: app?.image,
+      ports: app?.ports.map(
+        (port) => `${port.host_ip}:${port.published}:${port.target}`,
+      ),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/*
+ * An env file written before the rename names the image and the port with the old prefix; one written
+ * after, with the new. Both must start the same container.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+test("the delivery file resolves the same image and port from the old names as from the new", () => {
+  const image = `ghcr.io/example/xiongbaowork@sha256:${"0".repeat(64)}`;
+  const legacy = deliveryConfig([
+    `OPENBOT_IMAGE=${image}`,
+    "OPENBOT_PORT=3780",
+  ]);
+  const renamed = deliveryConfig([
+    `XIONGBAO_IMAGE=${image}`,
+    "XIONGBAO_PORT=3780",
+  ]);
+  expect(renamed.image).toBe(image);
+  expect(renamed.ports).toContain("127.0.0.1:3780:3001");
+  expect(legacy).toEqual(renamed);
+  // Both set: the new name wins, as it does inside the container.
+  expect(
+    deliveryConfig([
+      `XIONGBAO_IMAGE=${image}`,
+      "OPENBOT_IMAGE=ghcr.io/example/old:v0",
+    ]).image,
+  ).toBe(image);
+  // Neither: the image built from source, on the usual port.
+  const unset = deliveryConfig([]);
+  expect(unset.image).toBe("xiongbao-digital-employee:local");
+  expect(unset.ports).toContain("127.0.0.1:3772:3001");
 });

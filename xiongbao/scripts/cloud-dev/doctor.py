@@ -68,7 +68,7 @@ READ_ALLOWLIST = (
 )
 
 # Names only (values never read).
-ENV_NAME_PREFIXES = ("BUN_", "NODE_", "OPENBOT_", "COMPOSIO_")
+ENV_NAME_PREFIXES = ("BUN_", "NODE_", "XIONGBAO_", "COMPOSIO_")
 
 # Environment allowlist for probe subprocesses (Root review item 3):
 # platform essentials + proxy/CA only. Provider secrets, option-injection

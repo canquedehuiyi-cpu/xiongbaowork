@@ -55,7 +55,7 @@ async function runProductionEntry(withRoleWriter: boolean) {
             ]
           : []),
         "KEY_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        "OPENBOT_SINGLE_USER=true",
+        "XIONGBAO_SINGLE_USER=true",
         "MANAGED_AGENT_AG_UI_URL=http://127.0.0.1:4200/ag-ui",
         "MANAGED_AGENT_TOKEN=synthetic-managed-token",
         "COMPUTER_SUPERVISOR_URL=http://127.0.0.1:4300",
@@ -115,7 +115,7 @@ describe("production server loader boundary", () => {
     const output = `${result.stdout}\n${result.stderr}`;
     expect(result.exitCode).not.toBe(0);
     expect(output).not.toContain("require() async module");
-    expect(output).not.toContain("OPENBOT_SERVER_LOADER_SMOKE");
+    expect(output).not.toContain("XIONGBAO_SERVER_LOADER_SMOKE");
     expect(result.databaseConnections).toBeGreaterThan(0);
     expect(output).toContain("Startup or cleanup failed or is unconfirmed.");
     expect(output).not.toContain("Role writer initialization failed.");
@@ -129,7 +129,7 @@ describe("production server loader boundary", () => {
     const output = `${result.stdout}\n${result.stderr}`;
     expect(result.exitCode).not.toBe(0);
     expect(output).not.toContain("require() async module");
-    expect(output).not.toContain("OPENBOT_SERVER_LOADER_SMOKE");
+    expect(output).not.toContain("XIONGBAO_SERVER_LOADER_SMOKE");
     expect(output).toContain("ROLE_WRITER_DATABASE_URL is required");
     expect(result.databaseConnections).toBe(0);
     expect(output).not.toContain("Failed query: insert into");

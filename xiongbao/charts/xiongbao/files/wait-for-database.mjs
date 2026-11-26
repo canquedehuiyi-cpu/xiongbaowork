@@ -19,7 +19,7 @@
  *    older image restarting after an upgrade migrated) holds every hash it carries and passes, which is
  *    what lets old replicas keep running through a rollout.
  *
- * Bounded by OPENBOT_DATABASE_WAIT_SECONDS. When that runs out it says what it last saw and exits 1, so
+ * Bounded by XIONGBAO_DATABASE_WAIT_SECONDS. When that runs out it says what it last saw and exits 1, so
  * the pod's own restart policy, and whoever is watching it, decide what happens next. It never prints
  * DATABASE_URL, which carries the password.
  */
@@ -34,12 +34,12 @@ const JOURNAL_TABLE = "drizzle.__drizzle_migrations";
 const POLL_MS = 2_000;
 const REPEAT_MS = 30_000;
 
-const seconds = Number(process.env.OPENBOT_DATABASE_WAIT_SECONDS);
+const seconds = Number(process.env.XIONGBAO_DATABASE_WAIT_SECONDS);
 const url = process.env.DATABASE_URL;
-const hint = process.env.OPENBOT_DATABASE_WAIT_HINT ?? "";
+const hint = process.env.XIONGBAO_DATABASE_WAIT_HINT ?? "";
 if (!Number.isInteger(seconds) || seconds < 1) {
   console.error(
-    "OPENBOT_DATABASE_WAIT_SECONDS must be a whole number of seconds of at least 1.",
+    "XIONGBAO_DATABASE_WAIT_SECONDS must be a whole number of seconds of at least 1.",
   );
   process.exit(1);
 }

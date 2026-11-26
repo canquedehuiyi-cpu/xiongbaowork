@@ -11,43 +11,43 @@
   },
   {
     "pattern": "\\bopenbotUrl\\b",
-    "until": "R2",
-    "reason": "打开浏览器请求体 connection.openbotUrl 与录制扩展状态 LauncherState.openbotUrl：服务器与电脑端（旧版可能仍在跑）之间传输的字段名（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "打开浏览器请求体 connection.openbotUrl 与录制扩展状态 LauncherState.openbotUrl：服务器与电脑端（旧版可能仍在跑）之间传输的字段名（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-${kind}",
-    "until": "R2",
-    "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-bot-id",
-    "until": "R2",
-    "reason": "电脑端请求头：Bot id（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "电脑端请求头：Bot id（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-build-version",
-    "until": "R2",
-    "reason": "发行站点回给服务器的构建版本头（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "发行站点回给服务器的构建版本头（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-computer-token",
-    "until": "R2",
-    "reason": "电脑令牌头：电脑端到服务器（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "电脑令牌头：电脑端到服务器（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-dictation",
-    "until": "R2",
-    "reason": "浏览器请求标记头（server/src/browser-request-marker.ts 同时认新旧两种）（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "浏览器请求标记头（server/src/browser-request-marker.ts 同时认新旧两种）（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-egress",
-    "until": "R2",
-    "reason": "电脑端出站过滤头（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "电脑端出站过滤头（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "text": "x-openbot-person-id",
-    "until": "R2",
-    "reason": "电脑端请求头：人员 id（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "电脑端请求头：人员 id（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
@@ -650,19 +650,9 @@
     "reason": "shared/env-aliases.ts 的旧环境变量前缀"
   },
   {
-    "text": "OPENBOT_\"$1\"",
-    "until": "R4",
-    "reason": "docker/s6/scripts/env-aliases.sh 的旧前缀拼接"
-  },
-  {
     "pattern": "OPENBOT_<[A-Za-z]+>",
     "until": "R4",
     "reason": "说明旧环境变量前缀的注释写法（env-aliases）"
-  },
-  {
-    "text": "OPENBOT_$suffix",
-    "until": "R4",
-    "reason": "docker/s6/scripts/env-aliases.sh 的旧前缀拼接"
   },
   {
     "pattern": "openbot-runner(?:\\.exe)?(?!-[a-z]+-)|OPENBOT-RUNNER(?:\\.EXE)?",
@@ -1116,8 +1106,8 @@
   {
     "file": "xiongbao/server/src/browser-request-marker.ts",
     "text": "`x-openbot-*`",
-    "until": "R2",
-    "reason": "注释里写的是仍被认的旧浏览器标记头前缀（设备端/服务器线上名，任务 16 处理）"
+    "until": "R3",
+    "reason": "注释里写的是仍被认的旧浏览器标记头前缀（设备端/服务器线上名，任务 16 处理）；until 暂标 R3：本条归 Task 16（R2），在它之前合入的 R2 任务收尾检查跑 --phase R2，标 R2 会让它们误报；Task 16 改名时删除本条"
   },
   {
     "file": "xiongbao/server/src/agents/profile-types.ts",
@@ -1366,12 +1356,6 @@
     "reason": "持久卷上的已有库，R4 基线化时改"
   },
   {
-    "file": "xiongbao/charts/xiongbao/README.md",
-    "pattern": "openbot_rls_enforce",
-    "until": "R2",
-    "reason": "链接锚点指向 docs/configuration.md 里 OPENBOT_RLS_ENFORCE 标题，随 Task 15 一起改"
-  },
-  {
     "file": "xiongbao/tests/chart-database-wait.test.ts",
     "pattern": ":5432/openbot\\?",
     "until": "R4",
@@ -1538,12 +1522,6 @@
     "reason": "公开默认口令 openbot（compose 的 ROLE_WRITER_PASSWORD 默认值，已保护），断言与之同值"
   },
   {
-    "file": "xiongbao/scripts/ci/manual-blocks.test.mjs",
-    "pattern": "\\$Openbot(?:Tag|Image)",
-    "until": "R2",
-    "reason": "断言根 README.md 的 Windows 手动块原文，README 归 Task 13；Task 13 改 README 时同改本测试并删除本条目"
-  },
-  {
     "file": "xiongbao/scripts/e2e/artifact-reachability.ts",
     "pattern": "(?<=\")openbot(?=\")",
     "until": "R4",
@@ -1572,12 +1550,6 @@
     "text": "`0054`'s public `openbot`",
     "until": "R4",
     "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的句子"
-  },
-  {
-    "file": "xiongbao/docs/deployment.md",
-    "pattern": "openbot_rls_enforce",
-    "until": "R2",
-    "reason": "链接锚点指向 docs/configuration.md 里 OPENBOT_RLS_ENFORCE 标题，随 Task 15 一起改"
   },
   {
     "file": "xiongbao/docs/configuration.md",
@@ -1716,5 +1688,227 @@
     "text": "instead of against CopilotKit Intelligence.",
     "until": "R4",
     "reason": "recovery-flow-customization-turns 测试钉死了这个文件的字节数与 sha256（基线 9eb7436d8 原样），R1 不能改它的注释；R4 基线化时随钉死值一起改"
+  },
+  {
+    "pattern": "OPENBOT_(?:MODEL_(?:REFUSED|AUTH_REQUIRED|BILLING)|PROVIDER_REQUEST_REFUSED|AP_LOCAL_(?:STREAM_ERROR|TERMINAL_MISSING)|HARNESS_START_FAILED|HEADLESS_TOOL_ERROR|TOOL_LIMIT_EXCEEDED|LEARNED_SKILLS_ERROR)(?![A-Z0-9_])",
+    "until": "R3",
+    "reason": "RUN_ERROR 错误码（不是环境变量）：Python 框架、toolkit 与服务器包装层发出，原样存进 thread_run_events 并在回放时由 server/src/wire-codes.ts 改成新前缀给浏览器；服务器读取方按旧码判断。改名会让已存的运行事件对不上，随 R3 数据迁移一起改"
+  },
+  {
+    "pattern": "OPENBOT_POOL_[A-Z0-9_]*",
+    "until": "R3",
+    "reason": "平台模型密钥的环境变量名：platform_model_pool.api_key_env 存着这个名字，表上 CHECK 约束 '^OPENBOT_POOL_…'（server/src/db/schema/model.ts、recovery 0120）；env-aliases 与 rewrite-env.sh 都不改它，随 R3 数据迁移一起改"
+  },
+  {
+    "pattern": "OPENBOT_HARNESS_NAME|OPENBOT_TOOL_LIMIT(?![A-Z0-9_])",
+    "until": "R3",
+    "reason": "常量名本身写在品牌白名单条目的 text 里（shared/harnesses.ts、server/src/agents/tool-limit.ts，值 \"OpenBot\" 已落库），护栏只许白名单缩小、不许改写条目文本；随 R3 值改名时一起改"
+  },
+  {
+    "file": "xiongbao/server/tests/recovery-approval-exact-input-objects.test.ts",
+    "text": "OPENBOT_EXACT_INPUT_JSON_V2",
+    "until": "R3",
+    "reason": "把 CRYPTO_NAMES 的 OPENBOT_EXACT_INPUT_JSON_V1 改一位后断言约束拒绝它的变异值，随加密版本名一起改"
+  },
+  {
+    "pattern": "OPENBOT_(?:UPSTREAM_(?:COMMIT|REPOSITORY|UPGRADES)|UPGRADE_(?:CHECKS|APP_CLIENT_ID|APP_PRIVATE_KEY))(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "上游同步工具的变量（upstream-upgrade.yml、integrate-upstream.ts、docs/upstream-upgrades.md 归 R4）兼 GitHub 仓库变量/密钥名，R4 搬走上游同步工具时处理"
+  },
+  {
+    "pattern": "(?<=\\b(?:vars|secrets)\\.)OPENBOT_[A-Z0-9_]+",
+    "until": "R4",
+    "reason": "工作流里 vars./secrets. 引用的 GitHub 仓库变量与密钥名：改名要同时改仓库设置，代码改不了，R4 处理"
+  },
+  {
+    "file": "xiongbao/desktop-device/src-tauri/src/sidecar.rs",
+    "pattern": "OPENBOT_[A-Z0-9_]+",
+    "until": "R4",
+    "reason": "设备端开发覆盖变量与桌面引擎变量的旧名回退（新名优先、旧名其次，含其单元测试）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start.sh",
+    "pattern": "(?<=setting )OPENBOT_[A-Z0-9_]+",
+    "until": "R4",
+    "reason": "源码启动从 .env 读设置时新名优先、旧名回退（setting XIONGBAO_X \"$(setting OPENBOT_X …)\"）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/dockerfile-runtime-tree.test.ts",
+    "text": "OPENBOT_BUILD_",
+    "until": "R4",
+    "reason": "断言单容器 Dockerfile 里不再出现旧名构建参数与 ENV（证明旧名已不在），到 R4 随兼容代码一起删除"
+  },
+  {
+    "file": "xiongbao/server/tests/env-name.test.ts",
+    "pattern": "OPENBOT_(?:BROKER_PROVIDER)?",
+    "until": "R4",
+    "reason": "证明只用旧名设置时拒绝信息仍报新名、不报旧前缀；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/env-aliases.test.ts",
+    "pattern": "OPENBOT_[A-Z0-9_]*",
+    "until": "R4",
+    "reason": "环境变量新旧双认的测试：故意用旧名证明旧部署仍能配置服务器；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker/tests/env-aliases.test.sh",
+    "pattern": "OPENBOT_[A-Z0-9_]*",
+    "until": "R4",
+    "reason": "容器内新旧双认（s6 env-aliases.sh）的测试：故意用旧名，含京东云 .env.delivery 形状的夹具；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker/s6/scripts/env-aliases.sh",
+    "text": "old=OPENBOT_",
+    "until": "R4",
+    "reason": "docker/s6/scripts/env-aliases.sh 的旧前缀；legacy-compat 到 R4 删除"
+  },
+  {
+    "pattern": "(?<=:-\\$\\{)OPENBOT_[A-Z0-9_]+",
+    "until": "R4",
+    "reason": "Compose 插值的旧名回退 ${XIONGBAO_X:-${OPENBOT_X:-…}}（docker/compose.delivery.yml、docker-compose.yml 与其测试）：旧 env 文件照样生效；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/wire-codes.test.ts",
+    "text": "const OLD = \"OPENBOT_\"",
+    "until": "R3",
+    "reason": "RUN_ERROR 错误码的旧前缀（发送方仍发旧码、存进 thread_run_events，出口改新前缀），随错误码一起在 R3 改"
+  },
+  {
+    "file": "xiongbao/app/tests/web-visible-names.test.ts",
+    "text": "旧名 OPENBOT_",
+    "until": "R4",
+    "reason": "断言页面源码里不再写「旧名 OPENBOT_」，到 R4 随兼容代码一起删除"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-on-this-machine.test.ts",
+    "text": "OPENBOT_THIS_MACHINE_HOST",
+    "until": "R4",
+    "reason": "证明旧名 OPENBOT_THIS_MACHINE_HOST 仍被读取；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/tests/compose.test.ts",
+    "pattern": "OPENBOT_(?:IMAGE|PORT|EDITION|TOOL_URL|HOST_GATEWAY|MODEL_OAUTH_FILE|BUILD_VERSION|BUILD_COMMIT)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "证明 Compose 文件对旧名的插值回退仍生效（交付 compose 的镜像与端口、开发 compose 的版本/回调/网关/模型登录文件/构建标识）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start-restart-guard.test.ts",
+    "until": "R4",
+    "reason": "证明 start.sh 仍从 .env 读旧名，并认 v0.2.15 更新器设的旧名更新操作；legacy-compat 到 R4 删除",
+    "pattern": "OPENBOT_(?:ONE_COMPUTER_EACH|UPDATE_OPERATION)(?![A-Z0-9_])"
+  },
+  {
+    "file": "xiongbao/agent-langgraph-agui/src/tool_runtime.py",
+    "text": "OPENBOT_TOOL_URL",
+    "until": "R4",
+    "reason": "Python 框架不经别名步骤，回调地址新名优先、旧名其次；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-langgraph-agui/tests/test_tool_protocol.py",
+    "text": "OPENBOT_TOOL_URL",
+    "until": "R4",
+    "reason": "测试清掉旧名回调地址变量，免得宿主环境里的旧名漏进来；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-langgraph/src/index.ts",
+    "text": "OPENBOT_TOOL_URL",
+    "until": "R4",
+    "reason": "agent-langgraph 进程不经别名步骤，回调地址新名优先、旧名其次；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/charts/xiongbao/templates/validation.yaml",
+    "text": "\"OPENBOT_RLS_ENFORCE\"",
+    "until": "R4",
+    "reason": "chart 渲染检查认 values 里旧名的 RLS 设置（用户手里的 values 文件）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/ci/chart-check.sh",
+    "text": "OPENBOT_RLS_ENFORCE",
+    "until": "R4",
+    "reason": "CI 证明 chart 仍认 values 里旧名的 RLS 设置；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker/compose.delivery.yml",
+    "pattern": "OPENBOT_(?:IMAGE|PORT)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "交付 compose 的说明与旧名回退：.env.delivery 里的 OPENBOT_IMAGE/OPENBOT_PORT 照样生效；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "pattern": "OPENBOT_(?:PUBLIC_URL|IMAGE|PORT|RLS_ENFORCE)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "部署手册 6.3 节向运维说明旧名仍被认与怎样改名；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/.env.example",
+    "text": "connected as `openbot`",
+    "until": "R4",
+    "reason": "指的是数据库超级用户角色 openbot（历史迁移 0054 引用，R4 基线化前全仓不改）"
+  },
+  {
+    "file": "xiongbao/docker/delivery.env.example",
+    "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
+    "until": "R4",
+    "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/configuration.md",
+    "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
+    "until": "R4",
+    "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "pattern": "OPENBOT_(?![A-Za-z0-9_<])",
+    "until": "R4",
+    "reason": "向运维说明旧前缀 OPENBOT_ 仍被认、怎样改名的文字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start.sh",
+    "text": "OPENBOT_UPDATE_OPERATION",
+    "until": "R4",
+    "reason": "已安装的 v0.2.15 本机更新器用旧名把更新操作交给新版 start.sh；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/update.ts",
+    "text": "OPENBOT_UPDATE_OPERATION",
+    "until": "R4",
+    "reason": "已安装的 v0.2.15 本机更新器用旧名运行新版 start.sh，assert-start 新名优先、旧名其次；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/tests/update-local.test.ts",
+    "text": "OPENBOT_UPDATE_OPERATION",
+    "until": "R4",
+    "reason": "证明 v0.2.15 更新器只设旧名时 assert-start 仍放行；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docker-compose.yml",
+    "text": "OPENBOT_MODEL_OAUTH_FILE",
+    "until": "R4",
+    "reason": "Compose 不能把 :+ 嵌进 :- 回退，模型登录文件的旧名单独成键，由服务器别名层复制到空的新键（只是运行时回退）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/vite.config.ts",
+    "pattern": "OPENBOT_(?:PUBLIC_URL|APP_URL)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "说明 dev server 自己跑别名层、认旧名地址的注释；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/tests/legacy-address-settings.test.ts",
+    "pattern": "OPENBOT_(?:PUBLIC_URL|APP_URL)(?![A-Z0-9_])",
+    "until": "R4",
+    "reason": "证明 dev server 与 app/serve.ts 认旧名地址；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/start-local-chrome-computer.ts",
+    "text": "OPENBOT_LOCAL_COMPUTER_DIR",
+    "until": "R4",
+    "reason": "说明这个独立脚本自己跑别名层的注释；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/agent-computer/tests/local-chrome-startup.test.ts",
+    "text": "OPENBOT_LOCAL_COMPUTER_DIR",
+    "until": "R4",
+    "reason": "证明本机 Chrome 电脑脚本认旧名数据目录；legacy-compat 到 R4 删除"
   }
 ]

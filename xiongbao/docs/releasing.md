@@ -326,7 +326,7 @@ So it is a step a person takes, on a machine with the stack running, before merg
 
 ```sh
 bash scripts/start.sh
-export OPENBOT_SMOKE_COOKIE='better-auth.session_token=...'   # from a signed-in browser
+export XIONGBAO_SMOKE_COOKIE='better-auth.session_token=...'   # from a signed-in browser
 bun run test:smoke
 ```
 

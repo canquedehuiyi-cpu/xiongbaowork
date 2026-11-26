@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { generativeUiProviderOptions, OPENBOT_UI } from "@/lib/copilot/a2ui";
+import { generativeUiProviderOptions, XIONGBAO_UI } from "@/lib/copilot/a2ui";
 
 /**
  * A conversation with interfaces a Bot drew, as a page of its own for a2ui-frame.test.tsx to bundle
@@ -28,7 +28,7 @@ function surface(surfaceId: string, components: Component[]): Message {
     content: {
       surfaceId,
       target: "chat",
-      catalogId: OPENBOT_UI.id,
+      catalogId: XIONGBAO_UI.id,
       status: "ready",
       rejected: [],
       operations: [
@@ -36,7 +36,7 @@ function surface(surfaceId: string, components: Component[]): Message {
           version: "1.0",
           createSurface: {
             surfaceId,
-            catalogId: OPENBOT_UI.id,
+            catalogId: XIONGBAO_UI.id,
             dataModel: { transport: 100, lodging: 250, food: 80 },
           },
         },

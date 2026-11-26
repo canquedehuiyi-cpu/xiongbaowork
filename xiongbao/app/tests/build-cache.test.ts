@@ -210,8 +210,8 @@ describe("production build cache", () => {
       );
       const env = {
         ...process.env,
-        OPENBOT_BUILD_CACHE_ROOT_DIR: paths.rootDir,
-        OPENBOT_BUILD_CACHE_APP_DIR: paths.appDir,
+        XIONGBAO_BUILD_CACHE_ROOT_DIR: paths.rootDir,
+        XIONGBAO_BUILD_CACHE_APP_DIR: paths.appDir,
       };
       await writeBuildCacheManifest(paths, env);
 
@@ -263,8 +263,8 @@ describe("production build cache", () => {
       );
       const env = {
         ...process.env,
-        OPENBOT_BUILD_CACHE_ROOT_DIR: paths.rootDir,
-        OPENBOT_BUILD_CACHE_APP_DIR: paths.appDir,
+        XIONGBAO_BUILD_CACHE_ROOT_DIR: paths.rootDir,
+        XIONGBAO_BUILD_CACHE_APP_DIR: paths.appDir,
       };
       await writeBuildCacheManifest(paths, env);
       await writeFile(join(paths.appDir, "src/main.tsx"), "console.log('b')\n");

@@ -10,7 +10,7 @@
  * What it proves, each against the compiled binary:
  *   - `--data-dir X`: a new machine pairs with a UUID v4 id, runs `files.write` and `files.list`, and
  *     every file it writes is under X. The launch directory, HOME and TMPDIR stay empty.
- *   - `OPENBOT_RUNNER_DATA_DIR`: a state file written before stage 0, with a `hostname-xxxxxxxx` id,
+ *   - `XIONGBAO_RUNNER_DATA_DIR`: a state file written before stage 0, with a `hostname-xxxxxxxx` id,
  *     connects without pairing again, keeps its id, and is not rewritten.
  *   - neither: the files land in the launch directory, where every runner has kept them so far.
  *
@@ -166,7 +166,7 @@ function startRunner(
       HOME: options.home,
       TMPDIR: options.tmp,
       ...(options.dataDirEnv
-        ? { OPENBOT_RUNNER_DATA_DIR: options.dataDirEnv }
+        ? { XIONGBAO_RUNNER_DATA_DIR: options.dataDirEnv }
         : {}),
     },
     stdout: "pipe",
@@ -274,7 +274,7 @@ test("compiled with --data-dir: a new device pairs as a UUID, lists its files, a
   expect(statSync(dataDir).mode & 0o777).toBe(0o700);
 }, 60_000);
 
-test("compiled with OPENBOT_RUNNER_DATA_DIR: a state file from before stage 0 connects unchanged with its old id", async () => {
+test("compiled with XIONGBAO_RUNNER_DATA_DIR: a state file from before stage 0 connects unchanged with its old id", async () => {
   const launch = emptyDir("b-launch");
   const home = emptyDir("b-home");
   const tmp = emptyDir("b-tmp");

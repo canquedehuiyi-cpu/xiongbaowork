@@ -12,7 +12,7 @@
  *
  * Called from windows-runner-probe.ts. Then the same Notepad is read through both engines, the
  * PowerShell reader and agent-desktop, as `xiongbao-runner --desktop-compare` reads it (step 8b, plan
- * docs/plans/2026-11-12-desktop-write.md Task 28): agent-desktop is the binary `OPENBOT_DESKTOP_HELPER`
+ * docs/plans/2026-11-12-desktop-write.md Task 28): agent-desktop is the binary `XIONGBAO_DESKTOP_HELPER`
  * names, or else the pinned release, fetched and checked against the lock like a build does. With
  * `execute`, the same Notepad is then read through the runner's own `desktop.*` actions (step 9).
  */
@@ -224,12 +224,12 @@ export const ENGINE_COMPARISON_CHECK =
   "both engines read the same Notepad (--desktop-compare)";
 
 /**
- * agent-desktop for the comparison: `OPENBOT_DESKTOP_HELPER` when set, else the pinned release for
+ * agent-desktop for the comparison: `XIONGBAO_DESKTOP_HELPER` when set, else the pinned release for
  * this machine, downloaded into `<root>/agent-desktop-bin` and checked against the lock (archive and
  * every entry by SHA-256) before anything runs it.
  */
 async function comparisonHelper(root: string): Promise<string> {
-  const given = process.env.OPENBOT_DESKTOP_HELPER?.trim();
+  const given = process.env.XIONGBAO_DESKTOP_HELPER?.trim();
   if (given) return given;
   const triple =
     process.arch === "arm64"

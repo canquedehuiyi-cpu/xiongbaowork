@@ -41,9 +41,9 @@ beforeEach(async () => {
   await writeExecutable(
     join(bin, "powershell.exe"),
     `#!/bin/sh
-printf 'argv=%s|port=%s|pattern=%s|stop=%s|pids=%s\\n' "$*" "\${OPENBOT_PORT:-}" "\${OPENBOT_PATTERN:-}" "\${OPENBOT_STOP:-}" "\${OPENBOT_PIDS:-}" >> "$CALLS"
+printf 'argv=%s|port=%s|pattern=%s|stop=%s|pids=%s\\n' "$*" "\${XIONGBAO_PORT:-}" "\${XIONGBAO_PATTERN:-}" "\${XIONGBAO_STOP:-}" "\${XIONGBAO_PIDS:-}" >> "$CALLS"
 case "$*" in
-  *ProcessName*) printf 'bun (127.0.0.1:%s)\\r\\n' "$OPENBOT_PORT" ;;
+  *ProcessName*) printf 'bun (127.0.0.1:%s)\\r\\n' "$XIONGBAO_PORT" ;;
   *-Unique*|*Win32_Process*) printf '4242\\r\\n' ;;
 esac
 `,

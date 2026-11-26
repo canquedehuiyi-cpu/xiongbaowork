@@ -42,7 +42,7 @@
 - **「招进来」是灰的：** 检查 Node.js、`codex` 或 `claude` 是否装好，装完要重新打开终端和设备端。
 - **提示「这位员工的模型不支持 Codex 接入」一类：** 员工用的模型必须是 DeepSeek、OpenAI（Codex）或 Anthropic（Claude Code）这一类。员工没有单独绑定模型时用团队的默认模型，请管理员检查默认模型。
 - **下载适配器很慢或失败：** 在电脑上设置环境变量 `XIONGBAO_NPM_REGISTRY`，指向可访问的 npm 镜像，然后彻底退出设备端再重新打开。
-- **手机打不开审批页：** 手机要能访问熊宝服务器地址，请管理员确认服务器对外地址（`OPENBOT_PUBLIC_URL` 或 `BETTER_AUTH_URL`）已设置，端口已放行。
+- **手机打不开审批页：** 手机要能访问熊宝服务器地址，请管理员确认服务器对外地址（`XIONGBAO_PUBLIC_URL` 或 `BETTER_AUTH_URL`）已设置，端口已放行。
 
 ## 给管理员
 

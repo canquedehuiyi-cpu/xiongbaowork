@@ -12,7 +12,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
-import { generativeUiProviderOptions, OPENBOT_UI } from "@/lib/copilot/a2ui";
+import { generativeUiProviderOptions, XIONGBAO_UI } from "@/lib/copilot/a2ui";
 import { codeFence } from "@/lib/copilot/a2ui-markdown";
 import { settleReactWork } from "./settle-react-work";
 
@@ -94,13 +94,13 @@ function Committed({ surfaceId, drawn }: { surfaceId: string; drawn: Drawn }) {
     runtime.manager.ingest("thread-a2ui-markdown", undefined, {
       surfaceId,
       target: surfaceId,
-      catalogId: OPENBOT_UI.id,
+      catalogId: XIONGBAO_UI.id,
       status: "ready",
       rejected: [],
       operations: [
         {
           version: "1.0",
-          createSurface: { surfaceId, catalogId: OPENBOT_UI.id },
+          createSurface: { surfaceId, catalogId: XIONGBAO_UI.id },
         },
         {
           version: "1.0",
@@ -345,7 +345,7 @@ test("a streaming Markdown component closes what is still half-written, as a str
 
 test("the model is offered the standard Code and Markdown, so what Bots already write keeps drawing", () => {
   for (const name of ["Code", "Markdown"] as const)
-    expect(OPENBOT_UI.manifestComponents[name]).toEqual(
+    expect(XIONGBAO_UI.manifestComponents[name]).toEqual(
       standardUI.manifestComponents[name],
     );
 });

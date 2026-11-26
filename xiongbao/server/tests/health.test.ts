@@ -114,7 +114,7 @@ describe("runtime capabilities", () => {
       generativeUi: true,
       // AUT3: off unless the WakerFlow automation target was registered (index.ts does).
       wakerflowAutomations: false,
-      // Default-off: the banner is opt-in (OPENBOT_SELF_HOST_BANNER=true) and needs a tenant support URL.
+      // Default-off: the banner is opt-in (XIONGBAO_SELF_HOST_BANNER=true) and needs a tenant support URL.
       selfHostBanner: false,
       // Off: this deployment has an identity provider, so it is not somebody's local trial.
       localEvaluation: false,
@@ -180,7 +180,7 @@ describe("runtime capabilities", () => {
    */
   test("reports generated interfaces as off when the deployment opts out", async () => {
     const disabled = createApp(
-      loadConfig(testEnvironment({ OPENBOT_GENERATIVE_UI: "false" })),
+      loadConfig(testEnvironment({ XIONGBAO_GENERATIVE_UI: "false" })),
     );
 
     const response = await disabled.request(
@@ -194,7 +194,7 @@ describe("runtime capabilities", () => {
   // The banner is opt-in, and the browser has to hear that an operator turned it on.
   test("reports the self-host banner as on when the deployment opts in", async () => {
     const enabled = createApp(
-      loadConfig(testEnvironment({ OPENBOT_SELF_HOST_BANNER: "true" })),
+      loadConfig(testEnvironment({ XIONGBAO_SELF_HOST_BANNER: "true" })),
     );
 
     const response = await enabled.request(
@@ -247,8 +247,8 @@ describe("runtime capabilities", () => {
           BETTER_AUTH_SECRET: undefined,
           BETTER_AUTH_URL: undefined,
           INITIAL_ADMIN_EMAILS: undefined,
-          OPENBOT_EDITION: "personal",
-          OPENBOT_SINGLE_USER: "true",
+          XIONGBAO_EDITION: "personal",
+          XIONGBAO_SINGLE_USER: "true",
           AGENT_COMPUTER_URL: "http://127.0.0.1:7000",
         }),
       ),
@@ -269,7 +269,7 @@ describe("authentication availability", () => {
     const single = createApp(
       loadConfig(
         testEnvironment({
-          OPENBOT_SINGLE_USER: "true",
+          XIONGBAO_SINGLE_USER: "true",
           BETTER_AUTH_URL: undefined,
           BETTER_AUTH_SECRET: undefined,
           GOOGLE_OAUTH_CLIENT_ID: undefined,

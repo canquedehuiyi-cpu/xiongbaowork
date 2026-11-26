@@ -19,7 +19,7 @@ describe("starting the local computer", () => {
     const config = localChromeConfiguration(
       {
         COMPUTER_TOKEN: "test-token",
-        OPENBOT_LOCAL_COMPUTER_DIR: "/tmp/xiongbao-local-test",
+        XIONGBAO_LOCAL_COMPUTER_DIR: "/tmp/xiongbao-local-test",
         PROFILES_DIR:
           "/Users/operator/Library/Application Support/Google/Chrome",
         WORKSPACE_DIR: "/Users/operator",
@@ -64,7 +64,7 @@ describe("starting the local computer", () => {
     expect(() =>
       localChromeConfiguration({
         ...env,
-        OPENBOT_LOCAL_COMPUTER_DIR: "profiles",
+        XIONGBAO_LOCAL_COMPUTER_DIR: "profiles",
       }),
     ).toThrow("absolute");
     expect(() => localChromeConfiguration({ ...env, PORT: "0" })).toThrow(
@@ -99,6 +99,33 @@ describe("starting the local computer", () => {
     expect(code).toBe(1);
     expect(stdout).toBe("");
     expect(stderr).toContain("COMPUTER_TOKEN is required");
+  });
+
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the data directory's setting before the rename
+  test("a data directory named under the old setting is still the one it checks", async () => {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "--no-env-file",
+        join(import.meta.dir, "../../scripts/start-local-chrome-computer.ts"),
+      ],
+      {
+        env: {
+          COMPUTER_TOKEN: "test-token",
+          OPENBOT_LOCAL_COMPUTER_DIR: "relative",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [code, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stderr).text(),
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain(
+      "XIONGBAO_LOCAL_COMPUTER_DIR must be an absolute path",
+    );
   });
 
   test("missing Chrome and Edge fails clearly without launching a bundled browser", async () => {

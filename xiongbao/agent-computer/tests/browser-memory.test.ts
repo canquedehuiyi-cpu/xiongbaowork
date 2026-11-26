@@ -17,9 +17,9 @@ import type { MemoryReading } from "../src/container-memory";
  * Asked for by name, like the other tests that launch a real Chromium:
  *
  *   cd agent-computer && bunx playwright install chromium
- *   OPENBOT_COMPUTER_BROWSER=1 COMPUTER_BROWSER_MODE=headless bun test tests/browser-memory.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 COMPUTER_BROWSER_MODE=headless bun test tests/browser-memory.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const LAUNCH_TIMEOUT_MS = 120_000;
 
 const html = (title: string) =>

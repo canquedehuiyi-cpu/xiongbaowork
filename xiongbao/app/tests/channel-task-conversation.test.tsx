@@ -6,7 +6,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { OPENBOT_WAITING_METADATA } from "@xiongbao/shared/waiting";
+import { XIONGBAO_WAITING_METADATA } from "@xiongbao/shared/waiting";
 import { z } from "zod";
 import { ChannelChat } from "@/components/channels/channel-chat";
 import { type AgentChannel, channelKeys } from "@/lib/channels/queries";
@@ -234,7 +234,7 @@ test("after the person decides a card, their next message is sent though the rep
     reason: "human_input",
     message: "This action is waiting for your approval.",
     metadata: {
-      [OPENBOT_WAITING_METADATA]: {
+      [XIONGBAO_WAITING_METADATA]: {
         kind: "approval",
         approvalId: "approval-1",
         requestId: "approval-1",

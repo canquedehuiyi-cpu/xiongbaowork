@@ -23,7 +23,7 @@ import { join } from "node:path";
  *   moving: the person watched the past. Paced by the frames the viewer confirms, a second or two.
  */
 
-const asked = process.env.OPENBOT_LIVE_SCREEN === "1";
+const asked = process.env.XIONGBAO_LIVE_SCREEN === "1";
 const TOKEN = "test-computer-token";
 
 async function freePort(): Promise<number> {

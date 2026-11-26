@@ -118,7 +118,7 @@ public static class XiongBaoCredentialLock {
 $deadline=[DateTime]::UtcNow.AddSeconds(5)
 $file=$null
 while ($null -eq $file) {
-  try { $file=[XiongBaoCredentialLock]::Open($env:OPENBOT_CREDENTIAL_LOCK) }
+  try { $file=[XiongBaoCredentialLock]::Open($env:XIONGBAO_CREDENTIAL_LOCK) }
   catch {
     $cause=$_.Exception.GetBaseException()
     if ($cause -isnot [System.ComponentModel.Win32Exception] -or $cause.NativeErrorCode -ne 32 -or [DateTime]::UtcNow -ge $deadline) { exit 1 }
@@ -132,7 +132,7 @@ finally { $file.Dispose() }
 async function windowsLock(path: string): Promise<() => Promise<void>> {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    OPENBOT_CREDENTIAL_LOCK: path,
+    XIONGBAO_CREDENTIAL_LOCK: path,
   };
   delete env.PSModulePath;
   const child = Bun.spawn(

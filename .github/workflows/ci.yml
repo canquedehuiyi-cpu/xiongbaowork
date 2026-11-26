@@ -257,7 +257,7 @@ jobs:
 
   # WP-3.2 状态行实时耗时的截图取证（设计规格 §8.3）：真 Chromium 里画真转录，暗色＋2 倍像素，
   # 五个画面各存一张图，上传成 artifact 供负责人核对界面后才合并。新增的证据 job，不动任何既有门；
-  # 测试本体由 skipIf 门控，app 分片不为它付时间，只有这个 job 带着 OPENBOT_APP_BROWSER 要浏览器。
+  # 测试本体由 skipIf 门控，app 分片不为它付时间，只有这个 job 带着 XIONGBAO_APP_BROWSER 要浏览器。
   app-status-shots:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -278,8 +278,8 @@ jobs:
         run: bunx playwright-core install --with-deps --no-shell chromium
       - name: Status-line scenes, dark at 2x
         env:
-          OPENBOT_APP_BROWSER: '1'
-          OPENBOT_APP_SHOTS: ${{ runner.temp }}/wp32-shots
+          XIONGBAO_APP_BROWSER: '1'
+          XIONGBAO_APP_SHOTS: ${{ runner.temp }}/wp32-shots
         run: bun test app/tests/wp32-status-shots.test.tsx
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -642,7 +642,7 @@ jobs:
           bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
           bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
           exit "$rc"
-      # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
+      # The s6 oneshot that copies old-prefix settings onto their XIONGBAO_* names runs on the host: it only reads and writes files.
       - name: env-aliases oneshot
         run: sh docker/tests/env-aliases.test.sh
       # The per-employee root helper creates users, so it is tested as root inside the image.
@@ -777,7 +777,7 @@ jobs:
   # tree. Helm is pinned as in the chart job, so the chart suites run rather than skip; the hosted
   # runner's Docker serves the real-tool update suite; chart-database-wait creates and drops scratch
   # databases on this job's own PostgreSQL, so it is given the owner. Left to the guards they already
-  # have: the kind-cluster suites (OPENBOT_KIND_KUBECONFIG) and the smoke journey (OPENBOT_SMOKE),
+  # have: the kind-cluster suites (XIONGBAO_KIND_KUBECONFIG) and the smoke journey (XIONGBAO_SMOKE),
   # which need a running cluster or a deployed instance.
   repo-tests:
     name: repository tests (xiongbao/tests)
@@ -901,7 +901,7 @@ jobs:
       - name: Browser tests
         working-directory: xiongbao/agent-computer
         env:
-          OPENBOT_COMPUTER_BROWSER: '1'
+          XIONGBAO_COMPUTER_BROWSER: '1'
           COMPUTER_BROWSER_MODE: headless
         run: >-
           bun test tests/neutral-page-marks.test.ts tests/sign-in.test.ts
@@ -920,7 +920,7 @@ jobs:
             exit 1
           fi
           if grep -Eq '^[[:space:]]*[1-9][0-9]* skip[[:space:]]*$' <<<"$text"; then
-            echo "::error::browser tests were skipped: OPENBOT_COMPUTER_BROWSER did not reach them"
+            echo "::error::browser tests were skipped: XIONGBAO_COMPUTER_BROWSER did not reach them"
             exit 1
           fi
       - name: Print browser test diagnostics (credentials masked)
@@ -1129,7 +1129,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          OPENBOT_DESKTOP_ENGINE: agent-desktop
+          XIONGBAO_DESKTOP_ENGINE: agent-desktop
         run: |
           [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
           $dir = Join-Path $env:RUNNER_TEMP 'desktop-probe'

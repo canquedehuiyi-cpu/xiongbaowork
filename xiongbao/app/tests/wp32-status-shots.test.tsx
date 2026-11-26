@@ -12,14 +12,14 @@ import { compile } from "tailwindcss";
  * Tailwind 按页面上真实出现的类编译应用自己的 styles.css。深色不是手挂 class：页面加载前把
  * `xiongbao-theme` 置成 dark，fixture 里的 ThemeProvider 走产品逻辑上深色。
  *
- *   OPENBOT_APP_BROWSER=1 OPENBOT_APP_SHOTS=<dir> bun test app/tests/wp32-status-shots.test.tsx
+ *   XIONGBAO_APP_BROWSER=1 XIONGBAO_APP_SHOTS=<dir> bun test app/tests/wp32-status-shots.test.tsx
  *
- * 平时（分片跑、没有 OPENBOT_APP_BROWSER）整组跳过，不占分片时间；CI 的 app-status-shots job
+ * 平时（分片跑、没有 XIONGBAO_APP_BROWSER）整组跳过，不占分片时间；CI 的 app-status-shots job
  * 带着两个环境变量跑它并把图上传成 artifact。
  */
-const asked = process.env.OPENBOT_APP_BROWSER === "1";
+const asked = process.env.XIONGBAO_APP_BROWSER === "1";
 const shots =
-  process.env.OPENBOT_APP_SHOTS ?? join(import.meta.dir, ".wp32-shots");
+  process.env.XIONGBAO_APP_SHOTS ?? join(import.meta.dir, ".wp32-shots");
 
 const APP = join(import.meta.dir, "..");
 const ORIGIN = "http://xiongbao.test";

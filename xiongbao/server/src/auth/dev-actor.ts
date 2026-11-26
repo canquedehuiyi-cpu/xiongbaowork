@@ -150,9 +150,9 @@ export function singleUserEnabled(
   // inferred from anything: every signal that could stand in for "this is only my laptop" is absent
   // by default on a server too, which is what made the previous NODE_ENV check useless.
   const asked =
-    environment.OPENBOT_SINGLE_USER?.trim() === "true" ||
+    environment.XIONGBAO_SINGLE_USER?.trim() === "true" ||
     // The name this had before. Still honoured so an existing .env keeps working.
-    environment.OPENBOT_DEV_NO_AUTH?.trim() === "true";
+    environment.XIONGBAO_DEV_NO_AUTH?.trim() === "true";
   if (asked) return true;
 
   throw new Error(

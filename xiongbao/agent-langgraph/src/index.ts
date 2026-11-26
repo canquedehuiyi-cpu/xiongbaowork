@@ -237,7 +237,10 @@ function buildModel() {
 const TOOL_URL =
   // Numeric, never `localhost`: it resolves to `::1` under Node and `127.0.0.1` under bun, so a
   // name here reaches a different interface depending on what started the process.
-  process.env.OPENBOT_TOOL_URL ?? "http://127.0.0.1:3001/api/agent-tools/call";
+  process.env.XIONGBAO_TOOL_URL ??
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the name before the rename
+  process.env.OPENBOT_TOOL_URL ??
+  "http://127.0.0.1:3001/api/agent-tools/call";
 const TOOL_TOKEN = process.env.AGENT_TOOL_TOKEN ?? "";
 
 async function callTool(

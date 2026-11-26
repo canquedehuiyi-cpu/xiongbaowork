@@ -492,7 +492,7 @@ export function createApp(
     memory?: { store: MemoryStore; ingestion: MemoryIngestion };
     proactive?: { store: ProactiveStore; engine: ProactiveEngine };
     /**
-     * 本地学习（L1）的本人路由。`engine` 不在时（`OPENBOT_LOCAL_LEARNING=off`）路由照样回答设置页，
+     * 本地学习（L1）的本人路由。`engine` 不在时（`XIONGBAO_LOCAL_LEARNING=off`）路由照样回答设置页，
      * 说明这个部署没有开启。
      */
     /** Who may download a workspace file the conversation or a card announced (computer/artifact-access.ts). */
@@ -616,7 +616,7 @@ export function createApp(
    * work it cannot price, which is the same degraded direction every other optional here takes.
    */
   quota?: QuotaService,
-  /** Whether to offer help self-hosting. Absent falls back to the operator's switch (`OPENBOT_SELF_HOST_BANNER`). */
+  /** Whether to offer help self-hosting. Absent falls back to the operator's switch (`XIONGBAO_SELF_HOST_BANNER`). */
   selfHostBanner?: SelfHostBanner,
   /** A person's own linked accounts. Absent answers 503 on /api/identity. */
   identity?: IdentityStore,

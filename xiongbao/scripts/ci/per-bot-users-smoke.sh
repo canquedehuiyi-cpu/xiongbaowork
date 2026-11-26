@@ -65,7 +65,7 @@ docker run -d --name "$name" -p "127.0.0.1:$port:3001" \
   -v "$volume:/var/lib/postgresql" \
   -e EMBEDDED_POSTGRES=on -e DO_NOT_TRACK=1 \
   -e TENANT_PACKAGE_DIR=../examples/xiongbao \
-  -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL="http://localhost:$port" \
+  -e XIONGBAO_SINGLE_USER=true -e XIONGBAO_PUBLIC_URL="http://localhost:$port" \
   -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
 
 healthy=false
@@ -196,8 +196,8 @@ if [ "$healthy" = true ]; then
   T_TERM=$(mktemp)
   docker exec "$name" sh -c '
     token=$(cat /run/s6/container_environment/COMPUTER_TOKEN)
-    cd /tmp && OPENBOT_SMOKE_TOKEN=$token timeout 20 bun -e "
-      const ws = new WebSocket(\"ws://127.0.0.1:4100/terminal?bot=$1&token=\" + process.env.OPENBOT_SMOKE_TOKEN);
+    cd /tmp && XIONGBAO_SMOKE_TOKEN=$token timeout 20 bun -e "
+      const ws = new WebSocket(\"ws://127.0.0.1:4100/terminal?bot=$1&token=\" + process.env.XIONGBAO_SMOKE_TOKEN);
       const said = [];
       ws.addEventListener(\"message\", (e) => { if (typeof e.data === \"string\") said.push(e.data); });
       ws.addEventListener(\"error\", () => { console.log(\"socket error\"); process.exit(1); });

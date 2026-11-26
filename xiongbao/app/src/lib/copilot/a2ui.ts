@@ -44,7 +44,7 @@ export const OMITTED_STANDARD_COMPONENTS = [
  * `Breakdown` is XiongBao's own: amounts that add up to a total, each editable and in its own colour,
  * with a bar of how the total splits; see a2ui-breakdown.tsx.
  */
-export const OPENBOT_UI = createGenerativeUI({
+export const XIONGBAO_UI = createGenerativeUI({
   id: "openbot/ui@1",
   extends: [standardUI.omit([...OMITTED_STANDARD_COMPONENTS])],
   overrides: {
@@ -72,7 +72,7 @@ const radius = (scale: number) => `calc(var(--radius) * ${scale})`;
  * The font is spelled out rather than `var(--font-sans)`: that one lives in `@theme inline`, which
  * Tailwind inlines into utilities instead of emitting as a variable.
  */
-export const OPENBOT_UI_THEME: GenerativeUITheme = {
+export const XIONGBAO_UI_THEME: GenerativeUITheme = {
   "--a2ui-font-family":
     '"Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif',
   "--a2ui-color-text-default": "var(--foreground)",
@@ -121,8 +121,8 @@ export const OPENBOT_UI_THEME: GenerativeUITheme = {
 };
 
 const GENERATIVE_UI = {
-  ui: OPENBOT_UI,
-  theme: OPENBOT_UI_THEME,
+  ui: XIONGBAO_UI,
+  theme: XIONGBAO_UI_THEME,
 } satisfies NonNullable<CopilotKitProviderProps["generativeUI"]>;
 
 /**

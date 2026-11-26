@@ -11,7 +11,7 @@ metadata:
   labels:
 {{ include "xiongbao.labels" . | indent 4 }}
 data:
-  OPENBOT_DEPLOYMENT: kubernetes
+  XIONGBAO_DEPLOYMENT: kubernetes
   {{- if .Values.config.publicUrl }}
   TRUSTED_ORIGINS: {{ .Values.config.publicUrl | quote }}
   {{- end }}

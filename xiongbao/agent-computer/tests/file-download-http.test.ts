@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { reservePort } from "../../tests/support/reserved-port";
 import { DEFAULT_WORKSPACE_LIMITS } from "../src/workspace";
 
-const asked = process.env.OPENBOT_FILE_DOWNLOAD_HTTP === "1";
+const asked = process.env.XIONGBAO_FILE_DOWNLOAD_HTTP === "1";
 const TOKEN = "file-download-http-test-token";
 const BOT = "file-download-http";
 

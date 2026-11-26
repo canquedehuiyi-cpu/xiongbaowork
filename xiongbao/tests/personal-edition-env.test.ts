@@ -43,10 +43,10 @@ async function fresh(): Promise<string> {
 }
 
 const PERSONAL = {
-  OPENBOT_EDITION: "personal",
-  OPENBOT_SINGLE_USER: "true",
+  XIONGBAO_EDITION: "personal",
+  XIONGBAO_SINGLE_USER: "true",
   TENANT_PACKAGE_DIR: "../examples/personal",
-  OPENBOT_ONE_COMPUTER_EACH: "false",
+  XIONGBAO_ONE_COMPUTER_EACH: "false",
   COMPUTER_SUPERVISOR_URL: "",
   AGENT_COMPUTER_URL: "http://localhost:4100",
   AUDIT_RETENTION_DAYS: "90",
@@ -69,7 +69,7 @@ test("starts from .env.example when there is no .env yet", async () => {
   const envFile = await fresh();
   await run(envFile);
   const lines = values(await readFile(envFile, "utf8"));
-  expect(lines.get("OPENBOT_EDITION")).toEqual(["personal"]);
+  expect(lines.get("XIONGBAO_EDITION")).toEqual(["personal"]);
   // Everything else .env.example carries is still there to fill in.
   expect(lines.has("OPENAI_API_KEY")).toBe(true);
 });

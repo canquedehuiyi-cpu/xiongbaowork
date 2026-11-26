@@ -21,9 +21,9 @@ import { OnboardingWizard } from "../src/components/onboarding/onboarding-wizard
  * the real wizard with the real name step, and the stylesheet is Tailwind's build of exactly the
  * classes it wears, over the app's own theme.
  *
- *   OPENBOT_APP_BROWSER=1 bun test app/tests/onboarding-orb-room.test.tsx
+ *   XIONGBAO_APP_BROWSER=1 bun test app/tests/onboarding-orb-room.test.tsx
  */
-const asked = process.env.OPENBOT_APP_BROWSER === "1";
+const asked = process.env.XIONGBAO_APP_BROWSER === "1";
 
 function NameStepOnScreen({ finished }: { finished: boolean }) {
   const name = useNameStep({ finish: async () => {}, finished });

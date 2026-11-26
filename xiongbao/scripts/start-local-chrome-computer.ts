@@ -4,6 +4,10 @@ import { homedir } from "node:os";
 import { join, posix, win32 } from "node:path";
 import { browserRuntimeFromEnv } from "../agent-computer/src/browser-runtime";
 import {
+  applyEnvironmentAliases,
+  reportEnvironmentAliases,
+} from "../shared/env-aliases";
+import {
   type InstalledBrowser,
   installedBrowser,
   NO_INSTALLED_BROWSER,
@@ -44,10 +48,10 @@ export function localChromeConfiguration(
             "openbot",
           );
   const root =
-    env.OPENBOT_LOCAL_COMPUTER_DIR?.trim() ||
+    env.XIONGBAO_LOCAL_COMPUTER_DIR?.trim() ||
     path.join(dataHome, "local-computer");
   if (!path.isAbsolute(root))
-    throw new Error("OPENBOT_LOCAL_COMPUTER_DIR must be an absolute path.");
+    throw new Error("XIONGBAO_LOCAL_COMPUTER_DIR must be an absolute path.");
   const port = env.PORT?.trim() || "4101";
   if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
     throw new Error("PORT must be a whole number between 1 and 65535.");
@@ -100,7 +104,12 @@ export async function requireAvailablePort(port: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const config = localChromeConfiguration(process.env);
+  // A standalone process: it runs the alias step itself, so a data directory still named under the
+  // old prefix (OPENBOT_LOCAL_COMPUTER_DIR) is found where it was.
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+  const environment = { ...process.env };
+  reportEnvironmentAliases(applyEnvironmentAliases(environment));
+  const config = localChromeConfiguration(environment);
   await requireInstalledBrowser(config.env);
   await requireAvailablePort(config.port);
   await mkdir(config.root, { recursive: true, mode: 0o700 });

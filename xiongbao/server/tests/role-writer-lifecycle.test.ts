@@ -489,7 +489,7 @@ describe("dedicated writer configuration (synthetic environment only)", () => {
   const environment = {
     DATABASE_URL: "postgres://unit-application@127.0.0.1/unit",
     KEY_ENCRYPTION_KEY: "b3BlbmJvdC1wcm9kdWN0aW9uLXRlc3Qta2V5LTMyMzI=",
-    OPENBOT_SINGLE_USER: "true",
+    XIONGBAO_SINGLE_USER: "true",
   };
   test("reads only the dedicated setting and trims it", () => {
     expect(

@@ -725,7 +725,7 @@ describe.skipIf(lanAddress === undefined)("where the app listens", () => {
 
   test("on every interface when the deployment names an address on its network", async () => {
     const proxy = await startProxy(await reservePort(), {
-      OPENBOT_APP_URL: `http://${lanAddress}:3010`,
+      XIONGBAO_APP_URL: `http://${lanAddress}:3010`,
     });
     try {
       expect(await accepts(lanAddress as string, proxy.port)).toBe(true);

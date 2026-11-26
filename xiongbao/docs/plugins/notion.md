@@ -23,7 +23,7 @@ There is deliberately no endpoint for an administrator to connect an account on 
 At `/admin/plugins/notion`, turn on **Enable for this deployment**. There is no client to register
 and no secret to paste: this deployment introduces itself to Notion on first connect, over RFC 7591
 dynamic client registration. The prerequisite is a public URL the redirect URI can be derived from —
-`OPENBOT_PUBLIC_URL` if it is set, or the auth base URL it falls back to otherwise — nothing needs to
+`XIONGBAO_PUBLIC_URL` if it is set, or the auth base URL it falls back to otherwise — nothing needs to
 be registered at Notion ahead of time.
 
 ### 2. Connect your own account
@@ -74,6 +74,6 @@ expires.
 ## See also
 
 - [Architecture](../architecture.md) — where plugins, grants, policy and audit sit.
-- [Configuration](../configuration.md) — `OPENBOT_PUBLIC_URL`, `OPENBOT_APP_URL`, `KEY_ENCRYPTION_KEY`.
+- [Configuration](../configuration.md) — `XIONGBAO_PUBLIC_URL`, `XIONGBAO_APP_URL`, `KEY_ENCRYPTION_KEY`.
 - [Notion's own guide](https://developers.notion.com/guides/mcp/build-mcp-client) to building an MCP
   client against its hosted server.

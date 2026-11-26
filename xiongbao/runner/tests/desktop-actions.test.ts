@@ -790,7 +790,7 @@ describe("desktop engines (agent-desktop on macOS and Linux)", () => {
     noUnknown(outcome);
   });
 
-  test("win32 stays on the PowerShell reader unless OPENBOT_DESKTOP_ENGINE is agent-desktop", () => {
+  test("win32 stays on the PowerShell reader unless XIONGBAO_DESKTOP_ENGINE is agent-desktop", () => {
     expect(desktopEngineFor("win32", undefined)).toBe("legacy");
     expect(desktopEngineFor("win32", "legacy")).toBe("legacy");
     expect(desktopEngineFor("win32", "agent-desktop")).toBe("agent-desktop");

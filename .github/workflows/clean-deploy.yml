@@ -140,7 +140,7 @@ jobs:
               echo "::error::container-images.json images.xiongbao is '$expected', expected $own@sha256:<digest>"
               exit 1
             fi
-            # The README's command takes the image from OPENBOT_IMAGE; the customer run sets it to this.
+            # The README's command takes the image from XIONGBAO_IMAGE; the customer run sets it to this.
             echo "CUSTOMER_IMAGE=$own:$TAG" >> "$GITHUB_ENV"
           else
             expected="$(jq -r .images.openbot.reference "$EVIDENCE/container-images.json")"
@@ -258,16 +258,16 @@ jobs:
       - id: customer
         name: Run it as a customer (empty directory, no registry login)
         env:
-          OPENBOT_TAG: ${{ inputs.tag }}
+          XIONGBAO_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           # An empty Docker config: no stored registry credential can make a private image pullable.
           mkdir -p "$RUNNER_TEMP/docker-config"
           printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
           cd "$CUSTOMER"
-          # Our registry, when configured: the README command runs the image OPENBOT_IMAGE names.
+          # Our registry, when configured: the README command runs the image XIONGBAO_IMAGE names.
           image=()
-          if [ -n "${CUSTOMER_IMAGE:-}" ]; then image=("OPENBOT_IMAGE=$CUSTOMER_IMAGE"); fi
+          if [ -n "${CUSTOMER_IMAGE:-}" ]; then image=("XIONGBAO_IMAGE=$CUSTOMER_IMAGE"); fi
           start=$SECONDS
           env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" "${image[@]}" \
             bash -euo pipefail "$EVIDENCE/g7-linux.sh"

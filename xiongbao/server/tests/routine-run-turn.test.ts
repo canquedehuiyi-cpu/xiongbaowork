@@ -7,7 +7,7 @@ import {
 } from "@xiongbao/shared/approval-outcomes";
 import {
   HeadlessToolSuspension,
-  OPENBOT_WAITING_METADATA,
+  XIONGBAO_WAITING_METADATA,
 } from "@xiongbao/toolkit/headless-tools";
 import type { TurnAdmission } from "@xiongbao/toolkit/ports";
 import {
@@ -1136,7 +1136,7 @@ describe("a turn waiting on a person", () => {
     const { run, calls } = harness({
       drive: ({ agent, observer }) => {
         agent.pendingInterrupts = [
-          interruptCarrying({ [OPENBOT_WAITING_METADATA]: WAITING }),
+          interruptCarrying({ [XIONGBAO_WAITING_METADATA]: WAITING }),
         ];
         observer.complete();
       },
@@ -1154,7 +1154,7 @@ describe("a turn waiting on a person", () => {
       drive: ({ agent, observer }) => {
         agent.pendingInterrupts = [
           interruptCarrying({
-            [OPENBOT_WAITING_METADATA]: { kind: "question" },
+            [XIONGBAO_WAITING_METADATA]: { kind: "question" },
           }),
         ];
         observer.complete();
@@ -1168,7 +1168,7 @@ describe("a turn waiting on a person", () => {
     const { run } = harness({
       drive: (context) => {
         context.agent.pendingInterrupts = [
-          interruptCarrying({ [OPENBOT_WAITING_METADATA]: WAITING }),
+          interruptCarrying({ [XIONGBAO_WAITING_METADATA]: WAITING }),
         ];
         answers(context);
       },
@@ -1182,7 +1182,7 @@ describe("a turn waiting on a person", () => {
       drive: ({ agent, observer }) => {
         agent.pendingInterrupts = [
           interruptCarrying({
-            [OPENBOT_WAITING_METADATA]: { requestId: "request_1" },
+            [XIONGBAO_WAITING_METADATA]: { requestId: "request_1" },
           }),
         ];
         observer.complete();
@@ -1203,7 +1203,7 @@ describe("a turn waiting on a person", () => {
           // biome-ignore lint/suspicious/noExplicitAny: the harness observer types only RUN_ERROR.
         } as any);
         agent.pendingInterrupts = [
-          interruptCarrying({ [OPENBOT_WAITING_METADATA]: WAITING }),
+          interruptCarrying({ [XIONGBAO_WAITING_METADATA]: WAITING }),
         ];
         observer.complete();
       },

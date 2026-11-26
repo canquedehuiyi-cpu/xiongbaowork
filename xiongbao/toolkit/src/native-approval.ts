@@ -11,11 +11,11 @@ import { Observable, type Subscription } from "rxjs";
 import { withApprovalContext } from "./continuation";
 import {
   HeadlessToolSuspension,
-  OPENBOT_WAITING_METADATA,
+  XIONGBAO_WAITING_METADATA,
 } from "./headless-tools";
 import type { AuditInitiator } from "./initiator";
 
-export { OPENBOT_WAITING_METADATA };
+export { XIONGBAO_WAITING_METADATA };
 
 type NativeRun = {
   input: RunAgentInput;
@@ -207,7 +207,7 @@ class NativeApprovalMiddleware extends Middleware {
                   // Also on the interrupt: a run relayed through Intelligence arrives without the
                   // CUSTOM event above, and the interrupt is what a headless turn still sees.
                   metadata: {
-                    [OPENBOT_WAITING_METADATA]: {
+                    [XIONGBAO_WAITING_METADATA]: {
                       ...error.waiting,
                       message: error.message,
                     },

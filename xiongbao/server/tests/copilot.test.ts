@@ -1733,7 +1733,7 @@ describe("when a Bot answers with a component", () => {
  * kept as `agent-claude-sdk/tests/fixtures/server-instructions.json`; the harness's own test
  * (`test_xiongbao_instructions.py`) runs that file through the adapter and checks Claude Code starts
  * with these sections. The two halves meet in the file, so the fixture is compared here byte for
- * byte, and a change to the prompt rewrites it with `OPENBOT_WRITE_FIXTURES=1`.
+ * byte, and a change to the prompt rewrites it with `XIONGBAO_WRITE_FIXTURES=1`.
  */
 describe("a Claude Agent SDK Bot on a routine", () => {
   const FIXTURE = join(
@@ -1810,7 +1810,7 @@ describe("a Claude Agent SDK Bot on a routine", () => {
       expect(sectionOf(role, "run_mode")).toBe(runModeGuidance("routine"));
 
       const fixture = `${JSON.stringify({ messages: instructions }, null, 2)}\n`;
-      if (process.env.OPENBOT_WRITE_FIXTURES === "1")
+      if (process.env.XIONGBAO_WRITE_FIXTURES === "1")
         await Bun.write(FIXTURE, fixture);
       expect(await Bun.file(FIXTURE).text()).toBe(fixture);
     } finally {

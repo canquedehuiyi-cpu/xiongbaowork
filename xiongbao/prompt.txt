@@ -27,7 +27,7 @@ One port. The app is on 3001 as well, so open http://localhost:3001, not 3010. `
 recent release; a version tag such as `:v0.0.15` pins one.
 
 The env file still needs a model credential, a real KEY_ENCRYPTION_KEY, and
-either an identity provider or OPENBOT_SINGLE_USER=true. Start from `.env.example` in this
+either an identity provider or XIONGBAO_SINGLE_USER=true. Start from `.env.example` in this
 repository, or write the handful by hand. `EMBEDDED_POSTGRES=on` runs PostgreSQL inside the
 container, creates the database and the `vector` extension the first time, and applies migrations on
 every start. With your own DATABASE_URL, leave EMBEDDED_POSTGRES off and enable the `vector`
@@ -96,8 +96,8 @@ WHAT YOU MUST NOT DO FOR THEM
 FAILURES YOU WILL ACTUALLY SEE
 The server refuses to start rather than running half-configured. The message names the variable.
 
-- "No identity provider is configured. Set GOOGLE_OAUTH_* ... or set OPENBOT_SINGLE_USER=true"
-  `.env.example` already sets OPENBOT_SINGLE_USER=true. On a laptop, put it back. On a shared URL,
+- "No identity provider is configured. Set GOOGLE_OAUTH_* ... or set XIONGBAO_SINGLE_USER=true"
+  `.env.example` already sets XIONGBAO_SINGLE_USER=true. On a laptop, put it back. On a shared URL,
   configure real sign-in instead.
 
 - "KEY_ENCRYPTION_KEY must be a base64-encoded 32-byte key"

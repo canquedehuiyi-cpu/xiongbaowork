@@ -623,7 +623,7 @@ export function createAgentRoutes(
    */
   isolation?: { available: boolean },
   /**
-   * The name this server's container reaches the person's machine by (`OPENBOT_THIS_MACHINE_HOST`),
+   * The name this server's container reaches the person's machine by (`XIONGBAO_THIS_MACHINE_HOST`),
    * so a connection test dials an agent on their loopback where a run will. See onThisMachine.
    */
   dial?: { thisMachineHost?: string },

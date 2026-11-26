@@ -1,41 +1,5 @@
 [
   {
-    "word": "$OPENBOT_IMAGE",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "$OPENBOT_TAG",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "$OpenbotImage",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "$OpenbotTag",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "$env:OPENBOT_IMAGE",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "$env:OPENBOT_TAG",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
     "word": ".images.openbot.reference",
     "category": "operator-visible",
     "plan": "rewrite",
@@ -66,19 +30,7 @@
     "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
   },
   {
-    "word": "OPENBOT_IMAGE:-ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OPENBOT_TAG",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
     "word": "OPENBOT_IMAGE:-xiongbao-digital-employee:local",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "OPENBOT_ORGANIZATION_AUTHORITY",
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
@@ -108,30 +60,6 @@
     "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
   },
   {
-    "word": "OPENBOT_SELF_HOST_BANNER",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "OPENBOT_SINGLE_USER",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "OPENBOT_TAG",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "OPENBOT_TAG:-v<version>",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
     "word": "QoderWake",
     "category": "operator-visible",
     "plan": "rewrite",
@@ -142,24 +70,6 @@
     "category": "persisted-data",
     "plan": "keep",
     "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "ghcr.io/canquedehuiyi-cpu/xiongbaowork:$OpenbotTag",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/$OPENBOT_TAG/container-images.json",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "oci://$OPENBOT_IMAGE",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
   },
   {
     "word": "openbot",

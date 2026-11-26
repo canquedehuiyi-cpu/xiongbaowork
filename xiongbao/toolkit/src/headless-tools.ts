@@ -9,7 +9,7 @@ import {
   type Tool,
   type ToolCall,
 } from "@ag-ui/client";
-import { OPENBOT_WAITING_METADATA } from "@xiongbao/shared/waiting";
+import { XIONGBAO_WAITING_METADATA } from "@xiongbao/shared/waiting";
 import { Observable, type Subscription } from "rxjs";
 import { withApprovalContext } from "./continuation";
 import type { AuditInitiator } from "./initiator";
@@ -45,7 +45,7 @@ export type HeadlessTool = {
 };
 
 /** Where a suspended run's waiting details ride on its AG-UI interrupt. Shared with the browser. */
-export { OPENBOT_WAITING_METADATA };
+export { XIONGBAO_WAITING_METADATA };
 
 export type HeadlessWaiting = {
   kind: string;

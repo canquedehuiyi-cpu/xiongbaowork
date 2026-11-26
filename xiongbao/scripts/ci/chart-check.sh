@@ -142,3 +142,18 @@ render --values "$external" "${inline[@]}" --set migrations.enabled=false \
   --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao >/dev/null ||
   fail "With migrations.enabled=false an inline database without database.migrationUrl was refused."
 echo "ok: migrations.enabled=false needs no owner URL"
+
+# The bundled superuser renders once the operator names the RLS mode, under either name: values
+# written before the rename say OPENBOT_RLS_ENFORCE.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+for name in XIONGBAO_RLS_ENFORCE OPENBOT_RLS_ENFORCE; do
+  render --values "$bundled" --set "config.extraEnv[0].name=$name" \
+    --set-string "config.extraEnv[0].value=warn" >/dev/null ||
+    fail "Bundled superuser with $name named in config.extraEnv: the chart refused to render."
+done
+if refusal="$(render --values "$bundled" --set config.extraEnv=null 2>&1)"; then
+  fail "The bundled superuser with no RLS mode named rendered; it must be refused."
+fi
+[[ "$refusal" == *"XIONGBAO_RLS_ENFORCE"* ]] ||
+  fail "The bundled superuser was refused, but the refusal does not name XIONGBAO_RLS_ENFORCE: $refusal"
+echo "ok: the bundled superuser needs the RLS mode named, by its new or its old name"

@@ -83,7 +83,7 @@ if (!port.ok) throw new Error(port.reason);
 export const xiongbaoBaseInstructions =
   "Answer the question you are asked, briefly and correctly.";
 
-const OPENBOT_CONTEXT_DESCRIPTIONS = [
+const XIONGBAO_CONTEXT_DESCRIPTIONS = [
   "OpenBot standing role",
   "OpenBot granted tools guidance",
   "OpenBot learned skills",
@@ -142,7 +142,7 @@ export function buildXiongBaoInstructions({
 }: XiongBaoInstructionArgs = {}) {
   const contextEntries =
     agUiContextEntries(requestContext).filter(isUsableEntry);
-  const xiongbaoInstructions = OPENBOT_CONTEXT_DESCRIPTIONS.flatMap(
+  const xiongbaoInstructions = XIONGBAO_CONTEXT_DESCRIPTIONS.flatMap(
     (description) =>
       contextEntries
         .filter((entry) => entry.description === description)

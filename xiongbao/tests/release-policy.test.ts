@@ -245,7 +245,7 @@ describe("release policy", () => {
     const { repo, env } = publisher(forVersion("v0.3.0", ["v0.2.0"]));
     const result = validate(repo, {
       ...env,
-      OPENBOT_RELEASE_POLICY: JSON.stringify(forVersion("v0.4.0")),
+      XIONGBAO_RELEASE_POLICY: JSON.stringify(forVersion("v0.4.0")),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.output).toContain('describes "v0.3.0"');

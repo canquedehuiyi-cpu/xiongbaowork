@@ -96,10 +96,10 @@ describe("whether Web Bot Auth is on", () => {
   test("reaches the configuration, and stays off without the switch", () => {
     expect(loadConfig(testEnvironment()).webBotAuth).toBeUndefined();
     expect(
-      loadConfig(testEnvironment({ OPENBOT_PUBLIC_URL: PUBLIC })).webBotAuth,
+      loadConfig(testEnvironment({ XIONGBAO_PUBLIC_URL: PUBLIC })).webBotAuth,
     ).toBeUndefined();
     expect(
-      loadConfig(testEnvironment({ OPENBOT_PUBLIC_URL: PUBLIC, ...ON }))
+      loadConfig(testEnvironment({ XIONGBAO_PUBLIC_URL: PUBLIC, ...ON }))
         .webBotAuth?.agent,
     ).toBe(PUBLIC);
   });
@@ -275,7 +275,7 @@ describe("the key directory", () => {
 
   test("is served at the well-known path when on, and not served when off", async () => {
     const on = createApp(
-      loadConfig(testEnvironment({ OPENBOT_PUBLIC_URL: PUBLIC, ...ON })),
+      loadConfig(testEnvironment({ XIONGBAO_PUBLIC_URL: PUBLIC, ...ON })),
     );
     const served = await on.request(`${PUBLIC}${DIRECTORY_PATH}`);
     expect(served.status).toBe(200);

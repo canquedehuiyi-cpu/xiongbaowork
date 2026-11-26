@@ -1,7 +1,7 @@
 /**
  * What the personal edition's Activity page shows, decided once for the page and for the server.
  *
- * The page asks the server to leave {@link OPENBOT_WORKING_EVENT_TYPES} out and draws each action
+ * The page asks the server to leave {@link XIONGBAO_WORKING_EVENT_TYPES} out and draws each action
  * once ({@link oneRowPerAction}). The Activity report a Bot draws counts the same rows
  * (`botActivity` in `server/src/components/functions.ts`), so its figure for a Bot is the number of
  * rows the person finds on the page for that Bot.
@@ -11,7 +11,7 @@
  * XiongBao's own working, which the personal edition's Activity leaves out. None of it is something
  * a Bot did or a person can act on, and Admin keeps all of it.
  */
-export const OPENBOT_WORKING_EVENT_TYPES = [
+export const XIONGBAO_WORKING_EVENT_TYPES = [
   /*
    * Which tools a run was offered, written on every turn ("Choose tools for a run, 96 of 96 tools").
    * Everything offered was already the Bot's, and a run offered too many says so on its own row

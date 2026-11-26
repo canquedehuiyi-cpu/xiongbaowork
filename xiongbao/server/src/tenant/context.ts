@@ -18,7 +18,7 @@ import { PLATFORM_TENANT, TEAM_TENANT } from "../db/schema/tenant";
  * a `TenantContextError`, and so does every statement the database client builds there, because the
  * client asks it first. It used to answer `system`. That read only platform rows, but it also WROTE
  * them, and a `system` row is one every tenant can read, so background work that forgot its frame
- * filed a person's results where everybody could see them. The `OPENBOT_TENANT_FRAME_GUARD` switch
+ * filed a person's results where everybody could see them. The `XIONGBAO_TENANT_FRAME_GUARD` switch
  * that found the remaining offenders (`report`, then `throw` as the suite's default) is gone with
  * the fallback, and there is no escape hatch: a path that reaches the database without a frame is a
  * bug, fixed by giving it the right frame.

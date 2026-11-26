@@ -45,14 +45,14 @@ up() {
   #   1) 一个 BETTER_AUTH_* 都不能给 —— 给了就有"登录方式"，单用户会自己关掉（config.ts 的
   #      `singleUser = !organizationAuthUrl && singleUserAllowed(env, auth !== undefined)`）。
   #   2) INTELLIGENCE_MODE=local 必须有，否则 server 拒绝启动（Missing: INTELLIGENCE_API_KEY）。
-  #   3) OPENBOT_PUBLIC_URL 必须是回环地址，否则 singleUserAllowed 拒绝启动 —— 这是设计。
+  #   3) XIONGBAO_PUBLIC_URL 必须是回环地址，否则 singleUserAllowed 拒绝启动 —— 这是设计。
   recreate "$SERVER" \
     -e DATABASE_URL="$DB_URL" \
     -e KEY_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
-    -e OPENBOT_SINGLE_USER=true \
+    -e XIONGBAO_SINGLE_USER=true \
     -e INTELLIGENCE_MODE=local \
-    -e OPENBOT_PUBLIC_URL=http://localhost:3001 \
-    -e OPENBOT_SELF_HOST_BANNER=false \
+    -e XIONGBAO_PUBLIC_URL=http://localhost:3001 \
+    -e XIONGBAO_SELF_HOST_BANNER=false \
     -e COMPUTER_TOKEN="$COMPUTER_TOKEN" \
     -e AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true \
     -p 3001:3001 -p 3010:3010 \

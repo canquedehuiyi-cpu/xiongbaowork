@@ -26,9 +26,9 @@ import { LOGIN_ATTRIBUTE } from "../src/sign-in";
  * The browser half launches a real Chromium, like sign-in.test.ts, and is asked for by name:
  *
  *   cd agent-computer && bunx playwright install chromium
- *   OPENBOT_COMPUTER_BROWSER=1 bun test tests/neutral-page-marks.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 bun test tests/neutral-page-marks.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const PASSWORD = "hunter2-not-for-the-model";
 const TOKEN = "tok_live_abc123";
 const TELEPHONE = "555-0100";

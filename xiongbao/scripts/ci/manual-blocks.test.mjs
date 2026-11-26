@@ -240,13 +240,13 @@ test("README g7:linux is a bash block that bash can parse", () => {
 
 test("README g7:linux pulls the published image instead of building from source", () => {
   const body = linux.body;
-  expect(body).toContain(`${IMAGE}:$OPENBOT_TAG`);
+  expect(body).toContain(`${IMAGE}:$XIONGBAO_TAG`);
   expect(body).toMatch(
-    /^OPENBOT_TAG=\$\{OPENBOT_TAG:-v\d+\.\d+\.\d+(-rc\.\d+)?\}$/m,
+    /^XIONGBAO_TAG=\$\{XIONGBAO_TAG:-v\d+\.\d+\.\d+(-rc\.\d+)?\}$/m,
   );
-  expect(body).toContain('docker pull "$OPENBOT_IMAGE"');
+  expect(body).toContain('docker pull "$XIONGBAO_IMAGE"');
   expect(body).toContain(
-    `https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/\${OPENBOT_TAG}/xiongbao/docker/delivery.env.example`,
+    `https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/\${XIONGBAO_TAG}/xiongbao/docker/delivery.env.example`,
   );
   expect(body).toContain("openssl rand -base64 32");
   for (const forbidden of [
@@ -280,7 +280,7 @@ test("README g7:linux runs the container the way image-smoke.sh does", () => {
   expect(linux.body).toContain("http://127.0.0.1:3772/health");
   // The image runs last on the docker run line, so a pulled image is what starts.
   expect(linux.body).toMatch(
-    /-v xiongbao-local-profiles:\/profiles \\\n {2}"\$OPENBOT_IMAGE"\n/,
+    /-v xiongbao-local-profiles:\/profiles \\\n {2}"\$XIONGBAO_IMAGE"\n/,
   );
 });
 
@@ -309,7 +309,7 @@ test("manual g7:external-migrate migrates with the released digest and the owner
   expect(result.status).toBe(0);
   const body = externalMigrate.body;
   expect(body).toContain(
-    'OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"',
+    'XIONGBAO_IMAGE="$(jq -r .images.openbot.reference container-images.json)"',
   );
   expect(body).toContain("--env-file .env.migration");
   expect(body).toContain("scripts/migrate.ts");
@@ -377,9 +377,9 @@ test("manual section 4 names every database URL an external-database API needs",
 
 test("README g7:windows pulls the same image and tag (manual acceptance)", () => {
   expect(windows.lang).toBe("powershell");
-  expect(windows.body).toContain(`"${IMAGE}:$OpenbotTag"`);
-  expect(windows.body).toContain("docker pull $OpenbotImage");
-  const linuxTag = /OPENBOT_TAG:-(v[^}]+)\}/.exec(linux.body)?.[1];
+  expect(windows.body).toContain(`"${IMAGE}:$XiongbaoTag"`);
+  expect(windows.body).toContain("docker pull $XiongbaoImage");
+  const linuxTag = /XIONGBAO_TAG:-(v[^}]+)\}/.exec(linux.body)?.[1];
   expect(linuxTag).toBeTruthy();
   expect(windows.body).toContain(`else { '${linuxTag}' }`);
   for (const forbidden of [
@@ -430,7 +430,7 @@ test("deployment manual pins digests and explains how to verify them", () => {
     "jq -r .images.openbot.reference container-images.json",
   );
   expect(manual).toContain(
-    `gh attestation verify "oci://$OPENBOT_IMAGE" -R canquedehuiyi-cpu/xiongbaowork`,
+    `gh attestation verify "oci://$XIONGBAO_IMAGE" -R canquedehuiyi-cpu/xiongbaowork`,
   );
   expect(manual).toContain("clean-deploy.yml");
 });
@@ -440,16 +440,16 @@ test("delivery.env.example documents the image override without setting it", () 
     join(product, "docker", "delivery.env.example"),
     "utf8",
   );
-  expect(example).toMatch(/^# OPENBOT_TAG=v\d+\.\d+\.\d+/m);
-  expect(example).toContain(`# OPENBOT_IMAGE=${IMAGE}:`);
-  expect(example).toContain(`# OPENBOT_IMAGE=${IMAGE}@sha256:`);
-  expect(example).not.toMatch(/^OPENBOT_IMAGE=/m);
+  expect(example).toMatch(/^# XIONGBAO_TAG=v\d+\.\d+\.\d+/m);
+  expect(example).toContain(`# XIONGBAO_IMAGE=${IMAGE}:`);
+  expect(example).toContain(`# XIONGBAO_IMAGE=${IMAGE}@sha256:`);
+  expect(example).not.toMatch(/^XIONGBAO_IMAGE=/m);
   expect(example).not.toMatch(/^KEY_ENCRYPTION_KEY=/m);
   const compose = readFileSync(
     join(product, "docker", "compose.delivery.yml"),
     "utf8",
   );
-  expect(compose).toContain("image: ${OPENBOT_IMAGE:-");
+  expect(compose).toContain("image: ${XIONGBAO_IMAGE:-");
 });
 
 function filesUnder(dir) {

@@ -12,7 +12,7 @@
  * bought — kept here, on disk, in a file this process creates for itself. There is no password to
  * enter, no login to keep alive, and nothing a screenshot could give away.
  */
-// Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
+// Must stay the first import: it copies settings written with the old prefix onto their XIONGBAO_* names before any module reads config.
 import "../../shared/apply-env-aliases";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { hostname, platform, tmpdir } from "node:os";
@@ -57,7 +57,7 @@ import { createRootRegistry, type RootMode, type RootRegistry } from "./roots";
 import { createRunnerScreens } from "./screencast";
 
 /** The environment twin of `--data-dir`, for a desktop shell that starts the runner as a sidecar. */
-export const DATA_DIR_ENV = "OPENBOT_RUNNER_DATA_DIR";
+export const DATA_DIR_ENV = "XIONGBAO_RUNNER_DATA_DIR";
 
 /**
  * Every place this process writes to, worked out once from the arguments.
@@ -109,8 +109,8 @@ export type Options = {
 };
 
 // --- desktop control (sub-project 2) ---
-const DESKTOP_HELPER_ENV = "OPENBOT_DESKTOP_HELPER";
-const DESKTOP_ENGINE_ENV = "OPENBOT_DESKTOP_ENGINE";
+const DESKTOP_HELPER_ENV = "XIONGBAO_DESKTOP_HELPER";
+const DESKTOP_ENGINE_ENV = "XIONGBAO_DESKTOP_ENGINE";
 const DESKTOP_ENGINES: ReadonlySet<string> = new Set<DesktopEngine>([
   "legacy",
   "agent-desktop",
@@ -146,7 +146,7 @@ export function clearDesktopState(
 }
 
 /**
- * The agent-desktop binary: `--desktop-helper`, else `OPENBOT_DESKTOP_HELPER`, else the one shipped
+ * The agent-desktop binary: `--desktop-helper`, else `XIONGBAO_DESKTOP_HELPER`, else the one shipped
  * next to the runner's own executable. Undefined when the flag is there without a path.
  */
 function desktopHelperPath(

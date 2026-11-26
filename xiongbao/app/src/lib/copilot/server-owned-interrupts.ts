@@ -1,15 +1,15 @@
-import { OPENBOT_WAITING_METADATA } from "@xiongbao/shared/waiting";
+import { XIONGBAO_WAITING_METADATA } from "@xiongbao/shared/waiting";
 
 /** An AG-UI interrupt as the agent holds it, as much of it as this reads. */
 type HeldInterrupt = { id: string; metadata?: Record<string, unknown> };
 
 /**
  * Whether an interrupt is one the server answers itself: an approval, a question or a sign-in its
- * Bot stopped for, which carries what it waits on under `OPENBOT_WAITING_METADATA`. The person
+ * Bot stopped for, which carries what it waits on under `XIONGBAO_WAITING_METADATA`. The person
  * answers it on its card and the server carries the conversation on; nothing in this app resumes it.
  */
 export function serverOwnedInterrupt(interrupt: HeldInterrupt): boolean {
-  const waiting = interrupt.metadata?.[OPENBOT_WAITING_METADATA];
+  const waiting = interrupt.metadata?.[XIONGBAO_WAITING_METADATA];
   return !!waiting && typeof waiting === "object";
 }
 

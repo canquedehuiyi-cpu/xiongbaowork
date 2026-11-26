@@ -18,12 +18,12 @@ import { compile } from "tailwindcss";
  * stylesheet is the app's own `styles.css` built by Tailwind for exactly the classes on the page.
  * The window is swept through the widths around where the rail starts to draw.
  *
- *   OPENBOT_APP_BROWSER=1 bun test app/tests/transcript-rail-clearance.test.tsx
+ *   XIONGBAO_APP_BROWSER=1 bun test app/tests/transcript-rail-clearance.test.tsx
  *
- * With OPENBOT_APP_SHOTS=<dir> it also saves screenshots at 1280px, 900px and 800px wide.
+ * With XIONGBAO_APP_SHOTS=<dir> it also saves screenshots at 1280px, 900px and 800px wide.
  */
-const asked = process.env.OPENBOT_APP_BROWSER === "1";
-const shots = process.env.OPENBOT_APP_SHOTS;
+const asked = process.env.XIONGBAO_APP_BROWSER === "1";
+const shots = process.env.XIONGBAO_APP_SHOTS;
 
 const APP = join(import.meta.dir, "..");
 const ORIGIN = "http://xiongbao.test";

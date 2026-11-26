@@ -32,7 +32,7 @@ import {
   channelKeys,
 } from "@/lib/channels/queries";
 import { applyChannelEvent } from "@/lib/channels/use-channel-events";
-import { generativeUiProviderOptions, OPENBOT_UI } from "@/lib/copilot/a2ui";
+import { generativeUiProviderOptions, XIONGBAO_UI } from "@/lib/copilot/a2ui";
 import { queryClient } from "@/query-client";
 
 type ChannelCache = InfiniteData<ChannelPage>;
@@ -254,7 +254,7 @@ function tripForm(version: string) {
     content: {
       surfaceId: "trip",
       target: "chat",
-      catalogId: OPENBOT_UI.id,
+      catalogId: XIONGBAO_UI.id,
       status: "ready",
       rejected: [],
       operations: [
@@ -262,7 +262,7 @@ function tripForm(version: string) {
           version,
           createSurface: {
             surfaceId: "trip",
-            catalogId: OPENBOT_UI.id,
+            catalogId: XIONGBAO_UI.id,
             dataModel: { destination: "Paris" },
           },
         },

@@ -5,7 +5,7 @@ export type SelfHostBanner = {
 
 /**
  * Decide, per deployment, whether the self-host banner shows: the operator's switch
- * (`OPENBOT_SELF_HOST_BANNER`) alone.
+ * (`XIONGBAO_SELF_HOST_BANNER`) alone.
  */
 export function createSelfHostBanner(options: {
   enabled: boolean;

@@ -13,7 +13,7 @@ import {
   withoutXiongBaoWorking,
 } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
-import { OPENBOT_WORKING_EVENT_TYPES } from "@/lib/audit/outcome";
+import { XIONGBAO_WORKING_EVENT_TYPES } from "@/lib/audit/outcome";
 import { deploymentKeys } from "@/lib/deployment/queries";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
@@ -151,7 +151,7 @@ async function renderAs(edition: "team" | "personal") {
         edition === "personal"
           ? ROWS.filter(
               (row) =>
-                !(OPENBOT_WORKING_EVENT_TYPES as readonly string[]).includes(
+                !(XIONGBAO_WORKING_EVENT_TYPES as readonly string[]).includes(
                   row.eventType,
                 ),
             )

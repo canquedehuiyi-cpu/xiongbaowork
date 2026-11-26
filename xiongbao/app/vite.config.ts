@@ -4,6 +4,7 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
+import { applyEnvironmentAliases } from "@xiongbao/shared/env-aliases";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import { appListenHosts, isLoopbackHost } from "@xiongbao/shared/this-machine";
 import { defineConfig, loadEnv, type Plugin } from "vite";
@@ -23,9 +24,9 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
  * own middleware below.
  */
 function announceServerPort(port: number): Plugin {
-  const tag = `<script>window.__OPENBOT_WS_PORT__=${JSON.stringify(String(port))};</script>`;
+  const tag = `<script>window.__XIONGBAO_WS_PORT__=${JSON.stringify(String(port))};</script>`;
   const inject = (html: string) =>
-    html.includes("__OPENBOT_WS_PORT__")
+    html.includes("__XIONGBAO_WS_PORT__")
       ? html
       : html.replace("</head>", `    ${tag}\n  </head>`);
   return {
@@ -78,6 +79,20 @@ if (!apiPort.ok) {
 }
 
 /**
+ * Whether the deployment names an address beyond this machine, read the way the server reads it:
+ * through the alias step on a copy, because this process never runs the server's entry, so a `.env`
+ * that still says OPENBOT_PUBLIC_URL or OPENBOT_APP_URL counts too.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export function answersBeyondThisMachine(
+  environment: Record<string, string | undefined>,
+): boolean {
+  const aliased = { ...environment };
+  applyEnvironmentAliases(aliased);
+  return appListenHosts(aliased)[0] === "::";
+}
+
+/**
  * Only this machine, unless the deployment names an address beyond it (`appListenHosts`).
  *
  * The dev server passes `/api` to the server from this machine, and a single-user server admits a
@@ -89,7 +104,7 @@ if (!apiPort.ok) {
 export function thisMachineOnly(
   environment: Record<string, string | undefined>,
 ): Plugin {
-  const beyond = appListenHosts(environment)[0] === "::";
+  const beyond = answersBeyondThisMachine(environment);
   const refuseOthers = (
     request: IncomingMessage,
     response: ServerResponse,

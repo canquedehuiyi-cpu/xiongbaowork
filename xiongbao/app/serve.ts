@@ -13,6 +13,9 @@
  * prefix, needs no Node, and has nothing in it that a dev server needs and an install does not.
  */
 
+// Must stay the first import: this process never runs the server's entry, so a `.env` that still
+// names the deployment's address under the old prefix is copied onto the XIONGBAO_ names here.
+import "@xiongbao/shared/apply-env-aliases";
 import { join, normalize, sep } from "node:path";
 import { DICTATION_HTTP_IDLE_SECONDS } from "@xiongbao/shared/dictation";
 import { listenPort } from "@xiongbao/shared/listen-port";

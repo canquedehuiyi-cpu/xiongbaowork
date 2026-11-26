@@ -19,10 +19,10 @@ permissions:
 # inherit another publisher's registry. The compatibility and upgrade policy is not configuration:
 # it is release-policy.json in the release commit, reviewed with the release.
 env:
-  OPENBOT_DISTRIBUTION_ID: ${{ vars.OPENBOT_DISTRIBUTION_ID || github.repository }}
+  XIONGBAO_DISTRIBUTION_ID: ${{ vars.OPENBOT_DISTRIBUTION_ID || github.repository }}
   OPENBOT_UPSTREAM_REPOSITORY: ${{ vars.OPENBOT_UPSTREAM_REPOSITORY || 'CopilotKit/openbot' }}
   OPENBOT_UPSTREAM_COMMIT: ${{ vars.OPENBOT_UPSTREAM_COMMIT }}
-  OPENBOT_RELEASE_CHANNEL: ${{ vars.OPENBOT_RELEASE_CHANNEL || 'stable' }}
+  XIONGBAO_RELEASE_CHANNEL: ${{ vars.OPENBOT_RELEASE_CHANNEL || 'stable' }}
 
 jobs:
   # Every push to main or a release branch runs this, and almost none of them are releases. This job
@@ -346,7 +346,7 @@ jobs:
       retention_days: 30
       platforms: '["macos","windows"]'
     secrets:
-      OPENBOT_GOOGLE_MODEL_OAUTH_CLIENT_SECRET: ${{ secrets.OPENBOT_GOOGLE_MODEL_OAUTH_CLIENT_SECRET }}
+      XIONGBAO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET: ${{ secrets.OPENBOT_GOOGLE_MODEL_OAUTH_CLIENT_SECRET }}
     permissions:
       contents: read
 
@@ -403,8 +403,8 @@ jobs:
           helm package charts/xiongbao --destination release-assets
           chart_version="$(helm show chart charts/xiongbao | sed -n 's/^version: //p')"
           test -f "release-assets/xiongbao-$chart_version.tgz"
-          echo "OPENBOT_CHART_PATH=release-assets/xiongbao-$chart_version.tgz" >> "$GITHUB_ENV"
-          echo "OPENBOT_CHART_VERSION=$chart_version" >> "$GITHUB_ENV"
+          echo "XIONGBAO_CHART_PATH=release-assets/xiongbao-$chart_version.tgz" >> "$GITHUB_ENV"
+          echo "XIONGBAO_CHART_VERSION=$chart_version" >> "$GITHUB_ENV"
       # A rerun of a half-published release. `helm package` stamps the time it ran and the provenance
       # bundle is signed again on every run, so this run's bytes never equal the published ones even
       # when nothing changed. What was published is fetched first; each asset this run produces is
@@ -422,7 +422,7 @@ jobs:
             if [ "$(jq '.assets | length' "$RUNNER_TEMP/existing-assets.json")" -gt 0 ]; then
               gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" --dir "$published"
             fi
-            echo "OPENBOT_PUBLISHED_ASSETS=$published" >> "$GITHUB_ENV"
+            echo "XIONGBAO_PUBLISHED_ASSETS=$published" >> "$GITHUB_ENV"
           fi
       - name: Archive exact source and write release manifest
         env:
@@ -483,7 +483,7 @@ jobs:
               -f "ref=refs/tags/$VERSION" -f "sha=$GITHUB_SHA" >/dev/null
           fi
 
-          if [ -n "${OPENBOT_PUBLISHED_ASSETS:-}" ]; then
+          if [ -n "${XIONGBAO_PUBLISHED_ASSETS:-}" ]; then
             # Release-specific source/chart URLs are immutable after first publication. A rerun
             # fills in what is missing. Every asset that was published already was compared by
             # content and kept above, so it is byte-identical here. The one exception is the
@@ -493,7 +493,7 @@ jobs:
             gh release edit "$VERSION" --title "$VERSION" --notes-file notes.md "${edit_flags[@]}"
             for artifact in container-images.json desktop-images.json release-assets/*; do
               name="$(basename "$artifact")"
-              published="$OPENBOT_PUBLISHED_ASSETS/$name"
+              published="$XIONGBAO_PUBLISHED_ASSETS/$name"
               if [ ! -e "$published" ]; then
                 gh release upload "$VERSION" "$artifact"
               elif ! cmp -s "$artifact" "$published"; then

@@ -26,12 +26,12 @@ test("an Arcade key and a broker provider are read, and an unknown provider is r
   const set = loadConfig({
     ...baseEnvironment,
     ARCADE_API_KEY: "  arc_example  ",
-    OPENBOT_BROKER_PROVIDER: " arcade ",
+    XIONGBAO_BROKER_PROVIDER: " arcade ",
   });
   expect(set.arcadeApiKey).toBe("arc_example");
   expect(set.brokerProvider).toBe("arcade");
   expect(() =>
-    loadConfig({ ...baseEnvironment, OPENBOT_BROKER_PROVIDER: "zapier" }),
+    loadConfig({ ...baseEnvironment, XIONGBAO_BROKER_PROVIDER: "zapier" }),
   ).toThrow(/XIONGBAO_BROKER_PROVIDER 只能是 "composio" 或 "arcade"/);
 });
 

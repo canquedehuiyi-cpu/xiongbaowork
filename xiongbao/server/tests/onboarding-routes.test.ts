@@ -78,7 +78,7 @@ describe("onboarding routes", () => {
   });
 
   test("/api/me carries the XiongBao release the server runs, beside the person", async () => {
-    const app = appWith(undefined, { OPENBOT_BUILD_VERSION: "v0.3.1" });
+    const app = appWith(undefined, { XIONGBAO_BUILD_VERSION: "v0.3.1" });
 
     const response = await app.request("http://xiongbao.local/api/me");
 
@@ -94,7 +94,7 @@ describe("onboarding routes", () => {
   test("/api/me answers a null version when the build has none", async () => {
     const builds: Record<string, string>[] = [
       {},
-      { OPENBOT_BUILD_VERSION: "  " },
+      { XIONGBAO_BUILD_VERSION: "  " },
     ];
     for (const environment of builds) {
       const response = await appWith(undefined, environment).request(

@@ -152,7 +152,7 @@ jobs:
           tests/screencast-keys-browser.test.ts tests/screencast-pacing-browser.test.ts tests/browser-memory.test.ts
         working-directory: agent-computer
         env:
-          OPENBOT_COMPUTER_BROWSER: '1'
+          XIONGBAO_COMPUTER_BROWSER: '1'
           COMPUTER_BROWSER_MODE: headless
       # The app's real-browser tests, here because this job has the browser: a running step's words
       # under reduced motion, where onboarding's Back lands beside the Mac window's buttons, the name
@@ -165,17 +165,17 @@ jobs:
           bun run generate:app-config
           bun test app/tests/tool-line-reduced-motion.test.tsx app/tests/onboarding-window-buttons.test.tsx app/tests/onboarding-orb-room.test.tsx app/tests/transcript-rail-clearance.test.tsx app/tests/a2ui-frame.test.tsx
         env:
-          OPENBOT_APP_BROWSER: '1'
+          XIONGBAO_APP_BROWSER: '1'
       # Headed is the default for hosted computers, so it is tested as one: the computer starting its
       # own Xvfb, and the signing again with cross-site frames in processes of their own.
       - run: bun test tests/headed-browser.test.ts
         working-directory: agent-computer
         env:
-          OPENBOT_HEADED_BROWSER: '1'
+          XIONGBAO_HEADED_BROWSER: '1'
       - run: xvfb-run --auto-servernum bun test tests/web-bot-auth-browser.test.ts
         working-directory: agent-computer
         env:
-          OPENBOT_COMPUTER_BROWSER: '1'
+          XIONGBAO_COMPUTER_BROWSER: '1'
           COMPUTER_BROWSER_MODE: headed
 
   chart:
@@ -300,7 +300,7 @@ jobs:
           # The bundled superuser with nobody having said RLS may go unenforced. Only armed where the
           # target runs the bundled database.
           if grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/xiongbao/ci/${{ matrix.target }}-values.yaml); then
-            refuses "the bundled superuser with OPENBOT_RLS_ENFORCE unsaid" \
+            refuses "the bundled superuser with XIONGBAO_RLS_ENFORCE unsaid" \
               --set config.extraEnv=null
           else
             echo "skipped: the bundled-superuser refusal is only armed with postgresql.enabled"
@@ -712,10 +712,10 @@ jobs:
       - name: The image boots and serves
         run: |
           set -euo pipefail
-          # `OPENBOT_SINGLE_USER=true` because this boots a deployment with no identity provider, and
+          # `XIONGBAO_SINGLE_USER=true` because this boots a deployment with no identity provider, and
           # the image sets NODE_ENV=production, where that combination refuses to start rather than
           # serve an open deployment. Saying so is the point: the flag is how somebody declares they
-          # meant it. This was `OPENBOT_DEV_NO_AUTH=1` before, which the code never accepted at all,
+          # meant it. This was `XIONGBAO_DEV_NO_AUTH=1` before, which the code never accepted at all,
           # since it compares against the exact string "true"; it did nothing and nothing noticed.
           #
           # Placeholders, not secrets: the boot contract is a well-formed `KEY_ENCRYPTION_KEY` and a
@@ -727,7 +727,7 @@ jobs:
             -e EMBEDDED_POSTGRES=on \
             -e KEY_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
             -e TRUSTED_ORIGINS=http://localhost:3001 \
-             -e OPENBOT_SINGLE_USER=true \
+             -e XIONGBAO_SINGLE_USER=true \
             xiongbao:ci
           for attempt in $(seq 1 150); do
             if curl -fsS http://localhost:3001/api/capabilities >/dev/null 2>&1; then

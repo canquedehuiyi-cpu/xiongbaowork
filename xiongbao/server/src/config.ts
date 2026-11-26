@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { applyEnvironmentAliases, envName } from "@xiongbao/shared/env-aliases";
+import {
+  applyEnvironmentAliases,
+  envName,
+  reportEnvironmentAliases,
+} from "@xiongbao/shared/env-aliases";
 import { listenPort } from "@xiongbao/shared/listen-port";
 import {
   addressesBeyondThisMachine,
@@ -239,7 +243,7 @@ export type SingleUserAccess = {
 export type DeploymentConfig = {
   /**
    * Memory sources and background research XiongBao switches on for each person (memory/defaults.ts).
-   * Both on unless OPENBOT_MEMORY_SOURCE_DEFAULTS or OPENBOT_PROACTIVE_DEFAULTS is "false" or "0".
+   * Both on unless XIONGBAO_MEMORY_SOURCE_DEFAULTS or XIONGBAO_PROACTIVE_DEFAULTS is "false" or "0".
    * Switching either off stops new defaults and leaves every existing row as it is.
    */
   memoryDefaults: { sources: boolean; research: boolean };
@@ -275,7 +279,7 @@ export type DeploymentConfig = {
   agentEndpointAllowedHosts: ReadonlySet<string>;
   /**
    * The name this server's container reaches the person's machine by, from
-   * `OPENBOT_THIS_MACHINE_HOST`. XiongBao Desktop sets it (`host.docker.internal`), because there the
+   * `XIONGBAO_THIS_MACHINE_HOST`. XiongBao Desktop sets it (`host.docker.internal`), because there the
    * server runs in a container and `127.0.0.1` is the container, so an agent the person registers on
    * their own loopback is dialled through this name (`onThisMachine` in agents/endpoint.ts). Absent
    * wherever the server is a host process or hosted, and nothing is translated.
@@ -289,7 +293,7 @@ export type DeploymentConfig = {
    */
   deploymentId: string | undefined;
   /**
-   * The XiongBao release this server runs, such as `v0.3.1`, from OPENBOT_BUILD_VERSION: release CI
+   * The XiongBao release this server runs, such as `v0.3.1`, from XIONGBAO_BUILD_VERSION: release CI
    * bakes it into the image, and XiongBao Desktop sets it from the release it installed. Absent in
    * development and in a local image build.
    */
@@ -317,7 +321,7 @@ export type DeploymentConfig = {
    */
   arcadeApiKey?: string;
   /**
-   * 运维指明的 broker，来自 `OPENBOT_BROKER_PROVIDER`。这里只读取并校验取值；哪个提供商活动由
+   * 运维指明的 broker，来自 `XIONGBAO_BROKER_PROVIDER`。这里只读取并校验取值；哪个提供商活动由
    * `plugins/provider-wiring.ts` 决定。没设置时不出现在配置里。
    */
   brokerProvider?: BrokerProvider;
@@ -331,7 +335,7 @@ export type DeploymentConfig = {
    * configuration rather than from the incoming request: a redirect URI assembled out of a Host
    * header is one an attacker has a say in.
    *
-   * `OPENBOT_PUBLIC_URL` when set, otherwise `BETTER_AUTH_URL`, which is the same public address for
+   * `XIONGBAO_PUBLIC_URL` when set, otherwise `BETTER_AUTH_URL`, which is the same public address for
    * every deployment that has real sign-in. Undefined only where neither exists, which is a local
    * deployment running without authentication — and there is nothing to connect there anyway.
    */
@@ -349,7 +353,7 @@ export type DeploymentConfig = {
    * the API and has to send the person back to a page, so a relative redirect would put them on the
    * API's origin, where no page exists.
    *
-   * `OPENBOT_APP_URL` when set, otherwise the first `TRUSTED_ORIGINS` entry, which is already defined
+   * `XIONGBAO_APP_URL` when set, otherwise the first `TRUSTED_ORIGINS` entry, which is already defined
    * as where the app is served from. Falls back to the API's own public URL, which is right for a
    * deployment serving both from one origin.
    */
@@ -405,7 +409,7 @@ export type DeploymentConfig = {
   browserOrigins: string[];
   /** Which product this is. `personal` requires single-user mode and the one shared computer. */
   edition: Edition;
-  /** Names XiongBao on the analytics the runtime already sends. Off with OPENBOT_ACCESSIBILITY_DISABLED. */
+  /** Names XiongBao on the analytics the runtime already sends. Off with XIONGBAO_ACCESSIBILITY_DISABLED. */
   accessibility: boolean;
   /**
    * Whether a Bot may answer with an interface it wrote itself.
@@ -423,7 +427,7 @@ export type DeploymentConfig = {
    * nothing at all, which is a worse answer than never offering it.
    *
    * On by default. A deployment that cannot allow generated interfaces can explicitly opt out with
-   * OPENBOT_GENERATIVE_UI=false or OPENBOT_GENERATIVE_UI=0.
+   * XIONGBAO_GENERATIVE_UI=false or XIONGBAO_GENERATIVE_UI=0.
    *
    * What it runs is sandboxed by the SDK, in an iframe with no same-origin access to this app, so a
    * generated interface reaches this deployment's data only through what the host hands it. This
@@ -435,7 +439,7 @@ export type DeploymentConfig = {
    * Whether the signed-in app shows the banner offering help self-hosting XiongBao.
    *
    * Off by default: the bar links to a support address, and a deployment that never set one has
-   * nowhere honest to send people. An operator turns it on with OPENBOT_SELF_HOST_BANNER=true, and
+   * nowhere honest to send people. An operator turns it on with XIONGBAO_SELF_HOST_BANNER=true, and
    * the app still hides it unless the tenant package carries a support URL. This is the operator's
    * switch only; a deployment on a paid Intelligence plan hides the bar too (self-host-banner.ts).
    */
@@ -490,7 +494,7 @@ export type DeploymentConfig = {
   modelEndpointsAllowPrivateHosts: boolean;
   /**
    * 本地学习（L1）：每人每天从自己的对话里提出技能草案，本人批准后才生效。默认开，
-   * `OPENBOT_LOCAL_LEARNING=off` 整个部署关掉（不扫描、设置页说明未开启）。
+   * `XIONGBAO_LOCAL_LEARNING=off` 整个部署关掉（不扫描、设置页说明未开启）。
    */
   localLearning: boolean;
   /**
@@ -589,15 +593,15 @@ function optional(environment: Environment, name: string): string | undefined {
 }
 
 /**
- * `ARCADE_API_KEY` 与 `OPENBOT_BROKER_PROVIDER`，只在设置了时出现在配置里，没设置的部署配置对象与以前一样。
- * `OPENBOT_BROKER_PROVIDER` 只能是 composio 或 arcade，别的值让服务起不来。
+ * `ARCADE_API_KEY` 与 `XIONGBAO_BROKER_PROVIDER`，只在设置了时出现在配置里，没设置的部署配置对象与以前一样。
+ * `XIONGBAO_BROKER_PROVIDER` 只能是 composio 或 arcade，别的值让服务起不来。
  */
 function brokerProviderConfig(environment: Environment): {
   arcadeApiKey?: string;
   brokerProvider?: BrokerProvider;
 } {
   const arcadeApiKey = optional(environment, "ARCADE_API_KEY");
-  const raw = optional(environment, "OPENBOT_BROKER_PROVIDER");
+  const raw = optional(environment, "XIONGBAO_BROKER_PROVIDER");
   if (raw !== undefined && raw !== "composio" && raw !== "arcade") {
     throw new Error(
       `${envName("BROKER_PROVIDER")} 只能是 "composio" 或 "arcade"，现在是 "${raw}"。不设置时按配置了哪个 API key 来选。`,
@@ -758,8 +762,8 @@ function singleUserAllowed(
   if (!singleUserEnabled(environment, hasProvider)) return false;
 
   const reachable = [
-    optional(environment, "OPENBOT_PUBLIC_URL"),
-    optional(environment, "OPENBOT_APP_URL"),
+    optional(environment, "XIONGBAO_PUBLIC_URL"),
+    optional(environment, "XIONGBAO_APP_URL"),
     ...commaSeparated(environment, "TRUSTED_ORIGINS"),
   ].filter((value): value is string => value !== undefined);
 
@@ -788,7 +792,7 @@ function singleUserAllowed(
 /**
  * Which requests single-user mode admits. See {@link SingleUserAccess}.
  *
- * WHERE THE SERVER RUNS IS SAID BY THE IMAGE, NOT GUESSED. `OPENBOT_IN_CONTAINER=true` is set by both
+ * WHERE THE SERVER RUNS IS SAID BY THE IMAGE, NOT GUESSED. `XIONGBAO_IN_CONTAINER=true` is set by both
  * images that run this server: `server/Dockerfile` (Compose and the chart) as an ENV, and the
  * one-container `Dockerfile` through its defaults file (`docker/defaults.env`, which the s6
  * env-aliases oneshot writes into every service's environment unless the deployment set the name
@@ -799,7 +803,7 @@ function singleUserAllowed(
  * request, which is the one place the flag is needed and the one place it is always present.
  */
 function singleUserAccess(environment: Environment): SingleUserAccess {
-  const inContainer = optional(environment, "OPENBOT_IN_CONTAINER") === "true";
+  const inContainer = optional(environment, "XIONGBAO_IN_CONTAINER") === "true";
   const hosts = new Set<string>();
   for (const address of deploymentAddresses(environment)) {
     try {
@@ -822,7 +826,7 @@ function singleUserAccess(environment: Environment): SingleUserAccess {
  * In single-user mode the app's port as well, on all three loopback names, whatever else is configured,
  * because that is where XiongBao Desktop and `scripts/start.sh` open it, and on the host of every configured
  * address, because that is where another machine opens it once one is configured
- * (`OPENBOT_PUBLIC_URL=http://192.168.1.10:3001` puts the app at `http://192.168.1.10:3010`). The app's
+ * (`XIONGBAO_PUBLIC_URL=http://192.168.1.10:3001` puts the app at `http://192.168.1.10:3010`). The app's
  * servers proxy API calls to this one, so the browser's `Origin` names the app's port and the request's
  * `Host` this server's, and the socket the app opens in development goes straight to this port from the
  * app's origin. Only that port on those hosts: another port, or another host, is still another site.
@@ -871,7 +875,7 @@ function browserOrigins(
 }
 
 /**
- * How far an address reaches, which is the question `OPENBOT_SINGLE_USER` actually turns on.
+ * How far an address reaches, which is the question `XIONGBAO_SINGLE_USER` actually turns on.
  *
  * Not two answers but three, because the middle one is most of the deployments this flag exists
  * for. "No sign-in, one administrator" is a thing people run on a home server at `192.168.1.10`,
@@ -1434,7 +1438,7 @@ function agentEndpointAllowedHosts(
 }
 
 /**
- * `OPENBOT_THIS_MACHINE_HOST`, as one host name. See {@link DeploymentConfig.thisMachineHost}.
+ * `XIONGBAO_THIS_MACHINE_HOST`, as one host name. See {@link DeploymentConfig.thisMachineHost}.
  *
  * A scheme, port or path is refused at boot, naming the value, rather than producing addresses that
  * silently never connect.
@@ -1442,7 +1446,7 @@ function agentEndpointAllowedHosts(
 function thisMachineHost(environment: NodeJS.ProcessEnv): {
   thisMachineHost?: string;
 } {
-  const host = optional(environment, "OPENBOT_THIS_MACHINE_HOST")
+  const host = optional(environment, "XIONGBAO_THIS_MACHINE_HOST")
     ?.trim()
     .toLowerCase();
   if (!host) return {};
@@ -1640,7 +1644,7 @@ function actionPolicy(environment: Environment): ActionPolicy | undefined {
  * Zero is a legitimate value and means off. It is not the same as a malformed one.
  */
 function accessibilityEnabled(environment: Environment): boolean {
-  const off = optional(environment, "OPENBOT_ACCESSIBILITY_DISABLED");
+  const off = optional(environment, "XIONGBAO_ACCESSIBILITY_DISABLED");
   return off !== "true" && off !== "1";
 }
 
@@ -1660,7 +1664,7 @@ function accessibilityEnabled(environment: Environment): boolean {
  * interface that nothing renders. See DeploymentConfig.generativeUi.
  */
 function generativeUiEnabled(environment: Environment): boolean {
-  const value = optional(environment, "OPENBOT_GENERATIVE_UI");
+  const value = optional(environment, "XIONGBAO_GENERATIVE_UI");
   return value !== "false" && value !== "0";
 }
 
@@ -1790,7 +1794,7 @@ function contentConfig(
 
 /** The opposite rule from generated interfaces: off unless explicitly "true". */
 function selfHostBannerEnabled(environment: Environment): boolean {
-  return optional(environment, "OPENBOT_SELF_HOST_BANNER") === "true";
+  return optional(environment, "XIONGBAO_SELF_HOST_BANNER") === "true";
 }
 
 /**
@@ -1868,21 +1872,17 @@ function serverPort(environment: Environment): number {
 
 export function loadConfig(given: Environment = process.env): DeploymentConfig {
   /*
-   * Scripts call this without the server's entry, which is where the XIONGBAO_ names are otherwise copied onto the
-   * OPENBOT_ ones. The process environment is aliased in place so a script's own later reads see the same values; any
+   * Scripts call this without the server's entry, which is where the old-prefix names are otherwise copied onto the
+   * new ones. The process environment is aliased in place so a script's own later reads see the same values; any
    * other environment is aliased into a copy, so a caller's object is never written to.
    */
   const environment = given === process.env ? given : { ...given };
-  for (const name of applyEnvironmentAliases(environment).conflicts) {
-    console.warn(
-      `${name} is also set under its XIONGBAO_ name; using the XIONGBAO_ value.`,
-    );
-  }
+  reportEnvironmentAliases(applyEnvironmentAliases(environment));
   const google = oauthClient(environment, "GOOGLE");
   const auth = authConfig(environment, google);
   const organizationAuthValue = optional(
     environment,
-    "OPENBOT_ORGANIZATION_AUTH_URL",
+    "XIONGBAO_ORGANIZATION_AUTH_URL",
   );
   const organizationAuthUrl = organizationAuthValue
     ? organizationAuthority(organizationAuthValue)
@@ -1890,7 +1890,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
   const managedAgent = managedAgentConfig(environment);
   const githubApp = githubAppConfig(environment);
   const publicUrl = (
-    optional(environment, "OPENBOT_PUBLIC_URL") ?? auth?.baseUrl
+    optional(environment, "XIONGBAO_PUBLIC_URL") ?? auth?.baseUrl
   )?.replace(/\/+$/, "");
   // GitHub sends people back to this address after they approve. Without it linking is silently
   // switched off, so say so at start-up instead.
@@ -1907,13 +1907,13 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     keyEncryptionKey: deploymentKey,
   });
   const appUrl = (
-    optional(environment, "OPENBOT_APP_URL") ??
+    optional(environment, "XIONGBAO_APP_URL") ??
     commaSeparated(environment, "TRUSTED_ORIGINS")[0] ??
-    optional(environment, "OPENBOT_PUBLIC_URL") ??
+    optional(environment, "XIONGBAO_PUBLIC_URL") ??
     auth?.baseUrl
   )?.replace(/\/+$/, "");
 
-  const edition = parseEdition(optional(environment, "OPENBOT_EDITION"));
+  const edition = parseEdition(optional(environment, "XIONGBAO_EDITION"));
 
   // Built first and checked after, so every refusal the team edition gives keeps its order.
   const loaded = {
@@ -1929,8 +1929,8 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     agentEndpointAllowedHosts: agentEndpointAllowedHosts(environment),
     ...thisMachineHost(environment),
     deploymentId: optional(environment, "DEPLOYMENT_ID"),
-    ...(optional(environment, "OPENBOT_BUILD_VERSION")
-      ? { version: optional(environment, "OPENBOT_BUILD_VERSION") as string }
+    ...(optional(environment, "XIONGBAO_BUILD_VERSION")
+      ? { version: optional(environment, "XIONGBAO_BUILD_VERSION") as string }
       : {}),
     composioApiKey: optional(environment, "COMPOSIO_API_KEY"),
     ...brokerProviderConfig(environment),
@@ -1940,10 +1940,10 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
       optional(environment, "TENANT_PACKAGE_DIR") ?? "../examples/xiongbao",
     runtime: runtimeCapabilities(environment),
     memoryDefaults: {
-      sources: switchedOn(environment, "OPENBOT_MEMORY_SOURCE_DEFAULTS"),
+      sources: switchedOn(environment, "XIONGBAO_MEMORY_SOURCE_DEFAULTS"),
       // Off unless asked for: a Bot offers a check-in in the conversation instead (`offer_check_in`).
       research: ["true", "1"].includes(
-        optional(environment, "OPENBOT_PROACTIVE_DEFAULTS") ?? "",
+        optional(environment, "XIONGBAO_PROACTIVE_DEFAULTS") ?? "",
       ),
     },
     agentStallTimeoutMs: agentStallTimeoutMs(environment),
@@ -1984,7 +1984,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     computer: computerConfig(environment),
     modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
     localLearning:
-      optional(environment, "OPENBOT_LOCAL_LEARNING")?.toLowerCase() !== "off",
+      optional(environment, "XIONGBAO_LOCAL_LEARNING")?.toLowerCase() !== "off",
     sidebarAutoCompaction: autoCompactionEnabled(environment),
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own

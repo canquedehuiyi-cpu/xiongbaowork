@@ -24,7 +24,7 @@ import { createComposioClient } from "../src/plugins/composio-adapter";
  * narrowed by a runtime check that says what was missing, not by a cast that asserts it was there.
  *
  * SKIPPED WITHOUT A KEY, so CI and a contributor with no Composio account are unaffected. Run it
- * deliberately: `OPENBOT_LIVE_COMPOSIO=1 COMPOSIO_API_KEY=... bun test tests/composio-live.test.ts`.
+ * deliberately: `XIONGBAO_LIVE_COMPOSIO=1 COMPOSIO_API_KEY=... bun test tests/composio-live.test.ts`.
  *
  * IT READS AND IT FAILS ON PURPOSE. Every action it calls is a read; the user id it calls for is one
  * nobody has connected, and the one action it calls that is allowed to reach a third party is a
@@ -32,7 +32,7 @@ import { createComposioClient } from "../src/plugins/composio-adapter";
  * the failure is the assertion.
  */
 const key = process.env.COMPOSIO_API_KEY?.trim();
-const live = process.env.OPENBOT_LIVE_COMPOSIO === "1" && Boolean(key);
+const live = process.env.XIONGBAO_LIVE_COMPOSIO === "1" && Boolean(key);
 
 /** A user id nobody has connected, so no call below can reach an account that belongs to somebody. */
 const NOBODY = "xiongbao-live-test-nobody";

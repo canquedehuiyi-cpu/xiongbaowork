@@ -178,7 +178,7 @@ test("parseArgs takes --desktop-helper and --desktop-engine, and refuses an unkn
     "agent-desktop",
   );
   expect(
-    parsed([], { OPENBOT_DESKTOP_ENGINE: " legacy " }).desktop.engine,
+    parsed([], { XIONGBAO_DESKTOP_ENGINE: " legacy " }).desktop.engine,
   ).toBe("legacy");
   // A relative helper is taken from the launch directory, like a browser executable.
   expect(parsed(["--desktop-helper", "bin/ad"]).desktop.helper).toBe(
@@ -187,8 +187,8 @@ test("parseArgs takes --desktop-helper and --desktop-engine, and refuses an unkn
 
   // The environment is the same switch, and the flag wins over it.
   const env = {
-    OPENBOT_DESKTOP_HELPER: "/env/agent-desktop",
-    OPENBOT_DESKTOP_ENGINE: "agent-desktop",
+    XIONGBAO_DESKTOP_HELPER: "/env/agent-desktop",
+    XIONGBAO_DESKTOP_ENGINE: "agent-desktop",
   };
   expect(parsed([], env).desktop).toMatchObject({
     helper: "/env/agent-desktop",
@@ -206,7 +206,7 @@ test("parseArgs takes --desktop-helper and --desktop-engine, and refuses an unkn
   expect(
     parseArgs(
       [...SERVER],
-      { OPENBOT_DESKTOP_ENGINE: "AgentDesktop" },
+      { XIONGBAO_DESKTOP_ENGINE: "AgentDesktop" },
       "/launch",
     ),
   ).toBe(refused);
@@ -243,7 +243,7 @@ test("M7: an unknown engine is the default engine, said once on stderr, when the
     [["--desktop-engine", "uia"], {}],
     [["--desktop-engine", "agent_desktop"], {}],
     [["--desktop-engine"], {}],
-    [[], { OPENBOT_DESKTOP_ENGINE: "Agent-Desktop" }],
+    [[], { XIONGBAO_DESKTOP_ENGINE: "Agent-Desktop" }],
   ] as const) {
     const result = parseArgs([...SERVER, ...argv], { ...env }, "/launch", tell);
     if (typeof result === "string") throw new Error(result);

@@ -28,21 +28,21 @@ Windows 命令块由人工验收。GHCR 包设为公开之前，未登录的拉�
 ## 2. Compose 形态
 
 这个 Compose 文件只管理本产品独立服务与卷。在新建空目录中下载同一标签的 Compose 文件、配置模板和
-Release 附件 `container-images.json`，生成密钥，并把 `OPENBOT_IMAGE` 设为其中的 digest 引用（见第 7 节）。
-需要 curl、OpenSSL 和 jq。不设置 `OPENBOT_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
+Release 附件 `container-images.json`，生成密钥，并把 `XIONGBAO_IMAGE` 设为其中的 digest 引用（见第 7 节）。
+需要 curl、OpenSSL 和 jq。不设置 `XIONGBAO_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
 
 ```bash
-OPENBOT_TAG=v0.2.13
-raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/xiongbao/docker"
+XIONGBAO_TAG=v0.2.13
+raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${XIONGBAO_TAG}/xiongbao/docker"
 mkdir -p docker
 curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
 curl --fail --silent --show-error --location -o .env.delivery "$raw/delivery.env.example"
 chmod 600 .env.delivery
 printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
 curl --fail --silent --show-error --location -o container-images.json \
-  "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/$OPENBOT_TAG/container-images.json"
-printf 'OPENBOT_IMAGE=%s\n' "$(jq -r .images.openbot.reference container-images.json)" >> .env.delivery
-grep -E '^OPENBOT_IMAGE=ghcr\.io/.+@sha256:[0-9a-f]{64}$' .env.delivery
+  "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/$XIONGBAO_TAG/container-images.json"
+printf 'XIONGBAO_IMAGE=%s\n' "$(jq -r .images.openbot.reference container-images.json)" >> .env.delivery
+grep -E '^XIONGBAO_IMAGE=ghcr\.io/.+@sha256:[0-9a-f]{64}$' .env.delivery
 ```
 
 Compose 文件按 `docker/` 目录相对读取上一级的 `.env.delivery`；最后一行应打印 digest 形式的镜像引用。
@@ -57,7 +57,7 @@ docker compose --project-name xiongbao-local --env-file .env.delivery \
 ```
 
 PowerShell 可把命令写在一行，或用反引号续行。修改宿主端口时，
-在 `.env.delivery` 设 `OPENBOT_PORT=新端口` 并同步 `OPENBOT_PUBLIC_URL`。
+在 `.env.delivery` 设 `XIONGBAO_PORT=新端口` 并同步 `XIONGBAO_PUBLIC_URL`。
 停服用同一 `--project-name` 的 `stop`；`down` 会删容器而保留卷，禁止在升级时加 `-v`。
 开发用 `xiongbao/docker-compose.yml` 不作为交付起法，它还包含开发用服务和宿主进程假设。
 
@@ -78,15 +78,15 @@ docker exec <容器名> sh -c 'export DATABASE_URL="$(cat /run/s6/container_envi
 能在容器里执行命令的人已经掌握数据库和全部密钥，所以由他指定首位管理员。这条命令会写一条审计记录。
 
 ```dotenv
-OPENBOT_SINGLE_USER=false
-OPENBOT_PUBLIC_URL=https://employees.example.com
+XIONGBAO_SINGLE_USER=false
+XIONGBAO_PUBLIC_URL=https://employees.example.com
 BETTER_AUTH_URL=https://employees.example.com
 BETTER_AUTH_SECRET=<至少32字符的随机值>
 INITIAL_ADMIN_EMAILS=admin@example.com
 TRUSTED_ORIGINS=https://employees.example.com
 KEY_ENCRYPTION_KEY=<32字节随机值的base64>
-OPENBOT_RLS_ENFORCE=refuse
-OPENBOT_SELF_HOST_BANNER=false
+XIONGBAO_RLS_ENFORCE=refuse
+XIONGBAO_SELF_HOST_BANNER=false
 ```
 
 将示例域名与占位值替换后再启动。反向代理转发到本机 3772，保留同一 origin 的 API 与 SPA，
@@ -124,7 +124,7 @@ OPENBOT_SELF_HOST_BANNER=false
 
 1. 选一个专用域名，例如 `apps.example.com`，设 `XIONGBAO_CONTENT_DOMAIN=apps.example.com`
    （只写主机名，不要协议、端口和路径；**不能等于或是应用所在域名的上级**：应用在 `app.example.com`，
-   就不能把内容域名设成 `example.com`，否则整个应用都会被当成内容源。启动时会按 `OPENBOT_PUBLIC_URL`、
+   就不能把内容域名设成 `example.com`，否则整个应用都会被当成内容源。启动时会按 `XIONGBAO_PUBLIC_URL`、
    前端地址和 `TRUSTED_ORIGINS` 里的主机名检查，撞上就拒绝启动）。设了域名就不再单独监听内容端口，
    `XIONGBAO_CONTENT_PORT` 不再起作用，3773 也不必放行。
    **内容域名请用与应用不同的可注册域**（例如应用在 `app.example.com`，内容放在另一个域名下，而不是 `apps.example.com`）：
@@ -211,9 +211,9 @@ ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:<URL编码口令>@db.exa
 
 <!-- g7:external-migrate:begin -->
 ```bash
-OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
+XIONGBAO_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
 docker run --rm --env-file .env.migration --entrypoint /bin/sh \
-  "$OPENBOT_IMAGE" \
+  "$XIONGBAO_IMAGE" \
   -c 'cd /app/server && exec /usr/local/bin/bun scripts/migrate.ts'
 ```
 <!-- g7:external-migrate:end -->
@@ -241,7 +241,7 @@ SELECT rolname, rolsuper, rolbypassrls FROM pg_roles
 
 发布镜像在构建期内置 `examples/xiongbao` 品牌包。SPA 首屏标题与主 JS 品牌在构建期注入，
 只设置运行期 TENANT_PACKAGE_DIR 不会重写 bundle；换品牌包需要按附录从源码构建。
-推广条默认关闭（只有 `OPENBOT_SELF_HOST_BANNER=true` 且租户包配了 `support_url` 才显示），这里保留 `=false` 只是显式声明。
+推广条默认关闭（只有 `XIONGBAO_SELF_HOST_BANNER=true` 且租户包配了 `support_url` 才显示），这里保留 `=false` 只是显式声明。
 
 模型可在产品模型库接入并绑定到员工；部署默认的 OpenAI 兼容接口配置为：
 
@@ -299,7 +299,7 @@ DEEPSEEK_THINKING=disabled
 5. **健康检查地址是 `/health`，不是 `/api/health`。** 后者会返回 404。
 6. **要在自己电脑上执行命令，得跟本人的「我的分身」说。**
    - 生产默认 `TENANT_RUNTIME=device`：员工的电脑操作跑在这个员工**主人**配对的设备上（`server/src/devices/selection.ts`）。品牌包的公共员工不归任何人，所以永远用不了谁的电脑，会提示 "does not belong to a tenant with machines of its own."。
-   - v0.2.0 里侧栏那段「我的分身」对话（`/channel/channel_<uuid>`）其实由公共员工 `general-assistant` 接，它当时也叫「我的分身」，所以在这段对话里用不了电脑。这段对话是首页「开始新对话」不 @ 时默认交给第一个公共员工建出来的；多用户部署（`OPENBOT_SINGLE_USER=false`）不会给每个人建品牌包的对话。实测改为跟本人的分身（`avatar-<本人>`）对话后，命令在配对的 Windows 设备上跑通了。
+   - v0.2.0 里侧栏那段「我的分身」对话（`/channel/channel_<uuid>`）其实由公共员工 `general-assistant` 接，它当时也叫「我的分身」，所以在这段对话里用不了电脑。这段对话是首页「开始新对话」不 @ 时默认交给第一个公共员工建出来的；多用户部署（`XIONGBAO_SINGLE_USER=false`）不会给每个人建品牌包的对话。实测改为跟本人的分身（`avatar-<本人>`）对话后，命令在配对的 Windows 设备上跑通了。
    - 已修复（#283、#286）：
      - 公共员工改名「通用助手」，它的说明写明不代表任何人、用不了任何人的电脑。
      - 每个人第一次打开应用（读对话列表）时，自动有一段和本人分身的对话「我的分身」；删掉的不会再补回来。
@@ -437,7 +437,7 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 
 升级先备份，按第 7 节取得新版本的 digest 并校验来源，在隔离环境验证迁移；
 单容器重建时使用原命名卷和原 env-file，镜像写成 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<新 digest>`。
-Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
+Compose 把 `.env.delivery` 中的 `XIONGBAO_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
 内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
 停旧容器用 `docker stop`（单容器加 `--time 30`；Compose 的开发文件已给 server 设 `stop_grace_period: 30s`），
 不要用 `docker rm -f`：它直接 SIGKILL，服务端来不及收尾。微信 ClawBot 的消息按「至多一次」处理：
@@ -564,18 +564,56 @@ COMMIT;
 
 全量回退仍然是恢复备份（本节开头）。
 
+### 6.3 配置名前缀改为 XIONGBAO_（v0.2.16 起）
+
+从 v0.2.16 起，代码读取的配置名一律以 `XIONGBAO_` 开头。旧版本 env 文件里以 `OPENBOT_` 开头的名字在 v0.2.16 里仍然认，
+到 v0.2.17 不再认，在那之前改掉即可。
+
+1. **不改也能升级。** 启动时只有旧名的设置被复制成新名，服务端日志出现一行
+   `These settings still use the old OPENBOT_ prefix, which keeps working for now; rename each to its XIONGBAO_ name: …`，
+   后面列出要改的名字。只列名字，不列值。
+2. **新旧名都写了且值不同：以新名为准**，日志对每个这样的旧名打一行，例如
+   `OPENBOT_PUBLIC_URL and XIONGBAO_PUBLIC_URL are both set and differ; using XIONGBAO_PUBLIC_URL.`，服务照常启动。值相同不算冲突。
+   **空的新名等于没设**：`XIONGBAO_PUBLIC_URL=` 这样的空行挡不住旧名，生效的仍是旧值。想去掉某个旧设置，要删掉（或注释掉）那一行旧名，
+   不能靠写一个空的新名。
+3. **Compose 的镜像与端口变量**：v0.2.16 起的 `docker/compose.delivery.yml` 新名优先、旧名其次：`XIONGBAO_IMAGE` 没设时读
+   `OPENBOT_IMAGE`，端口写成 `${XIONGBAO_PORT:-${OPENBOT_PORT:-3772}}`，`.env.delivery` 里的旧名照样生效。更早的 Compose 文件只认旧名，所以**先按第 2 节换上新标签的 `compose.delivery.yml`，再改 env 文件**。
+4. **平台模型的密钥变量不改名**（用 `server/scripts/platform-models.ts add --api-key-env` 登记的那些）：模型池在数据库里记着变量名，
+   随数据库迁移一起改，在那之前不要手改。
+5. **一次改完**（可选）：在放 `.env.delivery` 的目录，下载与新版本同标签的改写脚本并执行一次：
+
+   ```bash
+   curl --fail --silent --show-error --location -o rewrite-env.sh \
+     "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${XIONGBAO_TAG}/xiongbao/scripts/rebrand/rewrite-env.sh"
+   sh rewrite-env.sh .env.delivery
+   ```
+
+   脚本先把原文件复制成 `.env.delivery.bak-<UTC 时间>`（权限 0600），再把每个旧名的行改成新名，例如
+   `OPENBOT_PUBLIC_URL=` 改成 `XIONGBAO_PUBLIC_URL=`。改写前后生效的值完全一样：文件里已经有同名新行且有值时，旧行加 `# ` 注释掉
+   （运行时本来就以新名为准）；同名新行只有空值时，运行时生效的是旧值，所以注释掉的是空的新行，旧行照常改名。
+   平台模型的密钥变量保持原样。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
+   改完照常 `up -d`。要退回，把备份文件改回原名即可。源码目录的 `.env` 也可以这样改，`scripts/start.sh` 同样新名优先、旧名其次。
+6. **用开发 Compose（`xiongbao/docker-compose.yml`，本机更新器的 image 拓扑）安装的 v0.2.15 暂时不能原地升级。**
+   这一版里该文件的 Compose 项目名、卷名和数据库名已经改了，v0.2.15 的本机更新器会在停服之前发现这些变化并拒绝更新，
+   不停服务、不动数据库。请等包含数据迁移（R3）的 v0.2.16 正式版发布后再升级，那一版会把已有的卷和数据库接过来；在那之前
+   不要手工用新文件 `docker compose up`，否则会起一个使用全新空卷的新项目，原有数据仍在旧卷里但不会被用到。
+   交付容器（`docker/compose.delivery.yml`，第 1、2 节的起法）不受影响，按本节前几条升级即可。
+7. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。
+   chart 自己用新名下发的几项（如来自 `config.publicUrl` 的公网地址、单用户开关）若又在 `config.extraEnv` 里用旧名写了不同的值，
+   现在一律以 chart 下发的新名值为准，服务端日志点名这个冲突；以前两者同名，按 env 列表的先后决定。
+
 ## 7. 版本固定与来源校验
 
 每个 GitHub Release 附带 `container-images.json`，记录该标签发布时经过 Gate 1 验证的 digest。
 部署和升级使用 digest，而不是可移动的标签；部署前可校验镜像由本仓库的发布流程构建。
 
 ```bash
-OPENBOT_TAG=v0.2.13
-gh release download "$OPENBOT_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
-OPENBOT_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
-gh attestation verify "oci://$OPENBOT_IMAGE" -R canquedehuiyi-cpu/xiongbaowork
-docker pull "$OPENBOT_IMAGE"
-docker image inspect "$OPENBOT_IMAGE" --format '{{json .RepoDigests}}'
+XIONGBAO_TAG=v0.2.13
+gh release download "$XIONGBAO_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
+XIONGBAO_IMAGE="$(jq -r .images.openbot.reference container-images.json)"
+gh attestation verify "oci://$XIONGBAO_IMAGE" -R canquedehuiyi-cpu/xiongbaowork
+docker pull "$XIONGBAO_IMAGE"
+docker image inspect "$XIONGBAO_IMAGE" --format '{{json .RepoDigests}}'
 ```
 
 `reference` 形如 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<64 位十六进制>`；
@@ -651,4 +689,4 @@ docker build --build-arg TENANT_PACKAGE_DIR=../examples/xiongbao \
 
 品牌包必须在 build context 内（这里是 `xiongbao/`）；相对路径以 server 为基准。
 自定义包要同时配置构建参数和运行期 TENANT_PACKAGE_DIR。之后把上文命令中的镜像换成
-`xiongbao-digital-employee:local`（单容器跳过 `docker pull`）；Compose 未设置 `OPENBOT_IMAGE` 时默认使用这个本机标签。
+`xiongbao-digital-employee:local`（单容器跳过 `docker pull`）；Compose 未设置 `XIONGBAO_IMAGE` 时默认使用这个本机标签。

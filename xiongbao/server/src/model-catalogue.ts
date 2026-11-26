@@ -921,7 +921,7 @@ export function createModelCatalogue(options: {
   refreshMs?: number;
   timeoutMs?: number;
   /**
-   * Where capability data is read: models.dev unless `OPENBOT_MODEL_CAPABILITIES_URL` says
+   * Where capability data is read: models.dev unless `XIONGBAO_MODEL_CAPABILITIES_URL` says
    * otherwise. `off` (or null here) reads none, which leaves each provider's own data.
    */
   capabilitiesUrl?: string | null;
@@ -938,7 +938,7 @@ export function createModelCatalogue(options: {
   const capabilitiesUrl = (() => {
     const configured =
       options.capabilitiesUrl === undefined
-        ? environment.OPENBOT_MODEL_CAPABILITIES_URL?.trim() || MODELS_DEV
+        ? environment.XIONGBAO_MODEL_CAPABILITIES_URL?.trim() || MODELS_DEV
         : options.capabilitiesUrl;
     return !configured || configured === "off" ? null : configured;
   })();

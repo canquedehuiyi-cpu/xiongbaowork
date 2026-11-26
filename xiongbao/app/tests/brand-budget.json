@@ -36,23 +36,13 @@
   },
   {
     "rule": "env-name",
-    "scope": "runner/src",
-    "lines": 3
-  },
-  {
-    "rule": "env-name",
     "scope": "server/src",
-    "lines": 42
-  },
-  {
-    "rule": "env-name",
-    "scope": "shared/this-machine.ts",
-    "lines": 2
+    "lines": 1
   },
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 34
+    "lines": 22
   },
   {
     "rule": "identifier",
@@ -62,27 +52,17 @@
   {
     "rule": "identifier",
     "scope": "docker/delivery.env.example",
-    "lines": 7
-  },
-  {
-    "rule": "identifier",
-    "scope": "docker/s6",
-    "lines": 8
-  },
-  {
-    "rule": "identifier",
-    "scope": "server/src",
-    "lines": 41
-  },
-  {
-    "rule": "identifier",
-    "scope": "shared/activity-rows.ts",
     "lines": 1
   },
   {
     "rule": "identifier",
-    "scope": "shared/bot-prompt.ts",
-    "lines": 3
+    "scope": "docker/s6",
+    "lines": 7
+  },
+  {
+    "rule": "identifier",
+    "scope": "server/src",
+    "lines": 39
   },
   {
     "rule": "identifier",
@@ -102,7 +82,7 @@
   {
     "rule": "identifier",
     "scope": "toolkit/src",
-    "lines": 26
+    "lines": 19
   },
   {
     "rule": "mit-attribution",

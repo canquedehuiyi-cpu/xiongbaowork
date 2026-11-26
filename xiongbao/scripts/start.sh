@@ -25,7 +25,9 @@ if [ -f "$ROOT/.openbot-update-journal.json" ]; then
   # must not run source whose migration/activation was interrupted.
   bun "$ROOT/scripts/update.ts" local assert-start --root "$ROOT"
 fi
-if [ -f "$ROOT/.openbot-release.json" ] && [ -z "${OPENBOT_UPDATE_OPERATION:-}" ]; then
+# The v0.2.15 local updater runs this script with OPENBOT_UPDATE_OPERATION, the name before the rename.
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+if [ -f "$ROOT/.openbot-release.json" ] && [ -z "${XIONGBAO_UPDATE_OPERATION:-${OPENBOT_UPDATE_OPERATION:-}}" ]; then
   # Keep ordinary host restarts on the accepted build identity. Quoting each export treats
   # release strings as data; no shell text from metadata is evaluated.
   release_environment="$(bun "$ROOT/scripts/update.ts" local build-environment --root "$ROOT")"
@@ -74,7 +76,8 @@ SUPERVISOR_PORT="$(setting SUPERVISOR_PORT 4500)"
 # Through `setting`, like every other key here, so `.env` counts as the comment above says and as
 # docs/configuration.md tells people to rely on. Read from the environment alone, `false` in `.env`
 # was ignored: the supervisor was still started and the server still told to use it.
-ONE_COMPUTER_EACH="$(setting OPENBOT_ONE_COMPUTER_EACH true)"
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the old name in a .env written before the rename
+ONE_COMPUTER_EACH="$(setting XIONGBAO_ONE_COMPUTER_EACH "$(setting OPENBOT_ONE_COMPUTER_EACH true)")"
 export APP_PORT SERVER_PORT
 SUPERVISOR_TOKEN="$(setting SUPERVISOR_TOKEN xiongbao-dev-supervisor-token)"
 COMPUTER_TOKEN="$(setting COMPUTER_TOKEN xiongbao-dev-computer-token)"
@@ -104,7 +107,8 @@ WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET xiongbao-dev-worker-secret)
 # The personal edition runs its Personal Assistant inside the server, so it starts no Bot process and
 # names no managed endpoint unless .env does. Its one computer carries only the one person's Bots, so
 # it is started as theirs.
-EDITION="$(setting OPENBOT_EDITION team)"
+# legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the old name in a .env written before the rename
+EDITION="$(setting XIONGBAO_EDITION "$(setting OPENBOT_EDITION team)")"
 if [ "$EDITION" = "personal" ]; then
   MANAGED_AGENT_AG_UI_URL="$(setting MANAGED_AGENT_AG_UI_URL "")"
   COMPUTER_PERSON_ID=personal
@@ -427,6 +431,7 @@ if [ "$worker_running" = false ]; then
   # isolation preflight before its first tick and refuses the owner, a superuser. It decides with the
   # mode the server reads from .env (either spelling) and the same NODE_ENV, so the two agree.
   WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://openbot_app:openbot@localhost:5432/xiongbao)"
+  # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，the old name in a .env written before the rename
   WORKER_RLS_ENFORCE="$(setting XIONGBAO_RLS_ENFORCE "$(setting OPENBOT_RLS_ENFORCE "")")"
   WORKER_NODE_ENV="$(setting NODE_ENV "")"
   (cd "$ROOT" && \

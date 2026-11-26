@@ -34,11 +34,11 @@ export function createReleaseStatusRoutes(
   env: NodeJS.ProcessEnv = process.env,
 ) {
   const identity = {
-    version: env.OPENBOT_BUILD_VERSION,
-    commit: env.OPENBOT_BUILD_COMMIT,
-    distributionId: env.OPENBOT_BUILD_DISTRIBUTION_ID,
-    repository: env.OPENBOT_BUILD_REPOSITORY,
-    channel: env.OPENBOT_BUILD_CHANNEL,
+    version: env.XIONGBAO_BUILD_VERSION,
+    commit: env.XIONGBAO_BUILD_COMMIT,
+    distributionId: env.XIONGBAO_BUILD_DISTRIBUTION_ID,
+    repository: env.XIONGBAO_BUILD_REPOSITORY,
+    channel: env.XIONGBAO_BUILD_CHANNEL,
   };
   const valid =
     Object.values(identity).every(

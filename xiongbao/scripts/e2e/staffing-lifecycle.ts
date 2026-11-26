@@ -365,7 +365,7 @@ const serverEnv: Record<string, string> = {
   KEY_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
   BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
   BETTER_AUTH_URL: ORIGIN,
-  OPENBOT_PUBLIC_URL: ORIGIN,
+  XIONGBAO_PUBLIC_URL: ORIGIN,
   INITIAL_ADMIN_EMAILS: ADMIN_EMAIL,
   INTELLIGENCE_MODE: "local",
   TENANT_PACKAGE_DIR: "../examples/xiongbao",

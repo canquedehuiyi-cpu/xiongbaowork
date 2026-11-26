@@ -28,9 +28,9 @@ import { setWebBotAuth } from "../src/web-bot-auth";
  * Asked for by name, like `webrtc-proxy.test.ts`: it launches a real Chromium.
  *
  *   cd agent-computer && bunx playwright install chromium
- *   OPENBOT_COMPUTER_BROWSER=1 COMPUTER_BROWSER_MODE=headless bun test tests/web-bot-auth-browser.test.ts
+ *   XIONGBAO_COMPUTER_BROWSER=1 COMPUTER_BROWSER_MODE=headless bun test tests/web-bot-auth-browser.test.ts
  */
-const asked = process.env.OPENBOT_COMPUTER_BROWSER === "1";
+const asked = process.env.XIONGBAO_COMPUTER_BROWSER === "1";
 const AGENT = "https://xiongbao.example.com";
 
 type Seen = {

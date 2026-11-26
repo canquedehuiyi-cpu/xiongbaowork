@@ -13,7 +13,7 @@
  *  - nothing ships a fixed value, which would be a credential published in this repository.
  *
  * Kept across upgrades is `lookup`'s job, which needs a cluster: the last block runs against one when
- * OPENBOT_KIND_KUBECONFIG names a disposable cluster (see tests/promote-kubernetes-kind.test.ts).
+ * XIONGBAO_KIND_KUBECONFIG names a disposable cluster (see tests/promote-kubernetes-kind.test.ts).
  */
 import { describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
@@ -22,7 +22,7 @@ import { join } from "node:path";
 import { parseAllDocuments } from "yaml";
 
 const helm = Bun.which("helm") !== null;
-const kubeconfig = process.env.OPENBOT_KIND_KUBECONFIG;
+const kubeconfig = process.env.XIONGBAO_KIND_KUBECONFIG;
 const chart = join(import.meta.dir, "../charts/xiongbao");
 const SANDBOX_API = [
   "--api-versions",

@@ -340,14 +340,14 @@ describe("the --desktop-compare table", () => {
     expect(
       parseDesktopCompare(
         ["--desktop-compare", "--desktop-helper", "bin/agent-desktop"],
-        { OPENBOT_DESKTOP_HELPER: "/elsewhere/agent-desktop" },
+        { XIONGBAO_DESKTOP_HELPER: "/elsewhere/agent-desktop" },
         "/here",
       ),
     ).toEqual({ helper: resolve("/here", "bin/agent-desktop") });
     expect(
       parseDesktopCompare(
         ["--desktop-compare"],
-        { OPENBOT_DESKTOP_HELPER: "/elsewhere/agent-desktop" },
+        { XIONGBAO_DESKTOP_HELPER: "/elsewhere/agent-desktop" },
         "/here",
       ),
     ).toEqual({ helper: resolve("/here", "/elsewhere/agent-desktop") });

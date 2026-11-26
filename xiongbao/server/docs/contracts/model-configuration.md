@@ -64,7 +64,7 @@ DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你
 `risk-analyst`，不动它），而 A 线只有 `xiongbao/server/**` 与 `xiongbao/server/docs/contracts`。
 
 要谁认领都行，形状就是上面那三条断言：
-- 落到 `xiongbao/server/tests/smoke/qoderwake-chat.test.ts`（`OPENBOT_SMOKE=1` 才跑，默认跳过）→ 需要同时给
+- 落到 `xiongbao/server/tests/smoke/qoderwake-chat.test.ts`（`XIONGBAO_SMOKE=1` 才跑，默认跳过）→ 需要同时给
   `xiongbao/package.json` 加一条 `test:smoke:qoderwake`（B 名下）；
 - 或直接放 `xiongbao/tests/smoke/` 复用现有脚本（该目录归属见分工表）。
 凭据：只用 `.env` 里那把 key，且**每次跑之前问用户**（会产生真实外部调用）。

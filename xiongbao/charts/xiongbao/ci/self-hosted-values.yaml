@@ -11,7 +11,7 @@ config:
   publicUrl: https://xiongbao.internal
   # The bundled database connects as its superuser, and the chart refuses that unless it is said.
   extraEnv:
-    - name: OPENBOT_RLS_ENFORCE
+    - name: XIONGBAO_RLS_ENFORCE
       value: warn
 postgresql:
   enabled: true

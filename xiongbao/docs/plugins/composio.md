@@ -486,7 +486,7 @@ already holds, **Connect** goes nowhere: it opens a form and asks for it. The re
 is about the trip; the section above is about the form.
 
 **The address they come back to is built here, and a caller has no say in it.** It is this
-deployment's `OPENBOT_APP_URL` plus one of two known pages, so what a request can choose is which
+deployment's `XIONGBAO_APP_URL` plus one of two known pages, so what a request can choose is which
 page and never which site: an address taken from a body or a query would be an open redirect with a
 consent screen in front of it, which is the same reason this deployment's own OAuth flow narrows its
 `returnTo` to a name. A deployment with no app URL configured has no absolute address to hand over

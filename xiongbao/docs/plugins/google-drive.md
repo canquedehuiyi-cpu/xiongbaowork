@@ -42,7 +42,7 @@ credential is otherwise good is most often this API not being enabled on the pro
 Type **Web application**. Under **Authorised redirect URIs**, add this deployment's callback:
 
 ```
-<OPENBOT_PUBLIC_URL>/api/plugins/oauth/callback
+<XIONGBAO_PUBLIC_URL>/api/plugins/oauth/callback
 ```
 
 Locally that is `http://localhost:3001/api/plugins/oauth/callback` — port 3001, the API, not 3010,
@@ -50,7 +50,7 @@ the app. The callback lands on the API and redirects back to the app afterwards.
 
 It has to match character for character: scheme, host, port, path, no trailing slash. XiongBao Work shows
 the exact string to paste under the **Connection** section of the plugin page, built from
-`OPENBOT_PUBLIC_URL` rather than from the incoming request — a redirect URI assembled from a request
+`XIONGBAO_PUBLIC_URL` rather than from the incoming request — a redirect URI assembled from a request
 header is one an attacker has a say in. Copy it from there rather than typing it.
 
 Keep the client ID and client secret for the next step.
@@ -176,7 +176,7 @@ rather than handed an empty string it would fill in from memory.
 ## See also
 
 - [Architecture](../architecture.md) — where plugins, grants, policy and audit sit.
-- [Configuration](../configuration.md) — `OPENBOT_PUBLIC_URL`, `OPENBOT_APP_URL`,
+- [Configuration](../configuration.md) — `XIONGBAO_PUBLIC_URL`, `XIONGBAO_APP_URL`,
   `KEY_ENCRYPTION_KEY`.
 - [Google Drive API](https://developers.google.com/workspace/drive/api/reference/rest/v3) — the REST
   API this connector calls.

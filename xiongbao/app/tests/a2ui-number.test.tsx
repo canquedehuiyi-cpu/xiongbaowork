@@ -3,13 +3,13 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { OPENBOT_UI } from "@/lib/copilot/a2ui";
+import { XIONGBAO_UI } from "@/lib/copilot/a2ui";
 
 beforeAll(() => GlobalRegistrator.register());
 afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
-const definition = OPENBOT_UI.components.get("TextField");
+const definition = XIONGBAO_UI.components.get("TextField");
 if (!definition) throw new Error("Missing TextField");
 const Field = definition.component;
 function Budget() {

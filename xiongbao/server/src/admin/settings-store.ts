@@ -92,7 +92,7 @@ export type ModelUsageSummary = {
 let fixed: Partial<EnterpriseSettings> = {};
 
 /**
- * One person on their own machine (`OPENBOT_SINGLE_USER`) is shown every model their credential
+ * One person on their own machine (`XIONGBAO_SINGLE_USER`) is shown every model their credential
  * lists, so nothing stored, by an earlier team deployment or anybody, narrows it: the model
  * allowlist is off for them, as it is for the personal edition.
  */

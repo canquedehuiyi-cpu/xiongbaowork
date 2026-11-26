@@ -1467,7 +1467,7 @@ const AUTHORIZATION_URL = "https://backend.composio.dev/s/a-bearer-capability";
  * Where this deployment tells Composio to send somebody back to, written out rather than composed.
  *
  * BUILT FROM THE DEPLOYMENT AND FROM NOTHING IN THE REQUEST, which is the property the tests below
- * are about. The origin is `testEnvironment`'s own — no `OPENBOT_APP_URL` is set, so it falls back
+ * are about. The origin is `testEnvironment`'s own — no `XIONGBAO_APP_URL` is set, so it falls back
  * through to `BETTER_AUTH_URL` — and the path is the account's page, which is where the person
  * pressed Connect and the page that asks Composio whether it worked.
  *
@@ -1977,7 +1977,7 @@ describe("connecting a brokered app", () => {
 
   test("a brokered row never reaches the checks that belong to the OAuth flow", async () => {
     /*
-     * The ordering, stated as its own case. This deployment has no OPENBOT_PUBLIC_URL and
+     * The ordering, stated as its own case. This deployment has no XIONGBAO_PUBLIC_URL and
      * `composio-linear` is in nobody's catalogue, so a brokered row that fell through to either of
      * the two checks below the branch would be answered "no public URL" or "is not connected as an
      * individual person" — the second of which is the opposite of true. Neither check applies: no
@@ -2156,11 +2156,11 @@ describe("connecting a brokered app", () => {
      * with no route back and nothing here knowing it happened.
      *
      * Single-user with no sign-in is the one deployment shape that genuinely has no app URL:
-     * everywhere else `OPENBOT_APP_URL`, `TRUSTED_ORIGINS` or the sign-in address supplies one.
+     * everywhere else `XIONGBAO_APP_URL`, `TRUSTED_ORIGINS` or the sign-in address supplies one.
      */
     const { authorized, connect } = brokeredApp(null, AUTHORIZATION_URL, {
       environment: {
-        OPENBOT_SINGLE_USER: "true",
+        XIONGBAO_SINGLE_USER: "true",
         BETTER_AUTH_URL: undefined,
         BETTER_AUTH_SECRET: undefined,
         GOOGLE_OAUTH_CLIENT_ID: undefined,
@@ -2630,7 +2630,7 @@ describe("connecting an app whose secret a person types", () => {
     /*
      * A SETTING WITH NO BEARING ON THIS FLOW DOES NOT GET TO REFUSE IT.
      *
-     * `OPENBOT_APP_URL` is where Composio sends somebody back to once they have consented, and this
+     * `XIONGBAO_APP_URL` is where Composio sends somebody back to once they have consented, and this
      * half has no consent screen to come back from: the key is typed here, no link is minted, and
      * nobody ever leaves the deployment. The guard for it used to stand in front of the fork, so a
      * single-user deployment with no sign-in — the one shape that genuinely has no app URL — could
@@ -2646,7 +2646,7 @@ describe("connecting an app whose secret a person types", () => {
       AUTHORIZATION_URL,
       {
         environment: {
-          OPENBOT_SINGLE_USER: "true",
+          XIONGBAO_SINGLE_USER: "true",
           BETTER_AUTH_URL: undefined,
           BETTER_AUTH_SECRET: undefined,
           GOOGLE_OAUTH_CLIENT_ID: undefined,
@@ -2722,12 +2722,12 @@ describe("connecting an app whose secret a person types", () => {
  * CRITERION. Pressing Connect on a `NO_AUTH` app is answered with what is true of it — there is no
  * account to make — in a sentence naming the app rather than the row, and nothing is asked of
  * Composio on the way: no form is drawn, no consent link is minted, and no key travels. The answer
- * is the same on a deployment with no `OPENBOT_APP_URL`, because that setting is where a consent
+ * is the same on a deployment with no `XIONGBAO_APP_URL`, because that setting is where a consent
  * comes back to and this flow has no consent to come back from.
  *
  * REASON. Thirty-four of Composio's toolkits resolve to `no-auth`, and `NO_AUTH` is the literal
  * recorded on their rows. It is not a field scheme, so the fork above dropped every one of them
- * into the consent arm, where they met one of two dead ends: a 503 demanding `OPENBOT_APP_URL` for
+ * into the consent arm, where they met one of two dead ends: a 503 demanding `XIONGBAO_APP_URL` for
  * a return leg that does not exist, or `broker.authorize`, which can only fail because
  * `ensureAuthConfig` deliberately creates no config for an app Composio refuses to hold one for —
  * answered with a sentence telling the person to remove the app and add it again, which would
@@ -2792,7 +2792,7 @@ describe("connecting an app that needs no account", () => {
      */
     const { authorized, connectNoAuth } = brokeredApp(null, AUTHORIZATION_URL, {
       environment: {
-        OPENBOT_SINGLE_USER: "true",
+        XIONGBAO_SINGLE_USER: "true",
         BETTER_AUTH_URL: undefined,
         BETTER_AUTH_SECRET: undefined,
         GOOGLE_OAUTH_CLIENT_ID: undefined,

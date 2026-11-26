@@ -55,10 +55,10 @@ test("startup closes updater pipes while its background services remain live", a
   await writeFile(
     join(root, ".env"),
     [
-      "OPENBOT_ONE_COMPUTER_EACH=false",
-      "OPENBOT_LEARNING_AUTO_ASSIGN=false",
+      "XIONGBAO_ONE_COMPUTER_EACH=false",
+      "XIONGBAO_LEARNING_AUTO_ASSIGN=false",
       "COMPOSIO_API_KEY=synthetic-configured-key",
-      "OPENBOT_BROKER_PROVIDER=composio",
+      "XIONGBAO_BROKER_PROVIDER=composio",
       "MANAGED_AGENT_TOKEN=synthetic-managed-token",
       "AGENT_TOOL_TOKEN=synthetic-tool-token",
     ].join("\n"),

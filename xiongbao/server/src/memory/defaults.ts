@@ -4,7 +4,7 @@
  * Both used to start only when a person set them up by hand, one Bot and one app at a time, so on a
  * fresh deployment a Bot remembered what it was told and nothing else. Now:
  *
- * - Only with OPENBOT_PROACTIVE_DEFAULTS=true: a person who talks to one of their Bots in a
+ * - Only with XIONGBAO_PROACTIVE_DEFAULTS=true: a person who talks to one of their Bots in a
  *   conversation with that Bot alone gets check-ins from it: the same read-only run
  *   (`proactive/restriction.ts`), hourly, first run one interval after the conversation so it never
  *   races it. Otherwise a Bot offers a check-in on one thing in the conversation
@@ -24,8 +24,8 @@
  * Removal waits for the lock; adoption only tries it and steps aside when it is held, so it never
  * parks a pooled connection behind another transaction.
  *
- * Off for the whole deployment with OPENBOT_MEMORY_SOURCE_DEFAULTS=false and
- * OPENBOT_PROACTIVE_DEFAULTS=false. Either switch stops new defaults; neither touches existing rows.
+ * Off for the whole deployment with XIONGBAO_MEMORY_SOURCE_DEFAULTS=false and
+ * XIONGBAO_PROACTIVE_DEFAULTS=false. Either switch stops new defaults; neither touches existing rows.
  * Memory sources are never adopted in an edition without memory (`editionHasMemory`), whatever the
  * switch says; background research still is.
  */
@@ -136,11 +136,11 @@ export type MemoryDefaults = ReturnType<typeof createMemoryDefaults>;
 export function createMemoryDefaults(options: {
   database: Database;
   ingestion: Pick<MemoryIngestion, "defaultSourceCandidates" | "sync">;
-  /** OPENBOT_MEMORY_SOURCE_DEFAULTS, on unless switched off. */
+  /** XIONGBAO_MEMORY_SOURCE_DEFAULTS, on unless switched off. */
   sources: boolean;
   /** Without memory (`editionHasMemory`), no source is adopted whatever `sources` says. */
   edition: Edition;
-  /** OPENBOT_PROACTIVE_DEFAULTS, on unless switched off. */
+  /** XIONGBAO_PROACTIVE_DEFAULTS, on unless switched off. */
   research: boolean;
   /** The Bots in this person's conversation, or null when it is not theirs. */
   channelBots(ownerUserId: string, channelId: string): Promise<string[] | null>;

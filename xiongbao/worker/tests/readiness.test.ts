@@ -83,7 +83,7 @@ describe("the worker's readiness gate", () => {
     const diagnostics: ReadinessDiagnostic[] = [];
     await checkRlsReadiness({
       database: database(facts("openbot", true, false)).database,
-      environment: { NODE_ENV: "production", OPENBOT_RLS_ENFORCE: "warn" },
+      environment: { NODE_ENV: "production", XIONGBAO_RLS_ENFORCE: "warn" },
       report: (event) => diagnostics.push(event),
     });
     expect(diagnostics.map((event) => event.type)).toEqual([
@@ -112,7 +112,7 @@ describe("the worker's readiness gate", () => {
     await expect(
       checkRlsReadiness({
         database: db,
-        environment: { OPENBOT_RLS_ENFORCE: "off" },
+        environment: { XIONGBAO_RLS_ENFORCE: "off" },
         report: () => {},
       }),
     ).rejects.toThrow('must be "refuse" or "warn"');

@@ -18,17 +18,17 @@ import { expectUnframedRefused, UNFRAMED_REFUSAL } from "./support/frame-guard";
 
 /*
  * G01-E P16: there is no answer outside a tenant frame. `currentTenant()` used to fall back to the
- * legacy `system` frame, and `OPENBOT_TENANT_FRAME_GUARD` (`off` / `report` / `throw`) decided
+ * legacy `system` frame, and `XIONGBAO_TENANT_FRAME_GUARD` (`off` / `report` / `throw`) decided
  * whether that was silent, written to stderr as a `tenant-unframed-access` line, or refused. The
  * fallback and the guard are gone: an unframed read is a `TenantContextError` whatever the
  * environment says, nothing is written about it, and a framed read is never affected.
  *
  * The variable is still set below, to every value it ever had, to prove that it no longer matters.
  */
-const saved = process.env.OPENBOT_TENANT_FRAME_GUARD;
+const saved = process.env.XIONGBAO_TENANT_FRAME_GUARD;
 afterEach(() => {
-  if (saved === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-  else process.env.OPENBOT_TENANT_FRAME_GUARD = saved;
+  if (saved === undefined) delete process.env.XIONGBAO_TENANT_FRAME_GUARD;
+  else process.env.XIONGBAO_TENANT_FRAME_GUARD = saved;
 });
 
 /*
@@ -63,8 +63,8 @@ describe("no tenant frame", () => {
     );
     try {
       for (const guard of [undefined, "off", "report", "throw", "yes"]) {
-        if (guard === undefined) delete process.env.OPENBOT_TENANT_FRAME_GUARD;
-        else process.env.OPENBOT_TENANT_FRAME_GUARD = guard;
+        if (guard === undefined) delete process.env.XIONGBAO_TENANT_FRAME_GUARD;
+        else process.env.XIONGBAO_TENANT_FRAME_GUARD = guard;
         // One call site reached twice, which `report` used to write once.
         for (let read = 0; read < 2; read += 1)
           expect(() => currentTenant()).toThrow(
@@ -231,8 +231,8 @@ describe("the unframed-refusal probe", () => {
   });
 
   test("passes whatever the old guard variable says, and leaves the environment as it found it", async () => {
-    process.env.OPENBOT_TENANT_FRAME_GUARD = "off";
+    process.env.XIONGBAO_TENANT_FRAME_GUARD = "off";
     await expectUnframedRefused(() => currentTenant());
-    expect(process.env.OPENBOT_TENANT_FRAME_GUARD).toBe("off");
+    expect(process.env.XIONGBAO_TENANT_FRAME_GUARD).toBe("off");
   });
 });
