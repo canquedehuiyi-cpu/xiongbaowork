@@ -203,8 +203,22 @@ ROLE_WRITER_DATABASE_URL=postgres://xiongbao_role_writer:<URL编码口令>@db.ex
 
 **API 运行期必须是非超级用户、无 BYPASSRLS 的角色。owner 串只用于迁移。**
 
-从 v0.2.15 升级的外接库：v0.2.16 的迁移（`0240`）把两个角色改名为 `xiongbao_app` 与 `xiongbao_role_writer`（口令不变）。
-迁移完成后旧用户名登录不上，要把这两条连接串里的用户名改成新名再启动 API。
+从 v0.2.15 升级的外接库：v0.2.16 的迁移（`0240`）把两个角色改名为 `xiongbao_app` 与 `xiongbao_role_writer`。
+迁移完成后旧用户名登录不上，要把这两条连接串里的用户名改成新名再启动 API。口令是否保留取决于库里存的口令格式：
+
+- SCRAM（`SCRAM-SHA-256$…`，PostgreSQL 14 起的默认）：改名后口令不变，只改连接串里的用户名即可。
+- md5（`md5…`）：PostgreSQL 改名时会清空 md5 口令（md5 哈希里含角色名），改名后这个角色登录不上。升级后用 owner 给它重新设口令
+  （`ALTER ROLE xiongbao_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<新口令>';`，role writer 同理，见下面的 g7 段），
+  再更新连接串里的口令。
+
+升级前用 owner 执行下面的只读查询看是哪一种（只显示格式前缀，不显示口令内容）：
+
+```sql
+SELECT rolname, split_part(rolpassword, '$', 1) AS kind FROM pg_authid
+  WHERE rolname LIKE '%\_app' OR rolname LIKE '%\_role\_writer' ORDER BY rolname;
+-- kind 为 SCRAM-SHA-256：口令不变；以 md5 开头：改名后要重新设口令；为空：本来就没有口令
+```
+
 `ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `xiongbao_role_writer`，唯一可以写入身份角色的登录；
 缺少它 API 拒绝启动（`ROLE_WRITER_DATABASE_URL is required`）。内嵌模式自动生成这两条连接串，外接模式需要自己配置。
 嵌入模式会自动导出 `MIGRATION_DATABASE_URL`，外接模式不会自动迁移，运维在发布流程中单独执行。

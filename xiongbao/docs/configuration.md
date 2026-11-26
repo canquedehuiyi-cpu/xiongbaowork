@@ -74,7 +74,8 @@ Where that bites, and who already says `warn`:
   application.
 
 `0054_app_role.sql` creates the application role with the password `openbot` (migration 0240
-renames it to `xiongbao_app` and keeps the password), which is printed in this repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
+renames it to `xiongbao_app`; a SCRAM password survives the rename, an md5 one is cleared by PostgreSQL
+and must be set again, see docs/deployment-xiongbao.md), which is printed in this repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
 already changed and resetting it would lock a running deployment out without a word. Instead, under
 `NODE_ENV=production` the server refuses to start when the password in `DATABASE_URL` is `openbot`
 (`{"type":"database-password-public-default", …}` on stderr); elsewhere it only warns. Set a real one

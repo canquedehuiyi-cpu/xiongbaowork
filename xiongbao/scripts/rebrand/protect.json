@@ -1629,5 +1629,11 @@
     "text": "\"openbot:%\"",
     "until": "R4",
     "reason": "团队版启动提醒里认旧前缀的授予：0240 已把库里的改成新前缀，读取端到 R4 仍认旧前缀；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/support/renamed-by-0240.ts",
+    "pattern": "openbot",
+    "until": "R4",
+    "reason": "把历史迁移原文（按字节冻结，写的是 0240 改名前的角色名与函数名）换成 0240 之后的名字再在已迁移的测试库上重放：旧名就是要替换的对象；legacy-compat 到 R4 随历史迁移基线化一起删除"
   }
 ]

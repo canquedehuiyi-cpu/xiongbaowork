@@ -24,7 +24,7 @@ docker start openbot-postgres-1        # 已存在则直接起；别新建
 
 | 用途 | 连接串 |
 | --- | --- |
-| 运行期（服务端、测试用） | `postgres://xiongbao_app:<口令>@127.0.0.1:5433/<库名>`（口令与库名同下一行；迁移 `0240` 把应用角色改名为 `xiongbao_app`，口令不变） |
+| 运行期（服务端、测试用） | `postgres://xiongbao_app:<口令>@127.0.0.1:5433/<库名>`（口令与库名同下一行；迁移 `0240` 把应用角色改名为 `xiongbao_app`，SCRAM 口令不变（md5 口令会被 PostgreSQL 清空，要重新设）） |
 | 迁移/清库（需要 owner 权限） | `postgres://openbot:openbot@127.0.0.1:5433/openbot` |
 
 `xiongbao_app` 能读写数据、能在 `public` schema 里建表（迁移 `0054` 给了 `CREATE`），但**不能 `TRUNCATE`**——清库脚本因此必须用 owner 串跑。RLS 对所有带 `tenant_id` 的表开启 `FORCE`，并且**读和写各自一条策略**（迁移 `0072`）：`FOR SELECT` 允许"本租户 / `system` / `platform`"，所以平台内置目录人人可读；`FOR INSERT`/`UPDATE`/`DELETE` 只认"本租户，或当前处于 `platform` 作用域"，所以拿着别人的 id 也改不动、删不掉平台行。应用层仍然比对 `currentTenant()`（`src/waker-groups/store.ts` 是范例），但那是副防线而不是唯一的防线。
