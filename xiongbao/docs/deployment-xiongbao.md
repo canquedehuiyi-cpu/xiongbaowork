@@ -32,7 +32,7 @@ Release 附件 `container-images.json`，生成密钥，并把 `XIONGBAO_IMAGE` 
 需要 curl、OpenSSL 和 jq。不设置 `XIONGBAO_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
 
 ```bash
-XIONGBAO_TAG=v0.2.13
+XIONGBAO_TAG=v0.2.16
 raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${XIONGBAO_TAG}/xiongbao/docker"
 mkdir -p docker
 curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
@@ -241,6 +241,16 @@ KEY_ENCRYPTION_KEY=<与 API 的 KEY_ENCRYPTION_KEY 相同>
   不改表的行级安全设置。迁移角色对 `credentials` 表没有读写权限时迁移拒绝执行并回滚；用建库时的 owner 连接串跑迁移。
 - 滚动升级期间还在跑的 v0.2.15 副本，在迁移之后写入的仍是 `k1` 凭据；v0.2.16 照常能读。每次跑迁移都会把剩下的 `k1` 换成 `k2`，
   所以旧副本全部下线后再执行一次本节的迁移命令（没有要换的就什么都不改）。
+
+从 v0.2.15 升级的外接库，另外几条（交付容器用内置库，不涉及）：
+
+- **先停掉全部 v0.2.15 副本，再跑迁移，迁移完再起 v0.2.16。** `0240` 给约 20 张表的触发器改名，这些表上的排它锁一直持有到迁移事务提交；
+  旧副本还在读写时迁移会排队等它们，旧副本也会反过来被迁移挡住，可能死锁。真的做了滚动升级，就在旧副本全部下线后再跑一次迁移（上一条）。
+  旧副本在迁移之后写进对话历史的旧名不会再被改写，v0.2.16 照样读得懂；v0.2.17 发布前会提供只读预检，确认库里没有旧名、没有 `k1` 凭据。
+- **迁移前自己做一次整实例的备份或快照。** 外接库不走交付容器那套自动备份（6.4）。回滚要靠数据库服务方的快照或时间点恢复（整个实例，
+  含角色）：`0240` 改的角色名在实例级别，只用 `pg_dump` 的逻辑备份灌回去，备份里的授权对象（旧角色名）已经不存在，回滚不了。
+- **员工框架镜像与 v0.2.16 同时升级。** 自己构建、单独运行的员工框架镜像（`agent-*`）若停在 v0.2.15，不认这一版的新名字；旧的 Mastra 框架镜像
+  还会把签名的运行令牌写进模型指令。服务器、框架镜像一起换。交付容器里没有单独的框架镜像，不涉及。
 
 `ROLE_WRITER_DATABASE_URL` 是迁移 `0109` 建立的 `xiongbao_role_writer`，唯一可以写入身份角色的登录；
 缺少它 API 拒绝启动（`ROLE_WRITER_DATABASE_URL is required`）。内嵌模式自动生成这两条连接串，外接模式需要自己配置。
@@ -478,7 +488,7 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 升级先备份，按第 7 节取得新版本的 digest 并校验来源，在隔离环境验证迁移；
 单容器重建时使用原命名卷和原 env-file，镜像写成 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<新 digest>`。
 Compose 把 `.env.delivery` 中的 `XIONGBAO_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
-内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
+内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest（从 v0.2.15 升到 v0.2.16 例外：改名之后 v0.2.15 登录不了改过名的库，回滚要还原备份，见 6.4）。
 停旧容器用 `docker stop`（单容器加 `--time 30`；Compose 的开发文件已给 server 设 `stop_grace_period: 30s`），
 不要用 `docker rm -f`：它直接 SIGKILL，服务端来不及收尾。微信 ClawBot 的消息按「至多一次」处理：
 关停时在跑的那一轮最多再等 7 秒，被强杀或被中止的那一轮不会重来，用户要在微信里再发一次。
@@ -658,6 +668,8 @@ COMMIT;
    docker compose run --rm migrate
    ```
 
+   - 源码目录里如果还用 `scripts/start.sh` 在宿主机上跑着 server、worker（它们经 5432 端口连着 Compose 里的库），第 1 步之前先停掉它们：
+     第 3 步删库时库上不能有别的连接，否则删库失败（不会改动数据），停掉后从第 3 步重来。
    - 灌回在一个事务里执行，任何一条出错就整体回滚，新库保持空库，排除原因后从第 3 步重来即可。
    - 开发 Compose 的数据库超级用户在这一版没有改名（只有库名改了），备份里各对象的属主就是它，灌回后属主和权限与旧库一致，
      应用角色和 role writer 照常读写。上面的命令都从容器自己的 `POSTGRES_USER`/`POSTGRES_DB` 取名字，不需要手填。
@@ -665,10 +677,155 @@ COMMIT;
      `docker compose up --no-start` 建好新卷，再按 `docker volume ls` 看到的名字，用任意带 `sh` 的镜像把旧卷内容 `cp -a` 到新卷。
    - 确认新项目一切正常后再删旧项目：`docker compose -p "$OLD" down`；确定不再需要旧数据时才加 `-v` 删旧卷。
 
-   交付容器（`docker/compose.delivery.yml`，第 1、2 节的起法）不受影响：它在 v0.2.16 第一次启动时自动备份、在原卷上完成改名，按本节前几条升级即可。
+   交付容器（`docker/compose.delivery.yml`，第 1、2 节的起法）不受影响：它在 v0.2.16 第一次启动时自动备份、在原卷上完成改名，按 6.4 升级。
 7. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。
    chart 自己用新名下发的几项（如来自 `config.publicUrl` 的公网地址、单用户开关）若又在 `config.extraEnv` 里用旧名写了不同的值，
    现在一律以 chart 下发的新名值为准，服务端日志点名这个冲突；以前两者同名，按 env 列表的先后决定。
+8. **Helm：chart 改名了**（目录换成 `charts/xiongbao`，chart 名换成 `xiongbao`）。资源名、选择器标签（`app.kubernetes.io/name`）和员工电脑的存储卷名
+   都由 chart 名派生（设了 `fullnameOverride` 的除外）。从 v0.2.15 的 chart 升级时，在 values 里加 `nameOverride: openbot`，名字、标签、卷与
+   chart 生成的 Secret 都和原来一样；不加的话 `helm upgrade` 会按新名字另建一套资源：员工电脑用新的空卷，chart 自己生成并存着的
+   `KEY_ENCRYPTION_KEY`、数据库角色口令也会重新生成，已存凭据解不开，迁移拒绝执行。内置 PostgreSQL 子 chart 的名字按 release 名派生，不受影响。
+   新装的不用加。升级前先用 `helm template` 把新旧 chart 各渲染一次，对比资源名一致再 `helm upgrade`。
+
+### 6.4 从 v0.2.15 升级到 v0.2.16：改名迁移、备份与回滚（交付容器）
+
+v0.2.16 把数据库里剩下的旧名统一改成新名：内置库的超级用户与库（改名为 `xiongbao`）、两个应用角色（`xiongbao_app`、`xiongbao_role_writer`）、
+数据库函数与触发器、系统写进库里的标记、对话历史里系统写的名字（用户消息与模型回复的正文不动）、已存凭据的加密格式（用原来的
+`KEY_ENCRYPTION_KEY` 重新加密，内容不变）。用内置库的交付容器在 v0.2.16 **第一次启动时自动完成**，顺序是：
+
+1. **前置检查**：库里还有待审批、未完成的续跑或续跑步骤，或者数据库卷可用空间不到库大小的 2 倍，就拒绝启动，日志写明各项数字和处理办法，数据不动。
+2. **自动备份**：`pg_dump -Fc` 到数据库卷上的 `/var/lib/postgresql/backup/pre-rebrand-<UTC 时间>.dump`（0600，属主 postgres），读回一遍确认完整；旁边的 `<备份>.size` 记下当时的库大小（还原时估算空间用）。
+3. **业务库改名**：数据库迁移、凭据重新加密、历史改写在**同一个事务**里，任何一步失败整体回滚。
+4. **超级用户与库改名**，写新的连接串，然后才启动服务。
+5. 之后每次启动：名字都已是新的，什么都不做，不再备份，日志里没有改名相关的输出。
+
+升级前在还跑着 v0.2.15 的机器上做一次只读自查，它查的就是第 1 条那几项（容器名不是 `xiongbao-local` 时换成实际的）：
+
+```bash
+curl --fail --silent --show-error --location -o pre-upgrade-check.sh \
+  "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/v0.2.16/xiongbao/scripts/rebrand/pre-upgrade-check.sh"
+sh pre-upgrade-check.sh xiongbao-local
+```
+
+最后一行是「结论：可以升级」再继续。然后按 6.3 第 5 条改写 env 文件（可选），按第 7 节取得并拉取 v0.2.16 的 digest（`XIONGBAO_IMAGE`），
+停旧容器、留着它（回滚 A 要用）、用原来的三个卷起新容器：
+
+```bash
+docker image inspect "$XIONGBAO_IMAGE" >/dev/null &&
+  docker stop -t 30 xiongbao-local &&
+  docker rename xiongbao-local xiongbao-local-v0215 &&
+  docker run -d --name xiongbao-local --env-file .env.delivery \
+    -p 127.0.0.1:3772:3001 \
+    -v xiongbao-local-db:/var/lib/postgresql \
+    -v xiongbao-local-workspace:/workspace \
+    -v xiongbao-local-profiles:/profiles \
+    "$XIONGBAO_IMAGE"
+```
+
+第一条在新镜像不在本机时让整行什么都不做。Compose 形态照第 2 节把 `.env.delivery` 里的 `XIONGBAO_IMAGE` 换成新 digest 再 `up -d`。
+起来以后看迁移摘要：
+
+```bash
+docker logs xiongbao-local 2>&1 | grep -E 'rebrand-|credentials-rekeyed|业务库' | tail -n 20
+```
+
+正常时依次有「正在备份数据库到 …」「升级前备份已写好：…（… MB，权限 0600）。改名迁移开始。」、有旧格式凭据时
+`{"type":"credentials-rekeyed","rekeyed":<条数>}`、「数据库超级用户与库已改名为 xiongbao（口令不变）。」「改名迁移全部完成。升级前的备份保留在 …」。
+升级后把已经打开的网页刷新一次（升级重启时连接断过）。浏览器录制扩展已在这一版删除；设备端请重装 v0.2.16（旧设备端在这期间照常能连）。
+
+备份留到 v0.2.17 升级稳定之后再删。宿主机上另存一份：
+
+```bash
+mkdir -p rollback-v0216 && chmod 700 rollback-v0216 &&
+  docker cp xiongbao-local:/var/lib/postgresql/backup rollback-v0216/backup &&
+  ls -l rollback-v0216/backup
+```
+
+**回滚。** 改名完成后 v0.2.15 用旧名登录不了这个库，换回旧 digest 已经不够。按日志分两种：
+
+- **A. 启动失败，日志说「业务库没有改动」**（或前置检查拒绝、说「数据没有改动」）：直接换回 v0.2.15，用原来的卷，什么都不丢。
+  先核对：日志里不能有「业务库已经改动」「已经改成新名字」「无法确认」，也不能有「已改名为 xiongbao」「改名迁移全部完成」
+  （容器失败后会自动重启，重启那次可能已经改名成功，那就要走 B）。先删掉卷上的「改名进行中」记录，以后再升级时才会重新备份：
+
+  ```bash
+  docker stop -t 30 xiongbao-local &&
+    docker rename xiongbao-local xiongbao-local-v0216 &&
+    docker run --rm --volumes-from xiongbao-local-v0216 --user root --entrypoint rm \
+      "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0216)" -f /var/lib/postgresql/backup/rebrand-in-progress &&
+    docker rename xiongbao-local-v0215 xiongbao-local &&
+    docker start xiongbao-local
+  ```
+
+- **B. 已经改过名**（升级成功后想回去，或日志说「业务库已经改动」「已经改成新名字」）：用第 2 步的备份还原到一个**新卷**，再用 v0.2.15 起来。
+  **备份之后写进去的数据都会丢**（新对话、新审批、改过的设置），在途的事要在还原后重新发起。原来的卷不要删。
+
+  B1. 停掉 v0.2.16（留着，改过名的库在它的卷里），取出备份和还原脚本；用 6.3 第 5 条改写过 env 文件的，换回改写前的备份：
+
+  ```bash
+  docker stop -t 30 xiongbao-local &&
+    docker rename xiongbao-local xiongbao-local-v0216 &&
+    mkdir -p rollback-v0216 && chmod 700 rollback-v0216 &&
+    rm -rf rollback-v0216/backup &&
+    docker cp xiongbao-local-v0216:/var/lib/postgresql/backup rollback-v0216/backup &&
+    docker cp xiongbao-local-v0216:/etc/s6-overlay/scripts/rebrand-restore.sh rollback-v0216/rebrand-restore.sh &&
+    ls -l rollback-v0216/backup
+  envb=$(ls -t .env.delivery.bak-* 2>/dev/null | head -n 1)
+  [ -z "$envb" ] || cp -p "$envb" .env.delivery
+  ```
+
+  B2. 用 v0.2.15 镜像（旧容器记着它）和一个新的数据库卷起容器，员工文件与浏览器登录的两个卷照旧，再用 README 的健康检查循环等它起来：
+
+  ```bash
+  docker run -d --name xiongbao-local --env-file .env.delivery \
+    -p 127.0.0.1:3772:3001 \
+    -v xiongbao-local-db-v0215:/var/lib/postgresql \
+    -v xiongbao-local-workspace:/workspace \
+    -v xiongbao-local-profiles:/profiles \
+    "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0215)"
+  ```
+
+  B3. 停掉这个容器，用 v0.2.15 镜像起一个只跑还原的一次性容器（挂同一个新卷和拷出来的备份目录），还原最新的那份备份（就是这次升级前做的），
+  完了再启动完整容器。不能在运行中的容器里还原：v0.2.15 的 api 服务一停，它的收尾脚本会让整个容器停机，还原做不完。
+  一次性容器起固定的名字：终端断开后重跑，上一个还没结束时 Docker 会因为重名直接拒绝，不会有两个数据库同时写一个卷。
+  用 `docker ps -a --filter name=xiongbao-local-v0215-restoring` 看它：还在跑就等它消失，已经停了（异常终止时 `--rm` 可能没执行）就 `docker rm` 掉。
+  脚本还会在数据目录里有 `postmaster.pid` 时拒绝起库。这时不要启动完整容器去清它（还原没做完时那是空库，会直接对外服务）：
+  先确认 `docker ps --filter volume=xiongbao-local-db-v0215` 与 `docker ps -a --filter name=xiongbao-local-v0215-restoring` 都什么不列，
+  再用一次性容器删掉残留的锁文件，原样重跑 B3，数据库会自己做崩溃恢复：
+
+  ```bash
+  [ -z "$(docker ps --filter volume=xiongbao-local-db-v0215 --format '{{.Names}}')" ] &&
+    [ -z "$(docker ps -a --filter name='^xiongbao-local-v0215-restoring$' --format '{{.Names}}')" ] &&
+    docker run --rm --user root --entrypoint rm -v xiongbao-local-db-v0215:/var/lib/postgresql \
+      "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0215)" -f /var/lib/postgresql/data/postmaster.pid
+  ```
+
+  ```bash
+  f=$(cd rollback-v0216/backup && ls pre-rebrand-*.dump | tail -n 1) &&
+    docker stop -t 30 xiongbao-local &&
+    docker run --rm -i --name xiongbao-local-v0215-restoring --user root --entrypoint sh \
+      -v xiongbao-local-db-v0215:/var/lib/postgresql -v "$PWD/rollback-v0216/backup:/restore:ro" \
+      "$(docker inspect -f '{{.Config.Image}}' xiongbao-local-v0215)" -s "/restore/$f" < rollback-v0216/rebrand-restore.sh &&
+    docker start xiongbao-local
+  ```
+
+  还原脚本先核对：不在 v0.2.16 的镜像里、不在运行中的完整容器里；备份完整可读；目标是 v0.2.15 起过一次的新卷（不是改过名或带着改名备份的原卷、
+  应用角色已建好、库里还没有对话）；数据目录所在盘放得下「备份时的库大小（含索引，记在备份旁边的 `.size` 文件里）与展开后大小取大，× 2」；
+  库上没有任何连接。任何一项不满足就什么都不动并说明原因。然后用镜像自己的初始化步骤写好连接信息、只启动数据库，把备份灌进空的临时库
+  （一个事务），在一个事务里把它换成原来的库名，删掉被换下来的库，最后停掉数据库。中途断了用同样的命令再执行一次 B3，它会认出做到哪一步
+  接着做。为什么不直接 `pg_restore --clean` 覆盖：v0.2.15 首次启动的迁移设了默认权限，覆盖重建的表会让应用角色多出写权限（例如能改身份角色表）。
+
+  还原后应用角色应是 v0.2.15 的旧名（不是 `xiongbao_app`）、不是超级用户、不能改 `user_roles`：
+
+  ```bash
+  printf '%s\n' "select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user;" \
+    "select has_table_privilege(current_user, 'public.user_roles', 'UPDATE');" |
+    docker exec -i xiongbao-local sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -At'
+  ```
+
+  第一行应以 `_app|f|f` 结尾、前面不是 `xiongbao`，第二行是 `f`。Compose 形态同样三步，只是卷名带项目名：另起一个 `--project-name` 会连员工文件的卷一起换成新的空卷，
+  要带着旧的员工文件就先 `docker volume ls` 找到原项目的卷，用 `docker cp` 把文件拷过去。
+
+外接库不走上面这套（没有自动备份、没有前置检查），见第 4 节「从 v0.2.15 升级的外接库」。
 
 ## 7. 版本固定与来源校验
 
@@ -676,7 +833,7 @@ COMMIT;
 部署和升级使用 digest，而不是可移动的标签；部署前可校验镜像由本仓库的发布流程构建。
 
 ```bash
-XIONGBAO_TAG=v0.2.13
+XIONGBAO_TAG=v0.2.16
 gh release download "$XIONGBAO_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
 XIONGBAO_IMAGE="$(jq -er '(.ghcr // .images.xiongbao).reference' container-images.json)"
 gh attestation verify "oci://$XIONGBAO_IMAGE" -R canquedehuiyi-cpu/xiongbaowork

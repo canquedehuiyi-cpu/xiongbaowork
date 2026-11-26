@@ -150,6 +150,7 @@ test("every action is pinned to a commit SHA, as in the repository's other workf
     "ci.yml",
     "release.yml",
     "clean-deploy.yml",
+    "rebrand-rehearsal.yml",
   ]) {
     const doc = Bun.YAML.parse(readFileSync(join(workflows, file), "utf8"));
     const uses = [

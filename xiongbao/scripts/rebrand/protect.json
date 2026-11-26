@@ -1026,9 +1026,33 @@
   },
   {
     "file": "xiongbao/docker/tests/rebrand-preflight.test.sh",
-    "pattern": "\\bopenbot(?:_app|_role_writer|_restoring)?\\b",
+    "pattern": "\\bopenbot(?:_app|_role_writer|_restoring|_before_restore)?\\b",
     "until": "R4",
-    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，以及还原脚本的临时库名（旧库名加 _restoring），旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+    "reason": "v0.2.16 改名前置检查（s6 rebrand-preflight.sh）与升级前自查的测试：用 initdb 造出 v0.2.15 形状的旧名集群（超级用户、库、应用角色、role writer）和旧连接串，以及还原脚本的临时库名（旧库名加 _restoring）与替换下来的原库名（旧库名加 _before_restore），旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+  },
+  {
+    "file": ".github/workflows/rebrand-rehearsal.yml",
+    "text": ".images.openbot",
+    "until": "R4",
+    "reason": "升级演练取起点版本的 GHCR 镜像：v0.2.16 之前的发布记录里 GHCR 镜像在这个旧键下（images.xiongbao 配了自有仓库时是同步过去的那份）；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/scripts/ci/rebrand-rehearsal.sh",
+    "pattern": "(?i:openbot)",
+    "until": "R4",
+    "reason": "v0.2.16 改名升级演练（CI 用 v0.2.15 镜像建库再换本分支镜像）：按 v0.2.15 的写法存旧名的凭据标签、历史事件名、运行参数键、上下文标题、错误码、皮肤与授权标记，env 文件用现网形状的 OPENBOT_ 配置名，还原后核对 v0.2.15 的角色与库名；旧名就是被测对象；legacy-compat 到 R4 随迁移代码删除"
+  },
+  {
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "text": "nameOverride: openbot",
+    "until": "R4",
+    "reason": "部署手册向运维说明从 v0.2.15 的 chart 升级：保持旧资源名、选择器标签与卷名的 nameOverride 取值就是 chart 改名前的名字；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/docs/kubernetes-upgrades.md",
+    "pattern": "`charts/openbot`|nameOverride: openbot",
+    "until": "R4",
+    "reason": "Kubernetes 升级说明：从 v0.2.15 的 chart 升级时旧 chart 目录名与保持旧资源名的 nameOverride 取值（chart 改名前的名字）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/docker/tests/rebrand-superuser.test.sh",
