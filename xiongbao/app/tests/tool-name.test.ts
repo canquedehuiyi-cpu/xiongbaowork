@@ -232,8 +232,8 @@ describe("naming what an approval asks to do", () => {
 
 describe("an approval's phrase never shows an internal name", () => {
   // The check's own name, as the server stores it.
-  const shareRef = ["openbot", "share_private_information"].join("/");
-  const internal = /openbot|acp\//i;
+  const shareRef = ["xiongbao", "share_private_information"].join("/");
+  const internal = /xiongbao\/|acp\//i;
 
   test("an external employee's request says its kind in Chinese", () => {
     const cases: [string, string][] = [

@@ -52,7 +52,7 @@
   {
     "rule": "identifier",
     "scope": "server/src",
-    "lines": 19
+    "lines": 10
   },
   {
     "rule": "identifier",
@@ -67,7 +67,7 @@
   {
     "rule": "identifier",
     "scope": "toolkit/src",
-    "lines": 19
+    "lines": 18
   },
   {
     "rule": "mit-attribution",
@@ -77,7 +77,7 @@
   {
     "rule": "never-change",
     "scope": "server/src",
-    "lines": 11
+    "lines": 9
   },
   {
     "rule": "never-change",
@@ -92,7 +92,7 @@
   {
     "rule": "never-change",
     "scope": "toolkit/src",
-    "lines": 3
+    "lines": 1
   },
   {
     "rule": "wire-dom",

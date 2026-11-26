@@ -163,10 +163,10 @@ test("remote runs receive coordination tools and preserve the signed delivery sc
     agent.threadId = "scratch-thread";
     await agent.runAgent({
       runId: "actual-run",
-      forwardedProps: { openbotRun: "signed-delivery" },
+      forwardedProps: { xiongbaoRun: "signed-delivery" },
     });
     expect(seen[0]?.tools.map((tool) => tool.name)).toContain("ask_person");
-    expect(seen[0]?.forwardedProps.openbotRun).toBe("signed-delivery");
+    expect(seen[0]?.forwardedProps.xiongbaoRun).toBe("signed-delivery");
   } finally {
     run.mockRestore();
   }
@@ -2009,7 +2009,7 @@ describe("what day it is", () => {
   /*
    * Seen on Desktop: a Mac in California on Friday 2026-11-06 at 16:20, which is 00:20 on Saturday
    * in UTC. Asked "what's on my Google Calendar tomorrow?", the harness Bot answered for Sunday,
-   * November 8. The browser now says the person's IANA zone on every run (`openbotTimeZone`), and
+   * November 8. The browser now says the person's IANA zone on every run (`xiongbaoTimeZone`), and
    * every Bot is told the date in it.
    */
   const FRIDAY_EVENING_IN_CALIFORNIA = new Date("2026-11-07T00:20:00Z");
@@ -2064,7 +2064,7 @@ describe("what day it is", () => {
         ];
         const forwardedProps = {
           xiongbaoAskedRun: true,
-          ...(zone === undefined ? {} : { openbotTimeZone: zone }),
+          ...(zone === undefined ? {} : { xiongbaoTimeZone: zone }),
         };
         const ask = async (
           agents: Record<string, AbstractAgent>,

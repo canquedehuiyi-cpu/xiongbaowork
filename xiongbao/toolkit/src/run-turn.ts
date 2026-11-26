@@ -58,6 +58,7 @@ import { EventType } from "@ag-ui/client";
 import { NOT_RUN_WHILE_WAITING } from "@xiongbao/shared/approval-outcomes";
 import { NOT_SHOWN } from "@xiongbao/shared/component-markers";
 import { frameFiring } from "@xiongbao/shared/routine-firing";
+import { waitingIn } from "@xiongbao/shared/waiting";
 import type { Observable } from "rxjs";
 import type { ApprovalContinuation } from "./continuation";
 import {
@@ -65,7 +66,7 @@ import {
   HeadlessToolSuspension,
   HeadlessToolsMiddleware,
   type HeadlessWaiting,
-  XIONGBAO_WAITING_METADATA,
+  isHeadlessWaitingEvent,
 } from "./headless-tools";
 import { sanitizeSeededHistory } from "./history-sanitize";
 import type { AuditInitiator } from "./initiator";
@@ -442,7 +443,14 @@ function notRunBeside(
  * runtime reads it (`server/src/plugins/picked-skill.ts`) beside the `/<command>` a browser message
  * starts with.
  */
-export const PICKED_SKILL_PROP = "openbotSkill";
+export const PICKED_SKILL_PROP = "xiongbaoSkill";
+
+/**
+ * The key before v0.2.16. A continuation stored before the upgrade carries its run's properties
+ * under it, and a resumed turn hands them back as they were; read, never written.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_PICKED_SKILL_PROP = "openbotSkill";
 
 export function turnInput(input: {
   threadId: string;
@@ -576,7 +584,7 @@ export type TurnEvidence = {
   heartbeatError?: unknown;
   /** Whether the deadline stopped the run. */
   stopped: boolean;
-  /** The waiting the run announced through its `openbot.headless.waiting` event. */
+  /** The waiting the run announced through its `xiongbao.headless.waiting` event. */
   waiting?: HeadlessToolSuspension;
   /** The messages this run added to the agent. */
   added: Message[];
@@ -613,7 +621,7 @@ export function settle(evidence: TurnEvidence): TurnOutcome {
 
   // The waiting details, when the CUSTOM event did not survive the trip, ride on the interrupt.
   const carried = evidence.pendingInterrupts
-    .map((interrupt) => interrupt.metadata?.[XIONGBAO_WAITING_METADATA])
+    .map((interrupt) => waitingIn(interrupt.metadata))
     .find(
       (value): value is HeadlessWaiting & { message?: string } =>
         !!value &&
@@ -1093,7 +1101,7 @@ export function createTurnRunner(options: {
                 observedModel = modelNamedIn(event);
               if (
                 event.type === EventType.CUSTOM &&
-                event.name === "openbot.headless.waiting"
+                isHeadlessWaitingEvent(event.name)
               ) {
                 const value = event.value as HeadlessWaiting & {
                   message?: string;

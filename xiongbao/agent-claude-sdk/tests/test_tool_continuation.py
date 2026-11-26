@@ -56,7 +56,7 @@ def request(thread="thread-a", run="run-1", results=(), tool_count=1, tool_name=
                     "parameters": {"type": "object", "properties": {}},
                 }
             ],
-            "context": [{"description": "OpenBot learned skills", "value": "LEARNED_CATALOG_MARKER"}],
+            "context": [{"description": "XiongBao learned skills", "value": "LEARNED_CATALOG_MARKER"}],
             "forwardedProps": {},
         }
     )

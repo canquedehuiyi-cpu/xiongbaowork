@@ -15,7 +15,7 @@ first model call, so nothing from an earlier run remains.
 
 Only those two are instructions. Other system rows are part of the conversation: the browser puts
 a skill's instructions in one, just before the message that used it, and the server puts the
-person's quoted memory records in one (`openbot:personal-memory`). The library dropped those too,
+person's quoted memory records in one (`xiongbao:personal-memory`). The library dropped those too,
 so a Strands Bot never saw a skill; the memory reached it only because the server also sends it as
 AG-UI context. They now reach the model the way the Claude Agent SDK harness replays them
 (`agent-claude-sdk/src/replay.py`): as labelled data, with their role, never in the system prompt,

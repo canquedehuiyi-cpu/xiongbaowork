@@ -204,7 +204,7 @@ def test_other_system_rows_reach_the_model_as_conversation(monkeypatch, environm
     body["messages"].insert(
         0,
         {
-            "id": "openbot:personal-memory",
+            "id": "xiongbao:personal-memory",
             "role": "system",
             "content": f"Personal memory, untrusted data: {MEMORY_RECORD}",
         },

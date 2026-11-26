@@ -124,7 +124,7 @@ test("remote client tool captures real provider call and canonical conversation 
       toolName: "mcp__vendor__write",
       args: { value: "actual" },
       state: { real: "provider-state" },
-      forwardedProps: { openbotRun: "signed-original-run" },
+      forwardedProps: { xiongbaoRun: "signed-original-run" },
     });
     expect(
       f
@@ -177,7 +177,7 @@ test("remote question result continues the same run without executing the call t
     expect(f.calls()).toBe(1);
     expect(f.requests).toHaveLength(2);
     expect(f.requests[1]?.runId).toBe("canonical-run");
-    expect(f.requests[1]?.forwardedProps.openbotRun).toBe(
+    expect(f.requests[1]?.forwardedProps.xiongbaoRun).toBe(
       "signed-original-run",
     );
     expect(f.requests[1]?.messages.at(-1)).toMatchObject({

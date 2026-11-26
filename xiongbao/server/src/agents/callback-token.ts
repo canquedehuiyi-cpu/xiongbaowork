@@ -45,6 +45,38 @@ const RUN_LABEL = "openbot:agent-run";
  */
 const RUN_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * The run property (AG-UI `forwardedProps`) the signed assertion travels under: to the agent, back on
+ * its tool calls, and into an approval's stored continuation.
+ */
+export const RUN_ASSERTION_PROP = "xiongbaoRun";
+
+/**
+ * The property's name before v0.2.16. A continuation stored before the upgrade, or a request from an
+ * agent image still on v0.2.15, carries it; read and dropped, never written.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_RUN_ASSERTION_PROP = "openbotRun";
+
+/** The assertion a run's properties carry, under either name. Not checked: see `readRunAssertion`. */
+export function runAssertionIn(forwardedProps: unknown): unknown {
+  if (!forwardedProps || typeof forwardedProps !== "object") return undefined;
+  const props = forwardedProps as Record<string, unknown>;
+  return props[RUN_ASSERTION_PROP] ?? props[LEGACY_RUN_ASSERTION_PROP];
+}
+
+/** The same properties without an assertion under either name. */
+export function withoutRunAssertion<T extends Record<string, unknown>>(
+  forwardedProps: T,
+): Omit<T, typeof RUN_ASSERTION_PROP | typeof LEGACY_RUN_ASSERTION_PROP> {
+  const {
+    [RUN_ASSERTION_PROP]: _assertion,
+    [LEGACY_RUN_ASSERTION_PROP]: _legacy,
+    ...rest
+  } = forwardedProps;
+  return rest;
+}
+
 export function mintCallbackToken(): string {
   return `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString("base64url")}`;
 }

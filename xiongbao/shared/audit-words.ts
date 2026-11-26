@@ -43,6 +43,8 @@ const ACTIONS: Readonly<Record<string, string>> = {
   host_write_file: "保存文件",
   host_run_command: "执行命令",
   "bot/message_bot": "询问另一位员工",
+  "xiongbao/share_private_information": "分享私密信息",
+  // v0.2.16 之前的引用：审计记录只追加、不改写，旧记录里还是它。legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
   "openbot/share_private_information": "分享私密信息",
 };
 

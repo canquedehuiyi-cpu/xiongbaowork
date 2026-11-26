@@ -216,7 +216,7 @@ def plan(monkeypatch, tmp_path):
 
 
 def run_body(*, model=None, tools=(), content="Say hello."):
-    props = {"openbotRun": "synthetic-run-assertion"}
+    props = {"xiongbaoRun": "synthetic-run-assertion"}
     if model is not None:
         props["xiongbaoModel"] = model
     return {

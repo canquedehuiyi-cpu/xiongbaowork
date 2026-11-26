@@ -40,7 +40,7 @@ const input = (): RunAgentInput => ({
   context: [],
   tools: [],
   state: { progress: 1 },
-  forwardedProps: { openbotRun: "signed" },
+  forwardedProps: { xiongbaoRun: "signed" },
 });
 test("background ingestion retains its memory initiator in signed assertions", () => {
   const signed = mintRunAssertion(
@@ -88,12 +88,12 @@ test("later AGUI runs reflect edited memory without rebuilding the middleware", 
 test("disabled or deleted memory removes stale replayed context", async () => {
   const request = input();
   request.messages.unshift({
-    id: "openbot:personal-memory",
+    id: "xiongbao:personal-memory",
     role: "system",
     content: "deleted fact",
   });
   request.context.push({
-    description: "OpenBot personal memory",
+    description: "XiongBao personal memory",
     value: "deleted fact",
   });
   const next = await run(async () => "", request);
@@ -104,12 +104,12 @@ test("a continuation replaying its memory entry still carries one memory", async
   // An approval's continuation snapshot keeps the context the run was sent and replays it as-is.
   const request = input();
   request.context.push({
-    description: "OpenBot personal memory",
+    description: "XiongBao personal memory",
     value: "stale fact",
   });
   const next = await run(async () => "fresh fact", request);
   expect(next?.context).toEqual([
-    { description: "OpenBot personal memory", value: "fresh fact" },
+    { description: "XiongBao personal memory", value: "fresh fact" },
   ]);
 });
 test("personal memory retains canonical user messages and continuation state", async () => {

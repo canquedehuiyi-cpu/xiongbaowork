@@ -536,10 +536,10 @@ test("a turn sends the endpoint the component catalog once, as the guide, and no
   const marker = "CATALOG-MARKER: one line of text.";
   const envelope = {
     "1.0": {
-      supportedCatalogIds: ["openbot/ui@1"],
+      supportedCatalogIds: ["xiongbao/ui@1"],
       inlineCatalogs: [
         {
-          catalogId: "openbot/ui@1",
+          catalogId: "xiongbao/ui@1",
           protocolVersion: "1.0",
           components: {
             Text: {
@@ -671,7 +671,7 @@ test("a person's own run still holds its grants and the subagent tool, and can s
   expect(remote.tools.map((tool) => tool.name)).toEqual(
     expect.arrayContaining([SUBAGENT_TOOL, postNote.name]),
   );
-  expect(remote.forwardedProps?.openbotRun).toBe(
+  expect(remote.forwardedProps?.xiongbaoRun).toBe(
     `signed:${REMOTE}:${remote.runId}`,
   );
 });

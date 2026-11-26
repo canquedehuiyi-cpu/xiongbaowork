@@ -20,7 +20,11 @@ import type { PluginStore } from "../plugins/store";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import { createPrivateShareCheck } from "../proactive/private-share";
 import { createWorkQueue } from "../work/queue";
-import { type RunAssertion, readRunAssertion } from "./callback-token";
+import {
+  type RunAssertion,
+  readRunAssertion,
+  runAssertionIn,
+} from "./callback-token";
 import { type HandoffDesk, resolveAddressedBot } from "./handoff";
 import {
   authoriseCoordinationRun,
@@ -246,7 +250,7 @@ export function wireCoordination(deps: {
     ) =>
     async (botId: string, input: import("@ag-ui/client").RunAgentInput) => {
       const assertion = readRunAssertion(
-        input.forwardedProps?.openbotRun,
+        runAssertionIn(input.forwardedProps),
         config.keyEncryptionKey,
       );
       if (

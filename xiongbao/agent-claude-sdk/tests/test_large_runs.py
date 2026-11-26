@@ -90,8 +90,8 @@ def large_run(names, run="run-1"):
             "context": [
                 {"description": "Generative UI component schema", "value": "s" * 36_573},
                 {"description": "Generative UI guidelines", "value": "g" * 13_198},
-                {"description": "OpenBot personal memory", "value": json.dumps([{"content": "m" * 24_000}])},
-                {"description": "OpenBot learned skills", "value": "LEARNED_SKILLS_MARKER " + "k" * 40_000},
+                {"description": "XiongBao personal memory", "value": json.dumps([{"content": "m" * 24_000}])},
+                {"description": "XiongBao learned skills", "value": "LEARNED_SKILLS_MARKER " + "k" * 40_000},
             ],
             "forwardedProps": {},
         }

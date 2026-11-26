@@ -1275,7 +1275,7 @@ describe("分享到群的审批", () => {
         action: {
           botId: "ext-codex",
           // The check's own name, as the server stores it: never shown.
-          toolRef: ["openbot", "share_private_information"].join("/"),
+          toolRef: ["xiongbao", "share_private_information"].join("/"),
           effect: "share_private",
           scope: "group:g-1:members:abc",
           threadId: "t-group-codex",
@@ -1305,7 +1305,7 @@ describe("分享到群的审批", () => {
     for (const internal of [
       "share_private",
       "share private",
-      "openbot",
+      "xiongbao/",
       "contentDigest",
       "{",
     ])

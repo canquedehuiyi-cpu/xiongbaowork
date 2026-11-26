@@ -590,7 +590,7 @@ export function searchToolsTool(
     );
   return {
     name: SEARCH_TOOLS,
-    ref: `openbot/${SEARCH_TOOLS}`,
+    ref: `xiongbao/${SEARCH_TOOLS}`,
     description: slim
       ? [
           "Load unlisted tools:",

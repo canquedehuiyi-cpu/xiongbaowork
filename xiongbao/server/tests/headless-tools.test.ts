@@ -769,7 +769,7 @@ test("human help creates a durable suspension, persists the waiting event, and r
     persisted.filter((event) => event.type === EventType.CUSTOM),
   ).toMatchObject([
     {
-      name: "openbot.headless.waiting",
+      name: "xiongbao.headless.waiting",
       value: { requestId: "durable-handoff" },
     },
   ]);

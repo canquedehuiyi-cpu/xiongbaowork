@@ -231,7 +231,7 @@ def run_input(
         "state": {},
         "forwardedProps": {
             "xiongbaoDeploymentTools": list(deployment),
-            "openbotRun": assertion,
+            "xiongbaoRun": assertion,
         },
     }
 
@@ -458,7 +458,7 @@ async def test_a2ui_catalog_context_reaches_model_without_entering_history(bound
 @pytest.mark.parametrize("name", ["computer_navigate", "computer_run_command", "client_lookup", "client_read_file"])
 async def test_surface_tool_calls_end_then_consume_actual_client_result(boundary, name):
     body = run_input([name])
-    body["context"] = [{"description": "OpenBot learned skills", "value": "LEARNED_CATALOG_MARKER"}]
+    body["context"] = [{"description": "XiongBao learned skills", "value": "LEARNED_CATALOG_MARKER"}]
     first = await run_protocol(body)
     assert "LEARNED_CATALOG_MARKER" in json.dumps(boundary["model"][0]["messages"])
     assert [t["function"]["name"] for t in boundary["model"][0].get("tools", [])] == [

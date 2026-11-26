@@ -87,8 +87,8 @@ export type ConnectionTestResult =
  */
 function probeBody() {
   return {
-    threadId: `openbot-connection-test-${crypto.randomUUID()}`,
-    runId: `openbot-connection-test-${crypto.randomUUID()}`,
+    threadId: `xiongbao-connection-test-${crypto.randomUUID()}`,
+    runId: `xiongbao-connection-test-${crypto.randomUUID()}`,
     messages: [
       {
         id: crypto.randomUUID(),

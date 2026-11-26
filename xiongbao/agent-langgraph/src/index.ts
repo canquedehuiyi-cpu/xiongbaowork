@@ -290,8 +290,12 @@ async function callTool(
  * calls a tool, and the deployment that signed it is the only thing that can open it.
  */
 function runAssertionOf(input: RunAgentInput): string {
-  const props = input.forwardedProps as { openbotRun?: unknown } | undefined;
-  return typeof props?.openbotRun === "string" ? props.openbotRun : "";
+  const props = input.forwardedProps as
+    | { xiongbaoRun?: unknown; openbotRun?: unknown }
+    | undefined;
+  // The name before v0.2.16, from a server not yet upgraded. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+  const assertion = props?.xiongbaoRun ?? props?.openbotRun;
+  return typeof assertion === "string" ? assertion : "";
 }
 
 /**

@@ -688,6 +688,7 @@ tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
 tests/quota-token-usage.integration.test.ts
 tests/quota.test.ts
+tests/rebrand-history.test.ts
 tests/rebrand-migration.test.ts
 tests/recorder-schema.integration.test.ts
 tests/recovery-ap2-parent-schema-reconcile.test.ts

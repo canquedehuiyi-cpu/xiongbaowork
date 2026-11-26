@@ -10,6 +10,7 @@ import {
 import { Observable, type Subscription } from "rxjs";
 import { withApprovalContext } from "./continuation";
 import {
+  HEADLESS_WAITING_EVENT,
   HeadlessToolSuspension,
   XIONGBAO_WAITING_METADATA,
 } from "./headless-tools";
@@ -184,7 +185,7 @@ class NativeApprovalMiddleware extends Middleware {
           if (subscriber.closed) return;
           subscriber.next({
             type: EventType.CUSTOM,
-            name: "openbot.headless.waiting",
+            name: HEADLESS_WAITING_EVENT,
             value: { ...error.waiting, message: error.message },
           });
           subscriber.next({

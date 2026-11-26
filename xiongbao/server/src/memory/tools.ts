@@ -18,7 +18,26 @@ import {
 } from "./types";
 
 /** 个人记忆中间件放进 `RunAgentInput.context` 的那一条的描述；对话侧栏按它把这部分算作「记忆」。 */
-export const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
+export const PERSONAL_MEMORY_CONTEXT = "XiongBao personal memory";
+
+/** 同一条记录在对话行里的 id：每次运行由这个中间件放在最前面，进来的同名行先去掉。 */
+export const PERSONAL_MEMORY_ROW_ID = "xiongbao:personal-memory";
+
+/**
+ * v0.2.16 之前的描述与行 id。改名之前存下的审批续跑快照带着它们，续跑时照样认、照样去掉，不再写。
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
+/** legacy-compat：introducedIn 0.2.16，removeIn 0.2.17 */
+export const LEGACY_PERSONAL_MEMORY_ROW_ID = "openbot:personal-memory";
+
+/** 这一条上下文是不是个人记忆（新旧描述都认）。 */
+export function isPersonalMemoryContext(description: string): boolean {
+  return (
+    description === PERSONAL_MEMORY_CONTEXT ||
+    description === LEGACY_PERSONAL_MEMORY_CONTEXT
+  );
+}
 
 /**
  * The server half of every ref XiongBao's own memory tools carry (`memory/recall_personal_memory`).
@@ -84,19 +103,21 @@ export class PersonalMemoryMiddleware extends Middleware {
               ...(content
                 ? [
                     {
-                      id: "openbot:personal-memory",
+                      id: PERSONAL_MEMORY_ROW_ID,
                       role: "system" as const,
                       content,
                     },
                   ]
                 : []),
               ...input.messages.filter(
-                (message) => message.id !== "openbot:personal-memory",
+                (message) =>
+                  message.id !== PERSONAL_MEMORY_ROW_ID &&
+                  message.id !== LEGACY_PERSONAL_MEMORY_ROW_ID,
               ),
             ],
             context: [
               ...input.context.filter(
-                (entry) => entry.description !== PERSONAL_MEMORY_CONTEXT,
+                (entry) => !isPersonalMemoryContext(entry.description),
               ),
               ...(content
                 ? [{ description: PERSONAL_MEMORY_CONTEXT, value: content }]

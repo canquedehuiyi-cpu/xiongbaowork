@@ -14,7 +14,7 @@ import {
   platformModelPool,
   threadContextBreakdowns,
 } from "../db/schema";
-import { PERSONAL_MEMORY_CONTEXT } from "../memory/tools";
+import { isPersonalMemoryContext } from "../memory/tools";
 import { DEPLOYMENT_MODEL_REF } from "../models/runtime-resolver";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 
@@ -561,7 +561,7 @@ export function runContextSections(run: ContextBreakdownRun): ContextSection[] {
   add("system", rest.length);
 
   for (const entry of run.input.context ?? []) {
-    if (entry.description === PERSONAL_MEMORY_CONTEXT)
+    if (isPersonalMemoryContext(entry.description))
       add("memory", entry.value.length);
     else if (entry.description === COMPACTION_SUMMARY_CONTEXT)
       add("messages", entry.value.length);

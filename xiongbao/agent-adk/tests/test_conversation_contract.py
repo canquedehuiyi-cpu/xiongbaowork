@@ -265,13 +265,13 @@ def test_personal_memory_reaches_every_turn_as_data_not_instructions(monkeypatch
     """
 
     def memory(content):
-        return {"id": "openbot:personal-memory", "role": "system", "content": f"Personal memory. {content}"}
+        return {"id": "xiongbao:personal-memory", "role": "system", "content": f"Personal memory. {content}"}
 
     def first(messages):
         messages.insert(0, memory(MEMORY))
 
     def newer(messages):
-        messages[:] = [m for m in messages if m["id"] != "openbot:personal-memory"]
+        messages[:] = [m for m in messages if m["id"] != "xiongbao:personal-memory"]
         messages.insert(0, memory(NEWER_MEMORY))
 
     body = _two_turns(monkeypatch, "memory-thread", first=first, second=newer)

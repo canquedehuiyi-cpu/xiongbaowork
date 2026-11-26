@@ -42,8 +42,8 @@
   {
     "text": "\"<<openbot:staffing-proposal>>\"",
     "file": "xiongbao/shared/staffing-proposal.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/staffing-proposal.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "招聘提议卡片标记的旧名：迁移改写存量工具回答，读取端到 R4 仍认旧标记；legacy-compat 到 R4 删除"
   },
   {
     "text": "\"openbot-browser\"",
@@ -62,12 +62,6 @@
     "file": "xiongbao/server/src/plugins/shared-accounts.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/plugins/shared-accounts.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot-model-call\"",
-    "file": "xiongbao/server/src/routing/model.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/routing/model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "file": "xiongbao/server/src/db/apply-migrations.ts",
@@ -96,26 +90,20 @@
   {
     "text": "\"openbot/share_private_information\"",
     "file": "xiongbao/server/src/proactive/private-share.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/proactive/private-share.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot/share_private_information\"",
-    "file": "xiongbao/server/src/approvals/rule-vocabulary.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/approvals/rule-vocabulary.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "分享私密信息工具的旧引用：保存的规则由迁移改成新引用；审批记录里的引用在动作摘要里不改，规则匹配与续跑执行到 R4 仍认；legacy-compat 到 R4 删除"
   },
   {
     "text": "\"openbot/share_private_information\"",
     "file": "xiongbao/shared/audit-words.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/audit-words.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "审计记录只追加、不改写，旧行里的工具引用仍是旧名，活动页到 R4 仍按它显示中文名；legacy-compat 到 R4 删除"
   },
   {
     "text": "\"openbot/ui@1\"",
     "file": "xiongbao/app/src/lib/copilot/a2ui.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/lib/copilot/a2ui.ts 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "生成式界面目录的旧 id：迁移改写存量界面，网页到 R4 仍把旧 id 的界面按新目录画出来（迁移后旧页面画的）；legacy-compat 到 R4 删除"
   },
   {
     "text": "\"openbotmobile://\"",
@@ -152,21 +140,10 @@
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
   },
   {
-    "text": "`openbot-${config.provider}-plan`",
-    "file": "xiongbao/server/src/agents/plan-model.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/agents/plan-model.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "`openbot-connection-test-",
-    "file": "xiongbao/server/src/agents/connection-test.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/agents/connection-test.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "<<openbot:app-access-request>>",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+    "until": "R4",
+    "reason": "应用申请卡片标记的旧名：迁移改写存量工具回答，读取端到 R4 仍认旧标记；legacy-compat 到 R4 删除",
+    "file": "xiongbao/shared/app-access-request.ts"
   },
   {
     "text": "= \"openbot.",
@@ -247,29 +224,26 @@
   },
   {
     "text": "openbot:personal-memory",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+    "until": "R4",
+    "reason": "个人记忆对话行的旧 id：续跑快照里的旧行照样识别、去掉，迁移改写存量快照；legacy-compat 到 R4 删除",
+    "file": "xiongbao/server/src/memory/tools.ts"
   },
   {
     "text": "openbot.ap.local-terminal.v1",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+    "until": "R4",
+    "reason": "本地续跑终端日志标记的旧名：只改名不改摘要覆盖的内容（回执摘要不含标记名），迁移改写存量标记，读取端到 R4 仍认旧名；legacy-compat 到 R4 删除",
+    "file": "xiongbao/server/src/approvals/continuation-target-store.ts"
   },
   {
     "text": "openbot.headless.waiting",
-    "until": "R3",
-    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+    "until": "R4",
+    "reason": "等待事件的旧名：v0.2.16 起写 xiongbao.headless.waiting，改名迁移（recovery 0241）改写存量运行事件；读取端到 R4 仍认旧名；legacy-compat 到 R4 删除",
+    "file": "xiongbao/toolkit/src/headless-tools.ts"
   },
   {
     "until": "R3",
     "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）",
     "pattern": "openbot\\-product(?!\\w)"
-  },
-  {
-    "text": "ref: `openbot/${SEARCH_TOOLS}`",
-    "file": "xiongbao/server/src/agents/tool-search.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/agents/tool-search.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "RESERVED_SERVERS = new Set([\"bot\", \"host\", \"openbot\", \"computer\"])",
@@ -280,8 +254,8 @@
   {
     "text": "startsWith(\"openbot/\")",
     "file": "xiongbao/app/src/components/approvals/describe-rules.tsx",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/components/approvals/describe-rules.tsx 里已落在存量数据或对端的名字，随迁移改名"
+    "until": "R4",
+    "reason": "审批记录与审计行里旧工具引用的前缀，网页到 R4 仍按私密信息显示；legacy-compat 到 R4 删除"
   },
   {
     "pattern": "--username[= ][\"']?openbot\\b",
@@ -519,18 +493,21 @@
   },
   {
     "text": "openbotWaiting",
-    "until": "R3",
-    "reason": "落库键：thread_run_events 里中断的 metadata，网页重放时读取，Task 22 迁移"
+    "until": "R4",
+    "reason": "中断元数据的旧键：迁移改写存量运行事件，读取端（网页与 toolkit）到 R4 仍认旧键；legacy-compat 到 R4 删除",
+    "file": "xiongbao/shared/waiting.ts"
   },
   {
     "text": "openbotTimeZone",
-    "until": "R3",
-    "reason": "落库键：审批续跑快照里的 forwardedProps，Task 22 迁移"
+    "until": "R4",
+    "reason": "运行属性的旧键：迁移前存下的审批续跑快照、仍开着旧页面的浏览器带它，读取端到 R4 仍认；legacy-compat 到 R4 删除",
+    "file": "xiongbao/shared/person-time-zone.ts"
   },
   {
     "pattern": "\\bopenbotRun\\b",
-    "until": "R3",
-    "reason": "落库键：审批续跑快照里的 forwardedProps.openbotRun（approvals/wiring.ts、execute.ts），Task 22 迁移"
+    "until": "R4",
+    "reason": "签名运行声明在运行属性里的旧键：v0.2.16 起写 xiongbaoRun，迁移改写存量续跑快照；服务器与框架读取端到 R4 仍认旧键（迁移前的快照、未升级的对端），转发前一并去掉；legacy-compat 到 R4 删除",
+    "file": "xiongbao/server/src/agents/callback-token.ts"
   },
   {
     "file": "xiongbao/shared/bot-prompt.test.ts",
@@ -599,42 +576,6 @@
     "reason": "测试引用 delivery/opentag.ts 已保护的对端名（OpenTag 上下文键、事件名、工具调用 id 前缀）"
   },
   {
-    "file": "xiongbao/server/tests/delivery-routes.test.ts",
-    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
-    "until": "R3",
-    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
-  },
-  {
-    "file": "xiongbao/server/tests/private-share-group.test.ts",
-    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
-    "until": "R3",
-    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
-  },
-  {
-    "file": "xiongbao/server/tests/proactive.test.ts",
-    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
-    "until": "R3",
-    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
-  },
-  {
-    "file": "xiongbao/server/tests/wakerflow-action-step.integration.test.ts",
-    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
-    "until": "R3",
-    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
-  },
-  {
-    "file": "xiongbao/server/tests/wakerflow-plan-graph.test.ts",
-    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
-    "until": "R3",
-    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
-  },
-  {
-    "file": "xiongbao/server/tests/runtime-own-runs.test.ts",
-    "pattern": "openbot/ui@1",
-    "until": "R3",
-    "reason": "测试引用已保护的 A2UI 目录 id（对话历史里落库）"
-  },
-  {
     "file": "xiongbao/server/tests/auth-mobile-scheme.integration.test.ts",
     "pattern": "openbotmobile",
     "until": "R3",
@@ -671,12 +612,6 @@
     "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
   },
   {
-    "file": "xiongbao/server/tests/thread-identity.test.ts",
-    "pattern": "openbot-connection-test-|openbot-model-call",
-    "until": "R3",
-    "reason": "测试引用已保护的内部 run/线程 id"
-  },
-  {
     "file": "xiongbao/server/tests/plugins-mcp-admin.integration.test.ts",
     "pattern": "openbot_grant_stamp_admissible",
     "until": "R4",
@@ -693,12 +628,6 @@
     "pattern": "skin: \\\"openbot\\\"|\\\"skin\\\":\\\"openbot\\\"",
     "until": "R4",
     "reason": "兼容读取的测试：库里或旧页面送来的旧默认皮肤值（0240 已把库里的改成 xiongbao），读取时归一为默认皮肤；legacy-compat 到 R4 删除"
-  },
-  {
-    "file": "xiongbao/server/src/approvals/rule-vocabulary.ts",
-    "pattern": "openbot/share_private_information",
-    "until": "R3",
-    "reason": "注释里写的是已保护的内置工具 ref 原值"
   },
   {
     "file": "xiongbao/server/tests/bot-knows-its-framework.test.ts",
@@ -755,12 +684,6 @@
     "reason": "断言出厂人设里不出现上游名"
   },
   {
-    "file": "xiongbao/server/tests/delivery-routes.test.ts",
-    "pattern": "/openbot\\|acp",
-    "until": "R3",
-    "reason": "断言卡片文字不泄露内部 ref（含已保护的 openbot/share_private_information）"
-  },
-  {
     "file": "xiongbao/server/src/plugins/composio-adapter.ts",
     "text": "\"Linear (OpenBot)\"",
     "until": "R3",
@@ -783,24 +706,6 @@
     "pattern": "(?<=\\\")openbot(?=\\\")|(?<=5432/)openbot(?=\\\")",
     "until": "R4",
     "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
-  },
-  {
-    "file": "xiongbao/app/tests/a2ui.test.tsx",
-    "text": "\"openbot/ui@1\"",
-    "until": "R3",
-    "reason": "测试与 lib/copilot/a2ui.ts 已保护的生成式界面 id（落在对话历史里，Task 22 迁移）同值"
-  },
-  {
-    "file": "xiongbao/app/tests/acp-cards.test.tsx",
-    "pattern": "(?<=\")openbot(?=\")|/openbot\\|acp",
-    "until": "R3",
-    "reason": "服务器存的工具引用 openbot/share_private_information（审批记录里，服务器侧已保护到 R3），测试按它拼 toolRef 并断言不在界面上出现"
-  },
-  {
-    "file": "xiongbao/app/tests/tool-name.test.ts",
-    "pattern": "(?<=\")openbot(?=\")|/openbot\\|acp",
-    "until": "R3",
-    "reason": "服务器存的工具引用 openbot/share_private_information（审批记录里，服务器侧已保护到 R3），测试按它拼 toolRef 并断言不在界面上出现"
   },
   {
     "file": "xiongbao/app/tests/audit-xiongbao-setup-rows.test.tsx",
@@ -865,20 +770,20 @@
   {
     "file": "xiongbao/toolkit/src/run-turn.ts",
     "text": "\"openbotSkill\"",
-    "until": "R3",
-    "reason": "落库键：审批续跑快照里的 forwardedProps.openbotSkill（turnInput 续跑时原样带回快照里的 forwardedProps，server/src/plugins/picked-skill.ts 读取），Task 22 迁移"
+    "until": "R4",
+    "reason": "运行属性 openbotSkill 的旧键：迁移前存下的续跑快照带它，server/src/plugins/picked-skill.ts 到 R4 仍认；写只写 xiongbaoSkill；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/agent-adk/src/main.py",
-    "text": "SERVER_RUN_CONTEXT_ID_PREFIX = \"openbot:\"",
-    "until": "R3",
-    "reason": "服务器写的系统行 id 前缀 openbot:（openbot:personal-memory、openbot:learned-skills 已保护到 R3），与服务器同值"
+    "text": "SERVER_RUN_CONTEXT_ID_PREFIX = (\"xiongbao:\", \"openbot:\")",
+    "until": "R4",
+    "reason": "服务器写的系统行 id 前缀：v0.2.16 起是 xiongbao:（xiongbao:personal-memory），框架到 R4 仍认旧前缀 openbot:（未升级的服务器）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/agent-langgraph-agui/src/tool_runtime.py",
-    "text": "\"openbot_run\"",
-    "until": "R3",
-    "reason": "forwardedProps.openbotRun 的 snake 写法（openbotRun 随审批续跑快照落库，保护到 R3）"
+    "pattern": "\"openbotRun\"|\"openbot_run\"",
+    "until": "R4",
+    "reason": "签名运行声明在运行属性里的旧键：v0.2.16 起写 xiongbaoRun，迁移改写存量续跑快照；服务器与框架读取端到 R4 仍认旧键（迁移前的快照、未升级的对端），转发前一并去掉；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/docker/tests/xb-bot.test.sh",
@@ -893,88 +798,34 @@
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前全仓不改；写法：readiness 测试里超级用户样例的角色名与报告原文"
   },
   {
-    "file": "xiongbao/agent-agno/tests/test_conversation_contract.py",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/agent-claude-sdk/tests/test_large_runs.py",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/agent-claude-sdk/tests/test_thread_history.py",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/agent-claude-sdk/tests/test_tool_continuation.py",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/agent-langgraph-agui/tests/test_tool_protocol.py",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
     "file": "xiongbao/agent-mastra/src/mastra/index.test.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+    "until": "R4",
+    "reason": "Mastra 框架读取端认旧标题的用例（legacy-compat 测试）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/agent-mastra/src/mastra/index.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/agent-strands/tests/test_conversation_contract.py",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+    "until": "R4",
+    "reason": "运行上下文条目的旧标题：v0.2.16 起写新标题（XiongBao …），改名迁移（recovery 0241）把审批续跑快照与运行事件里的旧标题改成新标题；读取端到 R4 仍认旧标题（迁移前写下、未被迁移覆盖的快照，或尚未升级的服务器）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/src/copilot.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+    "until": "R4",
+    "reason": "运行上下文条目的旧标题：v0.2.16 起写新标题（XiongBao …），改名迁移（recovery 0241）把审批续跑快照与运行事件里的旧标题改成新标题；读取端到 R4 仍认旧标题（迁移前写下、未被迁移覆盖的快照，或尚未升级的服务器）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/server/src/memory/tools.ts",
     "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/server/tests/context-usage.test.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/server/tests/memory-runtime.test.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
-  },
-  {
-    "file": "xiongbao/server/tests/tool-selection.integration.test.ts",
-    "pattern": "OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）"
+    "until": "R4",
+    "reason": "运行上下文条目的旧标题：v0.2.16 起写新标题（XiongBao …），改名迁移（recovery 0241）把审批续跑快照与运行事件里的旧标题改成新标题；读取端到 R4 仍认旧标题（迁移前写下、未被迁移覆盖的快照，或尚未升级的服务器）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/agent-mastra/src/mastra/index.ts",
-    "pattern": "startsWith\\(\"OpenBot \"\\)|`OpenBot …`",
-    "until": "R3",
-    "reason": "上下文标题：审批续跑快照存着 run 的 context（approvals/types.ts），续跑时原样带回（toolkit/src/run-turn.ts），服务器与各框架按标题全等过滤或识别；续跑快照落库，Task 22 迁移/双认（与同一对象的 id openbot:personal-memory、openbot:learned-skills 一致，保护到 R3）；agent-mastra 按这个前缀把服务器的条目与调用方的分开"
+    "text": "LEGACY_PREFIX = \"OpenBot \"",
+    "until": "R4",
+    "reason": "Mastra 框架识别服务器条目的旧前缀（v0.2.16 之前的服务器写 OpenBot …）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/charts/xiongbao/values.yaml",
@@ -1376,9 +1227,9 @@
   },
   {
     "file": "xiongbao/docker/tests/rebrand-superuser.test.sh",
-    "pattern": "\\bopenbot(?:_app|_role_writer)?\\b",
+    "pattern": "\\bopenbot(?:_app|_role_writer)?\\b|\\bopenbot(?:Run|TimeZone)\\b|OpenBot standing role",
     "until": "R4",
-    "reason": "v0.2.16 超级用户与库改名（s6 rebrand-superuser.sh）的测试：用 initdb 造出新装卷与 v0.2.15 形状的旧名集群（超级用户、库、应用角色），旧名就是被测对象，并检查启动日志里不再出现旧名；还按 v0.2.15 的格式写出 kid k1 凭据（旧 AAD 标签）并核对升级后换成 k2；legacy-compat 到 R4 随迁移代码删除"
+    "reason": "v0.2.16 超级用户与库改名（s6 rebrand-superuser.sh）的测试：用 initdb 造出新装卷与 v0.2.15 形状的旧名集群（超级用户、库、应用角色），旧名就是被测对象，并检查启动日志里不再出现旧名；还按 v0.2.15 的格式写出 kid k1 凭据（旧 AAD 标签）并核对升级后换成 k2；还按 v0.2.15 的写法存一段带旧事件名、旧运行属性键与旧上下文标题的对话历史，核对升级后改成新名、第二次启动不再改；legacy-compat 到 R4 随迁移代码删除"
   },
   {
     "file": "xiongbao/docker/s6/scripts/env-aliases.sh",
@@ -1648,5 +1499,23 @@
     "pattern": "\"openbot_(?:app|role_writer)\"",
     "until": "R4",
     "reason": "换密钥测试在 v0.2.15 形状的库上跑真迁移器，同一集群上会重建 0240 改名前的两个应用角色，收尾时无人引用就删掉；legacy-compat 到 R4 随迁移基线化删除"
+  },
+  {
+    "file": "xiongbao/agent-langgraph/src/index.ts",
+    "pattern": "\\bopenbotRun\\b",
+    "until": "R4",
+    "reason": "签名运行声明在运行属性里的旧键：v0.2.16 起写 xiongbaoRun，迁移改写存量续跑快照；服务器与框架读取端到 R4 仍认旧键（迁移前的快照、未升级的对端），转发前一并去掉；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/server/tests/rebrand-history.test.ts",
+    "pattern": "openbot|OPENBOT|OpenBot",
+    "until": "R4",
+    "reason": "v0.2.16 历史改写迁移（0241）的测试：往 v0.2.15 形状的库里写带旧名的历史，断言迁移后改成新名、用户正文与审计不动、读取端新旧都认，旧名就是被测对象；随迁移在 R4 基线化时删除；legacy-compat 到 R4 删除"
+  },
+  {
+    "file": "xiongbao/app/tests/channel-history-refresh.test.tsx",
+    "text": "\"openbot/ui@1\"",
+    "until": "R4",
+    "reason": "网页读取端把旧目录 id 的界面按新目录画出来的用例（legacy-compat 测试，app/src/lib/copilot/a2ui.ts 的 withCurrentCatalogId）；legacy-compat 到 R4 删除"
   }
 ]

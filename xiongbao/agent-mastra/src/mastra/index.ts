@@ -84,10 +84,28 @@ export const xiongbaoBaseInstructions =
   "Answer the question you are asked, briefly and correctly.";
 
 const XIONGBAO_CONTEXT_DESCRIPTIONS = [
-  "OpenBot standing role",
-  "OpenBot granted tools guidance",
-  "OpenBot learned skills",
+  "XiongBao standing role",
+  "XiongBao granted tools guidance",
+  "XiongBao learned skills",
 ] as const;
+
+/**
+ * The same entries' titles before v0.2.16, each in the same place as its new title: a server not yet
+ * upgraded still writes them. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+const LEGACY_CONTEXT_DESCRIPTIONS: Record<
+  (typeof XIONGBAO_CONTEXT_DESCRIPTIONS)[number],
+  string
+> = {
+  "XiongBao standing role": "OpenBot standing role",
+  "XiongBao granted tools guidance": "OpenBot granted tools guidance",
+  "XiongBao learned skills": "OpenBot learned skills",
+};
+
+/** The prefix of every entry the server writes for this process; the old one before v0.2.16. */
+const XIONGBAO_PREFIX = "XiongBao ";
+/** legacy-compat：introducedIn 0.2.16，removeIn 0.2.17 */
+const LEGACY_PREFIX = "OpenBot ";
 
 type XiongBaoInstructionArgs = {
   requestContext?: {
@@ -128,10 +146,10 @@ function isUsableEntry(entry: unknown): entry is ContextEntry {
  * What the model is told: the base line, XiongBao's three model-visible entries in a fixed order,
  * then whatever the calling surface sent, as `description: value`.
  *
- * Every other `OpenBot …` entry is for this process, not the model: the Bot id, the deployment's
+ * Every other `XiongBao …` entry is for this process, not the model: the Bot id, the deployment's
  * tool list, and the signed run assertion, which is a credential. The server keeps callers out of
  * that namespace (`RESERVED_MASTRA_CONTEXT_DESCRIPTIONS` in server/src/copilot.ts), so the prefix
- * is a safe line to draw. `OpenBot personal memory` is for the model, but as untrusted data, not
+ * is a safe line to draw. `XiongBao personal memory` is for the model, but as untrusted data, not
  * as an instruction: the server sends the same records as a quoted conversation row
  * (`quotedConversationRow` in server/src/copilot.ts), so it stays out of here too. Caller context
  * used to be dropped here altogether, although the server forwards it and every other harness puts
@@ -145,11 +163,19 @@ export function buildXiongBaoInstructions({
   const xiongbaoInstructions = XIONGBAO_CONTEXT_DESCRIPTIONS.flatMap(
     (description) =>
       contextEntries
-        .filter((entry) => entry.description === description)
+        .filter(
+          (entry) =>
+            entry.description === description ||
+            entry.description === LEGACY_CONTEXT_DESCRIPTIONS[description],
+        )
         .map((entry) => entry.value.trim()),
   );
   const callerInstructions = contextEntries
-    .filter((entry) => !entry.description.startsWith("OpenBot "))
+    .filter(
+      (entry) =>
+        !entry.description.startsWith(XIONGBAO_PREFIX) &&
+        !entry.description.startsWith(LEGACY_PREFIX),
+    )
     .map((entry) =>
       entry.description.trim()
         ? `${entry.description.trim()}: ${entry.value.trim()}`

@@ -47,6 +47,26 @@ export type HeadlessTool = {
 /** Where a suspended run's waiting details ride on its AG-UI interrupt. Shared with the browser. */
 export { XIONGBAO_WAITING_METADATA };
 
+/**
+ * The CUSTOM event a run emits when it stops to wait for a person, carrying the same details as the
+ * interrupt (a run relayed through Intelligence arrives without the interrupt's metadata).
+ */
+export const HEADLESS_WAITING_EVENT = "xiongbao.headless.waiting";
+
+/**
+ * The event's name before v0.2.16. The v0.2.16 migration rewrites stored runs to the name above
+ * (recovery 0241); this is read, never written.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+ */
+export const LEGACY_HEADLESS_WAITING_EVENT = "openbot.headless.waiting";
+
+/** Whether a CUSTOM event's name is the waiting event, by either name. */
+export function isHeadlessWaitingEvent(name: unknown): boolean {
+  return (
+    name === HEADLESS_WAITING_EVENT || name === LEGACY_HEADLESS_WAITING_EVENT
+  );
+}
+
 export type HeadlessWaiting = {
   kind: string;
   requestId?: string;
@@ -269,7 +289,7 @@ export class HeadlessToolsMiddleware extends Middleware {
                 };
                 subscriber.next({
                   type: EventType.CUSTOM,
-                  name: "openbot.headless.waiting",
+                  name: HEADLESS_WAITING_EVENT,
                   value: {
                     ...failure.waiting,
                     message: failure.message,
@@ -286,7 +306,9 @@ export class HeadlessToolsMiddleware extends Middleware {
                         toolCallId: call.id,
                         reason: "human_input",
                         message: failure.message,
-                        metadata: { openbotWaiting: failure.waiting },
+                        metadata: {
+                          [XIONGBAO_WAITING_METADATA]: failure.waiting,
+                        },
                       },
                     ],
                   },

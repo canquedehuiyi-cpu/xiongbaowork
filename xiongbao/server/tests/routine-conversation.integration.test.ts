@@ -437,7 +437,7 @@ describe("the next run, as the Bot is told it", () => {
       ],
     });
 
-    await ask(ASKED_IN.threadId, { openbotTimeZone: "America/Los_Angeles" });
+    await ask(ASKED_IN.threadId, { xiongbaoTimeZone: "America/Los_Angeles" });
 
     const [made] = await routinesOfOwner();
     expect(made?.nextRunAt.toISOString()).toBe("2026-11-07T17:00:00.000Z");

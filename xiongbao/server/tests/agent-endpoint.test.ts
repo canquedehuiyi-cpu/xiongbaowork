@@ -447,7 +447,10 @@ describe("dialling a stored agent endpoint", () => {
     },
     body: JSON.stringify({
       threadId: "t",
-      forwardedProps: { xiongbaoBotId: "risk", openbotRun: "signed.run.token" },
+      forwardedProps: {
+        xiongbaoBotId: "risk",
+        xiongbaoRun: "signed.run.token",
+      },
     }),
   };
 
@@ -573,7 +576,7 @@ describe("dialling a stored agent endpoint", () => {
       threadId?: string;
       forwardedProps?: Record<string, unknown>;
     };
-    expect(forwarded.forwardedProps?.openbotRun).toBeUndefined();
+    expect(forwarded.forwardedProps?.xiongbaoRun).toBeUndefined();
     // Only the credential is removed. The rest of the run is still the run.
     expect(forwarded.threadId).toBe("t");
     expect(forwarded.forwardedProps?.xiongbaoBotId).toBe("risk");
@@ -595,7 +598,7 @@ describe("dialling a stored agent endpoint", () => {
     const forwarded = JSON.parse(String(calls[1]?.init.body)) as {
       forwardedProps?: Record<string, unknown>;
     };
-    expect(forwarded.forwardedProps?.openbotRun).toBe("signed.run.token");
+    expect(forwarded.forwardedProps?.xiongbaoRun).toBe("signed.run.token");
   });
 
   test("an upgrade from http to https on the same host keeps them", async () => {
