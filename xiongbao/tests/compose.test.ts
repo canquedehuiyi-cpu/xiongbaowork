@@ -699,8 +699,7 @@ test("a host setting under its old name still reaches the containers, and the ne
 /*
  * A model sign-in file named in `.env` under the old name. Compose cannot nest the `:+` that turns it
  * into the container's path inside a fallback, so the server gets it under the old name too and its
- * alias step copies it over the empty new one. The old key carries exactly what the v0.2.15 file gave
- * it, which is what the v0.2.15 local updater compares before it accepts a new Compose file.
+ * alias step copies it over the empty new one.
  * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
  */
 test("a model sign-in file named under the old name still reaches the server", () => {

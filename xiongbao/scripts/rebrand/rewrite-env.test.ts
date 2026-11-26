@@ -153,6 +153,48 @@ describe("rewrite-env.sh", () => {
       expect(printed).not.toContain(value);
   });
 
+  test("a new value that parsers read differently leaves both lines and names them", () => {
+    // Compose 把 `X= # c` 读成 "# c"、把 `X=#c` 读成 "#c"，bun 都读成空：改哪一行都可能改变生效值。
+    const file = write(".env", [
+      "XIONGBAO_RLS_ENFORCE= # refuse",
+      "OPENBOT_RLS_ENFORCE=warn",
+      "XIONGBAO_SINGLE_USER=#true",
+      "OPENBOT_SINGLE_USER=false",
+    ]);
+    const before = readFileSync(file, "utf8");
+    const { code, stdout, stderr } = run(file);
+    expect(code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(before);
+    expect(backups()).toEqual([]);
+    expect(stderr).toContain("OPENBOT_RLS_ENFORCE");
+    expect(stderr).toContain("XIONGBAO_SINGLE_USER");
+    const printed = stdout + stderr;
+    for (const value of ["refuse", "warn", "true", "false"])
+      expect(printed).not.toContain(value);
+  });
+
+  test("an unclear new value does not stop the other names from being renamed", () => {
+    const file = write(".env", [
+      "XIONGBAO_RLS_ENFORCE= # refuse",
+      "OPENBOT_RLS_ENFORCE=warn",
+      "OPENBOT_PUBLIC_URL=https://public.example",
+      'XIONGBAO_SELF_HOST_BANNER=""  # off',
+      "OPENBOT_SELF_HOST_BANNER=true",
+    ]);
+    const { code, stderr } = run(file);
+    expect(code).toBe(0);
+    expect(readFileSync(file, "utf8").split("\n")).toEqual([
+      "XIONGBAO_RLS_ENFORCE= # refuse",
+      "OPENBOT_RLS_ENFORCE=warn",
+      "XIONGBAO_PUBLIC_URL=https://public.example",
+      // 一对空引号加注释：Compose 与 bun 都读成空，旧值生效，按空值处理。
+      '# XIONGBAO_SELF_HOST_BANNER=""  # off',
+      "XIONGBAO_SELF_HOST_BANNER=true",
+      "",
+    ]);
+    expect(stderr).toContain("OPENBOT_RLS_ENFORCE");
+  });
+
   test("the compose variables for image, tag and port are renamed like the rest", () => {
     const file = write(".env.delivery", [
       "OPENBOT_IMAGE=ghcr.io/example/xiongbaowork@sha256:abc",

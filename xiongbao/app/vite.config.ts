@@ -82,6 +82,7 @@ if (!apiPort.ok) {
  * Whether the deployment names an address beyond this machine, read the way the server reads it:
  * through the alias step on a copy, because this process never runs the server's entry, so a `.env`
  * that still says OPENBOT_PUBLIC_URL or OPENBOT_APP_URL counts too.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
  */
 export function answersBeyondThisMachine(
   environment: Record<string, string | undefined>,

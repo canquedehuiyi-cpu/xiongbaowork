@@ -106,6 +106,7 @@ export async function requireAvailablePort(port: number): Promise<void> {
 async function main(): Promise<void> {
   // A standalone process: it runs the alias step itself, so a data directory still named under the
   // old prefix (OPENBOT_LOCAL_COMPUTER_DIR) is found where it was.
+  // legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
   const environment = { ...process.env };
   reportEnvironmentAliases(applyEnvironmentAliases(environment));
   const config = localChromeConfiguration(environment);

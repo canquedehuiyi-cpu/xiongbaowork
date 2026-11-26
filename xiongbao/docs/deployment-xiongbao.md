@@ -594,6 +594,8 @@ COMMIT;
    平台模型的密钥变量保持原样。它只在标准错误里写名字和备份路径，不输出任何值；文件里没有旧名时什么都不改，也不留备份。
    改完照常 `up -d`。要退回，把备份文件改回原名即可。源码目录的 `.env` 也可以这样改，`scripts/start.sh` 同样新名优先、旧名其次。
 6. **Helm**：`config.extraEnv` 里写着 `OPENBOT_RLS_ENFORCE` 的 values 仍然通过 chart 的渲染检查，改成 `XIONGBAO_RLS_ENFORCE` 即可。
+   chart 自己用新名下发的几项（如来自 `config.publicUrl` 的公网地址、单用户开关）若又在 `config.extraEnv` 里用旧名写了不同的值，
+   现在一律以 chart 下发的新名值为准，服务端日志点名这个冲突；以前两者同名，按 env 列表的先后决定。
 
 ## 7. 版本固定与来源校验
 

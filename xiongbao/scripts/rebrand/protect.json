@@ -1885,7 +1885,7 @@
     "file": "xiongbao/docker-compose.yml",
     "text": "OPENBOT_MODEL_OAUTH_FILE",
     "until": "R4",
-    "reason": "Compose 不能把 :+ 嵌进 :- 回退，旧名单独成键，服务器别名层复制；v0.2.15 更新器的 preservedState 也比较这个键；legacy-compat 到 R4 删除"
+    "reason": "Compose 不能把 :+ 嵌进 :- 回退，模型登录文件的旧名单独成键，由服务器别名层复制到空的新键（只是运行时回退）；legacy-compat 到 R4 删除"
   },
   {
     "file": "xiongbao/app/vite.config.ts",

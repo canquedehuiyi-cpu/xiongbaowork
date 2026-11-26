@@ -7,11 +7,14 @@
 # 只是启动时会点名提醒；改完提醒就没了。到 v0.2.17 旧名不再认，在那之前改掉。
 #
 # - 先把原文件复制成 <文件>.bak-<UTC 时间 YYYYMMDDTHHMMSSZ>（0600），再原地改写（保留原文件的权限与属主）。
-# - 改写前后生效的值完全一样，规则与运行时相同（同名的行最后一行生效；新名的值为空等于没设，旧值生效）：
+# - 改写前后生效的值完全一样。值按 Compose 的 env_file 解析（交付走 Compose），规则与运行时相同：同名的行最后一行
+#   生效；新名的值为空等于没设，旧值生效。
 #   - 同名 XIONGBAO_<X> 最后一行的值非空：运行时新名赢，旧行不改名而是注释掉（加「# 」前缀，旧值留在文件里），
 #     并在标准错误点名。
-#   - 同名 XIONGBAO_<X> 只有空值（`XIONGBAO_X=`、`=""`、`=''`，或值只有空白与 # 注释）：运行时用的是旧值，
-#     所以把空的新行注释掉，再把旧行改名。
+#   - 同名 XIONGBAO_<X> 最后一行是空值（等号后什么都没有或只有空白，或只有一对空引号、后面可跟空白与 # 注释，
+#     各解析器都读成空）：运行时用的是旧值，所以把空的新行注释掉，再把旧行改名。
+#   - 同名 XIONGBAO_<X> 最后一行的值以 # 开头（如 `XIONGBAO_X= # 说明`）：Compose 读成以 # 开头的值，bun 读成空，
+#     各解析器结论不一。新旧两行都原样保留，只在标准错误点名，由运维自己处理。
 #   - 没有新行：同一个旧名的每一行都改名，最后一行仍然生效。
 # - OPENBOT_IMAGE / OPENBOT_TAG / OPENBOT_PORT（Compose 与 README 命令读的变量）同样处理。
 # - OPENBOT_POOL_<X>（平台模型的密钥变量）不改：数据库里的模型池行写着这个名字，随数据库迁移一起改。
@@ -49,22 +52,24 @@ awk -v report="$plan" '
     }
     return ""
   }
-  function blank(line,   value) {
-    # 设置行的值是否为空：去掉行尾 CR 后，什么都没有、只有一对空引号，或只有空白与 # 注释。
+  function kind(line,   value) {
+    # 设置行的值：Compose 与 bun 都读成空的返回 "blank"，两者读法不一（以 # 开头）的返回 "unclear"，其余 "filled"。
     value = substr(line, index(line, "=") + 1)
     sub(/\r$/, "", value)
-    return value ~ /^[ \t]*(#.*)?$/ || value ~ /^("|\047)("|\047)[ \t]*(#.*)?$/
+    if (value ~ /^[ \t]*$/ || value ~ /^[ \t]*("|\047)("|\047)[ \t]*(#.*)?$/) return "blank"
+    if (value ~ /^[ \t]*#/) return "unclear"
+    return "filled"
   }
   NR == FNR {
     name = setting($0)
-    # 同名的行最后一行生效：只记最后一行的值是不是空。
-    if (name ~ /^XIONGBAO_./) filled[name] = !blank($0)
+    # 同名的行最后一行生效：只记最后一行的值属于哪一类。
+    if (name ~ /^XIONGBAO_./) state[name] = kind($0)
     else if (name ~ /^OPENBOT_./) old["XIONGBAO_" substr(name, 9)] = 1
     next
   }
   {
     name = setting($0)
-    if (name ~ /^XIONGBAO_./ && (name in old) && !filled[name] && substr(name, 10) !~ /^POOL_/) {
+    if (name ~ /^XIONGBAO_./ && (name in old) && state[name] == "blank" && substr(name, 10) !~ /^POOL_/) {
       # 只有空值的新行：运行时等于没设，生效的是旧值。注释掉它，旧行改名后接着生效。
       print "# " $0
       if (!(name in emptied)) { emptied[name] = 1; print "emptied " name > report }
@@ -78,7 +83,13 @@ awk -v report="$plan" '
       next
     }
     renamed = "XIONGBAO_" suffix
-    if (filled[renamed]) {
+    if (state[renamed] == "unclear") {
+      # 新行的值各解析器读法不一，改哪一行都可能改变生效值：两行都不动，点名交给运维。
+      print
+      if (!(name in unclear)) { unclear[name] = 1; print "unclear " name " " renamed > report }
+      next
+    }
+    if (state[renamed] == "filled") {
       print "# " $0
       if (!(name in commented)) { commented[name] = 1; print "commented " name " " renamed > report }
       next
@@ -91,8 +102,11 @@ awk -v report="$plan" '
 ' "$file" "$file" > "$out"
 
 if ! grep -qE '^(renamed|commented) ' "$plan"; then
-  while read -r what name _; do
-    [ "$what" = kept ] && echo "rewrite-env: $name 保持原名（数据库里的模型池行写着这个名字，随数据库迁移一起改）" >&2
+  while read -r what name new; do
+    case $what in
+      kept) echo "rewrite-env: $name 保持原名（数据库里的模型池行写着这个名字，随数据库迁移一起改）" >&2 ;;
+      unclear) echo "rewrite-env: $name 与 $new 都原样保留：$new 的值以 # 开头，Compose 与 bun 读法不一，请自己决定留哪一行" >&2 ;;
+    esac
   done < "$plan"
   echo "rewrite-env: $file 里没有要改的旧名，未改动" >&2
   exit 0
@@ -118,6 +132,7 @@ while read -r what name new; do
     commented) commented=$((commented + 1)); echo "rewrite-env: $name 已注释掉：文件里已有 $new，运行时本来就以它为准" >&2 ;;
     emptied) commented=$((commented + 1)); echo "rewrite-env: $name 只有空值（运行时等于没设），已注释掉，改名后的旧值接着生效" >&2 ;;
     kept) echo "rewrite-env: $name 保持原名（数据库里的模型池行写着这个名字，随数据库迁移一起改）" >&2 ;;
+    unclear) echo "rewrite-env: $name 与 $new 都原样保留：$new 的值以 # 开头，Compose 与 bun 读法不一，请自己决定留哪一行" >&2 ;;
   esac
 done < "$plan"
 echo "rewrite-env: 改名 $renamed 个，注释 $commented 个；原文件备份在 $backup" >&2

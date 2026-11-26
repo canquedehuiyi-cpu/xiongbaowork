@@ -221,8 +221,9 @@ services:
       XIONGBAO_MODEL_OAUTH_FILE: ${XIONGBAO_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
       # The same under the old name, because Compose cannot nest a `:+` inside a `:-`: a `.env` that
       # still says OPENBOT_MODEL_OAUTH_FILE gets it here, and the server's alias step copies it over the
-      # empty new one. The v0.2.15 local updater also refuses a Compose file that drops this key while
-      # the installation uses it. legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+      # empty new one. Only that: it does not make this file acceptable to the v0.2.15 local updater,
+      # which also compares this project's name, volumes and the server's mount, renamed before this.
+      # legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
       OPENBOT_MODEL_OAUTH_FILE: ${OPENBOT_MODEL_OAUTH_FILE:+/xiongbao/model-oauth.json}
       # The secret local Intelligence's Learning agent sends when it asks the person's Claude or
       # ChatGPT plan for a step (server/src/learning/model-endpoint.ts). The desktop app mints it
