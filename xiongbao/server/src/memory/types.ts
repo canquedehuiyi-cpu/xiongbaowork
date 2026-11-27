@@ -82,6 +82,12 @@ export type MemoryRecord = MemoryInput & {
   sourceLink: string | null;
   observedAt: Date | null;
   deletedAt: Date | null;
+  /** 本人纠正员工时抽出来的。 */
+  fromCorrection: boolean;
+  /** 本人就这件事纠正过几次；不是纠正的为 0。 */
+  correctionCount: number;
+  /** 本人确认后要取代的那条记忆的 id。 */
+  replacesId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -116,6 +122,12 @@ export const formedMemorySchema = z
 export type FormedMemoryInput = z.infer<typeof formedMemorySchema> & {
   agentId: string;
   sourceRef?: string | null;
+  /** 本人纠正员工时抽出来的；缺省不是。 */
+  fromCorrection?: boolean;
+  /** 纠正过几次；缺省 0。 */
+  correctionCount?: number;
+  /** 本人确认后要取代的那条记忆；缺省没有。 */
+  replacesId?: string | null;
 };
 export type ImportedMemory = {
   externalId: string;

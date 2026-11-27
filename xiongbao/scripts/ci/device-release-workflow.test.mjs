@@ -1388,15 +1388,22 @@ const DOWNLOAD_SETTINGS = {
 
 /**
  * Evaluates a job's `if:` the way GitHub does for the few forms used here: `needs.<job>.result`,
- * `vars.X`, `inputs.X`, `!cancelled()`, string literals, ==, !=, &&, ||, !.
+ * `needs.<job>.outputs.<name>` (an unset output is ''), `vars.X`, `inputs.X`, `!cancelled()`,
+ * string literals, ==, !=, &&, ||, !.
  */
-function when(condition, { needs = {}, vars = {}, inputs = {} } = {}) {
+function when(
+  condition,
+  { needs = {}, outputs = {}, vars = {}, inputs = {} } = {},
+) {
   const inner = condition
     .trim()
     .replace(/^\$\{\{\s*/, "")
     .replace(/\s*\}\}$/, "");
   const js = inner
     .replace(/'([^']*)'/g, (_, text) => JSON.stringify(text))
+    .replace(/needs\.([\w-]+)\.outputs\.(\w+)/g, (_, job, name) =>
+      JSON.stringify(outputs[job]?.[name] ?? ""),
+    )
     .replace(/needs\.([\w-]+)\.result/g, (_, job) => {
       if (!(job in needs)) throw new Error(`no result for ${job}`);
       return `needs[${JSON.stringify(job)}]`;
@@ -1527,7 +1534,11 @@ function mirror(env = {}, crane = registry()) {
 test("mirror copies only the platform manifest to our registry", () => {
   const job = containerRelease.jobs.mirror;
   expect(job.needs).toEqual(["tag-check", "image", "promote"]);
-  expect(job.if).toBe(expression("!inputs.dry_run && vars.XB_REGISTRY != ''"));
+  // Decided inside the release Environment (promote's output), not by a job-level vars.XB_REGISTRY,
+  // which an Environment-only variable would leave empty.
+  expect(job.if).toBe(
+    expression("!inputs.dry_run && needs.promote.outputs.mirror == 'true'"),
+  );
   expect(job.environment).toBe("release");
   expect(job.permissions).toEqual({ contents: "read", packages: "read" });
   expect(job.outputs).toEqual({
@@ -1813,7 +1824,10 @@ test("the device installers go up to our download page after they are published"
   expect(job.needs).toEqual(["tag-check", "publish"]);
   expect(job.if).toContain("needs.publish.result == 'success'");
   expect(job.if).toContain("!cancelled()");
-  expect(job.if).toContain("vars.XB_DOWNLOAD_BUCKET != ''");
+  // Decided inside the device-release Environment (publish's output), not by a job-level
+  // vars.XB_DOWNLOAD_BUCKET, which an Environment-only variable would leave empty.
+  expect(job.if).toContain("needs.publish.outputs.download == 'true'");
+  expect(job.if).not.toContain("vars.");
   expect(job.environment).toBe("device-release");
   expect(job.permissions).toEqual({ contents: "read" });
   const download = job.steps.find((s) =>
@@ -1904,8 +1918,8 @@ test("our channel steps skip cleanly when unconfigured", () => {
   const CLEANUP = "mirror/logout";
   const cleanupGate = expression("always() && vars.XB_REGISTRY != ''");
   // Every step that does something with the channel is gated on its variable; the record step and
-  // the summary only read the variables, and must run either way.
-  const ungated = new Set(["github-release/record", "own-channel/summary"]);
+  // promote's channel step only read the variables, and must run either way.
+  const ungated = new Set(["github-release/record", "promote/channel"]);
   const release = channelSteps(containerRelease);
   expect(release.length).toBeGreaterThan(5);
   for (const { job, step: s } of release) {
@@ -1936,28 +1950,42 @@ test("our channel steps skip cleanly when unconfigured", () => {
   for (const s of device)
     expect([s.id ?? s.uses, s.if]).toEqual([s.id ?? s.uses, downloadGate]);
   // Unconfigured, mirror and download-page are skipped whole, so their environments ask for no
-  // approval, and what follows mirror still runs.
+  // approval, and what follows mirror still runs. For release.yml "configured" is what promote saw
+  // inside the release Environment; the job-level `vars` (which cannot see that Environment's
+  // variables) make no difference any more.
   const ok = (jobs) =>
     Object.fromEntries(jobs.map((name) => [name, "success"]));
-  const configuredNot = { vars: {}, inputs: {} };
+  const configuredNot = { outputs: { promote: { mirror: "false" } } };
   const configured = {
-    vars: { ...OWN, XB_DOWNLOAD_BUCKET: "downloads" },
+    outputs: { promote: { mirror: "true" } },
+    vars: {},
     inputs: {},
   };
+  const pageConfigured = { outputs: { publish: { download: "true" } } };
   const mirrorIf = containerRelease.jobs.mirror.if;
   expect(when(mirrorIf, configuredNot)).toBe(false);
+  expect(
+    when(mirrorIf, { ...configuredNot, vars: { ...OWN } }),
+    "a repository variable cannot override what the Environment says",
+  ).toBe(false);
   expect(when(mirrorIf, configured)).toBe(true);
   expect(when(mirrorIf, { ...configured, inputs: { dry_run: true } })).toBe(
     false,
   );
   const pageIf = workflow.jobs["download-page"].if;
-  expect(when(pageIf, { ...configuredNot, needs: ok(["publish"]) })).toBe(
-    false,
+  expect(
+    when(pageIf, {
+      outputs: { publish: { download: "false" } },
+      vars: { XB_DOWNLOAD_BUCKET: "downloads" },
+      needs: ok(["publish"]),
+    }),
+  ).toBe(false);
+  expect(when(pageIf, { ...pageConfigured, needs: ok(["publish"]) })).toBe(
+    true,
   );
-  expect(when(pageIf, { ...configured, needs: ok(["publish"]) })).toBe(true);
-  expect(when(pageIf, { ...configured, needs: { publish: "skipped" } })).toBe(
-    false,
-  );
+  expect(
+    when(pageIf, { ...pageConfigured, needs: { publish: "skipped" } }),
+  ).toBe(false);
   const releaseIf = containerRelease.jobs["github-release"].if;
   // Without a status function GitHub adds success(), which a skipped mirror would fail.
   expect(releaseIf).toContain("!cancelled()");
@@ -1986,6 +2014,10 @@ test("our channel steps skip cleanly when unconfigured", () => {
       needs: { ...upstream, mirror: "skipped" },
     }),
   ).toBe(false);
+  // A promote that reported nothing does not count as "not configured".
+  expect(
+    when(releaseIf, { outputs: {}, needs: { ...upstream, mirror: "skipped" } }),
+  ).toBe(false);
   for (const name of Object.keys(upstream))
     for (const result of ["failure", "skipped"])
       expect(
@@ -1996,7 +2028,7 @@ test("our channel steps skip cleanly when unconfigured", () => {
       ).toBe(false);
   expect(
     when(releaseIf, {
-      vars: {},
+      ...configuredNot,
       inputs: { dry_run: true },
       needs: { ...upstream, mirror: "skipped" },
     }),
@@ -2017,20 +2049,21 @@ test("our channel steps skip cleanly when unconfigured", () => {
       needs: { "tag-check": "success", "github-release": "failure" },
     }),
   ).toBe(false);
-  // Unconfigured, the run says so: release.yml in every mode (dry runs included), the device release
-  // once it has published.
+  // Unconfigured, the run says so: release.yml in promote (the first job inside the release
+  // Environment, so it sees what the channel jobs see; a dry run says it does not look), the device
+  // release once it has published.
   const summary = (env) => {
     const file = join(scratch(), "summary");
     writeFileSync(file, "");
     const result = run(
-      "own-channel",
-      "summary",
+      "promote",
+      "channel",
       {
         TAG: "v0.2.0",
         XB_REGISTRY: "",
         XB_IMAGE_REPOSITORY: "",
         XB_DOWNLOAD_BUCKET: "",
-        DRY_RUN: "",
+        XB_DOWNLOAD_BASE_URL: "",
         GITHUB_STEP_SUMMARY: file,
         ...env,
       },
@@ -2038,27 +2071,41 @@ test("our channel steps skip cleanly when unconfigured", () => {
       process.env.PATH,
       containerRelease,
     );
-    return { status: result.status, text: readFileSync(file, "utf8") };
+    return { ...result, text: readFileSync(file, "utf8") };
   };
-  const own = containerRelease.jobs["own-channel"];
-  expect(own.needs).toBe("tag-check");
-  expect(own.if).toBeUndefined();
-  expect(own.environment).toBeUndefined();
-  expect(own.permissions).toEqual({ contents: "read" });
-  expect(secretPaths(own)).toEqual([]);
-  const none = summary({ DRY_RUN: "true" });
+  expect(containerRelease.jobs["own-channel"]).toBeUndefined();
+  const promoteJob = containerRelease.jobs.promote;
+  expect(promoteJob.environment).toBe("release");
+  expect(promoteJob.steps[0].id).toBe("channel");
+  expect(secretPaths(promoteJob.steps[0])).toEqual([]);
+  const none = summary({});
   expect(none.status).toBe(0);
   expect(none.text.match(/未配置自有渠道/g)?.length).toBe(2);
   expect(none.text).toContain("XB_REGISTRY");
   expect(none.text).toContain("XB_DOWNLOAD_BUCKET");
-  const set = summary({ ...OWN, XB_DOWNLOAD_BUCKET: "downloads" });
+  expect(none.outputs).toEqual({ mirror: "false", download_base_url: "" });
+  const set = summary({
+    ...OWN,
+    XB_DOWNLOAD_BUCKET: "downloads",
+    XB_DOWNLOAD_BASE_URL: "https://d.example.com",
+  });
+  expect(set.status).toBe(0);
   expect(set.text).not.toContain("未配置自有渠道");
   expect(set.text).toContain(`${OWN_REPOSITORY}:v0.2.0`);
   expect(set.text).toContain("s3://downloads/v0.2.0/");
+  expect(set.outputs).toEqual({
+    mirror: "true",
+    download_base_url: "https://d.example.com",
+  });
+  const dryRun = containerRelease.jobs.image.steps.find(
+    (s) => s.name === "Dry run summary",
+  );
+  expect(dryRun.if).toBe(expression("inputs.dry_run"));
+  expect(dryRun.run).toContain("试运行");
   // The device release says it in publish, which runs either way, after the GitHub Release.
   const publishSteps = workflow.jobs.publish.steps;
   const notice = publishSteps.find(
-    (s) => s.if === expression("vars.XB_DOWNLOAD_BUCKET == ''"),
+    (s) => s.if === expression("steps.channel.outputs.download == 'false'"),
   );
   expect(publishSteps.indexOf(notice)).toBeGreaterThan(
     publishSteps.indexOf(step("publish", "publish")),
@@ -2241,10 +2288,7 @@ function cleanRecord(env, files) {
       GITHUB_ENV: githubEnv,
       GH_TOKEN: "x",
       GH_REPO: "o/r",
-      XB_REGISTRY: "",
-      XB_IMAGE_REPOSITORY: "",
-      XB_DOWNLOAD_BUCKET: "",
-      XB_DOWNLOAD_BASE_URL: "",
+      DOWNLOAD_BASE_URL: "",
       ...env,
     },
     scratch(),
@@ -2261,87 +2305,73 @@ function cleanRecord(env, files) {
 test("clean-deploy fetches from our download page when configured", () => {
   const ghcr = `ghcr.io/o/r@${INDEX}`;
   const own = `${OWN_REPOSITORY}@${PLATFORM}`;
-  // Not configured: the GitHub Release's record and its images.xiongbao, which is then GHCR's.
+  // Not configured: the GitHub Release's record.
   const before = cleanRecord({}, { xiongbao: ghcr, ghcr });
   expect(before.status).toBe(0);
   expect(before.calls).toEqual([
     `gh release download v0.2.0 --pattern container-images.json --dir ${before.calls[0].split(" ").at(-1)}`,
   ]);
   expect(before.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
-  expect(
-    cleanRecord({}, { xiongbao: `registry.example.com/x@${INDEX}`, ghcr })
-      .status,
-  ).not.toBe(0);
-  // Configured: the record comes from our download page as a customer reaches it, and the image to
-  // run and check is images.xiongbao, in our registry.
-  const configured = {
-    ...OWN,
-    XB_DOWNLOAD_BUCKET: "downloads",
-    XB_DOWNLOAD_BASE_URL: "https://download.example.com/xb/",
-  };
-  const after = cleanRecord(configured, { xiongbao: own, ghcr });
+  // The image to run and check is always the record's GHCR one: our registry (JCR) is private, so
+  // an anonymous customer pull from it could only fail.
+  const mirrored = cleanRecord({}, { xiongbao: own, ghcr });
+  expect(mirrored.status).toBe(0);
+  expect(mirrored.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
+  // A record from before v0.2.16 has no `ghcr`; its images.xiongbao must then be GHCR's.
+  expect(cleanRecord({}, { xiongbao: ghcr }).env).toBe(
+    `EXPECTED_REFERENCE=${ghcr}\n`,
+  );
+  for (const files of [
+    { xiongbao: own },
+    { xiongbao: `${OWN_REPOSITORY}:v0.2.0` },
+    { xiongbao: ghcr, ghcr: own },
+    { xiongbao: ghcr, ghcr: "ghcr.io/o/r:v0.2.0" },
+  ]) {
+    const refused = cleanRecord({}, files);
+    expect(refused.status).not.toBe(0);
+    expect(refused.env).toBe("");
+  }
+  // Configured (release.yml passes the page's address in): the record comes from our download page
+  // as a customer reaches it.
+  const after = cleanRecord(
+    { DOWNLOAD_BASE_URL: "https://download.example.com/xb/" },
+    { xiongbao: own, ghcr },
+  );
   expect(after.status).toBe(0);
   expect(after.calls.length).toBe(1);
   expect(after.calls[0]).toStartWith("curl ");
   expect(after.calls[0]).toEndWith(
     " https://download.example.com/xb/v0.2.0/container-images.json",
   );
-  expect(after.env).toBe(
-    `CUSTOMER_IMAGE=${OWN_REPOSITORY}:v0.2.0\nEXPECTED_REFERENCE=${own}\n`,
-  );
-  // images.xiongbao must be our registry's copy, by digest; GHCR no longer passes.
-  for (const xiongbao of [
-    ghcr,
-    `${OWN_REPOSITORY}:v0.2.0`,
-    `registry.example.com/other@${PLATFORM}`,
-  ]) {
-    const refused = cleanRecord(configured, { xiongbao, ghcr });
-    expect(refused.status).not.toBe(0);
-    expect(refused.env).toBe("");
-  }
-  // Only one half configured: the download page alone keeps GHCR's image, our registry alone keeps
-  // the GitHub Release's record.
-  const pageOnly = cleanRecord(
-    {
-      XB_DOWNLOAD_BUCKET: "downloads",
-      XB_DOWNLOAD_BASE_URL: "https://d.example.com",
-    },
-    { xiongbao: ghcr, ghcr },
-  );
-  expect(pageOnly.calls[0]).toEndWith(
-    " https://d.example.com/v0.2.0/container-images.json",
-  );
-  expect(pageOnly.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
-  const registryOnly = cleanRecord(OWN, { xiongbao: own, ghcr });
-  expect(registryOnly.calls[0]).toStartWith("gh release download");
-  expect(registryOnly.env).toContain(`EXPECTED_REFERENCE=${own}\n`);
-  // A bucket without the page's address fails rather than fetch from GitHub.
-  expect(
-    cleanRecord({ XB_DOWNLOAD_BUCKET: "downloads" }, { xiongbao: ghcr, ghcr })
-      .status,
-  ).not.toBe(0);
-  // A plain-http page fails too: nothing is fetched from it.
+  expect(after.env).toBe(`EXPECTED_REFERENCE=${ghcr}\n`);
+  // A plain-http page fails: nothing is fetched from it.
   const http = cleanRecord(
-    {
-      XB_DOWNLOAD_BUCKET: "downloads",
-      XB_DOWNLOAD_BASE_URL: "http://d.example.com",
-    },
+    { DOWNLOAD_BASE_URL: "http://d.example.com" },
     { xiongbao: ghcr, ghcr },
   );
   expect(http.status).not.toBe(0);
   expect(http.calls).toEqual([]);
   expect(http.log).toContain("must start with https://");
-  const recordEnv = step("linux", "record", cleanDeploy).env;
-  for (const name of [
-    "XB_REGISTRY",
-    "XB_IMAGE_REPOSITORY",
-    "XB_DOWNLOAD_BUCKET",
-    "XB_DOWNLOAD_BASE_URL",
-  ])
-    expect(recordEnv[name]).toBe(expression(`vars.${name}`));
+  // No variable at all: clean-deploy names no Environment, so it would not see one set only there.
+  expect(cleanDeployText).not.toMatch(/\bvars\.\w/);
+  expect(step("linux", "record", cleanDeploy).env).toEqual({
+    GH_TOKEN: expression("github.token"),
+    GH_REPO: expression("github.repository"),
+  });
+  expect(cleanDeploy.jobs.linux.env.DOWNLOAD_BASE_URL).toBe(
+    expression("inputs.download_base_url"),
+  );
+  for (const trigger of ["workflow_call", "workflow_dispatch"])
+    expect(cleanDeploy.on[trigger].inputs.download_base_url).toMatchObject({
+      type: "string",
+      required: false,
+      default: "",
+    });
+  expect(containerRelease.jobs["g7-linux"].with.download_base_url).toBe(
+    expression("needs.promote.outputs.download_base_url"),
+  );
   // delivery.env.example comes from the same place in both database shapes (delivery-env, below);
-  // the customer run starts our registry's copy through the README's XIONGBAO_IMAGE when it is
-  // configured. Both run as written.
+  // the customer run always starts the README's own GHCR image. Both run as written.
   const roles = (env, existing) => {
     const customer = scratch();
     const evidence = scratch();
@@ -2404,14 +2434,14 @@ test("clean-deploy fetches from our download page when configured", () => {
   // block runs; only the embedded one gets its KEY_ENCRYPTION_KEY here (roles writes the external
   // one's). Not configured, the step is skipped and the README block fetches the file as before.
   const fetchStep = step("linux", "delivery-env", cleanDeploy);
-  expect(fetchStep.if).toBe(expression("vars.XB_DOWNLOAD_BUCKET != ''"));
-  expect(when(fetchStep.if, {})).toBe(false);
+  expect(fetchStep.if).toBe(expression("inputs.download_base_url != ''"));
+  expect(when(fetchStep.if, { inputs: { download_base_url: "" } })).toBe(false);
   expect(
-    when(fetchStep.if, { vars: { XB_DOWNLOAD_BUCKET: "downloads" } }),
+    when(fetchStep.if, {
+      inputs: { download_base_url: "https://download.example.com" },
+    }),
   ).toBe(true);
-  expect(fetchStep.env.XB_DOWNLOAD_BASE_URL).toBe(
-    expression("vars.XB_DOWNLOAD_BASE_URL"),
-  );
+  expect(fetchStep.env).toBeUndefined();
   const linuxSteps = cleanDeploy.jobs.linux.steps;
   const at = (s) => linuxSteps.indexOf(s);
   const migrate = linuxSteps.find((s) =>
@@ -2436,7 +2466,7 @@ test("clean-deploy fetches from our download page when configured", () => {
         TAG: "v0.2.0",
         CUSTOMER: customer,
         DATABASE_SHAPE: shape,
-        XB_DOWNLOAD_BASE_URL: base,
+        DOWNLOAD_BASE_URL: base,
       },
       scratch(),
       tools.path,
@@ -2486,9 +2516,13 @@ test("clean-deploy fetches from our download page when configured", () => {
     expect(result.status).toBe(0);
     return readFileSync(join(evidence, "image.txt"), "utf8");
   };
+  // The README block runs its own (GHCR) image: nothing from the runner points it elsewhere.
   expect(customer({})).toBe("unset");
   expect(customer({ CUSTOMER_IMAGE: `${OWN_REPOSITORY}:v0.2.0` })).toBe(
-    `${OWN_REPOSITORY}:v0.2.0`,
+    "unset",
+  );
+  expect(customer({ XIONGBAO_IMAGE: `${OWN_REPOSITORY}:v0.2.0` })).toBe(
+    "unset",
   );
   const check = step("linux", "digest", cleanDeploy);
   expect(check.run).toContain(`"\${expected%@*}:$TAG"`);

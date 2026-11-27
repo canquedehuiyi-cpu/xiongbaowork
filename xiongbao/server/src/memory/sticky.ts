@@ -31,13 +31,16 @@ function fingerprintOf(
     content: string;
     provenance: string;
     reviewState?: string;
+    correctionCount?: number;
+    replacesId?: string | null;
   }[],
 ): string {
   const hash = createHash("sha256");
-  // 确认状态也算：本人确认一条之后，它在块里的标记和位置变了，不能再原样复用。
+  // 确认状态也算：本人确认一条之后，它在块里的标记和位置变了，不能再原样复用。纠正次数和取代关系同理：它们
+  // 决定块里的那一句说明。
   for (const memory of memories)
     hash.update(
-      `${memory.id}\u0000${memory.provenance}\u0000${memory.content}\u0000${memory.reviewState ?? ""}\u0001`,
+      `${memory.id}\u0000${memory.provenance}\u0000${memory.content}\u0000${memory.reviewState ?? ""}\u0000${memory.correctionCount ?? 0}\u0000${memory.replacesId ?? ""}\u0001`,
     );
   return hash.digest("hex");
 }

@@ -930,7 +930,44 @@ jobs:
     environment: device-release
     permissions:
       contents: write
+    # Whether our download page is configured, as the device-release Environment sees it: a variable
+    # set only on that Environment is invisible to download-page's job-level `if:`, which would then
+    # skip without a word. download-page follows this output instead.
+    outputs:
+      download: ${{ steps.channel.outputs.download }}
     steps:
+      # Before anything is published: a half-configured download page stops the run here, naming
+      # the variable that is missing.
+      - id: channel
+        name: Our download page, as the device-release Environment sees it
+        env:
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          XB_DOWNLOAD_ENDPOINT: ${{ vars.XB_DOWNLOAD_ENDPOINT }}
+          XB_DOWNLOAD_REGION: ${{ vars.XB_DOWNLOAD_REGION }}
+        run: |
+          set -euo pipefail
+          if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
+            for name in XB_DOWNLOAD_ENDPOINT XB_DOWNLOAD_REGION; do
+              if [ -z "${!name:-}" ]; then
+                echo "::error::XB_DOWNLOAD_BUCKET is set but $name is not (as the device-release Environment sees them, repository variables included)."
+                exit 1
+              fi
+            done
+            if [[ "$XB_DOWNLOAD_ENDPOINT" != https://* ]]; then
+              echo "::error::XB_DOWNLOAD_ENDPOINT must start with https://: '$XB_DOWNLOAD_ENDPOINT'"
+              exit 1
+            fi
+            echo "download=true" >> "$GITHUB_OUTPUT"
+          else
+            for name in XB_DOWNLOAD_ENDPOINT XB_DOWNLOAD_REGION; do
+              if [ -n "${!name:-}" ]; then
+                echo "::error::$name is set but XB_DOWNLOAD_BUCKET is not (as the device-release Environment sees them, repository variables included)."
+                exit 1
+              fi
+            done
+            echo "download=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::XB_DOWNLOAD_BUCKET is not set in the device-release Environment or the repository: download-page is skipped on purpose."
+          fi
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: device-release-dist
@@ -974,16 +1011,17 @@ jobs:
           gh release create "$TAG" release/dist/* "${evidence[@]}" \
             --verify-tag --title "$TITLE" --notes-file release/notes.md "${flags[@]}"
       - name: Our download page is not configured
-        if: ${{ vars.XB_DOWNLOAD_BUCKET == '' }}
+        if: ${{ steps.channel.outputs.download == 'false' }}
         run: echo "未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：安装包只在 GitHub Release 上，不上传自有下载页。" >> "$GITHUB_STEP_SUMMARY"
 
   # Our download page (Task U3): once the GitHub Release is out, the same installers and their
   # SHA256SUMS go to s3://<XB_DOWNLOAD_BUCKET>/<tag>/device/. A job of its own, so a failed upload
   # can be re-run without re-publishing. Until the bucket is set the whole job is skipped, so its
-  # environment asks for no approval; publish's summary says so.
+  # environment asks for no approval; publish's summary says so. Whether it is set is publish's
+  # output, read inside the device-release Environment, not a job-level `vars.XB_DOWNLOAD_BUCKET`.
   download-page:
     needs: [tag-check, publish]
-    if: ${{ !cancelled() && needs.publish.result == 'success' && vars.XB_DOWNLOAD_BUCKET != '' }}
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.publish.outputs.download == 'true' }}
     runs-on: ubuntu-latest
     environment: device-release
     permissions:

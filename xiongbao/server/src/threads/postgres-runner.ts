@@ -997,6 +997,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               error:
                 runErrorOf(events) ??
                 (thrown instanceof Error ? thrown.message : undefined),
+              // Its own events, for the failure hand-over: the last of them are not stored yet.
+              events,
             }
           : { firstSentence: firstSentenceOf(replyTextOf(events)) }),
       });

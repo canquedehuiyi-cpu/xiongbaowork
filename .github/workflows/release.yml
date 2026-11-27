@@ -103,41 +103,6 @@ jobs:
     permissions:
       contents: read
 
-  # Our own channel (Task U3) in one place, in every run, dry runs included: where the image and the
-  # downloads go, or 「未配置自有渠道」 while the variables are unset and those steps are skipped.
-  own-channel:
-    needs: tag-check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - id: summary
-        name: Our own channel
-        env:
-          TAG: ${{ needs.tag-check.outputs.tag }}
-          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
-          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
-          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -euo pipefail
-          {
-            echo "### 自有渠道"
-            if [ -n "$XB_REGISTRY" ]; then
-              printf -- '- 镜像：只拷 linux/amd64 平台清单到 `%s/%s:%s`\n' "$XB_REGISTRY" "$XB_IMAGE_REPOSITORY" "$TAG"
-            else
-              echo "- 未配置自有渠道（XB_REGISTRY 未设）：镜像不拷到自有仓库，container-images.json 的 images.xiongbao 仍指向 GHCR。"
-            fi
-            if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
-              printf -- '- 下载页：container-images.json、delivery.env.example、compose.delivery.yml 上传到 `s3://%s/%s/`\n' "$XB_DOWNLOAD_BUCKET" "$TAG"
-            else
-              echo "- 未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：清单和样例不上传自有下载页。"
-            fi
-            if [ "$DRY_RUN" = true ]; then
-              echo "- 试运行：不推送、不上传。"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
   image:
     needs: [tag-check, checks]
     runs-on: ubuntu-latest
@@ -149,7 +114,7 @@ jobs:
       attestations: write
     outputs:
       repository: ${{ steps.name.outputs.repository }}
-      digest: ${{ steps.push.outputs.digest }}
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -185,9 +150,64 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # A re-run of this release (Re-run all jobs after a later job failed, or a manual run for the
+      # same tag) must not build again: the build is not reproducible, and promote never moves the
+      # version or sha- tag to a new digest. When either tag already exists, the release goes on with
+      # the digest it names, and only if its signed provenance says this workflow built it from this
+      # commit; anything else stops here, loudly, rather than build an image promote would refuse.
+      # verify-digest runs Gate 1 on it again either way.
+      - id: existing
+        name: Reuse the digest a previous run built for this commit
+        if: ${{ !inputs.dry_run }}
+        env:
+          REPOSITORY: ${{ steps.name.outputs.repository }}
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          found=""
+          # Only "not found" counts as absent, as in promote.
+          for t in "$REPOSITORY:sha-$GITHUB_SHA" "$REPOSITORY:$TAG"; do
+            if digest="$(docker buildx imagetools inspect "$t" --format '{{.Manifest.Digest}}' 2>"$RUNNER_TEMP/existing.err")"; then
+              if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                echo "::error::$t resolves to '$digest', not a digest"
+                exit 1
+              fi
+              if [ -n "$found" ] && [ "$found" != "$digest" ]; then
+                echo "::error::$REPOSITORY:sha-$GITHUB_SHA names $found but $t names $digest; a person must sort this out"
+                exit 1
+              fi
+              found="$digest"
+            elif ! grep -qi 'not found' "$RUNNER_TEMP/existing.err"; then
+              cat "$RUNNER_TEMP/existing.err" >&2
+              echo "::error::could not tell whether $t exists"
+              exit 1
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "reuse=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The provenance attest-build-provenance signed below on the first run: built by this
+          # repository's release.yml, on a GitHub-hosted runner, from exactly this commit.
+          if ! gh attestation verify "oci://$REPOSITORY@$found" --repo "$GH_REPO" \
+            --signer-workflow "$GH_REPO/.github/workflows/release.yml" \
+            --source-digest "$GITHUB_SHA" --deny-self-hosted-runners \
+            > "$RUNNER_TEMP/existing-attestation.log" 2>&1; then
+            cat "$RUNNER_TEMP/existing-attestation.log" >&2
+            echo "::error::$REPOSITORY@$found is already tagged for $TAG / sha-$GITHUB_SHA, but its provenance does not say release.yml built it from $GITHUB_SHA. Not building over it; a person must look."
+            exit 1
+          fi
+          {
+            echo "reuse=true"
+            printf 'digest=%s\n' "$found"
+          } >> "$GITHUB_OUTPUT"
+          printf -- '- 复用此提交已构建并验证过的镜像 `%s@%s`（`sha-%s` / `%s`），不重新构建。\n' \
+            "$REPOSITORY" "$found" "$GITHUB_SHA" "$TAG" >> "$GITHUB_STEP_SUMMARY"
       # Pushed untagged, by digest. Tags are written only by promote, after the digest passed G1.
       - id: push
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.existing.outputs.reuse != 'true' }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: xiongbao
@@ -202,22 +222,32 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=release
           cache-to: type=gha,mode=max,scope=release
-      - name: Assert the pushed digest
+      # The digest every later job uses: the one just pushed, or the one reused above, never both.
+      - id: digest
+        name: Assert the pushed or reused digest
         if: ${{ !inputs.dry_run }}
         env:
-          DIGEST: ${{ steps.push.outputs.digest }}
+          PUSHED: ${{ steps.push.outputs.digest }}
+          REUSED: ${{ steps.existing.outputs.digest }}
         run: |
           set -euo pipefail
+          if [ -n "$PUSHED" ] && [ -n "$REUSED" ]; then
+            echo "::error::both pushed $PUSHED and reused $REUSED"
+            exit 1
+          fi
+          DIGEST="${REUSED:-$PUSHED}"
           if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error::build-push returned no usable digest: '$DIGEST'"
             exit 1
           fi
-          echo "Pushed $DIGEST"
-      - if: ${{ !inputs.dry_run }}
+          printf 'digest=%s\n' "$DIGEST" >> "$GITHUB_OUTPUT"
+          if [ -n "$REUSED" ]; then echo "Reused $DIGEST"; else echo "Pushed $DIGEST"; fi
+      # A reused digest already carries the provenance checked above.
+      - if: ${{ !inputs.dry_run && steps.existing.outputs.reuse != 'true' }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.name.outputs.repository }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
           push-to-registry: true
       # Dry run: the same build, loaded into the local daemon under a local tag. Nothing leaves the runner.
       - name: Build only (dry run)
@@ -243,6 +273,11 @@ jobs:
           set -euo pipefail
           docker image inspect xiongbao-release:dry-run --format '{{.Id}}'
           EVIDENCE_DIR="$RUNNER_TEMP/release-evidence" bash scripts/ci/image-smoke.sh xiongbao-release:dry-run
+      # Our own channel is read only inside the release Environment (promote), which a dry run never
+      # enters: say so instead of guessing from what this job can see.
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: echo "- 试运行：不推送、不打标签、不发布；自有渠道（XB_REGISTRY、XB_DOWNLOAD_BUCKET 等）只在 promote 进入 release Environment 后读取，试运行不检查。" >> "$GITHUB_STEP_SUMMARY"
       - name: Print container logs (credentials masked)
         if: ${{ failure() && inputs.dry_run }}
         working-directory: xiongbao
@@ -317,6 +352,10 @@ jobs:
           path: ${{ runner.temp }}/release-evidence/
           if-no-files-found: error
 
+  # Also where our own channel is decided. A variable set only on the `release` Environment is
+  # invisible to a job-level `if:` and to every job that does not name the Environment, so nothing
+  # downstream reads `vars.XB_*` there: this step reads them inside the Environment and hands its
+  # decision on as job outputs. A half-configured channel stops the release here, before any tag.
   promote:
     needs: [tag-check, image, verify-digest]
     if: ${{ !inputs.dry_run }}
@@ -325,7 +364,57 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      mirror: ${{ steps.channel.outputs.mirror }}
+      download_base_url: ${{ steps.channel.outputs.download_base_url }}
     steps:
+      - id: channel
+        name: Our own channel, as the release Environment sees it
+        env:
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
+        run: |
+          set -euo pipefail
+          # Each pair is all or nothing; the error names the variable that is missing.
+          for pair in XB_REGISTRY:XB_IMAGE_REPOSITORY XB_DOWNLOAD_BUCKET:XB_DOWNLOAD_BASE_URL; do
+            first="${pair%%:*}"
+            second="${pair#*:}"
+            if [ -n "${!first:-}" ] && [ -z "${!second:-}" ]; then
+              echo "::error::$first is set but $second is not (as the release Environment sees them, repository variables included)."
+              exit 1
+            fi
+            if [ -z "${!first:-}" ] && [ -n "${!second:-}" ]; then
+              echo "::error::$second is set but $first is not (as the release Environment sees them, repository variables included)."
+              exit 1
+            fi
+          done
+          if [ -n "$XB_DOWNLOAD_BASE_URL" ] && [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
+            echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+            exit 1
+          fi
+          {
+            if [ -n "$XB_REGISTRY" ]; then echo "mirror=true"; else echo "mirror=false"; fi
+            printf 'download_base_url=%s\n' "$XB_DOWNLOAD_BASE_URL"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### 自有渠道"
+            if [ -n "$XB_REGISTRY" ]; then
+              printf -- '- 镜像：只拷 linux/amd64 平台清单到 `%s/%s:%s`\n' "$XB_REGISTRY" "$XB_IMAGE_REPOSITORY" "$TAG"
+            else
+              echo "- 未配置自有渠道（release Environment 里看不到 XB_REGISTRY）：mirror 跳过，镜像不拷到自有仓库，container-images.json 的 images.xiongbao 仍指向 GHCR。"
+            fi
+            if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
+              printf -- '- 下载页：container-images.json、delivery.env.example、compose.delivery.yml 上传到 `s3://%s/%s/`，G7 从 `%s` 取回\n' "$XB_DOWNLOAD_BUCKET" "$TAG" "$XB_DOWNLOAD_BASE_URL"
+            else
+              echo "- 未配置自有渠道（release Environment 里看不到 XB_DOWNLOAD_BUCKET）：清单和样例不上传自有下载页，G7 从 GitHub Release 取清单。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$XB_REGISTRY" ]; then
+            echo "::notice::XB_REGISTRY is not set in the release Environment or the repository: the mirror job is skipped on purpose."
+          fi
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -347,8 +436,9 @@ jobs:
             true) ;;
             *) echo "::error::prerelease output is '$PRERELEASE'"; exit 1 ;;
           esac
-          # The version and sha- tags are immutable: a re-run builds a new digest, and it must not
-          # take over a tag (or :latest) that already names another one. Only "not found" is absent.
+          # The version and sha- tags are immutable: a re-run goes on with the digest they already
+          # name (image's `existing` step), and no other digest may take over a tag (or :latest)
+          # that already names one. Only "not found" is absent.
           for t in "$REPOSITORY:$TAG" "$REPOSITORY:sha-$GITHUB_SHA"; do
             if existing="$(docker buildx imagetools inspect "$t" --format '{{.Manifest.Digest}}' 2>"$RUNNER_TEMP/inspect.err")"; then
               if [ "$existing" != "$DIGEST" ]; then
@@ -377,11 +467,12 @@ jobs:
   # Our own registry (Task U3): the verified image is copied there as its linux/amd64 manifest alone,
   # under the release tag. The index around it and its provenance and SBOM attestations stay on GHCR:
   # they name this repository and the upstream package. Until XB_REGISTRY is set the whole job is
-  # skipped, so its environment asks for no approval (own-channel says so in the summary), and
-  # github-release accepts that skip.
+  # skipped, so its environment asks for no approval (promote says so in the summary), and
+  # github-release accepts that skip. Whether it is set is promote's output, read inside the release
+  # Environment: a job-level `vars.XB_REGISTRY` would not see an Environment variable and would skip.
   mirror:
     needs: [tag-check, image, promote]
-    if: ${{ !inputs.dry_run && vars.XB_REGISTRY != '' }}
+    if: ${{ !inputs.dry_run && needs.promote.outputs.mirror == 'true' }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -657,14 +748,14 @@ jobs:
         run: rm -rf "$RUNNER_TEMP/own-channel-docker"
 
   # Not the default success(): mirror is skipped while our registry is not configured, and only then
-  # is its skip accepted.
+  # (as promote saw it, inside the Environment) is its skip accepted.
   github-release:
     needs: [tag-check, image, verify-digest, promote, mirror]
     if: >-
       ${{ !cancelled() && !inputs.dry_run && needs.tag-check.result == 'success' &&
       needs.image.result == 'success' && needs.verify-digest.result == 'success' &&
       needs.promote.result == 'success' && (needs.mirror.result == 'success' ||
-      (needs.mirror.result == 'skipped' && vars.XB_REGISTRY == '')) }}
+      (needs.mirror.result == 'skipped' && needs.promote.outputs.mirror == 'false')) }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -759,7 +850,11 @@ jobs:
             aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
               "$file" "s3://$XB_DOWNLOAD_BUCKET/$TAG/${file##*/}"
           done
-      - name: Publish the GitHub Release (existing tag only)
+      # A re-run (Re-run all jobs) after this job once succeeded finds its own Release. It may replace
+      # that Release's record (--clobber), and only when the tag still names this commit and the
+      # record already there is this commit's and this digest's; anything else stops loudly.
+      - id: publish
+        name: Publish the GitHub Release (existing tag only)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -768,23 +863,69 @@ jobs:
         run: |
           set -euo pipefail
           test -s notes/release-notes.md
-          flags=()
-          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
-          gh release create "$TAG" container-images.json \
-            --verify-tag --title "$TAG" --notes-file notes/release-notes.md "${flags[@]}"
+          if view="$(gh release view "$TAG" --json tagName 2>"$RUNNER_TEMP/release-view.err")"; then
+            named="$(jq -r .tagName <<< "$view")"
+            if [ "$named" != "$TAG" ]; then
+              echo "::error::gh release view $TAG answered for '$named'"
+              exit 1
+            fi
+            # The commit the tag names on GitHub now; an annotated tag is followed to its commit.
+            ref="$(gh api "repos/$GH_REPO/git/ref/tags/$TAG")"
+            commit="$(jq -r .object.sha <<< "$ref")"
+            if [ "$(jq -r .object.type <<< "$ref")" = tag ]; then
+              commit="$(gh api "repos/$GH_REPO/git/tags/$commit" --jq .object.sha)"
+            fi
+            if [ "$commit" != "$GITHUB_SHA" ]; then
+              echo "::error::Release $TAG already exists and its tag names $commit, not $GITHUB_SHA; refusing to touch it."
+              exit 1
+            fi
+            # The record it already carries, if any (an earlier upload may have failed), must be this
+            # commit's and name the same GHCR digest.
+            published="$RUNNER_TEMP/published"
+            rm -rf "$published"
+            mkdir -p "$published"
+            if gh release download "$TAG" --pattern container-images.json --dir "$published" 2>"$RUNNER_TEMP/release-download.err"; then
+              old_commit="$(jq -r .commit "$published/container-images.json")"
+              old_digest="$(jq -r .ghcr.digest "$published/container-images.json")"
+              new_digest="$(jq -r .ghcr.digest container-images.json)"
+              if [ "$old_commit" != "$GITHUB_SHA" ] || [ "$old_digest" != "$new_digest" ]; then
+                echo "::error::Release $TAG already carries container-images.json for commit $old_commit, digest $old_digest; this run is $GITHUB_SHA, $new_digest. Refusing to replace it."
+                exit 1
+              fi
+            elif ! grep -qi 'no assets' "$RUNNER_TEMP/release-download.err"; then
+              cat "$RUNNER_TEMP/release-download.err" >&2
+              echo "::error::could not read container-images.json of the existing Release $TAG"
+              exit 1
+            fi
+            gh release upload "$TAG" container-images.json --clobber
+            echo "- GitHub Release \`$TAG\` 已存在（同一标签、同一提交）：用 --clobber 重新上传 container-images.json，没有新建。" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qi 'release not found' "$RUNNER_TEMP/release-view.err"; then
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" container-images.json \
+              --verify-tag --title "$TAG" --notes-file notes/release-notes.md "${flags[@]}"
+          else
+            cat "$RUNNER_TEMP/release-view.err" >&2
+            echo "::error::could not tell whether Release $TAG exists"
+            exit 1
+          fi
 
   # Gate 7, Linux half: a fresh runner installs this release exactly as the README tells a customer
-  # to, without any registry login, and checks it runs the digest recorded above; once with the
+  # to, without any registry login, and checks it runs the GHCR digest recorded above; once with the
   # embedded database and once against a separate PostgreSQL migrated by the deployment manual's
   # section 4 commands. It fails until the GHCR package has been made public, which is a human step.
+  # Always GHCR, never our registry: JCR is private (every pull signs in first, deployment manual
+  # 7.1), and mirror has already read its copy back with credentials. The download page, when
+  # configured, is promote's output, since this job sees no Environment variable.
   # Not the default success() either: mirror, upstream of github-release, may have been skipped.
   g7-linux:
-    needs: [tag-check, github-release]
+    needs: [tag-check, promote, github-release]
     if: >-
       ${{ !cancelled() && !inputs.dry_run && needs.tag-check.result == 'success' &&
       needs.github-release.result == 'success' }}
     uses: ./.github/workflows/clean-deploy.yml
     with:
       tag: ${{ needs.tag-check.outputs.tag }}
+      download_base_url: ${{ needs.promote.outputs.download_base_url }}
     permissions:
       contents: read

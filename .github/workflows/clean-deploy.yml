@@ -12,6 +12,16 @@
 #
 # The GHCR package must be public for the unauthenticated pull to work; until a person makes it
 # public this job fails at `docker pull`, which is the correct customer-facing answer.
+#
+# The image is always the public GHCR one (`ghcr` in container-images.json), never the copy in our
+# own registry: JD Cloud JCR is private, so an anonymous pull from it can only fail, and a customer
+# there signs in first (deployment manual 7.1), which is not what the README block does. Signing in
+# from here would need the release Environment's AccessKey in a job meant to have no credential;
+# release.yml's mirror job already reads its JCR copy back, with credentials.
+#
+# This workflow reads no `vars.*`: it names no Environment, so it could not see a variable set only
+# on one. Where to take the record from comes in as an input (release.yml passes what its promote
+# job read inside the `release` Environment).
 name: 熊宝干净部署（G7 Linux）
 
 on:
@@ -21,12 +31,22 @@ on:
         description: 已发布的版本标签，例如 v0.2.0-rc.1
         type: string
         required: true
+      download_base_url:
+        description: 自有下载页地址（https:// 开头）；留空则从 GitHub Release 取 container-images.json
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       tag:
         description: 已发布的版本标签，例如 v0.2.0-rc.1
         type: string
         required: true
+      download_base_url:
+        description: 自有下载页地址（https:// 开头）；留空则从 GitHub Release 取 container-images.json
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -49,6 +69,7 @@ jobs:
     env:
       TAG: ${{ inputs.tag }}
       DATABASE_SHAPE: ${{ matrix.database }}
+      DOWNLOAD_BASE_URL: ${{ inputs.download_base_url }}
     steps:
       - name: Release tag format
         run: |
@@ -103,52 +124,33 @@ jobs:
               > "$EVIDENCE/g7-external-roles.sql"
             cat "$EVIDENCE/g7-external-migrate.sh" "$EVIDENCE/g7-external-roles.sql"
           fi
-      # Our own channel (Task U3), once configured, is where a customer gets the record and the image:
-      # release.yml uploads the record to the download page (XB_DOWNLOAD_BUCKET) and copies the image
-      # to our registry (XB_REGISTRY). Each half is read from there when set, as before when not.
+      # Our download page (Task U3), once configured, is where a customer gets the record: release.yml
+      # uploads it there and passes the page's address in. Read from there when given, from the
+      # GitHub Release when not. The image to check is the record's GHCR one either way.
       - id: record
         name: The release record (container-images.json)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
-          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
-          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
-          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
         run: |
           set -euo pipefail
-          if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
-            if [ -z "$XB_DOWNLOAD_BASE_URL" ]; then
-              echo "::error::XB_DOWNLOAD_BUCKET is set but XB_DOWNLOAD_BASE_URL is not."
-              exit 1
-            fi
-            if [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
-              echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+          if [ -n "$DOWNLOAD_BASE_URL" ]; then
+            if [[ "$DOWNLOAD_BASE_URL" != https://* ]]; then
+              echo "::error::download_base_url must start with https://: '$DOWNLOAD_BASE_URL'"
               exit 1
             fi
             curl --fail --silent --show-error --location -o "$EVIDENCE/container-images.json" \
-              "${XB_DOWNLOAD_BASE_URL%/}/$TAG/container-images.json"
+              "${DOWNLOAD_BASE_URL%/}/$TAG/container-images.json"
           else
             gh release download "$TAG" --pattern container-images.json --dir "$EVIDENCE"
           fi
-          if [ -n "$XB_REGISTRY" ]; then
-            # Our registry's copy, by digest: images.xiongbao, in exactly XB_REGISTRY/XB_IMAGE_REPOSITORY.
-            own="$XB_REGISTRY/$XB_IMAGE_REPOSITORY"
-            expected="$(jq -r .images.xiongbao.reference "$EVIDENCE/container-images.json")"
-            if [ -z "$XB_IMAGE_REPOSITORY" ] || [ "${expected%@*}" != "$own" ] ||
-              [[ ! "${expected##*@}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              echo "::error::container-images.json images.xiongbao is '$expected', expected $own@sha256:<digest>"
-              exit 1
-            fi
-            # The README's command takes the image from XIONGBAO_IMAGE; the customer run sets it to this.
-            echo "CUSTOMER_IMAGE=$own:$TAG" >> "$GITHUB_ENV"
-          else
-            # No registry of ours: images.xiongbao is the GHCR image, in every release's record.
-            expected="$(jq -r .images.xiongbao.reference "$EVIDENCE/container-images.json")"
-            if [[ ! "$expected" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
-              echo "::error::container-images.json has no usable reference: '$expected'"
-              exit 1
-            fi
+          # `ghcr` is the GHCR image in every record from v0.2.16 on, whatever images.xiongbao points
+          # at (our registry's copy once that is configured). Older records have no `ghcr`, and their
+          # images.xiongbao is GHCR's. Either way it must be a GHCR reference by digest.
+          expected="$(jq -r '(.ghcr // .images.xiongbao).reference' "$EVIDENCE/container-images.json")"
+          if [[ ! "$expected" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::container-images.json has no usable GHCR reference: '$expected'"
+            exit 1
           fi
           echo "EXPECTED_REFERENCE=$expected" >> "$GITHUB_ENV"
 
@@ -192,25 +194,23 @@ jobs:
           printf 'applied_migrations=%s\n' "$migrations" | tee -a "$EVIDENCE/external-db.txt"
           [ "$migrations" -gt 0 ]
 
-      # --- both database shapes, once our download page is configured ---
+      # --- both database shapes, once our download page is configured (download_base_url given) ---
       # .env.delivery comes from there, as a customer gets it. The README block then finds the file and
       # keeps it (as on a customer's second run), so it fetches nothing from GitHub; for the embedded
       # database this step adds the KEY_ENCRYPTION_KEY that block would have added, and roles adds the
       # external database's settings.
       - id: delivery-env
         name: .env.delivery from our download page
-        if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
-        env:
-          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
+        if: ${{ inputs.download_base_url != '' }}
         run: |
           set -euo pipefail
-          if [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
-            echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+          if [[ "$DOWNLOAD_BASE_URL" != https://* ]]; then
+            echo "::error::download_base_url must start with https://: '$DOWNLOAD_BASE_URL'"
             exit 1
           fi
           cd "$CUSTOMER"
           curl --fail --silent --show-error --location -o .env.delivery \
-            "${XB_DOWNLOAD_BASE_URL%/}/$TAG/delivery.env.example"
+            "${DOWNLOAD_BASE_URL%/}/$TAG/delivery.env.example"
           chmod 600 .env.delivery
           if [ "$DATABASE_SHAPE" = embedded ]; then
             printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
@@ -266,11 +266,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/docker-config"
           printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
           cd "$CUSTOMER"
-          # Our registry, when configured: the README command runs the image XIONGBAO_IMAGE names.
-          image=()
-          if [ -n "${CUSTOMER_IMAGE:-}" ]; then image=("XIONGBAO_IMAGE=$CUSTOMER_IMAGE"); fi
+          # The README block's own image, the public GHCR one: nothing may point XIONGBAO_IMAGE at
+          # another registry. The digest step checks it is the record's GHCR reference.
           start=$SECONDS
-          env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" "${image[@]}" \
+          env -u GITHUB_TOKEN -u GH_TOKEN -u XIONGBAO_IMAGE DOCKER_CONFIG="$RUNNER_TEMP/docker-config" \
             bash -euo pipefail "$EVIDENCE/g7-linux.sh"
           echo "G7 install and health in $((SECONDS-start))s" | tee "$EVIDENCE/timing.txt"
           # The customer directory holds the generated key: record only which names it set.
