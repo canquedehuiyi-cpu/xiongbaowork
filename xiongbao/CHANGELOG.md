@@ -9,6 +9,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 ## Unreleased
 
 - **网页单聊里需要先批准的动作，又能弹出批准卡片了。** 以前在镜像部署里，「改动之前先问」开着（或有规则要求先问）时，员工写文件、跑命令会被直接拒绝，工具结果是「This action needs your approval, but it was not started from a conversation that can ask you」，页面上也没有批准卡片；不打包直接跑源码时没有这个问题，所以测试一直没发现。原因是服务器有几处用相对路径引用 toolkit，镜像打包（`bun build --packages=external`）时被内联成第二份，执行工具和审批各读一份上下文。现在服务器对 toolkit 一律用包名引用，并加了按镜像方式打包后再跑的回归测试和禁止相对引用的检查。同一原因也让后台例行任务、找回密码续跑里「等人批准」的暂停认不出来，一并修好。本项不带迁移。
+- **每个员工用自己的系统用户时（镜像默认 `COMPUTER_PER_BOT_USERS=on`），又能预览、下载默认员工以外的员工工作区里的文件了。** 以前点预览或下载会得到 503「The Bot's computer sent back a file that couldn't be read.」：员工电脑在这种模式下按流发文件，Bun 发流时把 `Content-Length` 丢了，服务器因为拿不到长度就拒收。现在员工电脑另用一个头报出文件长度，服务器边读边核对，多一个字节或少一个字节都照样拒绝，员工电脑那边的下载大小上限不变。员工电脑和服务器要一起升级（同一个镜像里的本来就是一起的）。本项不带迁移。
 
 ## 0.2.16
 
