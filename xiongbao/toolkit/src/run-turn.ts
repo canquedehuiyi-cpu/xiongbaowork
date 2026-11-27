@@ -585,7 +585,35 @@ export type TurnEvidence = {
   chunks: string[];
   pendingInterrupts: AbstractAgent["pendingInterrupts"];
   componentNames: ReadonlySet<string>;
+  /**
+   * Whether a tool result is the turn's hand-in (the host's `handedIn`, see {@link createTurnRunner}).
+   * Absent, no tool result is.
+   */
+  handedIn?: (toolName: string, result: string) => boolean;
 };
+
+/**
+ * Whether this run made a hand-in the host accepts: a tool call it added whose result, also added,
+ * `handedIn` says yes to. Only this run's own messages count, so a hand-in from an earlier turn in the
+ * history never makes this one's silence an answer.
+ */
+function handedInDuring(
+  added: readonly Message[],
+  handedIn: ((toolName: string, result: string) => boolean) | undefined,
+): boolean {
+  if (!handedIn) return false;
+  const names = new Map<string, string>();
+  for (const message of added)
+    if (message.role === "assistant")
+      for (const call of message.toolCalls ?? [])
+        names.set(call.id, call.function.name);
+  return added.some(
+    (message) =>
+      message.role === "tool" &&
+      typeof message.content === "string" &&
+      handedIn(names.get(message.toolCallId) ?? "", message.content),
+  );
+}
 
 /**
  * The one decision about how a turn ended, in this order and no other.
@@ -630,7 +658,18 @@ export function settle(evidence: TurnEvidence): TurnOutcome {
       ),
     };
   if (evidence.pendingInterrupts.length > 0) return { kind: "interrupted" };
-  if (replyText.length === 0) return { kind: "empty" };
+  /*
+   * Silence after an accepted hand-in is an answer, not an empty turn. The host's "delivery ends the
+   * turn" (server `tasks/delivery-end.ts`) stops the run right after `deliver_task` is accepted, with
+   * nothing more said by design: what was handed in is in the call itself. Reported as empty, the
+   * approval resume loop took the finished turn for a failure and ran the rest of the conversation
+   * again, handing the same card in on every try.
+   */
+  if (
+    replyText.length === 0 &&
+    !handedInDuring(evidence.added, evidence.handedIn)
+  )
+    return { kind: "empty" };
   return {
     kind: "completed",
     replyText,
@@ -643,6 +682,9 @@ export function settle(evidence: TurnEvidence): TurnOutcome {
  * every turn but one: a check-in that read what it was asked to and found nothing new often ends
  * without a closing line, and for it silence is the answer. Its own class so that caller can tell
  * this apart by type; everyone else meets it as the error it always was, word for word.
+ *
+ * Never raised for a turn that made a hand-in its host accepts (`handedIn`) and then stopped: that
+ * turn completed, with an empty reply.
  */
 export class EmptyTurnError extends Error {
   constructor() {
@@ -742,6 +784,13 @@ export function createTurnRunner(options: {
   /** Wraps the whole turn, for the host's own per-turn context (whose board card it is). */
   scope?: TurnScope;
   /**
+   * Whether a tool result is the turn's hand-in (for the server, an accepted `deliver_task`). A turn
+   * that made one and then said nothing completed with an empty reply: it answered by handing in,
+   * and the agent may well have been stopped right after on purpose. Absent, a turn that said
+   * nothing is always {@link EmptyTurnError}.
+   */
+  handedIn?: (toolName: string, result: string) => boolean;
+  /**
    * Looks at the whole stream of a turn that runs tools between the model's steps. The model's steps
    * are separate runs of the agent and the tools run between them, outside any one step's stream, so
    * whatever must see the turn as one (the files it left on the Bot's computer) is given the stream
@@ -770,6 +819,7 @@ export function createTurnRunner(options: {
     answered,
     scope,
     observeTurn,
+    handedIn,
   } = options;
 
   /*
@@ -1174,6 +1224,7 @@ export function createTurnRunner(options: {
       chunks,
       pendingInterrupts: agent.pendingInterrupts,
       componentNames: components?.names ?? new Set(),
+      ...(handedIn ? { handedIn } : {}),
     });
     const reply = await conclude(outcome, stopPromise, turnTimeoutMs);
     /*

@@ -66,6 +66,80 @@ describe("settle", () => {
   });
 
   /*
+   * 交付即收尾：被接受的交付之后这一轮不再说话。这是完成，不是「什么也没说」，否则审批续跑会把它当失败重跑、
+   * 重复交付（prod-anomalies 2.3 ①）。
+   */
+  describe("a hand-in the host accepts", () => {
+    const handedIn = (name: string, result: string) =>
+      name === "deliver_task" && JSON.parse(result).delivered === true;
+    const handIn = (result: string): Message[] => [
+      {
+        id: "assistant_call",
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "deliver_task", arguments: "{}" },
+          },
+        ],
+      },
+      { id: "tool_1", role: "tool", toolCallId: "call_1", content: result },
+    ];
+
+    test("then silence completes with an empty reply", () => {
+      expect(
+        settle(
+          evidence({
+            added: handIn(JSON.stringify({ delivered: true })),
+            handedIn,
+          }),
+        ),
+      ).toEqual({ kind: "completed", replyText: "", components: [] });
+    });
+
+    test("a bounced hand-in is no hand-in: still empty", () => {
+      expect(
+        settle(
+          evidence({
+            added: handIn(JSON.stringify({ bounced: true })),
+            handedIn,
+          }),
+        ),
+      ).toEqual({ kind: "empty" });
+    });
+
+    test("without the host's predicate, silence is empty as before", () => {
+      expect(
+        settle(
+          evidence({ added: handIn(JSON.stringify({ delivered: true })) }),
+        ),
+      ).toEqual({ kind: "empty" });
+    });
+
+    test("a hand-in in an earlier turn's history does not count", () => {
+      const result = handIn(JSON.stringify({ delivered: true }))[1] as Message;
+      // Only the tool result is this run's own; the call that named it was not added by it.
+      expect(settle(evidence({ added: [result], handedIn }))).toEqual({
+        kind: "empty",
+      });
+    });
+
+    test("an interrupt still outranks it", () => {
+      expect(
+        settle(
+          evidence({
+            added: handIn(JSON.stringify({ delivered: true })),
+            handedIn,
+            pendingInterrupts: [interrupt()],
+          }),
+        ),
+      ).toEqual({ kind: "interrupted" });
+    });
+  });
+
+  /*
    * Each row adds one condition that outranks everything below it, on top of evidence that would
    * otherwise settle as the row below. The order is the contract.
    */

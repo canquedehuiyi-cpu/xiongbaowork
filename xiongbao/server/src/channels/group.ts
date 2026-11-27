@@ -2895,6 +2895,8 @@ export function createGroupConversations(deps: {
           text: outcome.replyText,
           ...chainFrom(row.details),
         };
+        // 以交付收尾、没再说话的续跑（`handedIn`）：行上记着交付标记，没有一句话可预览、可转给别的员工。
+        if (!outcome.replyText) return outcome;
         await deps.activity?.(
           turn,
           row.agentId,

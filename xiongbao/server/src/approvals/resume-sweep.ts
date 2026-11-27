@@ -195,6 +195,246 @@ export function createApprovalResumeTick(deps: {
                 return;
               }
             }
+            /**
+             * The decision's answer, carried on into the conversation that asked. `turn.started` is
+             * set once the carried-on turn's run is under way, which is where repeating it would
+             * repeat what its tools did (see `continue` below).
+             */
+            const carryOn = async (
+              {
+                continuation: snapshot,
+                result,
+                messageId,
+                approvalId,
+              }: Parameters<ApprovalResumeDependencies["continue"]>[0],
+              turn: { started: boolean },
+            ): Promise<void> => {
+              const [waitingRun] = await database
+                .select({ id: responsibilityRuns.id })
+                .from(responsibilityRuns)
+                .where(
+                  and(
+                    eq(responsibilityRuns.status, "waiting"),
+                    sql`${responsibilityRuns.waiting}->>'approvalId' = ${approvalId}`,
+                  ),
+                )
+                .limit(1);
+              if (waitingRun) {
+                await responsibilityStore.resumeWaiting(
+                  input.ownerUserId,
+                  waitingRun.id,
+                  result,
+                );
+                return;
+              }
+              const request = await approvalService.store.get(
+                input.ownerUserId,
+                approvalId,
+              );
+              /*
+               * ASKING AGAIN IS WHERE THE TURN STOPS, NOT A FAILURE. A carried-on turn that reaches
+               * another action needing the person opens its own request and stops on it, nothing
+               * done, exactly as a run in the browser does. Thrown on from here, the resume loop
+               * took it for a failure: it released this decision and carried the conversation on
+               * again, from the same place, until its tries ran out, while the new request sat
+               * pending where nobody was shown it. Now this decision is finished, the conversation
+               * says what it waits on, and the new request carries it on when it is answered.
+               */
+              let waitingOn:
+                | { message: string; approvalId?: string }
+                | undefined;
+              let outcome: { replyText: string };
+              // A failure once the turn started is not retried (see `continue`); before it, it is.
+              let failedAfterStart: unknown;
+              try {
+                // A group turn's approval also writes the resumed reply into the shared transcript.
+                outcome = await groupConversations.continueWaiting(
+                  approvalId,
+                  // 群聊要接着记这一轮里交付卡的状态标记（`channels/group.ts` `continueWaiting`）。
+                  (hooks) =>
+                    approvalContinuationRunner({
+                      onStarted: () => {
+                        turn.started = true;
+                      },
+                      ...(hooks?.onCustom ? { onCustom: hooks.onCustom } : {}),
+                      ...(hooks?.onToolCall
+                        ? { onToolCall: hooks.onToolCall }
+                        : {}),
+                      ...(hooks?.onReasoning
+                        ? { onReasoning: hooks.onReasoning }
+                        : {}),
+                      ownerUserId: input.ownerUserId,
+                      routineId: "approval",
+                      agentId: request.action.botId,
+                      threadId: snapshot.threadId,
+                      instruction: "",
+                      initiator: snapshot.initiator ?? PERSON_INITIATOR,
+                      continuation: { snapshot, result, messageId },
+                    }),
+                );
+              } catch (error) {
+                if (!(error instanceof HeadlessToolSuspension)) {
+                  if (!turn.started) throw error;
+                  failedAfterStart = error;
+                  outcome = { replyText: "" };
+                } else {
+                  waitingOn = {
+                    message: error.message,
+                    ...(typeof error.waiting.approvalId === "string"
+                      ? { approvalId: error.waiting.approvalId }
+                      : {}),
+                  };
+                  outcome = { replyText: "" };
+                }
+              }
+              if (outcome.replyText)
+                await deps.transcriptHolds?.({
+                  ownerUserId: input.ownerUserId,
+                  threadId: snapshot.threadId,
+                  replyText: outcome.replyText,
+                });
+              const [source] = await database
+                .select({ channelId: intelligenceChannelMappings.channelId })
+                .from(intelligenceChannelMappings)
+                .where(
+                  and(
+                    eq(intelligenceChannelMappings.userId, input.ownerUserId),
+                    eq(intelligenceChannelMappings.threadId, snapshot.threadId),
+                  ),
+                )
+                .limit(1);
+              if (source && outcome.replyText)
+                await channelStore.recordActivity(
+                  await actorFor(input.ownerUserId),
+                  source.channelId,
+                  {
+                    text: outcome.replyText,
+                    agentId: request.action.botId,
+                    at: new Date(),
+                  },
+                  { id: messageId },
+                );
+              // The conversation's last line says what it waits on, and its card is read with it.
+              if (source && waitingOn)
+                await channelStore.recordActivity(
+                  await actorFor(input.ownerUserId),
+                  source.channelId,
+                  {
+                    text: waitingOn.message,
+                    agentId: request.action.botId,
+                    at: new Date(),
+                  },
+                  { id: `${messageId}:waiting` },
+                );
+              // A decision made in Slack, SMS or the phone gets its result back there too.
+              if (source && outcome.replyText)
+                await deps.notify(
+                  {
+                    ownerUserId: input.ownerUserId,
+                    channelId: source.channelId,
+                    agentId: request.action.botId,
+                    threadId: snapshot.threadId,
+                  },
+                  { id: messageId, text: outcome.replyText, kind: "reply" },
+                );
+              // A routine run waiting on this decision now waits on the request its turn opened.
+              if (waitingOn) {
+                if (waitingOn.approvalId)
+                  await database
+                    .update(routineRuns)
+                    .set({
+                      waiting: sql`jsonb_set(${routineRuns.waiting}, '{approvalId}', to_jsonb(${waitingOn.approvalId}::text))`,
+                    })
+                    .where(
+                      and(
+                        eq(routineRuns.status, "waiting"),
+                        sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
+                      ),
+                    );
+                // M3: a crew step parked on this approval stays parked on it; the pipeline has no
+                // way yet to move its wait to the request the carried-on turn opened.
+                return;
+              }
+              /*
+               * The carried-on turn started and then failed: finished as it is, never run again (see
+               * `continue`). A routine run waiting on it ends as the failure it was; a crew step is not
+               * handed an empty answer as its output, and stays parked as it did before.
+               */
+              if (failedAfterStart !== undefined) {
+                await database
+                  .update(routineRuns)
+                  .set({
+                    status: "failed",
+                    finishedAt: new Date(),
+                    error:
+                      failedAfterStart instanceof Error
+                        ? failedAfterStart.message
+                        : String(failedAfterStart),
+                    waiting: null,
+                  })
+                  .where(
+                    and(
+                      eq(routineRuns.status, "waiting"),
+                      sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
+                    ),
+                  );
+                const firing = firingOfInitiator(snapshot.initiator);
+                if (firing && deps.automations)
+                  await deps.automations.settleWaitingFiring(firing);
+                // Thrown on to `continue`, which logs it and finishes the request: not retried.
+                throw failedAfterStart;
+              }
+              /*
+               * A crew's step that stopped to ask is told the answer (ticket 021, spec I3).
+               *
+               * The person decided in the approvals region, which knows nothing about pipelines:
+               * without this the coworker's resumed turn would finish inside its own thread while
+               * the run it stopped in stayed `awaiting_action`. What that turn finally said IS the
+               * step's output, so the sequence is handed the answer rather than asking again.
+               */
+              const parkedCrew = await pipeline?.runHoldingApproval({
+                approvalId,
+              });
+              const crewTenant = parkedCrew
+                ? ownedBy(
+                    parkedCrew,
+                    input.ownerUserId,
+                    "parked-crew-owner-mismatch",
+                    approvalId,
+                  )
+                : undefined;
+              if (pipeline && parkedCrew && crewTenant)
+                await runAsTenant(crewTenant, () =>
+                  pipeline.resume({
+                    tenantId: crewTenant,
+                    runId: parkedCrew.runId,
+                    output: outcome.replyText,
+                  }),
+                );
+              await database
+                .update(routineRuns)
+                .set({
+                  status: "succeeded",
+                  finishedAt: new Date(),
+                  error: null,
+                  waiting: null,
+                })
+                .where(
+                  and(
+                    eq(routineRuns.status, "waiting"),
+                    sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
+                  ),
+                );
+              /*
+               * An automation firing that stopped for this approval (D06) is settled the same
+               * way, allowed or declined: the turn has now continued with the person's answer.
+               * Named by the snapshot's initiator and settled in this owner's frame, so another
+               * person's firing id matches nothing.
+               */
+              const waitingFiring = firingOfInitiator(snapshot.initiator);
+              if (waitingFiring && deps.automations)
+                await deps.automations.settleWaitingFiring(waitingFiring);
+            };
             const resumeDependencies: ApprovalResumeDependencies = {
               // Asked before the action runs: with Use Bots off, or the Bot's model off the allowlist,
               // nothing is carried out and the refusal is final rather than retried.
@@ -209,203 +449,33 @@ export function createApprovalResumeTick(deps: {
                   executeApprovedAction(action),
                 ),
               execute: executeApprovedAction,
-              continue: async ({
-                continuation: snapshot,
-                result,
-                messageId,
-                approvalId,
-              }) => {
-                const [waitingRun] = await database
-                  .select({ id: responsibilityRuns.id })
-                  .from(responsibilityRuns)
-                  .where(
-                    and(
-                      eq(responsibilityRuns.status, "waiting"),
-                      sql`${responsibilityRuns.waiting}->>'approvalId' = ${approvalId}`,
-                    ),
-                  )
-                  .limit(1);
-                if (waitingRun) {
-                  await responsibilityStore.resumeWaiting(
-                    input.ownerUserId,
-                    waitingRun.id,
-                    result,
-                  );
-                  return;
-                }
-                const request = await approvalService.store.get(
-                  input.ownerUserId,
-                  approvalId,
-                );
-                /*
-                 * ASKING AGAIN IS WHERE THE TURN STOPS, NOT A FAILURE. A carried-on turn that reaches
-                 * another action needing the person opens its own request and stops on it, nothing
-                 * done, exactly as a run in the browser does. Thrown on from here, the resume loop
-                 * took it for a failure: it released this decision and carried the conversation on
-                 * again, from the same place, until its tries ran out, while the new request sat
-                 * pending where nobody was shown it. Now this decision is finished, the conversation
-                 * says what it waits on, and the new request carries it on when it is answered.
-                 */
-                let waitingOn:
-                  | { message: string; approvalId?: string }
-                  | undefined;
-                let outcome: { replyText: string };
+              /*
+               * ONCE THE CARRIED-ON TURN HAS STARTED, NOTHING HERE RUNS IT AGAIN. Its tools ran as it
+               * went (a file written, a card handed in, a message sent), and the queue's retry starts
+               * the same continuation from the same place, doing all of it a second time: a turn that
+               * ended by handing in its card handed it in again every ten seconds until its tries ran
+               * out, while the request stayed `consumed` and the chat showed the action as running.
+               * So once it started, whatever goes wrong after -- the turn failing, stopping, saying
+               * nothing, or the bookkeeping after it -- ends this decision as it is: the request is
+               * finished, and what the turn did stays done. Only a failure before the turn started,
+               * when nothing ran, is thrown on for the queue to try again.
+               */
+              continue: async (answer) => {
+                const turn = { started: false };
                 try {
-                  // A group turn's approval also writes the resumed reply into the shared transcript.
-                  outcome = await groupConversations.continueWaiting(
-                    approvalId,
-                    // 群聊要接着记这一轮里交付卡的状态标记（`channels/group.ts` `continueWaiting`）。
-                    (hooks) =>
-                      approvalContinuationRunner({
-                        ...(hooks?.onCustom
-                          ? { onCustom: hooks.onCustom }
-                          : {}),
-                        ...(hooks?.onToolCall
-                          ? { onToolCall: hooks.onToolCall }
-                          : {}),
-                        ...(hooks?.onReasoning
-                          ? { onReasoning: hooks.onReasoning }
-                          : {}),
-                        ownerUserId: input.ownerUserId,
-                        routineId: "approval",
-                        agentId: request.action.botId,
-                        threadId: snapshot.threadId,
-                        instruction: "",
-                        initiator: snapshot.initiator ?? PERSON_INITIATOR,
-                        continuation: { snapshot, result, messageId },
-                      }),
-                  );
+                  await carryOn(answer, turn);
                 } catch (error) {
-                  if (!(error instanceof HeadlessToolSuspension)) throw error;
-                  waitingOn = {
-                    message: error.message,
-                    ...(typeof error.waiting.approvalId === "string"
-                      ? { approvalId: error.waiting.approvalId }
-                      : {}),
-                  };
-                  outcome = { replyText: "" };
-                }
-                if (outcome.replyText)
-                  await deps.transcriptHolds?.({
-                    ownerUserId: input.ownerUserId,
-                    threadId: snapshot.threadId,
-                    replyText: outcome.replyText,
-                  });
-                const [source] = await database
-                  .select({ channelId: intelligenceChannelMappings.channelId })
-                  .from(intelligenceChannelMappings)
-                  .where(
-                    and(
-                      eq(intelligenceChannelMappings.userId, input.ownerUserId),
-                      eq(
-                        intelligenceChannelMappings.threadId,
-                        snapshot.threadId,
-                      ),
-                    ),
-                  )
-                  .limit(1);
-                if (source && outcome.replyText)
-                  await channelStore.recordActivity(
-                    await actorFor(input.ownerUserId),
-                    source.channelId,
-                    {
-                      text: outcome.replyText,
-                      agentId: request.action.botId,
-                      at: new Date(),
-                    },
-                    { id: messageId },
-                  );
-                // The conversation's last line says what it waits on, and its card is read with it.
-                if (source && waitingOn)
-                  await channelStore.recordActivity(
-                    await actorFor(input.ownerUserId),
-                    source.channelId,
-                    {
-                      text: waitingOn.message,
-                      agentId: request.action.botId,
-                      at: new Date(),
-                    },
-                    { id: `${messageId}:waiting` },
-                  );
-                // A decision made in Slack, SMS or the phone gets its result back there too.
-                if (source && outcome.replyText)
-                  await deps.notify(
-                    {
-                      ownerUserId: input.ownerUserId,
-                      channelId: source.channelId,
-                      agentId: request.action.botId,
-                      threadId: snapshot.threadId,
-                    },
-                    { id: messageId, text: outcome.replyText, kind: "reply" },
-                  );
-                // A routine run waiting on this decision now waits on the request its turn opened.
-                if (waitingOn) {
-                  if (waitingOn.approvalId)
-                    await database
-                      .update(routineRuns)
-                      .set({
-                        waiting: sql`jsonb_set(${routineRuns.waiting}, '{approvalId}', to_jsonb(${waitingOn.approvalId}::text))`,
-                      })
-                      .where(
-                        and(
-                          eq(routineRuns.status, "waiting"),
-                          sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
-                        ),
-                      );
-                  // M3: a crew step parked on this approval stays parked on it; the pipeline has no
-                  // way yet to move its wait to the request the carried-on turn opened.
-                  return;
-                }
-                /*
-                 * A crew's step that stopped to ask is told the answer (ticket 021, spec I3).
-                 *
-                 * The person decided in the approvals region, which knows nothing about pipelines:
-                 * without this the coworker's resumed turn would finish inside its own thread while
-                 * the run it stopped in stayed `awaiting_action`. What that turn finally said IS the
-                 * step's output, so the sequence is handed the answer rather than asking again.
-                 */
-                const parkedCrew = await pipeline?.runHoldingApproval({
-                  approvalId,
-                });
-                const crewTenant = parkedCrew
-                  ? ownedBy(
-                      parkedCrew,
-                      input.ownerUserId,
-                      "parked-crew-owner-mismatch",
-                      approvalId,
-                    )
-                  : undefined;
-                if (pipeline && parkedCrew && crewTenant)
-                  await runAsTenant(crewTenant, () =>
-                    pipeline.resume({
-                      tenantId: crewTenant,
-                      runId: parkedCrew.runId,
-                      output: outcome.replyText,
+                  if (!turn.started) throw error;
+                  console.error(
+                    JSON.stringify({
+                      type: "approval-continuation-ended",
+                      approvalId: answer.approvalId,
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                      timestamp: new Date().toISOString(),
                     }),
                   );
-                await database
-                  .update(routineRuns)
-                  .set({
-                    status: "succeeded",
-                    finishedAt: new Date(),
-                    error: null,
-                    waiting: null,
-                  })
-                  .where(
-                    and(
-                      eq(routineRuns.status, "waiting"),
-                      sql`${routineRuns.waiting}->>'approvalId' = ${approvalId}`,
-                    ),
-                  );
-                /*
-                 * An automation firing that stopped for this approval (D06) is settled the same
-                 * way, allowed or declined: the turn has now continued with the person's answer.
-                 * Named by the snapshot's initiator and settled in this owner's frame, so another
-                 * person's firing id matches nothing.
-                 */
-                const waitingFiring = firingOfInitiator(snapshot.initiator);
-                if (waitingFiring && deps.automations)
-                  await deps.automations.settleWaitingFiring(waitingFiring);
+                }
               },
             };
             abandon = (reason) =>

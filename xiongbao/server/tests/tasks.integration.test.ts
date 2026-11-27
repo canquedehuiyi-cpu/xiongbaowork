@@ -43,6 +43,7 @@ import {
   channels,
   proactiveSettings,
   proactiveSuggestions,
+  taskEvents,
   users,
   workItems,
 } from "../src/db/schema";
@@ -50,6 +51,8 @@ import type { AttentionResponse } from "../src/proactive/contracts";
 import { createProactiveStore } from "../src/proactive/store";
 import type { ResponsibilityStore } from "../src/responsibilities/types";
 import { createBotTaskRoutes } from "../src/tasks/bot-task-routes";
+import { acceptedDelivery } from "../src/tasks/delivery-end";
+import { appendTaskEvent } from "../src/tasks/events";
 import { createTaskRunner } from "../src/tasks/runner";
 import { PROACTIVE_TASK_KIND } from "../src/tasks/state";
 import { createTaskStore } from "../src/tasks/store";
@@ -234,9 +237,28 @@ async function sendMessage(args: unknown, actorId: string, botId: string) {
   return "Sent.";
 }
 
+/**
+ * A card handed in, as `deliver_task` answers when it accepts one: a `delivered` line on the card's
+ * history, and `delivered: true` back to the Bot. One card for the file; a test reads its lines.
+ */
+const handedInCard = randomUUID();
+async function deliverTask(ownerUserId: string, botId: string) {
+  await runAsTenant(ownerUserId, () =>
+    appendTaskEvent(database, {
+      tenantId: ownerUserId,
+      taskId: handedInCard,
+      kind: "delivered",
+      actor: `agent:${botId}`,
+    }),
+  );
+  return JSON.stringify({ delivered: true, taskId: handedInCard });
+}
+
 /** The approval continuation runner, as index.ts builds it, with the model and the platform faked. */
 const runTurn = createTurnRunner({
   admission: serverTurnAdmission,
+  // As index.ts: a turn that ends on an accepted hand-in, saying nothing more, has answered.
+  handedIn: acceptedDelivery,
   intelligence: {
     getOrCreateThread: async () => undefined,
     getThreadMessages: async ({ threadId }) => ({
@@ -288,6 +310,14 @@ const runTurn = createTurnRunner({
         },
       },
       execute: (args) => readInbox(args, ownerUserId, agentId),
+    },
+    {
+      definition: {
+        name: "deliver_task",
+        description: "Hand the card in.",
+        parameters: { type: "object", properties: {} },
+      },
+      execute: () => deliverTask(ownerUserId, agentId),
     },
   ],
 });
@@ -1227,6 +1257,64 @@ describe("carried on after the person decides", () => {
           ),
       ),
     ).toBe(false);
+  });
+
+  /*
+   * 线上（prod-anomalies 2.3 ①）：批准之后续跑的这一段以被接受的 `deliver_task` 结束，「交付即收尾」不再让它说话。
+   * 续跑循环把没有文字的一轮当成失败：每 10 秒把同一个续跑从同一处再跑一遍，同一张卡交付 5～6 次，审批停在
+   * `consumed`，聊天里那个动作一直「正在运行」。
+   */
+  test("a carried-on turn that ends by handing its card in, saying nothing more, finishes the decision once and hands the card in once", async () => {
+    const { owner, request } = await waitingOnApproval("I sent your reply.");
+    // Once the send is answered, the Bot hands the card in, and the turn ends there with nothing said.
+    script = (input) =>
+      input.messages.filter((message) => message.role === "tool").length === 1
+        ? callTool(input, "deliver_task", {}, "call-deliver")
+        : lifecycle(input, []);
+    const before = sent.length;
+
+    await asOwner(owner, () =>
+      approvalService.decide(owner.id, request.id, "allow_once", "web"),
+    );
+    for (let tick = 0; tick < 6; tick += 1) {
+      await resumeApproval();
+      // As if the queue's ten seconds had passed: a released decision would be handed out again now.
+      await database
+        .update(workItems)
+        .set({ runAt: sql`now() - interval '1 second'` })
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            eq(workItems.key, request.id),
+          ),
+        );
+    }
+
+    const delivered = await database
+      .select()
+      .from(taskEvents)
+      .where(
+        and(
+          eq(taskEvents.tenantId, owner.id),
+          eq(taskEvents.taskId, handedInCard),
+          eq(taskEvents.kind, "delivered"),
+        ),
+      );
+    expect(delivered).toHaveLength(1);
+    expect(sent.length).toBe(before + 1);
+    expect((await approvalStore.get(owner.id, request.id)).status).toBe(
+      "completed",
+    );
+    const [resume] = await database
+      .select()
+      .from(workItems)
+      .where(
+        and(
+          eq(workItems.kind, "approval.resume"),
+          eq(workItems.key, request.id),
+        ),
+      );
+    expect(resume?.finishedAt).not.toBeNull();
   });
 
   /*
