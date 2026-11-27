@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
@@ -124,7 +127,7 @@ type Handler = (args: unknown, context: unknown) => Promise<unknown>;
  * consumers when a tool is added, so a read at render time sees the registry before the tool did.
  */
 class Registry {
-  copilotCore?: ReturnType<typeof useCopilotKit>["copilotkit"];
+  copilotCore?: ReturnType<typeof useChatRuntime>["copilotkit"];
   renderer(name: string) {
     return this.copilotCore?.renderToolCalls.find(
       (candidate) => candidate.name === name,
@@ -138,7 +141,7 @@ class Registry {
 }
 
 function Capture({ kept }: { kept: Registry }) {
-  kept.copilotCore = useCopilotKit().copilotkit;
+  kept.copilotCore = useChatRuntime().copilotkit;
   return null;
 }
 
@@ -150,12 +153,12 @@ function Declare() {
 function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <ActiveBotProvider>
           <Declare />
           {children}
         </ActiveBotProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

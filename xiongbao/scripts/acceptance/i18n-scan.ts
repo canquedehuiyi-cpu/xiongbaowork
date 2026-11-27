@@ -9,7 +9,7 @@
  * 决定了 Base UI 和 React DOM 在模块求值时就定下来的那些分支（见 `app/tests/preload.ts` 的注释）——只有
  * `bun test` 的 preload 能把这件事做对，`app/src/lib/marks.ts` 里的 `import.meta.glob` 也只有在那条路径上
  * 才是被替身接住的。所以：**规则在本文件，渲染在 `app/tests/i18n-dom-scan.test.tsx`**，数出来的账记在
- * `app/tests/i18n-dom-budget.json`，和 `scripts/brand/guard/budget.ts` 与 `brand-budget.json` 是同一套做法。
+ * `app/tests/i18n-dom-budget.json`。
  *
  * 一条判据，两处取舍：
  *
@@ -21,6 +21,8 @@
  * 邮箱、地址、版本号、格式名把英文占满了，它就不是没翻的文案；只要抠完还剩一个词，那就是给英文受众写的
  * 一句话，逐条列出来给人看。
  */
+
+import { LIBRARY_LOWER } from "../brand/guard/words";
 
 /** 有汉字就算中文行。 */
 const HAN = /\p{Script=Han}/u;
@@ -76,8 +78,10 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
    */
   {
     why: "品牌名",
-    pattern:
-      /\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|copilotkit|copilot|mcp|wakerflow|waker|xiongbao(?:\s+work)?)\b/gi,
+    pattern: new RegExp(
+      `\\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|${LIBRARY_LOWER}|copilot|mcp|wakerflow|waker|xiongbao(?:\\s+work)?)\\b`,
+      "gi",
+    ),
   },
   /*
    * 格式、单位、协议缩写：`PDF`、`CSV`、`JSON`、`MB`、`CPU`。**白名单，不是「全大写就算」**：后者会把

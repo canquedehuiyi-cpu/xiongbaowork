@@ -116,7 +116,7 @@ describe("upgrade preflight", () => {
       "repository",
       (m: ReleaseManifest) => ({
         ...m,
-        distribution: { ...m.distribution, repository: "CopilotKit/openbot" },
+        distribution: { ...m.distribution, repository: "example/other" },
       }),
     ],
     [

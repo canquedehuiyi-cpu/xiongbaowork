@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import {
   GenerativeUISurface,
   standardUI,
@@ -72,10 +72,10 @@ function Committed() {
 
 test("the catalog draws a committed surface in XiongBao's tokens", async () => {
   const view = render(
-    <CopilotKitProvider {...generativeUiProviderOptions(true)}>
+    <ChatRuntimeProvider {...generativeUiProviderOptions(true)}>
       <Committed />
       <GenerativeUISurface id="trip" />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
   expect(await view.findByText("Trip preferences")).toBeTruthy();
   const field = view.getByRole("textbox", { name: "Destination" });
@@ -229,10 +229,10 @@ function Budget() {
 
 test("a number field writes a number, so a total the Bot computes adds instead of joining", async () => {
   const view = render(
-    <CopilotKitProvider {...generativeUiProviderOptions(true)}>
+    <ChatRuntimeProvider {...generativeUiProviderOptions(true)}>
       <Budget />
       <GenerativeUISurface id="budget" />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
   expect(await view.findByText("Total $380")).toBeTruthy();
 

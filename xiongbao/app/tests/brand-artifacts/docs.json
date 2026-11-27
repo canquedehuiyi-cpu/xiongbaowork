@@ -1,74 +1,27 @@
 [
   {
-    "word": ".scratch/qoderwake-replica/seed-snapshots.mjs",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
-  },
-  {
-    "word": ".scratch/qoderwake-replica/tickets/029-",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
-  },
-  {
-    "word": "QoderWake",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
-  },
-  {
-    "word": "dev@openbot.local",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
     "word": "openbot",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "openbot-dev",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "开发环境文档里的本地容器名"
-  },
-  {
-    "word": "openbot-postgres-1",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "开发环境文档里的本地容器名"
+    "category": "until-task-26",
+    "note": "开发环境笔记里的数据库超级用户、口令与库名；Task 26 基线化时随超级用户改名删除"
   },
   {
     "word": "openbot_test",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+    "category": "until-task-26",
+    "note": "开发环境笔记里的数据库超级用户、口令与库名；Task 26 基线化时随超级用户改名删除"
   },
   {
     "word": "postgres://openbot:openbot@127.0.0.1:5433/$DB",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+    "category": "until-task-26",
+    "note": "开发环境笔记里的数据库超级用户、口令与库名；Task 26 基线化时随超级用户改名删除"
   },
   {
     "word": "postgres://openbot:openbot@127.0.0.1:5433/openbot",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
+    "category": "until-task-26",
+    "note": "开发环境笔记里的数据库超级用户、口令与库名；Task 26 基线化时随超级用户改名删除"
   },
   {
     "word": "postgres://openbot:openbot@host.docker.internal:5433/openbot_test",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "数据库名、角色名和开发登录账号，写在每个客户的数据库里"
-  },
-  {
-    "word": "qoderwake",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
+    "category": "until-task-26",
+    "note": "开发环境笔记里的数据库超级用户、口令与库名；Task 26 基线化时随超级用户改名删除"
   }
 ]

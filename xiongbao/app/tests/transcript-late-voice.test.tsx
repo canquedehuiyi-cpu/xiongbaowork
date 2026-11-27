@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render } from "@testing-library/react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
@@ -50,12 +50,12 @@ function call(id: string, startedAt: Date): VoiceChatEntry {
 
 function transcript(calls: VoiceChatEntry[]) {
   return (
-    <CopilotKitProvider>
+    <ChatRuntimeProvider>
       <ChatTranscript
         messages={withVoiceChats(history, calls)}
         restoring={false}
       />
-    </CopilotKitProvider>
+    </ChatRuntimeProvider>
   );
 }
 

@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { LICENCE_NOTICE } from "@xiongbao/shared/licence-paragraph";
 import { useDeferredValue, useEffect, useState } from "react";
 import { PageShell } from "@/components/layout/page-shell";
 import { Input } from "@/components/ui/input";
 import { appConfig } from "@/lib/generated/application-config";
-import license from "../../../../../LICENSE?raw";
 import { version } from "../../../../../package.json";
 
 export const Route = createFileRoute("/_authed/settings/about")({
@@ -17,14 +17,8 @@ type Notice = {
   licenseText?: string;
 };
 
-/* 随仓库附带的 MIT 许可作为清单里的一行，名称取自版权行的权利人；没有版本号，版本列写「—」。 */
-const BUNDLED_NOTICE: Notice = {
-  name:
-    license.match(/^Copyright \(c\) \d{4} (.+)$/m)?.[1]?.trim() || "LICENSE",
-  version: "—",
-  license: "MIT",
-  licenseText: license,
-};
+/* 产品最初所基于代码的 MIT 许可作为清单里的一行（THIRD-PARTY-NOTICES.md 也以它开头）；没有版本号，版本列写「—」。 */
+const BUNDLED_NOTICE: Notice = LICENCE_NOTICE;
 
 /* 与生成清单同一排序规则（按名称的码元顺序），这一行才能落在固定位置。 */
 function byName(a: Notice, b: Notice) {

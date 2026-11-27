@@ -4,20 +4,25 @@ import {
   ALWAYS_REPORT,
   printableStrings,
 } from "../../scripts/brand/guard/artifact-words";
+import { LIBRARY, OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
+
+// The old names, short, from the one place that spells them (words.ts).
+const O = OLD_PRODUCT_LOWER;
+const LP = LIBRARY;
 
 describe("artifact strings", () => {
   test("printableStrings pulls text out of bytes that hold NULs", () => {
     const bytes = new Uint8Array([
       0,
       1,
-      ...new TextEncoder().encode("/home/runner/work/x/openbot/node_modules"),
+      ...new TextEncoder().encode(`/home/runner/work/x/${O}/node_modules`),
       0,
       0xff,
       ...new TextEncoder().encode("ab"),
       0,
     ]);
     const lines = printableStrings(bytes).split("\n");
-    expect(lines).toContain("/home/runner/work/x/openbot/node_modules");
+    expect(lines).toContain(`/home/runner/work/x/${O}/node_modules`);
     expect(lines).not.toContain("ab");
   });
 
@@ -27,8 +32,8 @@ describe("artifact strings", () => {
     expect(printableStrings(bytes, 3).split("\n")).toContain("abc");
   });
 
-  test("the always-reported phrase is the CopilotKit footer", () => {
-    expect(ALWAYS_REPORT).toEqual(["Powered by CopilotKit"]);
+  test(`the always-reported phrase is the ${LP} footer`, () => {
+    expect(ALWAYS_REPORT).toEqual([`Powered by ${LP}`]);
   });
 });
 

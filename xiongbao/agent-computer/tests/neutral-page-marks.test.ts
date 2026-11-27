@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Browser, Page } from "playwright";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { parseAriaSnapshot } from "../src/aria-snapshot";
 import {
   HIDDEN_FIELD_SELECTOR,
@@ -44,7 +45,7 @@ test("the page mark names carry no product name", () => {
     PERSON_FILLED_ATTRIBUTE,
     LOGIN_ATTRIBUTE,
   ])
-    expect(name).not.toMatch(/openbot|xiongbao/i);
+    expect(name).not.toMatch(new RegExp(`${OLD_PRODUCT_LOWER}|xiongbao`, "i"));
 });
 
 test("the masking selectors are built from the renamed attributes", () => {
@@ -55,7 +56,7 @@ test("the masking selectors are built from the renamed attributes", () => {
   expect(HIDDEN_FIELD_SELECTOR).toContain("[data-xb-person-filled]");
 });
 
-test("no source spells a data-openbot- attribute", () => {
+test("no source spells the old product's data- attribute prefix", () => {
   const spelled: string[] = [];
   for (const entry of readdirSync(SRC, { recursive: true })) {
     const file = String(entry);
@@ -63,7 +64,7 @@ test("no source spells a data-openbot- attribute", () => {
     readFileSync(join(SRC, file), "utf8")
       .split("\n")
       .forEach((line, index) => {
-        if (line.includes("data-openbot-"))
+        if (line.includes(`data-${OLD_PRODUCT_LOWER}-`))
           spelled.push(`${file}:${index + 1}`);
       });
   }

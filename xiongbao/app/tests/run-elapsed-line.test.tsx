@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
@@ -118,14 +118,14 @@ function transcript(
 ) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <ChatTranscript
           busy={busy}
           messages={messages}
           restoring={false}
           {...opts}
         />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

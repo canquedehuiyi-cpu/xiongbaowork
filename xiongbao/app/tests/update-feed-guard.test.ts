@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { LIBRARY_LOWER } from "../../scripts/brand/guard/words";
 
 /**
  * Nothing a Helm or Compose deployment runs knows the upstream desktop app's update feed. A server,
- * worker or page that named it would be a self-hosted deployment reaching downloads.copilotkit.ai,
- * which is never wanted.
+ * worker or page that named it would be a self-hosted deployment reaching the library vendor's download
+ * host, which is never wanted.
  */
+const FEED_HOST = `downloads.${LIBRARY_LOWER}.ai`;
+
 test("no code a self-hosted deployment runs names the upstream desktop update feed", () => {
   const root = join(import.meta.dir, "..", "..");
   const shipped = [
@@ -30,7 +33,7 @@ test("no code a self-hosted deployment runs names the upstream desktop update fe
       }
       return;
     }
-    if (readFileSync(path, "utf8").includes("downloads.copilotkit.ai"))
+    if (readFileSync(path, "utf8").includes(FEED_HOST))
       named.push(path.slice(root.length + 1));
   };
   for (const part of shipped) visit(join(root, part));

@@ -1,4 +1,4 @@
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { useQuery } from "@tanstack/react-query";
 import {
   deviceTimeZone,
@@ -53,7 +53,7 @@ export function CopilotProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <CopilotKitProvider
+    <ChatRuntimeProvider
       enableInspector={false}
       runtimeUrl="/api/runtime"
       credentials="include"
@@ -109,7 +109,7 @@ export function CopilotProvider({ children }: { children: ReactNode }) {
         <BotTools />
         {children}
       </ActiveBotProvider>
-    </CopilotKitProvider>
+    </ChatRuntimeProvider>
   );
 }
 

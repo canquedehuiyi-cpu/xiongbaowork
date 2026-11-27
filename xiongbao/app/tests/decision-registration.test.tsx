@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { z } from "zod";
@@ -217,9 +220,9 @@ test("two decisions waiting at once are each answered from their own card", asyn
  * a tool whose `available` is false or "disabled", and the offer for each Bot is decided after it.
  */
 test("a decision is in the tool list a run is sent", () => {
-  let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+  let core: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
   function Capture() {
-    core = useCopilotKit().copilotkit;
+    core = useChatRuntime().copilotkit;
     return null;
   }
   function Registers() {
@@ -231,10 +234,10 @@ test("a decision is in the tool list a run is sent", () => {
     return null;
   }
   render(
-    <CopilotKitProvider>
+    <ChatRuntimeProvider>
       <Registers />
       <Capture />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
 
   // The list a run is sent: the SDK builds it with this, privately, for every run it starts.

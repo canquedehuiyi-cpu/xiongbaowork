@@ -15,14 +15,11 @@ on:
 permissions:
   contents: read
 
-# Identity belongs to this repository. Forks must explicitly declare their upstream baseline; never
-# inherit another publisher's registry. The compatibility and upgrade policy is not configuration:
+# Identity belongs to this repository; never inherit another publisher's registry. The compatibility and upgrade policy is not configuration:
 # it is release-policy.json in the release commit, reviewed with the release.
 env:
-  XIONGBAO_DISTRIBUTION_ID: ${{ vars.OPENBOT_DISTRIBUTION_ID || github.repository }}
-  OPENBOT_UPSTREAM_REPOSITORY: ${{ vars.OPENBOT_UPSTREAM_REPOSITORY || 'CopilotKit/openbot' }}
-  OPENBOT_UPSTREAM_COMMIT: ${{ vars.OPENBOT_UPSTREAM_COMMIT }}
-  XIONGBAO_RELEASE_CHANNEL: ${{ vars.OPENBOT_RELEASE_CHANNEL || 'stable' }}
+  XIONGBAO_DISTRIBUTION_ID: ${{ vars.XIONGBAO_DISTRIBUTION_ID || github.repository }}
+  XIONGBAO_RELEASE_CHANNEL: ${{ vars.XIONGBAO_RELEASE_CHANNEL || 'stable' }}
 
 jobs:
   # Every push to main or a release branch runs this, and almost none of them are releases. This job
@@ -346,7 +343,7 @@ jobs:
       retention_days: 30
       platforms: '["macos","windows"]'
     secrets:
-      XIONGBAO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET: ${{ secrets.OPENBOT_GOOGLE_MODEL_OAUTH_CLIENT_SECRET }}
+      XIONGBAO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET: ${{ secrets.XIONGBAO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET }}
     permissions:
       contents: read
 

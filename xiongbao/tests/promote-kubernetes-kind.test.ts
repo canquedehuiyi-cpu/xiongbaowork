@@ -110,7 +110,7 @@ describe.skipIf(!kubeconfig)("Kubernetes promotion on a real cluster", () => {
     );
     writeFileSync(
       join(source, "values.yaml"),
-      "server:\n  replicaCount: 2\n  podAnnotations: {}\nroutines:\n  suspend: false\nimage:\n  repository: ghcr.io/copilotkit/openbot\n  tag: v0.2.0\n  digest: ''\n",
+      "server:\n  replicaCount: 2\n  podAnnotations: {}\nroutines:\n  suspend: false\nimage:\n  repository: ghcr.io/example/xiongbao\n  tag: v0.2.0\n  digest: ''\n",
     );
     writeFileSync(join(source, "server.js"), SERVER);
     writeFileSync(join(source, "templates", "release.yaml"), TEMPLATES);

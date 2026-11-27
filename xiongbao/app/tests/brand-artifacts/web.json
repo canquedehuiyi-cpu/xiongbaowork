@@ -1,254 +1,212 @@
 [
   {
     "word": "--copilotkit-license-banner-offset",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "..._.copilotkit_action",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": ".__copilotkitMcpResourceReadOnly",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": ".copilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "prefix": ".copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "/CopilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "/copilotkit_knowledge_base_shell/",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": "@copilotkit/",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "prefix": "CopilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "X-CopilotKit-Telemetry-Id",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "_.__COPILOTKIT_CORE__",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "_.copilotKitInput",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "_.copilotKitInput:focus-within",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": "_.copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "__copilotkitMcpResourceReadOnly:",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "__copilotkitRequestId:_",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "action:_.copilotkit_action",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "contextSent:_.copilotkit_contextSent",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": "copilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "prefix": "copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "prefix": "data-copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "forwardedProps.copilotkit.ui",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": "https://api.cloud.copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "prefix": "https://cdn.copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "https://copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "https://copilotkit.ai/pricing",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "https://dashboard.operations.copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": "https://docs.copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "https://intelligence.copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "prefix": "https://telemetry.copilotkit.ai",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样（含压缩后的变体）"
   },
   {
     "word": "https://www.copilotkit.ai/talk-to-an-engineer",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "isCopilotKitDestination",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "openbot/",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "内置工具引用，已存进数据库"
+    "category": "kept",
+    "note": "内置工具引用旧名：审批记录与审计行里 v0.2.16 之前的引用，永久保留（见 brand-leak-allowlist.json 的 kept 条目）"
   },
   {
     "word": "openbot/share_private_information",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "内置工具引用，已存进数据库"
+    "category": "kept",
+    "note": "内置工具引用旧名：审批记录与审计行里 v0.2.16 之前的引用，永久保留（见 brand-leak-allowlist.json 的 kept 条目）"
   },
   {
     "word": "openbot:",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
+    "category": "kept",
+    "note": "系统来源标记旧前缀：审计记录里 0240 之前写下的，永久保留（shared/xiongbao-actor.ts）"
   },
   {
     "word": "public/icons/copilotkit-kite.svg",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "surfaces:_.copilotkit_surfaces",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "targets:_.copilotkit_targets",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "this.isCopilotKitDestination",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "transport:_.copilotkit_transport",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "useCopilotKit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   },
   {
     "word": "window.__COPILOTKIT_CORE__",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方库自带的 CopilotKit 字样"
   }
 ]

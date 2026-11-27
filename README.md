@@ -204,7 +204,7 @@ Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 
 ## 开发者说明
 
-源码在 `xiongbao/`，目录内部保持与上游开源项目相同的结构，以便持续同步上游更新（同步记录见 `xiongbao/UPSTREAM.md`）。
+源码在 `xiongbao/`。
 本仓库实际执行的 CI 是根目录的 `.github/workflows/`。服务端开发和测试请在 Linux/WSL 或容器里进行：
 Windows 原生 Bun 在服务端依赖导入链上会挂死。
 

@@ -1,7 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { CopilotKitProvider, useFrontendTool } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useFrontendTool,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
@@ -297,7 +300,7 @@ function BrowserStep() {
 function conversation(selected: AgentChannel) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <BrowserStep />
         {/* Keyed as the channel route keys it, so another conversation is a fresh mount. */}
         <ChannelChat
@@ -305,7 +308,7 @@ function conversation(selected: AgentChannel) {
           key={selected.id}
           runtimeAgentId="failed-run-bot"
         />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

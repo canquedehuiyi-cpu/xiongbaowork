@@ -8,7 +8,7 @@ import {
 
 /*
  * The compat windows written as source comments (see compat-comments.ts), held to their `removeIn`
- * the way brand-expiry holds the allowlist's entries to theirs.
+ * so a compatibility point cannot outlive the release it was meant to end in.
  *
  * The examples are built from parts so this file does not spell a window itself; the tree check
  * skips tests anyway, but a reader grepping for live windows should not land here.
@@ -82,7 +82,7 @@ describe("judging one file", () => {
 });
 
 describe("the tree", () => {
-  // The current version, read as brand-expiry reads it.
+  // The current version, from the root package.json.
   const { version } = JSON.parse(
     readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
   ) as { version: string };

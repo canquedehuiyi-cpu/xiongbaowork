@@ -17,7 +17,7 @@
 ## 1. 数据库（PostgreSQL，宿主端口 5433）
 
 ```
-docker start openbot-postgres-1        # 已存在则直接起；别新建
+docker start xiongbao-postgres-1        # 已存在则直接起；别新建
 ```
 
 两个连接串，**用途不同，别混**：
@@ -56,7 +56,7 @@ done
 ```bash
 cd xiongbao
 cp .env.example .env            # 然后按下表改
-docker compose up -d postgres   # 或复用已存在的 openbot-postgres-1
+docker compose up -d postgres   # 或复用已存在的 xiongbao-postgres-1
 ```
 
 本分支新增/改动的关键变量：
@@ -93,7 +93,7 @@ MSYS_NO_PATHCONV=1 docker run --rm \
   -v $B/server/src:/app/server/src -v $B/server/tests:/app/server/tests \
   -v $B/server/drizzle:/app/server/drizzle -v $B/server/scripts:/app/server/scripts \
   -v $B/shared:/app/shared -v $B/examples:/app/examples -v $B/.env:/app/.env \
-  openbot-dev \
+  xiongbao-dev \
   bash -lc "cd /app/server && bunx tsc --noEmit && bun test tests/<file>.test.ts"
 ```
 
@@ -114,7 +114,7 @@ app 侧对应 `-v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests`（凡 
 docker run --rm -v $B/server/scripts:/app/server/scripts -v $B/server/src:/app/server/src \
   -v $B/shared:/app/shared \
   -e DATABASE_URL="postgres://openbot:openbot@host.docker.internal:5433/openbot_test" \
-  openbot-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
+  xiongbao-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
 ```
 
 全量套件约 7–8 分钟；期间**别再开第二个碰同一个库的容器**，也别跑吃 CPU 的任务——那族参数化用例会被拖慢，制造出并不存在的"回归"。
@@ -156,7 +156,7 @@ done
   1. **app 容器也要挂 `examples`**。只给 server 挂 ⇒ app 的 `predev`（`scripts/generate-app-config.ts` → `loadTenantPackage`）在 `/app/examples/xiongbao/channels.yaml` 上 ENOENT，报的是镜像里的旧副本缺文件，不是仓库缺文件（仓库里 `examples/xiongbao/channels.yaml` 确实在）。
   2. **`loadTenantPackage` 需要的六个文件是硬读**（`server/src/tenant-package.ts:727`：brand/agents/channels/model/knowledge + theme.css，前五个**没有 `.catch`**）。品牌包少任何一个文件就不是"这块内容没有"，是**整个装载抛错**。
   3. **挂进来的 `app/src` 会让 TanStack 路由树生成器 EXDEV 失败**（`.tanstack/tmp/… -> /app/app/src/routeTree.gen.ts` 跨设备 rename）。本次**没有损坏工作区**（`git status` 空、文件 1206 行完好），Vite 也照样起来了，但 `routeTree.gen.ts` 从此**不会被 dev server 更新**——这正好对上本项目"新路由手工登记 routeTree"的既有约定。
-- 起法（`docker compose up --build` 那条路**我没走**，因为它会重建你机器上正在用的 `openbot-postgres-1`）：
+- 起法（`docker compose up --build` 那条路**我没走**，因为它会重建你机器上正在用的 `xiongbao-postgres-1`）：
   ```bash
   B="D:/AI编程库/项目库/进行中的项目/xiongbaoshuziyuangong/xiongbao"
   MSYS_NO_PATHCONV=1 docker run -d --name xiongbao-g2-server \
@@ -168,13 +168,13 @@ done
     -v $B/server/src:/app/server/src -v $B/server/drizzle:/app/server/drizzle \
     -v $B/server/scripts:/app/server/scripts -v $B/shared:/app/shared \
     -v $B/examples:/app/examples -v $B/.env:/app/.env \
-    openbot-dev bash -lc "cd /app/server && bun --env-file=../.env src/index.ts"
+    xiongbao-dev bash -lc "cd /app/server && bun --env-file=../.env src/index.ts"
   # app 必须与 server 共享网络命名空间：vite 的代理目标是字面量 http://localhost:${SERVER_PORT}
   MSYS_NO_PATHCONV=1 docker run -d --name xiongbao-g2-app --network container:xiongbao-g2-server \
     -e SERVER_PORT=3001 -e APP_PORT=3010 \
     -v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests -v $B/shared:/app/shared \
     -v $B/server/src:/app/server/src -v $B/examples:/app/examples -v $B/scripts:/app/scripts -v $B/.env:/app/.env \
-    openbot-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
+    xiongbao-dev bash -lc "cd /app/app && bun run dev --host 0.0.0.0 --port 3010 --strictPort"
   docker rm -f xiongbao-g2-app xiongbao-g2-server   # 收摊
   ```
 - **`INTELLIGENCE_MODE` 现在是"会被读、会被拒"而不是"必须给"**：给 `local` 或不给都行；给 `managed` 会在启动时报 `INTELLIGENCE_MODE must be "local" or unset: this deployment keeps its threads in its own PostgreSQL…` 并拒绝起来。**旧的"不给平台三件套就拒启"（启动时报「托管后端是必需的、却没有配置」）随 034 一起删掉了**——会话存的本机 `threads`/`thread_runs`/`thread_run_events`，`INTELLIGENCE_API_URL`/`_GATEWAY_WS_URL`/`_API_KEY` 与旧的许可证令牌变量**根本不被读**，留着只是让 `.env` 说假话。上面配方里的 `-e INTELLIGENCE_MODE=local` 因此可以删（保留也无害，只是把模式说明写在命令行上）。
@@ -185,7 +185,7 @@ done
 上一条记的"起得来但走查不通"已解决，**根因是我自己配错**：
 - `config.ts:1407` 的 `singleUser = !organizationAuthUrl && singleUserAllowed(environment, auth !== undefined)`，而 `hasProvider` 就是 **`auth !== undefined`**；只要给了 `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`，better-auth 实例就存在 ⇒ **单用户被判定为"有登录方式"而关闭**，`/api/tasks` 回 401、SPA 停在空壳。`.env.example` 里那四行"选哪种 provider 都要填"的键是**给 provider 模式用的**，单用户模式**一个都别给**。
 - 正确起法：`XIONGBAO_SINGLE_USER=true` + `KEY_ENCRYPTION_KEY` + `XIONGBAO_PUBLIC_URL=http://localhost:3001`（loopback；`singleUserAllowed` 遇到公网地址会**拒绝启动**，这是设计），**不传 BETTER_AUTH_\*、不传 INITIAL_ADMIN_EMAILS**；`INTELLIGENCE_MODE=local` 可给可不给（见 §上一条）。
-- 证据（不是推断）：启动日志 `No identity provider is configured, so every request is treated as dev@openbot.local (administrator)`；`GET /api/me` 回 `{"user":{"id":"dev-local-user","email":"dev@openbot.local","role":"admin",…}}`；`GET /api/capabilities` 回 `{"mode":"local","authProviders":[],"emailPassword":false,"selfHostBanner":false,…}`；`/api/tasks` 经 vite 代理回 **200** 与 `{"tasks":[]}`。
+- 证据（不是推断）：启动日志 `No identity provider is configured, so every request is treated as admin@xiongbao.local (administrator)`；`GET /api/me` 回 `{"user":{"id":"dev-local-user","email":"admin@xiongbao.local","role":"admin",…}}`；`GET /api/capabilities` 回 `{"mode":"local","authProviders":[],"emailPassword":false,"selfHostBanner":false,…}`；`/api/tasks` 经 vite 代理回 **200** 与 `{"tasks":[]}`。
 - **首屏有一道真实门禁**：`onboarding.completedAt === null` 会把 `/tasks` 弹回 `/onboarding`（`app/src/lib/auth/queries.ts:27`）。浏览器里点 Continue 没生效，走产品自己的端点才过：`POST /api/me/onboarding {"completed":true}` ⇒ `completedAt` 落值（`{"step":99,"completedAt":"2026-10-07T04:22:29.580Z"}`）。**走查任何页面之前先过这道**，否则每条都只会看到 onboarding。
 - **A1 实测通过**（结构快照，本机浏览器没有可见 surface，截不了图）：`/tasks` 渲染出 `heading "任务看板"`、副标题「从工作本身出发：员工做了什么、什么需要你、什么等你查收。」、筛选「全部/进行中/需要操作/查收结果/已完成/失败」、`region "需要关注"` 里两个计数页签「需要操作 (0)」「查收结果 (0)」与 A7 的原句「暂无需要操作的任务——需要你确认、回答或补充信息的任务会显示在这里」、空态「看板上还没有任务——和员工说句话，工作就会出现在这里。」、设备筛选出现「studio-pc · 休眠」，URL 带 `?machineId=&crew=`（与 CONTEXT.md 记的两轴口径一致）。
 - **A1 与 spec 字面有一处差异要认**：spec 写的是"统计条：任务总数/进行中/需要操作/已结束"，实屏是**筛选页签 + 需要关注区的双计数**，没有并列的四个总数。0 任务时也不见周期选择器（一周/一月/全部）。**这是渲染分支还是缺功能，下一轮要用有数据的库验**，别现在写成已符合。

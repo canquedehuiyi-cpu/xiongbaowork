@@ -9,9 +9,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AllowEntry } from "../../scripts/brand/guard/allowlist";
 import { segmentWords } from "../../scripts/brand/guard/artifact-words";
-import { metricsTable } from "../../scripts/brand/metrics";
+import {
+  LIBRARY,
+  LIBRARY_LOWER,
+  OLD_ENV_PREFIX,
+  OLD_PRODUCT,
+  OLD_PRODUCT_LOWER,
+} from "../../scripts/brand/guard/words";
 import {
   BUILD_PATH,
   canonical,
@@ -25,43 +30,41 @@ import {
   verdict,
 } from "../../scripts/brand/scan-artifact";
 
+// The old names, short, from the one place that spells them (words.ts).
+const E = OLD_ENV_PREFIX;
+const P = OLD_PRODUCT;
+const O = OLD_PRODUCT_LOWER;
+const LP = LIBRARY;
+const L = LIBRARY_LOWER;
+
 const dir = () => mkdtempSync(join(tmpdir(), "scan-"));
 const entry = (word: string) => ({
   word,
-  category: "operator-visible" as const,
-  plan: "rewrite" as const,
+  category: "kept" as const,
   note: "x",
 });
 
 describe("scan-artifact", () => {
   test("a minifier's renamed local does not change the word", () => {
-    expect(canonical("fromOpenBot:n")).toBe("fromOpenBot:_");
-    expect(canonical("e.openbotUrl")).toBe("_.openbotUrl");
-    expect(canonical("openbotUrl:xe")).toBe("openbotUrl:_");
-    expect(canonical("docs.copilotkit.ai")).toBe("docs.copilotkit.ai");
-    expect(canonical("ai.copilotkit.openbot.recorder")).toBe(
-      "ai.copilotkit.openbot.recorder",
-    );
+    expect(canonical(`from${P}:n`)).toBe(`from${P}:_`);
+    expect(canonical(`e.${O}Url`)).toBe(`_.${O}Url`);
+    expect(canonical(`${O}Url:xe`)).toBe(`${O}Url:_`);
+    expect(canonical(`docs.${L}.ai`)).toBe(`docs.${L}.ai`);
+    expect(canonical(`ai.${L}.${O}.recorder`)).toBe(`ai.${L}.${O}.recorder`);
   });
 
   test("failure lines name the kind, the word and which way it is wrong", () => {
     const root = dir();
-    writeFileSync(
-      join(root, "a.js"),
-      `x="openbot-new";y="Powered by CopilotKit"`,
-    );
+    writeFileSync(join(root, "a.js"), `x="${O}-new";y="Powered by ${LP}"`);
     const scan = scanWeb(root);
-    expect(scan.reported).toEqual(["Powered by CopilotKit"]);
-    const failures = verdict("web", scan, [
-      entry("openbot-gone"),
-      entry("CopilotKit"),
-    ]);
-    expect(failures).toContain("web: openbot-new （多出来的）");
-    expect(failures).toContain("web: openbot-gone （已经没了）");
+    expect(scan.reported).toEqual([`Powered by ${LP}`]);
+    const failures = verdict("web", scan, [entry(`${O}-gone`), entry(`${LP}`)]);
+    expect(failures).toContain(`web: ${O}-new （多出来的）`);
+    expect(failures).toContain(`web: ${O}-gone （已经没了）`);
     expect(summaryOf("web", scan, failures)).toContain("不失败");
-    expect(
-      verdict("web", scan, [entry("openbot-new"), entry("CopilotKit")]),
-    ).toEqual([]);
+    expect(verdict("web", scan, [entry(`${O}-new`), entry(`${LP}`)])).toEqual(
+      [],
+    );
   });
 
   test("web: a map file or a sourceMappingURL fails", () => {
@@ -96,47 +99,12 @@ describe("scan-artifact", () => {
           new URL(`./brand-artifacts/${name}.json`, import.meta.url),
           "utf8",
         ),
-      ) as { word?: string; prefix?: string; category: string; plan: string }[];
+      ) as { word?: string; prefix?: string; category: string }[];
       expect(list.length).toBeGreaterThan(0);
       expect(
-        list.filter((e) => e.prefix && e.category !== "third-party-name"),
+        list.filter((e) => e.prefix && e.category !== "dependency"),
       ).toEqual([]);
     }
-  });
-});
-
-describe("metrics", () => {
-  const allow = (
-    category: AllowEntry["category"],
-    plan: AllowEntry["plan"],
-  ): AllowEntry => ({
-    file: "a.ts",
-    text: "t",
-    reason: "r",
-    category,
-    plan,
-  });
-  test("remaining work, permanent leftovers and the change against base", () => {
-    const head = {
-      allow: [
-        allow("operator-visible", "rewrite"),
-        allow("third-party-name", "keep"),
-      ],
-      budget: [{ rule: "identifier", scope: "app/src", lines: 3 }],
-      words: { web: [entry("a")] },
-    };
-    const table = metricsTable(head, {
-      allow: [
-        allow("operator-visible", "rewrite"),
-        allow("operator-visible", "rewrite"),
-      ],
-      budget: [{ rule: "identifier", scope: "app/src", lines: 5 }],
-      words: { web: [entry("a"), entry("b")] },
-    });
-    expect(table).toContain("| 剩余工作量（rewrite + remove） | 1 | -1 |");
-    expect(table).toContain("| 永久残留（keep） | 1 | +1 |");
-    expect(table).toContain("| identifier | 3 | -2 |");
-    expect(table).toContain("| web | 1 | -1 | - | 1 |");
   });
 });
 
@@ -148,30 +116,30 @@ describe("image and deb scans (Task 5)", () => {
       list,
       [
         "/etc/hosts",
-        "/app/shared/openbot-actor.ts",
-        "/usr/src/openbot/x.js",
-        "/app/toolkit/src/copilotkit/agents.ts",
-        "/usr/local/sbin/openbot-apt",
+        `/app/shared/${O}-actor.ts`,
+        `/usr/src/${O}/x.js`,
+        `/app/toolkit/src/${L}/agents.ts`,
+        `/usr/local/sbin/${O}-apt`,
         "",
       ].join("\n"),
     );
     const found = scanImageFiles(list).found;
     expect([...found.keys()].sort()).toEqual([
-      "copilotkit",
-      "openbot",
-      "openbot-actor.ts",
-      "openbot-apt",
+      `${L}`,
+      `${O}`,
+      `${O}-actor.ts`,
+      `${O}-apt`,
     ]);
   });
 
   test("image-files: a new version or hash of the same package says the same words", () => {
     const store = (version: string, hash: string) =>
       [
-        `/app/node_modules/.bun/@copilotkit+shared@${version}+${hash}`,
-        `/app/node_modules/.bun/@copilotkit+shared@${version}+${hash}/node_modules/@copilotkit/shared/package.json`,
-        `/app/node_modules/.bun/copilotkit-cli@${version}+${hash}/node_modules/copilotkit-cli@${version}`,
-        `/app/node_modules/.bun/@openbot+shared@${version}/node_modules/@openbot/shared`,
-        `${hash}/node_modules/@copilotkit/runtime/dist/index.d.mts`,
+        `/app/node_modules/.bun/@${L}+shared@${version}+${hash}`,
+        `/app/node_modules/.bun/@${L}+shared@${version}+${hash}/node_modules/@${L}/shared/package.json`,
+        `/app/node_modules/.bun/${L}-cli@${version}+${hash}/node_modules/${L}-cli@${version}`,
+        `/app/node_modules/.bun/@${O}+shared@${version}/node_modules/@${O}/shared`,
+        `${hash}/node_modules/@${L}/runtime/dist/index.d.mts`,
       ].join("\n");
     const root = dir();
     const one = join(root, "one.txt");
@@ -180,29 +148,28 @@ describe("image and deb scans (Task 5)", () => {
     writeFileSync(two, store("1.86.0-next.3", "e95e36fcb715f04e"));
     const first = [...scanImageFiles(one).found.keys()].sort();
     expect(first).toEqual([...scanImageFiles(two).found.keys()].sort());
-    expect(first).toEqual(["@copilotkit", "@openbot", "copilotkit-cli"]);
+    expect(first).toEqual([`@${L}`, `@${O}`, `${L}-cli`]);
   });
 
   test("deb: string literals packed back to back are cut at the brand word and at `/`", () => {
     const text =
-      "agent-desktop/opt/google/chrome/chrome/usr/bin/chromiumopenbot-runner/proc.configautostartxiongbao-device\n" +
-      "shared/openbot-browser.ts\n@copilotkit/core@1.85.0\ndata-openbot-secret\n$openbotOut.AutoFlush\n";
+      `agent-desktop/opt/google/chrome/chrome/usr/bin/chromium${O}-runner/proc.configautostartxiongbao-device\n` +
+      `shared/${O}-browser.ts\n@${L}/core@1.85.0\ndata-${O}-secret\n$${O}Out.AutoFlush\n`;
     expect([...segmentWords(text).keys()]).toEqual([
-      "openbot-runner",
-      "openbot-browser.ts",
-      "@copilotkit",
-      "data-openbot-secret",
-      "$openbotOut.AutoFlush",
+      `${O}-runner`,
+      `${O}-browser.ts`,
+      `@${L}`,
+      `data-${O}-secret`,
+      `$${O}Out.AutoFlush`,
     ]);
   });
 
   test("deb: a literal glued to an ALL-CAPS name, or a brand word glued to the one before it, is cut there", () => {
-    const text =
-      "openbot-runnerXIONGBAO_DESKTOP_ENGINEOPENBOT_DESKTOP_ENGINE\nfromOpenBot\nOpenBot\n";
+    const text = `${O}-runnerXIONGBAO_DESKTOP_ENGINE${E}DESKTOP_ENGINE\nfrom${P}\n${P}\n`;
     expect([...segmentWords(text).keys()]).toEqual([
-      "openbot-runner",
-      "OPENBOT_DESKTOP_ENGINE",
-      "OpenBot",
+      `${O}-runner`,
+      `${E}DESKTOP_ENGINE`,
+      `${P}`,
     ]);
   });
 
@@ -213,18 +180,18 @@ describe("image and deb scans (Task 5)", () => {
       file,
       JSON.stringify([
         {
-          Name: "/openbot-trackb",
+          Name: `/${O}-trackb`,
           Config: {
-            Env: ["OPENBOT_X=1", "PATH=/usr/bin"],
-            Labels: { "ai.copilotkit.openbot.recorder": "v1" },
+            Env: [`${E}X=1`, "PATH=/usr/bin"],
+            Labels: { [`ai.${L}.${O}.recorder`]: "v1" },
           },
         },
       ]),
     );
     const found = scanImageConfig(file).found;
-    expect(found.has("OPENBOT_X")).toBe(true);
-    expect(found.has("ai.copilotkit.openbot.recorder")).toBe(true);
-    expect(found.has("/openbot-trackb")).toBe(false);
+    expect(found.has(`${E}X`)).toBe(true);
+    expect(found.has(`ai.${L}.${O}.recorder`)).toBe(true);
+    expect(found.has(`/${O}-trackb`)).toBe(false);
   });
 
   // `dpkg-deb` packs the archive this case reads. A machine without it (Windows) cannot build the
@@ -239,32 +206,29 @@ describe("image and deb scans (Task 5)", () => {
       mkdirSync(join(tree, "usr", "share", "doc"), { recursive: true });
       writeFileSync(
         join(tree, "DEBIAN", "control"),
-        "Package: openbot-device\nVersion: 1.0.0\nArchitecture: amd64\nMaintainer: x <x@example.com>\nDescription: openbot-desc\n",
+        `Package: ${O}-device\nVersion: 1.0.0\nArchitecture: amd64\nMaintainer: x <x@example.com>\nDescription: ${O}-desc\n`,
       );
       writeFileSync(
         join(tree, "usr", "bin", "xiongbao-runner"),
         Buffer.from(
-          "\0/home/runner/work/x/x/xiongbao/node_modules/a\0copilotkit-inside\0/usr/bin/chromiumopenbot-runner/proc.configautostart\0@copilotkit/core@1.85.0\0",
+          `\0/home/runner/work/x/x/xiongbao/node_modules/a\0${L}-inside\0/usr/bin/chromium${O}-runner/proc.configautostart\0@${L}/core@1.85.0\0`,
         ),
       );
-      writeFileSync(
-        join(tree, "usr", "share", "doc", "openbot-doc.txt"),
-        "hi\n",
-      );
+      writeFileSync(join(tree, "usr", "share", "doc", `${O}-doc.txt`), "hi\n");
       const deb = join(root, "out.deb");
       execFileSync("dpkg-deb", ["--build", "-Znone", tree, deb], {
         stdio: "ignore",
       });
       const scan = scanDeb(deb, "/home/runner/work/x/x/xiongbao");
-      expect(scan.found.has("openbot-device")).toBe(true);
-      expect(scan.found.has("openbot-desc")).toBe(true);
-      expect(scan.found.has("copilotkit-inside")).toBe(true);
+      expect(scan.found.has(`${O}-device`)).toBe(true);
+      expect(scan.found.has(`${O}-desc`)).toBe(true);
+      expect(scan.found.has(`${L}-inside`)).toBe(true);
       // Rust packs its literals with nothing between them: only the name and its own segment are the word.
-      expect(scan.found.has("openbot-runner")).toBe(true);
-      expect(scan.found.has("@copilotkit")).toBe(true);
+      expect(scan.found.has(`${O}-runner`)).toBe(true);
+      expect(scan.found.has(`@${L}`)).toBe(true);
       expect([...scan.found.keys()].filter((w) => w.length > 40)).toEqual([]);
       expect(
-        [...scan.found.keys()].some((w) => w.endsWith("openbot-doc.txt")),
+        [...scan.found.keys()].some((w) => w.endsWith(`${O}-doc.txt`)),
       ).toBe(true);
       expect(scan.found.get(BUILD_PATH)).toBe(1);
       rmSync(root, { recursive: true, force: true });
@@ -274,10 +238,10 @@ describe("image and deb scans (Task 5)", () => {
   test("web on a log file: words only, no source map check", () => {
     const root = dir();
     const log = join(root, "startup.log");
-    writeFileSync(log, "boot openbot\n//# sourceMappingURL=x.map\n");
+    writeFileSync(log, `boot ${O}\n//# sourceMappingURL=x.map\n`);
     const scan = scanLog(log);
     expect(scan.problems).toEqual([]);
-    expect(scan.found.has("openbot")).toBe(true);
+    expect(scan.found.has(`${O}`)).toBe(true);
   });
 
   test("the new baselines are committed as JSON lists", () => {

@@ -141,7 +141,7 @@ function attempt(
       GITHUB_SHA: rel.commit,
       VERSION: "v0.3.0",
       XIONGBAO_DISTRIBUTION_ID: "acme.xiongbao",
-      OPENBOT_UPSTREAM_COMMIT: rel.upstream,
+      XIONGBAO_UPSTREAM_COMMIT: rel.upstream,
       XIONGBAO_CHART_PATH: "release-assets/xiongbao-0.1.4.tgz",
       XIONGBAO_CHART_VERSION: "0.1.4",
       ...(published ? { XIONGBAO_PUBLISHED_ASSETS: published } : {}),

@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { OLD_NAME } from "../../scripts/brand/guard/words";
 import { personaIsEmpty } from "../../shared/persona";
 import { createDatabase } from "../src/db/client";
 import {
@@ -119,9 +120,7 @@ test("every preset coworker in the package has a full persona in all three parts
       120,
     );
     expect(total, `agent ${entry.id} persona length`).toBeLessThanOrEqual(600);
-    expect(JSON.stringify(persona), `agent ${entry.id}`).not.toMatch(
-      /openbot/i,
-    );
+    expect(JSON.stringify(persona), `agent ${entry.id}`).not.toMatch(OLD_NAME);
   }
 });
 

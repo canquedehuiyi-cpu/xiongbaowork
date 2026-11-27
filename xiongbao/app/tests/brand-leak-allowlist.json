@@ -1,79 +1,260 @@
 [
   {
+    "file": "shared/licence-paragraph.ts",
+    "text": "Copyright (c) 2026 CopilotKit",
+    "category": "licence",
+    "reason": "产品最初所基于代码的 MIT 版权行：许可证要求它随代码一起分发，THIRD-PARTY-NOTICES.md 以它开头"
+  },
+  {
     "file": "app/src/components/approvals/describe-rules.tsx",
     "text": "startsWith(\"openbot/\")",
-    "reason": "persisted-identifier: prefix of built-in tool refs stored in rules",
-    "category": "persisted-data",
-    "plan": "keep"
+    "category": "kept",
+    "reason": "永久保留（R4 裁决）：审批记录（动作摘要覆盖工具引用、不可改写）与审计行（只追加）里 v0.2.16 之前的内置工具引用前缀，网页按私密信息显示"
   },
   {
-    "file": "server/src/auth/role-writer-lifecycle.ts",
-    "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
-    "reason": "persisted-identifier: database password of the public default setup",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/proactive/private-share.ts",
-    "text": "\"openbot/share_private_information\"",
-    "reason": "persisted-identifier: built-in tool ref stored in rules and audit rows",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/plugins/composio-adapter.ts",
-    "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
-    "reason": "persisted-identifier: suffix of auth configs already created at Composio, still matched (Task 9)",
-    "category": "persisted-data",
-    "plan": "keep"
+    "file": "docker/s6/scripts/env-defaults.sh",
+    "text": "old=OPENBOT_",
+    "category": "kept",
+    "reason": "保留到 R5（R4 裁决，Task 25）：容器内拒绝旧前缀配置名的判定，与 shared/env-name.ts 同一规则"
   },
   {
     "file": "server/src/auth/index.ts",
     "text": "\"openbotmobile://\"",
-    "reason": "persisted-identifier: legacy mobile URL scheme the server still accepts for sign-in return (dual-accept with xiongbao: //)",
-    "category": "persisted-data",
-    "plan": "keep"
+    "category": "kept",
+    "reason": "永久保留（R4 裁决）：已装到手机上的旧版移动端登记的回调 scheme，服务器无法让已装客户端改登记；只在配置了 EXPO_PROJECT_ID 的部署上信任"
   },
   {
-    "file": "shared/xiongbao-actor.ts",
-    "text": "actor.startsWith(\"openbot:\")",
-    "reason": "persisted-identifier: stored actor id prefix",
-    "category": "persisted-data",
-    "plan": "keep"
+    "file": "server/src/plugins/composio-adapter.ts",
+    "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
+    "category": "kept",
+    "reason": "保留到 R5（R4 裁决）：Composio 项目里改名前建的 auth config 名后缀（第三方系统里的登记，迁移够不着）；运维在 Composio 控制台改完后缀后删除"
+  },
+  {
+    "file": "server/src/proactive/private-share.ts",
+    "text": "\"openbot/share_private_information\"",
+    "category": "kept",
+    "reason": "永久保留（R4 裁决）：审批记录的动作摘要覆盖工具引用，记录不能改写，执行 v0.2.16 之前的审批记录里的动作时仍要认旧引用"
   },
   {
     "file": "shared/audit-words.ts",
     "text": "\"openbot/share_private_information\"",
-    "reason": "persisted-identifier: built-in tool ref used as a lookup key",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/tenant-package-path.ts",
-    "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
-    "reason": "persisted-identifier: the pre-rename tenant package directory name, matched only to redirect old TENANT_PACKAGE_DIR values",
-    "category": "persisted-data",
-    "plan": "keep"
+    "category": "kept",
+    "reason": "永久保留（R4 裁决）：审计记录只追加、不改写，0240 之前的旧行里工具引用仍是旧名，活动页要按它显示中文名"
   },
   {
     "file": "shared/env-name.ts",
-    "text": "\"OPENBOT_\"",
-    "reason": "developer-only: the prefix before v0.2.16, matched only to refuse a setting still under it (names only in the refusal, never a value)",
-    "category": "developer-only",
-    "plan": "keep"
+    "text": "OLD_PREFIX = \"OPENBOT_\"",
+    "category": "kept",
+    "reason": "保留到 R5（R4 裁决，Task 25）：只认这个旧前缀以便点名拒绝未经 v0.2.16 改名的配置，从不读取它的值"
   },
   {
-    "file": "docker/s6/scripts/postgres-init.sh",
-    "text": "-U openbot",
-    "reason": "persisted-identifier: database name and role names written into every customer database",
-    "category": "persisted-data",
-    "plan": "keep"
+    "file": "shared/xiongbao-actor.ts",
+    "text": "actor.startsWith(\"openbot:\")",
+    "category": "kept",
+    "reason": "永久保留（R4 裁决）：审计记录只追加，0240 之前写下的系统来源标记仍是旧前缀，活动页要把它们读成系统发起"
   },
   {
-    "file": "docker/s6/scripts/migrate.sh",
-    "text": "-U openbot",
-    "reason": "persisted-identifier: database name and role names written into every customer database",
-    "category": "persisted-data",
-    "plan": "keep"
+    "file": "app/src/components/channels/channel-chat.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/components/channels/chat-transcript.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/components/channels/tool-activity.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/lib/computers/activity.ts",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/lib/copilot/approval-tools.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/lib/copilot/bot-offer.ts",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/lib/copilot/gallery-tools.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/bot.tsx",
+    "text": "copilotKitInput",
+    "category": "dependency",
+    "reason": "依赖库组件渲染出的 CSS 类名"
+  },
+  {
+    "file": "app/tests/approval-tools.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/authoring-tool-cards.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/channel-history-refresh.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/channel-join-replay.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/coding-tools.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/decision-registration.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/failed-send-attachments.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/local-tools.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/navigation-without-page.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/off-screen-tool-calls.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/question-parts.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/server-computer-tools.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/sign-in-card.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "app/tests/tool-activity.test.tsx",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "server/src/copilot.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/src/copilot.ts",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "server/src/delivery/opentag.ts",
+    "text": "__copilotkit_interrupt_value__",
+    "category": "dependency",
+    "reason": "依赖库中断协议的字段名"
+  },
+  {
+    "file": "server/tests/agent-handoff-answer.integration.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/tests/bot-answer-attribution.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/tests/delivery-routes.test.ts",
+    "text": "__copilotkit_interrupt_value__",
+    "category": "dependency",
+    "reason": "依赖库中断协议的字段名"
+  },
+  {
+    "file": "server/tests/goal-run-tools.integration.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/tests/openai-compatible-endpoint.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/tests/routine-conversation.integration.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/tests/run-model-built-in.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
+  },
+  {
+    "file": "server/tests/runtime-own-runs.test.ts",
+    "text": "copilotkit",
+    "category": "dependency",
+    "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
+  },
+  {
+    "file": "server/tests/tool-search.test.ts",
+    "text": "COPILOTKIT_OPENAI_API",
+    "category": "dependency",
+    "reason": "依赖库运行时读取的环境变量开关"
   }
 ]

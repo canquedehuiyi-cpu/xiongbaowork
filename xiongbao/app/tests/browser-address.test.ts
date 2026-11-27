@@ -7,7 +7,7 @@ import { addressFrom } from "@/lib/browser/address";
 
 test("an address with its scheme goes as typed", () => {
   for (const typed of [
-    "https://github.com/CopilotKit/openbot/pulls?q=is%3Aopen",
+    "https://github.com/example/app/pulls?q=is%3Aopen",
     "http://127.0.0.1:3010/browser",
     "about:blank",
     "  https://example.com/  ",

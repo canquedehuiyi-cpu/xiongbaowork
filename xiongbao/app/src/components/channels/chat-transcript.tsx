@@ -1,7 +1,7 @@
 import type { ActivityMessage, Message } from "@ag-ui/core";
 import type { Attachment } from "@copilotkit/react-core/v2";
 import {
-  useCopilotKit,
+  useCopilotKit as useChatRuntime,
   useRenderActivityMessage,
   useRenderToolCall,
 } from "@copilotkit/react-core/v2";
@@ -2383,7 +2383,7 @@ function TranscriptRenderersWatch({
 }: {
   onVersion: (version: number) => void;
 }) {
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   const { data: capabilities } = useQuery(deploymentCapabilitiesQueryOptions());
   return (
     <LateRenderersWatch

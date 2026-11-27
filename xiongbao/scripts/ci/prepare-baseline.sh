@@ -34,8 +34,8 @@ echo "frozen baseline: $(git log -1 --format='%h %cs %s' "$DELIVERY_BASELINE_SHA
 git worktree add --detach "$RUNNER_TEMP/delivery-baseline" "$DELIVERY_BASELINE_SHA"
 
 if [ "${1:-}" = "--with-bots" ]; then
-  # Ask baseline-dir.sh rather than assuming the product directory's name: an old pin may still carry it
-  # as openbot/, and in that case there are no bot packages to install here anyway.
+  # Ask baseline-dir.sh rather than assuming the product directory: a pin without it has no bot packages
+  # to install here anyway.
   bots="$(bash "$(dirname "${BASH_SOURCE[0]}")/baseline-dir.sh" 2>/dev/null || true)"
   # Same four commands, same order, same flags as the job that installs the head tree.
   if [ -n "$bots" ] && [ -f "$bots/agent-computer/package.json" ]; then

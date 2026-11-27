@@ -2416,12 +2416,6 @@ test("clean-deploy fetches from our download page when configured", () => {
     " https://raw.githubusercontent.com/o/r/v0.2.0/xiongbao/docker/delivery.env.example",
   );
   expect(rolesBefore.env).toContain("EMBEDDED_POSTGRES=off");
-  // A tag cut before the directory rename is fetched by its own path (product-dir, below).
-  const rolesOldTag = roles({ PRODUCT_DIR: "openbot" });
-  expect(rolesOldTag.status).toBe(0);
-  expect(rolesOldTag.curl[0]).toEndWith(
-    " https://raw.githubusercontent.com/o/r/v0.2.0/openbot/docker/delivery.env.example",
-  );
   // Already fetched from our download page: roles fetches nothing and switches that file over.
   const rolesAfter = roles({}, "FROM_OUR_PAGE=1\nEMBEDDED_POSTGRES=on\n");
   expect(rolesAfter.status).toBe(0);
@@ -2528,7 +2522,7 @@ test("clean-deploy fetches from our download page when configured", () => {
   expect(check.run).toContain(`"\${expected%@*}:$TAG"`);
 });
 
-test("clean-deploy finds the product directory of the tag under either name", () => {
+test("clean-deploy finds the product directory of the tag, and refuses a tag without it", () => {
   const linuxSteps = cleanDeploy.jobs.linux.steps;
   const product = step("linux", "product-dir", cleanDeploy);
   const checkout = linuxSteps.findIndex((s) =>
@@ -2553,20 +2547,12 @@ test("clean-deploy finds the product directory of the tag under either name", ()
     return {
       ...result,
       env: readFileSync(env, "utf8"),
-      moved: existsSync(join(cwd, "source", "xiongbao", "scripts")),
-      left: existsSync(join(cwd, "source", "openbot")),
     };
   };
   const current = tagged("xiongbao");
   expect(current.status).toBe(0);
   expect(current.env).toBe("PRODUCT_DIR=xiongbao\n");
-  expect(current.moved).toBe(true);
-  const old = tagged("openbot");
-  expect(old.status).toBe(0);
-  expect(old.env).toBe("PRODUCT_DIR=openbot\n");
-  expect(old.moved).toBe(true);
-  expect(old.left).toBe(false);
   const neither = tagged(null);
   expect(neither.status).not.toBe(0);
-  expect(neither.log).toContain("neither xiongbao/ nor openbot/");
+  expect(neither.log).toContain("has no xiongbao/ directory");
 });

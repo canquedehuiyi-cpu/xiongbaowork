@@ -1,22 +1,26 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  OLD_PRODUCT,
+  OLD_PRODUCT_LOWER,
+} from "../../scripts/brand/guard/words";
 
 const read = (file: string) =>
   readFileSync(join(import.meta.dir, "..", file), "utf8");
 
-// What a person's browser or a page's own markup carries must not say the upstream name. The
+// What a person's browser or a page's own markup carries must not say the old product's name. The
 // notification tag in lib/notifications/show.ts is checked by component-reply-notice.test.tsx.
 const NAMES = [
   {
     file: "src/components/computer/computer-view.tsx",
     now: 'id="xiongbao-secret"',
-    before: "openbot-secret",
+    before: `${OLD_PRODUCT_LOWER}-secret`,
   },
   {
     file: "src/components/layout/xiongbao-version.tsx",
     now: 'data-slot="xiongbao-version"',
-    before: "openbot-version",
+    before: `${OLD_PRODUCT_LOWER}-version`,
   },
 ];
 
@@ -38,7 +42,7 @@ test("the stopped-turn console warning names the product from the app config", (
   const source = read("src/lib/copilot/stopped-turn.ts");
   expect(source).toContain("连不上后端。");
   expect(source).toContain("productName()");
-  expect(source).not.toContain("OpenBot couldn't reach");
+  expect(source).not.toContain(`${OLD_PRODUCT} couldn't reach`);
 });
 
 test("the responsibilities page names only the new inbound-email settings", () => {

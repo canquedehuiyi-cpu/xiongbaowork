@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { OLD_PRODUCT_LOWER } from "../scripts/brand/guard/words";
 import {
   APPROVAL_GUIDANCE,
   APPROVAL_GUIDANCE_APPS,
@@ -310,7 +311,9 @@ describe("brand", () => {
       frameworkGuidance("LangChain"),
     ].join("\n");
     expect(assembled.length).toBeGreaterThan(2000);
-    expect(assembled).not.toMatch(/openbot|xiongbao/i);
+    expect(assembled).not.toMatch(
+      new RegExp(`${OLD_PRODUCT_LOWER}|xiongbao`, "i"),
+    );
   });
 });
 

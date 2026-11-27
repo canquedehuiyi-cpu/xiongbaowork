@@ -3,6 +3,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { z } from "zod";
+import { CHAT_RUNTIME_HOOK } from "./chat-runtime-hook";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -18,7 +19,7 @@ type Registered = Parameters<typeof real.useFrontendTool>[0];
 let registered = new Map<string, Registered>();
 mock.module("@copilotkit/react-core/v2", () => ({
   ...original,
-  useCopilotKit: () => ({ copilotkit: { stopAgent: () => undefined } }),
+  [CHAT_RUNTIME_HOOK]: () => ({ copilotkit: { stopAgent: () => undefined } }),
   useFrontendTool: (tool: Registered) => {
     registered.set(tool.name, tool);
   },

@@ -1,15 +1,11 @@
-熊宝 (Xiongbao)
-
-This product contains code derived from OpenBot, which is distributed under
-the MIT License. The original copyright notice and license text follow, as
-the license requires. The file LICENSE in this directory is the same text.
-
-Third-party packages bundled or installed with this product are listed with
-their licenses in THIRD-PARTY-NOTICES.md (generated at build time).
-
-----------------------------------------------------------------------
-
-MIT License
+/*
+ * The MIT notice of the code this product was first built from. The licence asks for its copyright line
+ * and permission notice to travel with the code, so THIRD-PARTY-NOTICES.md opens with it
+ * (scripts/brand/third-party-notices.ts writes that file at build time) and the About page lists it among
+ * the open-source software the product uses. It is the one licence text the brand guard lets name the
+ * holder, and only here (scripts/brand/guard/scan.ts, LICENCE_FILE).
+ */
+export const LICENCE_PARAGRAPH = `MIT License
 
 Copyright (c) 2026 CopilotKit
 
@@ -29,4 +25,17 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+SOFTWARE.`;
+
+/** The holder, read from the copyright line above so its name is written once. */
+export const LICENCE_HOLDER =
+  LICENCE_PARAGRAPH.match(/^Copyright \(c\) \d{4} (.+)$/m)?.[1]?.trim() ??
+  "MIT";
+
+/** The paragraph as one row of the third-party notices: no version of its own, so the version reads "—". */
+export const LICENCE_NOTICE = {
+  name: LICENCE_HOLDER,
+  version: "—",
+  license: "MIT",
+  licenseText: LICENCE_PARAGRAPH,
+};

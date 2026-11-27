@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import {
   GenerativeUISurface,
   useGenerativeUIRuntime,
@@ -82,10 +82,10 @@ function TripBudget() {
 
 function draw() {
   return render(
-    <CopilotKitProvider {...generativeUiProviderOptions(true)}>
+    <ChatRuntimeProvider {...generativeUiProviderOptions(true)}>
       <TripBudget />
       <GenerativeUISurface id="budget" />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
 }
 
