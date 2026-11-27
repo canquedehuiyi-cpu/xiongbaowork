@@ -249,7 +249,7 @@ describe("a goal asked for in a conversation", () => {
       {
         title: "Watch XiongBao releases",
         instruction:
-          "Check github.com/CopilotKit/OpenBot/releases and report any tag newer than the last one.",
+          "Check github.com/example/app/releases and report any tag newer than the last one.",
         successCriteria: "The person hears about each new release.",
         // As a live model sent them for "this conversation" and "no events".
         channelId: "",

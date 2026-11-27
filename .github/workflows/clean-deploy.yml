@@ -68,20 +68,16 @@ jobs:
           ref: refs/tags/${{ inputs.tag }}
           path: source
           persist-credentials: false
-      # The product directory was renamed from openbot/ to xiongbao/. A manual run from main against a
-      # tag cut before that has only openbot/: move it to the new name for the steps below, and keep the
-      # tag's own name in PRODUCT_DIR for the raw download URL (that tree is addressed by its real path).
+      # The tagged tree's product directory, for the raw download URL. A tag cut before the directory got its
+      # current name is not supported: say so here rather than fail later on a missing file.
       - id: product-dir
         name: Product directory of the tagged tree
         run: |
           set -euo pipefail
           if [ -d source/xiongbao ]; then
             echo "PRODUCT_DIR=xiongbao" >> "$GITHUB_ENV"
-          elif [ -d source/openbot ]; then
-            mv source/openbot source/xiongbao
-            echo "PRODUCT_DIR=openbot" >> "$GITHUB_ENV"
           else
-            echo "::error::$TAG has neither xiongbao/ nor openbot/"
+            echo "::error::$TAG has no xiongbao/ directory (tags from before the directory rename are not supported)"
             exit 1
           fi
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0

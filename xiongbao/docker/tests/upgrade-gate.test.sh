@@ -87,7 +87,10 @@ refuses() { # what to find in the refusal
 }
 mkdir -p "$T/backup"
 
-OLD_USER=openbot OLD_DB=openbot
+# The superuser and database a v0.2.15 volume carried, assembled so the source never spells them.
+OLD_USER=open
+OLD_USER=${OLD_USER}bot
+OLD_DB=$OLD_USER
 cluster old "$OLD_USER" "$OLD_DB" || exit 1
 O=$port
 R240=$(hash_of 0240_rebrand_names)

@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# Prints the product directory inside the frozen baseline worktree (prepare-baseline.sh). The baseline is
-# an older commit, so the directory may still carry its former name: it was renamed from openbot/ to
-# xiongbao/. The current pin (e63acdfb, 2026-11-18) is long past that rename, so only xiongbao/ can match;
-# the openbot/ arm stays for a pin older than the rename, and costs one stat.
+# Prints the product directory inside the frozen baseline worktree (prepare-baseline.sh). A pin from
+# before the directory got its current name is not supported: the current pin (e63acdfb, 2026-11-18) is
+# past that rename.
 set -euo pipefail
 : "${RUNNER_TEMP:?set RUNNER_TEMP to an isolated temporary directory}"
 base="$RUNNER_TEMP/delivery-baseline"
-for name in xiongbao openbot; do
+for name in xiongbao; do
   if [ -f "$base/$name/package.json" ]; then
     printf '%s\n' "$base/$name"
     exit 0
   fi
 done
-echo "no product directory (xiongbao/ or openbot/) in $base" >&2
+echo "no product directory (xiongbao/) in $base" >&2
 exit 1

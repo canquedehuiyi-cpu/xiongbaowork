@@ -41,14 +41,10 @@ describe("brand", () => {
     expect(englishName()).toBe("XiongBao Work");
   });
 
-  test("copyrightLine keeps the upstream MIT notice", () => {
-    expect(copyrightLine()).toBe(
-      "Copyright (c) 2026 熊宝数字员工; portions Copyright (c) 2026 CopilotKit (MIT)",
-    );
+  test("copyrightLine names the company alone", () => {
+    expect(copyrightLine()).toBe("Copyright (c) 2026 熊宝数字员工");
     setBrand({ productName: "P", companyName: "熊宝" });
-    expect(copyrightLine(2030)).toBe(
-      "Copyright (c) 2030 熊宝; portions Copyright (c) 2026 CopilotKit (MIT)",
-    );
+    expect(copyrightLine(2030)).toBe("Copyright (c) 2030 熊宝");
   });
 
   test("shortName is the package's short name, else the product name itself", () => {

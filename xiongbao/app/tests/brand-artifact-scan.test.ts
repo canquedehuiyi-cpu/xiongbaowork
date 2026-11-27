@@ -9,9 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AllowEntry } from "../../scripts/brand/guard/allowlist";
 import { segmentWords } from "../../scripts/brand/guard/artifact-words";
-import { metricsTable } from "../../scripts/brand/metrics";
 import {
   BUILD_PATH,
   canonical,
@@ -28,8 +26,7 @@ import {
 const dir = () => mkdtempSync(join(tmpdir(), "scan-"));
 const entry = (word: string) => ({
   word,
-  category: "operator-visible" as const,
-  plan: "rewrite" as const,
+  category: "kept" as const,
   note: "x",
 });
 
@@ -96,47 +93,12 @@ describe("scan-artifact", () => {
           new URL(`./brand-artifacts/${name}.json`, import.meta.url),
           "utf8",
         ),
-      ) as { word?: string; prefix?: string; category: string; plan: string }[];
+      ) as { word?: string; prefix?: string; category: string }[];
       expect(list.length).toBeGreaterThan(0);
       expect(
-        list.filter((e) => e.prefix && e.category !== "third-party-name"),
+        list.filter((e) => e.prefix && e.category !== "dependency"),
       ).toEqual([]);
     }
-  });
-});
-
-describe("metrics", () => {
-  const allow = (
-    category: AllowEntry["category"],
-    plan: AllowEntry["plan"],
-  ): AllowEntry => ({
-    file: "a.ts",
-    text: "t",
-    reason: "r",
-    category,
-    plan,
-  });
-  test("remaining work, permanent leftovers and the change against base", () => {
-    const head = {
-      allow: [
-        allow("operator-visible", "rewrite"),
-        allow("third-party-name", "keep"),
-      ],
-      budget: [{ rule: "identifier", scope: "app/src", lines: 3 }],
-      words: { web: [entry("a")] },
-    };
-    const table = metricsTable(head, {
-      allow: [
-        allow("operator-visible", "rewrite"),
-        allow("operator-visible", "rewrite"),
-      ],
-      budget: [{ rule: "identifier", scope: "app/src", lines: 5 }],
-      words: { web: [entry("a"), entry("b")] },
-    });
-    expect(table).toContain("| 剩余工作量（rewrite + remove） | 1 | -1 |");
-    expect(table).toContain("| 永久残留（keep） | 1 | +1 |");
-    expect(table).toContain("| identifier | 3 | -2 |");
-    expect(table).toContain("| web | 1 | -1 | - | 1 |");
   });
 });
 

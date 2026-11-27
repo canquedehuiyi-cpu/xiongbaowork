@@ -1,20 +1,17 @@
 [
   {
     "prefix": "@copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方包名（依赖目录与 bun 存储目录；版本与哈希已按段规整掉，随依赖升级不变）"
   },
   {
     "prefix": "copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "第三方包自带的 copilotkit-* 文件（含带哈希的构建产物名）与 toolkit 里的 copilotkit 目录"
   },
   {
     "prefix": "integrations-agentic-ui-copilotkit",
-    "category": "third-party-name",
-    "plan": "keep",
+    "category": "dependency",
     "note": "@mastra/core 自带的文档文件名"
   }
 ]

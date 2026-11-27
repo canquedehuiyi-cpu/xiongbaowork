@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Composio, telemetry } from "@composio/core";
+import { OLD_PRODUCT } from "../../scripts/brand/guard/words";
 import {
   type BrokerConnection,
   BrokerRefusalError,
@@ -182,11 +183,15 @@ const CREATED = { id: "ac_created" };
  * — instead of being an array whose index quietly carries the answer.
  */
 const BY_HAND = { id: "ac_by_hand", name: "Linear", status: "ENABLED" };
-const OURS = { id: "ac_ours", name: "Linear (OpenBot)", status: "ENABLED" };
+const OURS = {
+  id: "ac_ours",
+  name: `Linear (${OLD_PRODUCT})`,
+  status: "ENABLED",
+};
 /** The spare from a lost enable race: two administrators both found nothing and both created. */
 const OURS_SPARE = {
   id: "ac_ours_spare",
-  name: "Linear (OpenBot)",
+  name: `Linear (${OLD_PRODUCT})`,
   status: "ENABLED",
 };
 
@@ -201,12 +206,12 @@ const OURS_SPARE = {
  *
  * ITS OWN CONSTANT RATHER THAN {@link OURS}, because the suffix is the whole of what the adapter
  * reads and the rest of the name is the app an administrator typed. A gmail withdrawal answered
- * with a config called "Linear (OpenBot)" would pass, and would leave the one fixture in this file
+ * with a config called `Linear (${OLD_PRODUCT})` would pass, and would leave the one fixture in this file
  * that names the app it is about naming the wrong one.
  */
 const OUR_GMAIL = {
   id: "ac_gmail_ours",
-  name: "Gmail (OpenBot)",
+  name: `Gmail (${OLD_PRODUCT})`,
   status: "ENABLED",
 };
 
@@ -882,7 +887,7 @@ describe("beginning one person's connection", () => {
               items: [
                 {
                   id: "ac_this_deployments",
-                  name: "Linear (OpenBot)",
+                  name: `Linear (${OLD_PRODUCT})`,
                   status: "ENABLED",
                 },
               ],
@@ -1503,7 +1508,11 @@ describe("telling this deployment's auth configs from anybody else's", () => {
           // A listing that omitted them would find nothing and create the split it exists to stop.
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: "DISABLED" },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
             ],
           }),
           create: async (...call: unknown[]) => {
@@ -1529,7 +1538,11 @@ describe("telling this deployment's auth configs from anybody else's", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: "DISABLED" },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
             ],
           }),
         },
@@ -1577,8 +1590,16 @@ describe("telling this deployment's auth configs from anybody else's", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_a", name: "Linear (OpenBot)", status: "DISABLED" },
-              { id: "ac_b", name: "Linear (OpenBot)", status: "PENDING" },
+              {
+                id: "ac_a",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
+              {
+                id: "ac_b",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "PENDING",
+              },
             ],
           }),
         },
@@ -2591,7 +2612,7 @@ describe("withdrawing one person's grants", () => {
    * `unreadable` counts the rest — so both are ordinary facts about one listing and both can be
    * true at once. Written as consecutive throws the second is reachable only when the first is
    * false, so a person whose app holds one renamed config beside one unreadable row is told that
-   * "renaming it to end with (OpenBot) lets disconnecting again withdraw them" — which is not true
+   * `renaming it to end with (${OLD_PRODUCT}) lets disconnecting again withdraw them` — which is not true
    * while a row nothing could scope the account listing to is still sitting there. The method's own
    * partial-withdrawal sentence appends that fact as its own clause; the refusal ahead of it did
    * not.
@@ -2669,7 +2690,11 @@ describe("refusals a route can tell from an outage", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: "ENABLED" },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "ENABLED",
+              },
             ],
           }),
         },
@@ -3434,8 +3459,7 @@ describe("each vendor condition reaches the reader as its own remedy", () => {
             cause: {
               error: {
                 error: {
-                  message:
-                    "The auth config linear (OpenBot) has no redirect URI registered.",
+                  message: `The auth config linear (${OLD_PRODUCT}) has no redirect URI registered.`,
                 },
               },
             },
@@ -3446,7 +3470,7 @@ describe("each vendor condition reaches the reader as its own remedy", () => {
 
     expect(brokerSentence(failure)).toBeNull();
     expect(vendorSentence(failure)).toBe(
-      "The auth config linear (OpenBot) has no redirect URI registered.",
+      `The auth config linear (${OLD_PRODUCT}) has no redirect URI registered.`,
     );
   });
 });
@@ -3701,7 +3725,9 @@ describe("a vendor listing that is not the shape it is declared to be", () => {
         {
           shape: "a row whose id is null",
           answer: {
-            items: [{ id: null, name: "Linear (OpenBot)", status: "ENABLED" }],
+            items: [
+              { id: null, name: `Linear (${OLD_PRODUCT})`, status: "ENABLED" },
+            ],
           },
         },
       ],
@@ -4721,7 +4747,9 @@ describe("what a malformed field of a row actually costs", () => {
       fakeVendor({
         authConfigs: {
           list: async () => ({
-            items: [{ id: "   ", name: "Linear (OpenBot)", status: "ENABLED" }],
+            items: [
+              { id: "   ", name: `Linear (${OLD_PRODUCT})`, status: "ENABLED" },
+            ],
           }),
         },
       }),
@@ -4926,7 +4954,7 @@ describe("what a malformed field of a row actually costs", () => {
       fakeVendor({
         authConfigs: {
           list: async () => ({
-            items: [{ name: "Linear (OpenBot)", status: "ENABLED" }],
+            items: [{ name: `Linear (${OLD_PRODUCT})`, status: "ENABLED" }],
           }),
           delete: async (...call: unknown[]) => {
             deleted.push(call);
@@ -4975,7 +5003,7 @@ describe("what a malformed field of a row actually costs", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { name: "Linear (OpenBot)", status: "ENABLED" },
+              { name: `Linear (${OLD_PRODUCT})`, status: "ENABLED" },
               { id: "ac_b", status: "ENABLED" },
             ],
           }),
@@ -5008,8 +5036,16 @@ describe("what a malformed field of a row actually costs", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_a", name: "Linear (OpenBot)", status: "PENDING" },
-              { id: "ac_b", name: "Linear (OpenBot)", status: "SUSPENDED" },
+              {
+                id: "ac_a",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "PENDING",
+              },
+              {
+                id: "ac_b",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "SUSPENDED",
+              },
             ],
           }),
         },
@@ -5059,7 +5095,7 @@ describe("what a malformed field of a row actually costs", () => {
           list: async () => ({
             items: WORDS.map((status, index) => ({
               id: `ac_${index}`,
-              name: "Linear (OpenBot)",
+              name: `Linear (${OLD_PRODUCT})`,
               status,
             })),
           }),
@@ -5103,7 +5139,11 @@ describe("what a malformed field of a row actually costs", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_a", name: "Linear (OpenBot)", status: "DISABLED" },
+              {
+                id: "ac_a",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
               { id: "ac_b", status: "ENABLED" },
             ],
           }),
@@ -5137,7 +5177,11 @@ describe("what a malformed field of a row actually costs", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_a", name: "Linear (OpenBot)", status: "DISABLED" },
+              {
+                id: "ac_a",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
               { id: "ac_b", status: "ENABLED" },
             ],
           }),
@@ -5179,7 +5223,9 @@ describe("what a malformed field of a row actually costs", () => {
       fakeVendor({
         authConfigs: {
           list: async () => ({
-            items: [{ id: "ac_a", name: "Linear (OpenBot)", status: WIRE }],
+            items: [
+              { id: "ac_a", name: `Linear (${OLD_PRODUCT})`, status: WIRE },
+            ],
           }),
         },
       }),
@@ -5210,8 +5256,16 @@ describe("what a malformed field of a row actually costs", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_a", name: "Linear (OpenBot)", status: "ENABLED" },
-              { id: "ac_B", name: "Linear (OpenBot)", status: "ENABLED" },
+              {
+                id: "ac_a",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "ENABLED",
+              },
+              {
+                id: "ac_B",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "ENABLED",
+              },
             ],
           }),
         },
@@ -5323,7 +5377,9 @@ describe("what a malformed field of a row actually costs", () => {
         fakeVendor({
           authConfigs: {
             list: async () => ({
-              items: [{ id: "ac_ours", name: "Linear (OpenBot)", status }],
+              items: [
+                { id: "ac_ours", name: `Linear (${OLD_PRODUCT})`, status },
+              ],
             }),
           },
           connectedAccounts: {
@@ -5406,7 +5462,11 @@ describe("a field Composio padded with whitespace", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: " ac_ours ", name: "Linear (OpenBot)", status: "ENABLED" },
+              {
+                id: " ac_ours ",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "ENABLED",
+              },
             ],
           }),
           delete: async (...call: unknown[]) => {
@@ -5588,7 +5648,11 @@ describe("a field Composio padded with whitespace", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: " ENABLED " },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: " ENABLED ",
+              },
             ],
           }),
         },
@@ -5624,7 +5688,11 @@ describe("a field Composio padded with whitespace", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: " ENABLED " },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: " ENABLED ",
+              },
             ],
           }),
         },
@@ -5661,7 +5729,11 @@ describe("a field Composio padded with whitespace", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: " DISABLED " },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: " DISABLED ",
+              },
             ],
           }),
         },
@@ -7808,7 +7880,11 @@ describe("connecting one person with the secret they typed", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_ours", name: "Linear (OpenBot)", status: "DISABLED" },
+              {
+                id: "ac_ours",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
             ],
           }),
         },
@@ -7856,8 +7932,16 @@ describe("connecting one person with the secret they typed", () => {
         authConfigs: {
           list: async () => ({
             items: [
-              { id: "ac_a", name: "Linear (OpenBot)", status: "DISABLED" },
-              { id: "ac_b", name: "Linear (OpenBot)", status: "PENDING" },
+              {
+                id: "ac_a",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "DISABLED",
+              },
+              {
+                id: "ac_b",
+                name: `Linear (${OLD_PRODUCT})`,
+                status: "PENDING",
+              },
             ],
           }),
         },

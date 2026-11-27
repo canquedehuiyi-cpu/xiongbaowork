@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { OLD_PRODUCT } from "../../scripts/brand/guard/words";
 import { testAgentConnection } from "../src/agents/connection-test";
 import { desktopAuthPage } from "../src/auth/native-browser";
 import {
@@ -22,7 +23,7 @@ import {
 import { type SetupFacts, setupRows } from "../src/setup/checklist";
 import { createVoiceProvider } from "../src/voice/provider";
 
-// A deliberately non-default brand: copy that still says "OpenBot" or the default name would show
+// A deliberately non-default brand: copy that still says the old product's name or the default name would show
 // up here as a leak instead of passing by coincidence.
 beforeEach(() => setBrand({ productName: "甲", englishName: "Jia" }));
 afterEach(() => resetBrand());
@@ -42,7 +43,7 @@ describe("server copy a customer can read takes its name from the brand", () => 
     expect(html).toContain("<title>Sign in to Jia</title>");
     expect(html).toContain("<h1>Sign in to Jia</h1>");
     expect(html).toContain("to return to Jia.");
-    expect(html).not.toContain("OpenBot");
+    expect(html).not.toContain(OLD_PRODUCT);
   });
 
   test("a brand name with markup cannot break out of the sign-in page", async () => {
@@ -74,7 +75,7 @@ describe("server copy a customer can read takes its name from the brand", () => 
     expect(identityGuidance("Helper")).toStartWith(
       "You are Helper, a Bot in Jia.",
     );
-    expect(identityGuidance("Helper")).not.toContain("OpenBot");
+    expect(identityGuidance("Helper")).not.toContain(OLD_PRODUCT);
     expect(accessibilityTitle()).toBe("甲");
   });
 
@@ -116,7 +117,7 @@ describe("server copy a customer can read takes its name from the brand", () => 
     const text = connectorApprovalGuidance();
     expect(text).toContain("Jia itself asks the person");
     expect(text).toContain("they are asked once, by Jia.");
-    expect(text).not.toContain("OpenBot");
+    expect(text).not.toContain(OLD_PRODUCT);
     expect(
       grantedToolGuidance([{ name: "mcp__demo__send" }] as never),
     ).toContain(connectorApprovalGuidance());
@@ -170,7 +171,7 @@ describe("server copy a customer can read takes its name from the brand", () => 
     expect(instructions).toContain(
       "speaking directly with the user in your Jia channel.",
     );
-    expect(instructions).not.toContain("OpenBot");
+    expect(instructions).not.toContain(OLD_PRODUCT);
   });
 
   test("connection-test probe message", async () => {

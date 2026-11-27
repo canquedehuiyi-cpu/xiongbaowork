@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { OLD_ENV_PREFIX } from "../../scripts/brand/guard/words";
 import {
   envName,
   isProductSetting,
@@ -15,7 +16,7 @@ import { loadConfig } from "../src/config";
  * both and its upgrade sheet renamed every line, and this release is reached only from v0.2.16. The old
  * names below are the input under test.
  */
-const OLD = "OPENBOT_";
+const OLD = OLD_ENV_PREFIX;
 
 const environment = {
   DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",

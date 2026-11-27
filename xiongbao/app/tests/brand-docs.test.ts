@@ -23,8 +23,7 @@ const FILES = [
 ];
 const text = FILES.map((f) => readFileSync(f, "utf8")).join("\n");
 const entry = (e: Partial<ArtifactEntry>): ArtifactEntry => ({
-  category: "operator-visible",
-  plan: "rewrite",
+  category: "kept",
   note: "x",
   ...e,
 });
@@ -59,8 +58,7 @@ describe("artifact words", () => {
         entry({ word: "OPENBOT_TAG" }),
         entry({
           prefix: "copilotkit/",
-          category: "third-party-name",
-          plan: "keep",
+          category: "dependency",
         }),
       ]),
     ).toEqual({ extra: [], stale: [] });
@@ -73,8 +71,7 @@ describe("artifact words", () => {
         entry({ word: "gone" }),
         entry({
           prefix: "nothing/",
-          category: "third-party-name",
-          plan: "keep",
+          category: "dependency",
         }),
       ]).stale.sort(),
     ).toEqual(["gone", "nothing/"]);
@@ -89,15 +86,15 @@ describe("customer docs", () => {
   test("customer docs never point at the upstream", () => {
     let rest = text;
     for (const e of DOCS)
-      if (e.category === "third-party-name")
+      if (e.category === "dependency")
         rest = rest.split((e.word ?? e.prefix) as string).join(" ");
     expect(rest).not.toContain("github.com/CopilotKit");
     expect(rest).not.toContain("copilotkit.ai");
   });
 
   test("prefix entries are third-party names only", () => {
-    expect(
-      DOCS.filter((e) => e.prefix && e.category !== "third-party-name"),
-    ).toEqual([]);
+    expect(DOCS.filter((e) => e.prefix && e.category !== "dependency")).toEqual(
+      [],
+    );
   });
 });

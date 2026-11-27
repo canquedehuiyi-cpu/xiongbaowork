@@ -1,4 +1,8 @@
 import { writeFileSync } from "node:fs";
+import { OLD_PRODUCT } from "../brand/guard/words.ts";
+
+// The upstream self-host banner the page must not carry.
+const OLD_BANNER = `Self-host ${OLD_PRODUCT}`;
 
 const [origin, directory] = process.argv.slice(2);
 let failures = 0;
@@ -50,7 +54,7 @@ check(
   html.includes("熊宝数字员工"),
   "HTML contains 熊宝数字员工 (C owns title)",
 );
-check(!html.includes("Self-host OpenBot"), "HTML excludes Self-host OpenBot");
+check(!html.includes(OLD_BANNER), "HTML excludes the old self-host banner");
 const scripts = [...html.matchAll(/<script\b[^>]*src=["']([^"']+)["']/g)];
 const entry = scripts.find(([, src]) => /\/assets\/index-[^/]+\.js$/.test(src));
 check(Boolean(entry), "main JS entry exists");
@@ -61,8 +65,8 @@ if (entry) {
   writeFileSync(`${directory}/main.js`, js);
   check(js.includes("熊宝数字员工"), "main JS contains 熊宝数字员工");
   check(
-    !js.includes("Self-host OpenBot"),
-    "main JS excludes Self-host OpenBot (C owns visible strings)",
+    !js.includes(OLD_BANNER),
+    "main JS excludes the old self-host banner (C owns visible strings)",
   );
 }
 process.exitCode = failures ? 1 : 0;

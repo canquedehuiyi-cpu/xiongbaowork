@@ -33,7 +33,7 @@ env:
   # a branch: a moving baseline turns 「新增失败」into "whatever main was when this job started", and the
   # comparison then says nothing about the change under test.
   #
-  # 2026-11-18: moved from 2aacf0f19f (2026-11-04, before the openbot/ → xiongbao/ rename and before
+  # 2026-11-18: moved from 2aacf0f19f (2026-11-04, before the product directory rename and before
   # examples/xiongbao existed) to e63acdfb51 (run 44264063700, 46/46). Two things came from that staleness:
   # the baseline had to be located under its old product directory (baseline-dir.sh still allows that for
   # old pins), and the app baseline had to be generated with TENANT_PACKAGE_DIR=../examples/qoderwake, a
@@ -292,8 +292,7 @@ jobs:
           path: ${{ runner.temp }}/wp32-shots
 
   # Scan what the customer is given (spec 5.1): the built web app and the runner sidecar are
-  # checked against the word lists in xiongbao/app/tests/brand-artifacts, and the
-  # rewrite gauge goes into the job summary.
+  # checked against the word lists in xiongbao/app/tests/brand-artifacts.
   brand-artifacts:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -318,9 +317,6 @@ jobs:
         run: bun scripts/brand/scan-artifact.ts --kind web --input app/dist --allowlist app/tests/brand-artifacts/web.json --summary "$GITHUB_STEP_SUMMARY"
       - name: Scan the runner
         run: bun scripts/brand/scan-artifact.ts --kind runner --input desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu --allowlist app/tests/brand-artifacts/runner.json --summary "$GITHUB_STEP_SUMMARY"
-      - name: Rewrite gauge
-        if: always()
-        run: bun scripts/brand/metrics.ts --base origin/main >> "$GITHUB_STEP_SUMMARY"
 
   # Gate G4: the WakerFlow basic lifecycle in a real browser (the runner's preinstalled Chrome, driven
   # by playwright-core) against the real server on its own PostgreSQL, serving the built app the way

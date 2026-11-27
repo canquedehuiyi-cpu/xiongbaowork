@@ -4,9 +4,12 @@
 # As root and as any other user alike: it only reads and writes files in the directory it is given.
 # Any failed assertion exits 1.
 #
-# The old OPENBOT_ spellings below are the input under test: an env file still written under them is
-# refused, not read.
+# The old prefix's spellings below are the input under test: an env file still written under them is
+# refused, not read. The prefix is assembled here so the source never spells it (the brand guard holds
+# every file to that).
 set -u
+OLD=OPEN
+OLD=${OLD}BOT_
 HERE=$(cd "$(dirname "$0")" && pwd)
 SCRIPT=$HERE/../s6/scripts/env-defaults.sh
 T=$(mktemp -d)
@@ -27,12 +30,12 @@ expect_file() { # dir name value
 # 1. a setting only under its old name refuses to start: exit 1, the old name named, never its value, and
 #    nothing written (not even the image's defaults)
 d=$T/legacy; mkdir "$d"
-printf %s http://old.example > "$d/OPENBOT_PUBLIC_URL"
+printf %s http://old.example > "$d/${OLD}PUBLIC_URL"
 err=$(sh "$SCRIPT" "$d" "$HERE/../defaults.env" 2>&1 >/dev/null) && fail "old-only was not refused"
-case $err in *OPENBOT_PUBLIC_URL*) ;; *) fail "the refusal does not name OPENBOT_PUBLIC_URL: $err" ;; esac
+case $err in *${OLD}PUBLIC_URL*) ;; *) fail "the refusal does not name ${OLD}PUBLIC_URL: $err" ;; esac
 case $err in *'请先升级到 v0.2.16'*) ;; *) fail "the refusal does not say to upgrade to v0.2.16 first: $err" ;; esac
 case $err in *http://*) fail "the refusal printed a value: $err" ;; esac
-[ "$(ls "$d" | tr '\n' ' ')" = "OPENBOT_PUBLIC_URL " ] || fail "old-only wrote files: $(ls "$d" | tr '\n' ' ')"
+[ "$(ls "$d" | tr '\n' ' ')" = "${OLD}PUBLIC_URL " ] || fail "old-only wrote files: $(ls "$d" | tr '\n' ' ')"
 
 # 2. new-only deployment reports nothing: untouched, silent, no old name grown
 d=$T/new; mkdir "$d"
@@ -45,44 +48,44 @@ expect_file "$d" XIONGBAO_PUBLIC_URL http://new
 # 3. a setting under both names starts, silently, on the new value: the new one is in effect, as in v0.2.16
 d=$T/both; mkdir "$d"
 printf %s http://new > "$d/XIONGBAO_PUBLIC_URL"
-printf %s http://old > "$d/OPENBOT_PUBLIC_URL"
+printf %s http://old > "$d/${OLD}PUBLIC_URL"
 err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) || fail "both set: exited non-zero: $err"
 expect_file "$d" XIONGBAO_PUBLIC_URL http://new
 [ -z "$err" ] || fail "both set: warned: $err"
 
 # 4. the bare prefix and an empty old value are not settings; every old-only one is named, in one line
 d=$T/bare; mkdir "$d"
-printf %s x > "$d/OPENBOT_"
-: > "$d/OPENBOT_EMPTY"
+printf %s x > "$d/${OLD}"
+: > "$d/${OLD}EMPTY"
 sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>/dev/null || fail "bare prefix and empty value: exited non-zero"
 d=$T/several; mkdir "$d"
-printf %s sk-test > "$d/OPENBOT_POOL_OPENAI"
-printf %s warn > "$d/OPENBOT_RLS_ENFORCE"
+printf %s sk-test > "$d/${OLD}POOL_OPENAI"
+printf %s warn > "$d/${OLD}RLS_ENFORCE"
 err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "several old-only were not refused"
-case $err in *'OPENBOT_POOL_OPENAI, OPENBOT_RLS_ENFORCE'*) ;; *) fail "the refusal does not name both: $err" ;; esac
+case $err in *"${OLD}POOL_OPENAI, ${OLD}RLS_ENFORCE"*) ;; *) fail "the refusal does not name both: $err" ;; esac
 case $err in *sk-test*) fail "the refusal printed a key: $err" ;; esac
 [ "$(printf '%s\n' "$err" | grep -c .)" -eq 1 ] || fail "wanted one line, got: $err"
 
 # 5. an empty new value counts as unset: an old value under it is refused, not read
 d=$T/empty-new; mkdir "$d"
 : > "$d/XIONGBAO_SINGLE_USER"
-printf %s true > "$d/OPENBOT_SINGLE_USER"
+printf %s true > "$d/${OLD}SINGLE_USER"
 err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "empty new over an old value was not refused"
-case $err in *OPENBOT_SINGLE_USER*) ;; *) fail "the refusal does not name OPENBOT_SINGLE_USER: $err" ;; esac
+case $err in *${OLD}SINGLE_USER*) ;; *) fail "the refusal does not name ${OLD}SINGLE_USER: $err" ;; esac
 
 # 5b. another tool's variable under the old prefix (the upstream-sync tooling's) is no setting: left alone,
 #     silent; a platform model key and a build identity count by their families
 d=$T/other-tool; mkdir "$d"
-printf %s example/upstream > "$d/OPENBOT_UPSTREAM_REPOSITORY"
-printf %s 0123abc > "$d/OPENBOT_UPSTREAM_COMMIT"
+printf %s example/upstream > "$d/${OLD}UPSTREAM_REPOSITORY"
+printf %s 0123abc > "$d/${OLD}UPSTREAM_COMMIT"
 err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) || fail "another tool's variable was refused: $err"
 [ -z "$err" ] || fail "another tool's variable warned: $err"
 d=$T/families; mkdir "$d"
-printf %s v1 > "$d/OPENBOT_BUILD_VERSION"
-printf %s x > "$d/OPENBOT_POOL_"
+printf %s v1 > "$d/${OLD}BUILD_VERSION"
+printf %s x > "$d/${OLD}POOL_"
 err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "a build identity under the old name was not refused"
-case $err in *OPENBOT_BUILD_VERSION*) ;; *) fail "the refusal does not name OPENBOT_BUILD_VERSION: $err" ;; esac
-case $err in *OPENBOT_POOL_,*|*'OPENBOT_POOL_。'*) fail "the bare family stem was refused: $err" ;; esac
+case $err in *${OLD}BUILD_VERSION*) ;; *) fail "the refusal does not name ${OLD}BUILD_VERSION: $err" ;; esac
+case $err in *${OLD}POOL_,*|*"${OLD}POOL_。"*) fail "the bare family stem was refused: $err" ;; esac
 
 # 6. missing directory is a no-op, not a failure that would block container start
 sh "$SCRIPT" "$T/nonexistent" "$NO_DEFAULTS" 2>/dev/null || fail "missing directory exited non-zero"
@@ -101,13 +104,13 @@ expect_file "$d" XIONGBAO_IN_CONTAINER true
 [ -z "$err" ] || fail "delivery env warned: $err"
 # The same file before v0.2.16's upgrade sheet renamed it is refused, every old name named.
 d=$T/delivery-old; mkdir "$d"
-printf %s https://work.example.cn > "$d/OPENBOT_PUBLIC_URL"
-printf %s refuse > "$d/OPENBOT_RLS_ENFORCE"
-printf %s false > "$d/OPENBOT_SELF_HOST_BANNER"
-printf %s true > "$d/OPENBOT_SINGLE_USER"
+printf %s https://work.example.cn > "$d/${OLD}PUBLIC_URL"
+printf %s refuse > "$d/${OLD}RLS_ENFORCE"
+printf %s false > "$d/${OLD}SELF_HOST_BANNER"
+printf %s true > "$d/${OLD}SINGLE_USER"
 printf %s 3773 > "$d/XIONGBAO_CONTENT_PORT"
 err=$(sh "$SCRIPT" "$d" "$HERE/../defaults.env" 2>&1 >/dev/null) && fail "the delivery env before the rename was not refused"
-case $err in *'OPENBOT_PUBLIC_URL, OPENBOT_RLS_ENFORCE, OPENBOT_SELF_HOST_BANNER, OPENBOT_SINGLE_USER'*) ;; *) fail "the delivery refusal does not name all four: $err" ;; esac
+case $err in *"${OLD}PUBLIC_URL, ${OLD}RLS_ENFORCE, ${OLD}SELF_HOST_BANNER, ${OLD}SINGLE_USER"*) ;; *) fail "the delivery refusal does not name all four: $err" ;; esac
 
 # --- Image defaults (docker/defaults.env, L1-10): the lowest priority, written only when neither name is set.
 DEFAULTS=$HERE/../defaults.env

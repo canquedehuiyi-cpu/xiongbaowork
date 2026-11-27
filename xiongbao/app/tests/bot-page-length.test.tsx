@@ -208,7 +208,7 @@ test("with nothing running or scheduled, there is no Activity section, and For y
 test("a long title is cut to one line with an ellipsis, and the whole of it shows on hover", async () => {
   // Seen on the Bot page: "...releases) and post one l", cut mid-word with nothing to say so.
   const long =
-    "Check the latest release of CopilotKit/OpenBot on GitHub (https://github.com/CopilotKit/OpenBot/releases) and post one line in this conversation with its version number (tag) and release date.";
+    "Check the latest release of example/app on GitHub (https://github.com/example/app/releases) and post one line in this conversation with its version number (tag) and release date.";
   const [scheduled] = items(1, "Scheduled");
   const view = glance({
     inProgress: [],

@@ -4,7 +4,6 @@
     "externalBin": ["binaries/xiongbao-runner", "binaries/agent-desktop"],
     "resources": {
       "../../LICENSE": "LICENSE",
-      "../../NOTICE": "NOTICE",
       "../../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md",
       "../licenses/agent-desktop/LICENSE": "licenses/agent-desktop/LICENSE",
       "../licenses/agent-desktop/THIRD-PARTY.md": "licenses/agent-desktop/THIRD-PARTY.md",
