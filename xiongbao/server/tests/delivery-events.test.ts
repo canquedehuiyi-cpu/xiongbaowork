@@ -216,7 +216,8 @@ test("deliver_task 把文件所在的座位记到卡上，不写进对话事件�
     throw new Error("computer gone");
   }, file);
   expect(failing.answer).toContain('"delivered":true');
-  expect(failing.handed[0]?.seat).toBeUndefined();
+  expect(failing.handed).toHaveLength(1);
+  expect(Object.hasOwn(failing.handed[0] as object, "seat")).toBe(false);
 
   // A words-only hand-in has no file on any computer: nothing is asked or kept.
   const words = await run(
@@ -224,9 +225,11 @@ test("deliver_task 把文件所在的座位记到卡上，不写进对话事件�
     [{ kind: "note", ref: "结论" }],
   );
   expect(words.asked).toBe(0);
-  expect(words.handed[0]?.seat).toBeUndefined();
+  expect(words.handed).toHaveLength(1);
+  expect(Object.hasOwn(words.handed[0] as object, "seat")).toBe(false);
 
   // Wired without a gateway: nothing kept, the hand-in goes through.
   const none = await run(undefined, file);
-  expect(none.handed[0]?.seat).toBeUndefined();
+  expect(none.handed).toHaveLength(1);
+  expect(Object.hasOwn(none.handed[0] as object, "seat")).toBe(false);
 });

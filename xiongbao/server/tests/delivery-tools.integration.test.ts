@@ -2182,7 +2182,7 @@ describe("deliver_task and a workspace file", () => {
       | { deliverable?: Record<string, unknown> }
       | undefined;
     expect(detail?.deliverable).toBeDefined();
-    expect(detail?.deliverable?.seat).toBeUndefined();
+    expect(Object.hasOwn(detail?.deliverable as object, "seat")).toBe(false);
   });
 
   test("a path that leaves the workspace → bounced, and the card keeps nothing", async () => {
