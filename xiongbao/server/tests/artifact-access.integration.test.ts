@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import type { MiddlewareHandler } from "hono";
 import postgres from "postgres";
 import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
 import { runsIsolated } from "../src/agents/isolation";
 import type { AgentActor } from "../src/agents/profile-types";
+import type { AppVariables } from "../src/auth/guards";
 import {
   type ArtifactAccessDeps,
   type ArtifactScope,
@@ -15,6 +17,9 @@ import {
   botOwnership,
   createComputerSeatResolver,
 } from "../src/computer/computer-key";
+import type { ComputerGateway } from "../src/computer/gateway";
+import type { PolicyStore } from "../src/computer/policy-store";
+import { createComputerRoutes } from "../src/computer/routes";
 import { createDatabase } from "../src/db/client";
 import { asPlatform } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -66,6 +71,10 @@ const cardForgedRun = id("run-card-forged");
 const cardGoneRun = id("run-card-gone");
 const appsRun = id("run-apps");
 const appsOnlyRun = id("run-apps-only");
+/** A round whose file was written by an approved action: it handed in, and announced no computer. */
+const approvedRun = id("run-approved");
+const approvedIsoRun = id("run-approved-iso");
+const APPROVED_FILE = "测试-test.txt";
 const APPS = [{ port: 8000, path: "/", title: "Dash" }];
 
 const SPECIAL = "报告 #1?.pptx";
@@ -99,6 +108,12 @@ let strangerTask = "";
 let appsTask = "";
 let forgedTask = "";
 let goneTask = "";
+/** Cards whose files were written by an approved action, so none of their rounds announced a seat. */
+let approvedTask = "";
+let keptTask = "";
+let keptForgedTask = "";
+let isoBareTask = "";
+let isoKeptTask = "";
 
 async function seedRun(
   thread: string,
@@ -284,6 +299,68 @@ beforeAll(async () => {
             ${fixtures.json({ kind: "deliverable", workspaceFiles: ["out/deck.pptx"] })})
     returning id`;
   strangerTask = theirs?.id ?? "";
+
+  /*
+   * An approval in the middle of the work: the approved write ran outside every round, the round after
+   * it only read and handed in, so no `computer.turn_artifacts` names a computer for these cards.
+   */
+  const handedIn = (workspaceFiles: string[], agentId = bot) =>
+    custom("delivery.delivered", {
+      taskId: randomUUID(),
+      eventId: randomUUID(),
+      agentId,
+      deliverable: { kind: "deliverable", workspaceFiles },
+    });
+  await seedRun(memberThread, member, approvedRun, [
+    { type: "RUN_STARTED", threadId: memberThread, runId: approvedRun },
+    handedIn([APPROVED_FILE]),
+    { type: "RUN_FINISHED", threadId: memberThread, runId: approvedRun },
+  ]);
+  const card = async (
+    tenant: string,
+    agent: string,
+    runRef: string,
+    deliverable: Record<string, unknown>,
+  ) => {
+    const [row] = await fixtures<{ id: string }[]>`
+      insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
+      values (${tenant}, 'approved', 'chat', ${agent}, ${runRef}, ${fixtures.json(deliverable as never)})
+      returning id`;
+    return row?.id ?? "";
+  };
+  // Handed in before cards kept their seat.
+  approvedTask = await card(member, bot, approvedRun, {
+    kind: "deliverable",
+    workspaceFiles: [APPROVED_FILE],
+  });
+  // Handed in since: the seat the server took the hand-in on is kept, and outranks what a round said.
+  keptTask = await card(member, bot, cardForgedRun, {
+    kind: "deliverable",
+    workspaceFiles: ["card/out.pptx"],
+    seat: `person:${member}`,
+  });
+  keptForgedTask = await card(member, bot, approvedRun, {
+    kind: "deliverable",
+    workspaceFiles: [APPROVED_FILE],
+    seat: `person:${outsider}`,
+  });
+  // The owner's isolated employee, whose computer is its own and shared by everybody who uses it.
+  await seedRun(
+    ownerThread,
+    owner,
+    approvedIsoRun,
+    [handedIn(["iso-approved.md"], botIsolated)],
+    botIsolated,
+  );
+  isoBareTask = await card(owner, botIsolated, approvedIsoRun, {
+    kind: "deliverable",
+    workspaceFiles: ["iso-approved.md"],
+  });
+  isoKeptTask = await card(owner, botIsolated, approvedIsoRun, {
+    kind: "deliverable",
+    workspaceFiles: ["iso-approved.md"],
+    seat: `bot:${botIsolated}`,
+  });
 });
 
 afterAll(async () => {
@@ -497,3 +574,142 @@ describe.skipIf(!bypass)("workspace file access, against the database", () => {
     expect(await ask(member, "final/summary.md", scope)).toBeNull();
   });
 });
+
+describe.skipIf(!bypass)(
+  "a delivery card whose files an approved action wrote",
+  () => {
+    test("a card with no seat anywhere is read from the owner's own computer", async () => {
+      const access = await ask(member, APPROVED_FILE, { task: approvedTask });
+      expect(access?.seat.key).toEqual({ kind: "person", personId: member });
+      expect(access?.seat.botId).toBe(bot);
+      // Still only what the card lists, and only as its employee.
+      expect(await ask(member, "other.txt", { task: approvedTask })).toBeNull();
+      expect(
+        await ask(member, APPROVED_FILE, { task: approvedTask }, id("x")),
+      ).toBeNull();
+    });
+
+    test("nobody else may read it: not a group member, not an outsider", async () => {
+      expect(
+        await ask(owner, APPROVED_FILE, { task: approvedTask }),
+      ).toBeNull();
+      expect(
+        await ask(outsider, APPROVED_FILE, { task: approvedTask }),
+      ).toBeNull();
+    });
+
+    test("the seat kept with the hand-in is the one read, over a round that named another", async () => {
+      // `cardForgedRun` announced the outsider's computer; the kept seat is the member's own.
+      const access = await ask(member, "card/out.pptx", { task: keptTask });
+      expect(access?.seat.key).toEqual({ kind: "person", personId: member });
+      expect(
+        await ask(outsider, "card/out.pptx", { task: keptTask }),
+      ).toBeNull();
+    });
+
+    test("a kept seat that is not the one the server works out opens nothing", async () => {
+      expect(
+        await ask(member, APPROVED_FILE, { task: keptForgedTask }),
+      ).toBeNull();
+    });
+
+    test("an isolated employee's card needs its kept seat: its shared computer is not guessed at", async () => {
+      expect(
+        await ask(owner, "iso-approved.md", { task: isoBareTask }, botIsolated),
+      ).toBeNull();
+      const access = await ask(
+        owner,
+        "iso-approved.md",
+        { task: isoKeptTask },
+        botIsolated,
+      );
+      expect(access?.seat.key).toEqual({ kind: "bot", botId: botIsolated });
+      expect(
+        await ask(
+          member,
+          "iso-approved.md",
+          { task: isoKeptTask },
+          botIsolated,
+        ),
+      ).toBeNull();
+    });
+
+    /** The text preview route as the delivery card calls it, with the real rules and database behind it. */
+    const preview = (actor: string, query: string) => {
+      const read: { seat: unknown; path: string }[] = [];
+      const gateway = {
+        seatFor: (botId: string, personId: string) =>
+          deps.seatFor(botId, personId),
+        downloadFile: async (
+          seat: unknown,
+          _actor: unknown,
+          input: { path: string },
+        ) => {
+          read.push({ seat, path: input.path });
+          const bytes = new TextEncoder().encode("a\nb\nc\n");
+          return {
+            body: new Response(bytes).body,
+            bytes: bytes.byteLength,
+            name: input.path,
+          };
+        },
+      } as unknown as ComputerGateway;
+      const signedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
+        context,
+        next,
+      ) => {
+        context.set("actor", {
+          id: actor,
+          email: `${actor}@example.test`,
+          role: "user",
+        });
+        await next();
+      };
+      const routes = createComputerRoutes(
+        gateway,
+        {} as PolicyStore,
+        signedIn,
+        // Not allowed to use the employee directly: only the card's own rule can open the file.
+        async () => false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        deps,
+      );
+      return {
+        read,
+        response: routes.request(
+          `http://xiongbao.test/${bot}/files/text?${query}`,
+        ),
+      };
+    };
+
+    test("route: the card's owner previews the file, everybody else gets 「没有这个员工」", async () => {
+      const query = `path=${encodeURIComponent(APPROVED_FILE)}&task=${approvedTask}`;
+      const own = preview(member, query);
+      const response = await own.response;
+      expect(response.status).toBe(200);
+      expect(((await response.json()) as { text: string }).text).toBe(
+        "a\nb\nc\n",
+      );
+      expect(own.read).toEqual([
+        {
+          seat: { botId: bot, key: { kind: "person", personId: member } },
+          path: APPROVED_FILE,
+        },
+      ]);
+
+      for (const other of [owner, outsider]) {
+        const theirs = preview(other, query);
+        const refused = await theirs.response;
+        expect(refused.status).toBe(404);
+        await expect(refused.json()).resolves.toEqual({
+          error: "There is no such Bot.",
+        });
+        expect(theirs.read).toHaveLength(0);
+      }
+    });
+  },
+);

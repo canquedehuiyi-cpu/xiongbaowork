@@ -47,10 +47,13 @@ type Setup = {
   /** The employee that made the run; `bot-1` unless said. */
   runAgent?: string;
   channelAnswer?: { agentIds: string[]; threadIds: string[] } | null;
-  card?: { botId: string; seat: string; workspaceFiles: string[] } | null;
+  /** No `seat`: nothing recorded one (a card whose files an approved action wrote, from before cards kept it). */
+  card?: { botId: string; seat?: string; workspaceFiles: string[] } | null;
   /** The person the run and the card belong to; the seat every turn of theirs used is theirs. */
   owner?: string;
   live?: boolean;
+  /** The employee runs on a computer of its own (isolated) rather than on each person's. */
+  isolated?: boolean;
 };
 
 function depsFor(setup: Setup = {}) {
@@ -79,7 +82,10 @@ function depsFor(setup: Setup = {}) {
         ? { ...setup.card, ownerId: setup.owner ?? "member-2" }
         : null;
     },
-    seatFor: async (botId, personId) => personSeat(personId, botId),
+    seatFor: async (botId, personId) =>
+      setup.isolated
+        ? { botId, key: { kind: "bot", botId } }
+        : personSeat(personId, botId),
     botIsLive: async () => setup.live ?? true,
   };
   return { deps, asked };
@@ -367,6 +373,53 @@ describe("who may download which workspace file", () => {
       expect(
         await resolve(deps, "out/deck.pptx", { scope: { task: "task-1" } }),
       ).toBeNull();
+    });
+
+    describe("with no seat recorded anywhere (an approved action wrote the files)", () => {
+      const bare = { botId: "bot-1", workspaceFiles: ["测试-test.txt"] };
+
+      test("is read from the employee's seat on the card owner's own computer", async () => {
+        const { deps } = depsFor({ card: bare });
+        const access = await resolve(deps, "测试-test.txt", {
+          scope: { task: "task-1" },
+        });
+        expect(access?.seat).toEqual(personSeat("member-2", "bot-1"));
+      });
+
+      test("still opens only what the card lists, as its employee, to whom may see the card", async () => {
+        const { deps } = depsFor({ card: bare });
+        for (const [path, over] of [
+          ["other.txt", {}],
+          ["测试-test.txt", { botId: "bot-2" }],
+          ["测试-test.txt", { scope: { task: "task-9" } }],
+        ] as const)
+          expect(
+            await resolve(deps, path, { scope: { task: "task-1" }, ...over }),
+          ).toBeNull();
+      });
+
+      test("an employee that no longer exists opens nothing", async () => {
+        const { deps } = depsFor({ card: bare, live: false });
+        expect(
+          await resolve(deps, "测试-test.txt", { scope: { task: "task-1" } }),
+        ).toBeNull();
+      });
+
+      test("an isolated employee's own computer, shared by all its users, is not guessed at", async () => {
+        const { deps } = depsFor({ card: bare, isolated: true });
+        expect(
+          await resolve(deps, "测试-test.txt", { scope: { task: "task-1" } }),
+        ).toBeNull();
+        // With the seat kept on the card, the same card opens.
+        const kept = depsFor({
+          card: { ...bare, seat: "bot:bot-1" },
+          isolated: true,
+        }).deps;
+        expect(
+          (await resolve(kept, "测试-test.txt", { scope: { task: "task-1" } }))
+            ?.seat.key,
+        ).toEqual({ kind: "bot", botId: "bot-1" });
+      });
     });
 
     test("a task given together with channel or run is refused", async () => {
