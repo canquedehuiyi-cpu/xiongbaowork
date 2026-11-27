@@ -241,6 +241,7 @@ import { createComponentStore } from "./components/store";
 import { createArtifactAccessDeps } from "./computer/artifact-access-store";
 import {
   botOwnership,
+  computerKeyText,
   createComputerSeatResolver,
 } from "./computer/computer-key";
 import { createComputerGateway, localAppsAllowed } from "./computer/gateway";
@@ -591,6 +592,7 @@ import {
   savedWorkHours,
   threadRunning,
 } from "./tasks/delivery-checker";
+import { acceptedDelivery } from "./tasks/delivery-end";
 import {
   ACCEPT_TASK_REF,
   deliveryTools,
@@ -2886,6 +2888,18 @@ await startupLifecycle.run(async (startup) => {
       // A round with no browser behind it (a nudge, a hand-over) reads times on the person's saved zone.
       savedTimeZone: async () =>
         (await readWorkHours(database, actorId)).timeZone,
+      /*
+       * The seat the evidence gate looks for the files on, kept on the card: what its preview reads from
+       * (`computer/artifact-access-store.ts`), worked out in the card person's frame as it is there.
+       */
+      seatOf: computerGateway
+        ? () =>
+            runAsTenant(actorId, async () =>
+              computerKeyText(
+                (await computerGateway.seatFor(botId, actorId)).key,
+              ),
+            )
+        : undefined,
     }),
     // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*
@@ -4256,6 +4270,11 @@ await startupLifecycle.run(async (startup) => {
     buildAgentFor,
     toolsForTurn: async ({ ownerUserId, agentId, initiator }) =>
       approvalComputerTools(ownerUserId, agentId, initiator),
+    /*
+     * 交付即收尾（`tasks/delivery-end.ts`）：续跑的这一段以被接受的交付结束、没再说话，算完成，不算「什么也没说」。
+     * 算成空轮时，审批续跑把它当失败，每 10 秒从同一处重跑一遍，同一张卡反复交付。
+     */
+    handedIn: acceptedDelivery,
   };
   /*
    * The work an approval resumes keeps the light clock: the chat counts a conversation as carried on

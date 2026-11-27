@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ServerWebSocket, serve } from "bun";
 import type { ConsoleMessage, Page } from "playwright";
-import { downloadHeaders } from "../../shared/file-download";
+import { computerDownloadHeaders } from "../../shared/file-download";
 import { createCloudAcp, isAcpPath } from "./acp-cloud";
 import { unfinishedAction } from "./action-failure";
 import {
@@ -2002,8 +2002,10 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
         try {
           const files = await filesFor(botId);
           const file = await files.download(url.searchParams.get("path") ?? "");
+          // A confined workspace answers with a stream, and Bun drops `Content-Length` for it; the
+          // length goes in its own header as well, which the server checks against what it reads.
           return new Response(file.body, {
-            headers: downloadHeaders(file.name, file.bytes),
+            headers: computerDownloadHeaders(file.name, file.bytes),
           });
         } catch (error) {
           return json(

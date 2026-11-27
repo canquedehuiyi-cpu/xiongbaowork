@@ -223,10 +223,11 @@ export type AutomationStore = {
   startFiring(firingId: string): Promise<boolean>;
   /**
    * A firing that stopped for a person's approval (`waiting`) is settled once that approval was
-   * answered and the turn continued, allowed or declined alike: `succeeded`. False when it was not
-   * waiting.
+   * answered and the turn continued, allowed or declined alike: `succeeded`. With `failure`, the turn
+   * that carried it on started and then failed, and it is `failed` with that error. False when it was
+   * not waiting.
    */
-  settleWaitingFiring(firingId: string): Promise<boolean>;
+  settleWaitingFiring(firingId: string, failure?: string): Promise<boolean>;
   /**
    * Close every tenant's firings left `running` for longer than `olderThanMs` as `failed`, with
    * `error` (WF-F: mark failed, never replay). The other cross-tenant statement, as `platform`. A
@@ -1391,12 +1392,16 @@ export function createAutomationStore(
       return rows.length > 0;
     },
 
-    async settleWaitingFiring(firingId) {
+    async settleWaitingFiring(firingId, failure) {
       const tenant = callerTenant();
       if (!isUuid(firingId)) return false;
       const rows = await database
         .update(automationFirings)
-        .set({ status: "succeeded", error: null, updatedAt: new Date() })
+        .set(
+          failure === undefined
+            ? { status: "succeeded", error: null, updatedAt: new Date() }
+            : { status: "failed", error: failure, updatedAt: new Date() },
+        )
         .where(
           and(
             eq(automationFirings.id, firingId),

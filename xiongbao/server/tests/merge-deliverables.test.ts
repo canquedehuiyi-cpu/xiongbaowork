@@ -54,3 +54,32 @@ describe("mergeDeliverables: unverifiedFiles", () => {
     expect(merged.unverifiedFiles).toBeUndefined();
   });
 });
+
+describe("mergeDeliverables: seat", () => {
+  test("the seat a hand-in was taken on is kept, and a later hand-in's replaces it", () => {
+    const first = mergeDeliverables(undefined, {
+      kind: "deliverable",
+      workspaceFiles: ["a.md"],
+      seat: "person:p1",
+    });
+    expect(first.seat).toBe("person:p1");
+    // A later words-only hand-in names no computer: the card keeps the one it had.
+    const words = mergeDeliverables(first, {
+      kind: "deliverable",
+      notes: ["结论"],
+    });
+    expect(words.seat).toBe("person:p1");
+    const moved = mergeDeliverables(words, {
+      kind: "deliverable",
+      workspaceFiles: ["b.md"],
+      seat: "bot:b1",
+    });
+    expect(moved.seat).toBe("bot:b1");
+  });
+
+  test("no seat anywhere leaves the field off", () => {
+    expect(
+      mergeDeliverables(undefined, { kind: "deliverable", notes: ["x"] }).seat,
+    ).toBeUndefined();
+  });
+});

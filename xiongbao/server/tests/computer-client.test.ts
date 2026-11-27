@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { FILE_BYTES_HEADER } from "../../shared/file-download";
 import {
   ComputerStoppedError,
   ComputerUnavailableError,
@@ -105,6 +106,137 @@ describe("computer client", () => {
       await expect(client.download("x")).rejects.toThrow(
         ComputerUnavailableError,
       );
+    });
+
+    /*
+     * A confined workspace streams from the descriptor it checked, and Bun sends that chunked,
+     * without Content-Length; the computer states the length in FILE_BYTES_HEADER instead.
+     */
+    function chunked(chunks: number[][], stated: string | null) {
+      const state = { cancelled: false, pulled: 0 };
+      let next = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          const chunk = chunks[next++];
+          if (!chunk) return controller.close();
+          state.pulled += chunk.length;
+          controller.enqueue(Uint8Array.from(chunk));
+        },
+        cancel() {
+          state.cancelled = true;
+        },
+      });
+      const headers: Record<string, string> =
+        stated === null ? {} : { [FILE_BYTES_HEADER]: stated };
+      return { response: new Response(body, { headers }), state };
+    }
+
+    test("reads a chunked answer by the length the computer states", async () => {
+      const { response } = chunked([[0, 1], [2, 3], [255]], "5");
+      expect(response.headers.get("content-length")).toBeNull();
+      const download = await clientWith(() => response).download("a.bin");
+
+      expect(download.bytes).toBe(5);
+      expect(
+        new Uint8Array(await new Response(download.body).arrayBuffer()),
+      ).toEqual(Uint8Array.from([0, 1, 2, 3, 255]));
+    });
+
+    test("an empty file stated as 0 bytes reads as empty", async () => {
+      const { response } = chunked([], "0");
+      const download = await clientWith(() => response).download("a.bin");
+      expect(download.bytes).toBe(0);
+      expect((await new Response(download.body).arrayBuffer()).byteLength).toBe(
+        0,
+      );
+    });
+
+    test("never hands on more bytes than stated, and cancels the computer's body", async () => {
+      const { response, state } = chunked(
+        [
+          [1, 2],
+          [3, 4],
+          [5, 6],
+        ],
+        "3",
+      );
+      const download = await clientWith(() => response).download("a.bin");
+      const reader = download.body.getReader();
+      const received: number[] = [];
+      const failure = await (async () => {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) return undefined;
+          received.push(...value);
+        }
+      })().catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(ComputerUnavailableError);
+      expect(received.length).toBeLessThanOrEqual(3);
+      expect(state.cancelled).toBe(true);
+    });
+
+    test("refuses a chunked body that ends short of the stated length", async () => {
+      const { response } = chunked([[1, 2]], "5");
+      const download = await clientWith(() => response).download("a.bin");
+      await expect(new Response(download.body).arrayBuffer()).rejects.toThrow(
+        ComputerUnavailableError,
+      );
+    });
+
+    test("passes a reader's cancel on to the computer", async () => {
+      const { response, state } = chunked([[1], [2], [3]], "3");
+      const download = await clientWith(() => response).download("a.bin");
+      const reader = download.body.getReader();
+      await reader.read();
+      await reader.cancel();
+      expect(state.cancelled).toBe(true);
+    });
+
+    test.each([
+      "",
+      "-1",
+      "1.5",
+      "1e3",
+      "0x10",
+      "5 bytes",
+      "99999999999999999999",
+    ])(
+      "refuses a stated length of %p, and releases the body",
+      async (stated) => {
+        const { response, state } = chunked([[1, 2, 3, 4, 5]], stated);
+        await expect(
+          clientWith(() => response).download("a.bin"),
+        ).rejects.toThrow(ComputerUnavailableError);
+        expect(state.cancelled).toBe(true);
+      },
+    );
+
+    test("refuses a stated length that disagrees with Content-Length", async () => {
+      const client = clientWith(
+        () =>
+          new Response(Uint8Array.from([1, 2, 3]), {
+            headers: { "content-length": "3", [FILE_BYTES_HEADER]: "2" },
+          }),
+      );
+      await expect(client.download("a.bin")).rejects.toThrow(
+        ComputerUnavailableError,
+      );
+    });
+
+    test("takes Content-Length and a stated length that agree", async () => {
+      const payload = Uint8Array.from([7, 8, 9]);
+      const client = clientWith(
+        () =>
+          new Response(payload, {
+            headers: { "content-length": "3", [FILE_BYTES_HEADER]: "3" },
+          }),
+      );
+      const download = await client.download("a.bin");
+      expect(download.bytes).toBe(3);
+      expect(
+        new Uint8Array(await new Response(download.body).arrayBuffer()),
+      ).toEqual(payload);
     });
 
     test.each([

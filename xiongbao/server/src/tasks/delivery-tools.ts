@@ -206,6 +206,13 @@ export function deliveryTools(options: {
   savedTimeZone?: () => Promise<string>;
   /** Where the card-drawing events go; the run's own stream by default. */
   emit?: (runId: string, event: BaseEvent) => void;
+  /**
+   * The computer this coworker works on for the card's person, as `computerKeyText` writes it: the seat
+   * the evidence gate looked for the files on (`gateway.seatFor`). Kept on the card with a hand-in that
+   * lists files or programs (`Delivery.delivered`'s `seat`). Absent, or failing, nothing is kept and
+   * the hand-in goes through as before.
+   */
+  seatOf?: () => Promise<string | undefined>;
 }): GrantedTool[] {
   const { delivery, gate, board, ownerUserId: tenantId, agentId } = options;
   const now = options.now ?? (() => new Date());
@@ -225,6 +232,14 @@ export function deliveryTools(options: {
       emitRunEvent(runId, event);
     });
   const actor = `agent:${agentId}` as const;
+  /** The seat to keep with a hand-in, or undefined: not knowing it never stops the hand-in. */
+  const seatNow = async (): Promise<string | undefined> => {
+    try {
+      return (await options.seatOf?.()) || undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const said = (runId: string, name: string, value: Record<string, unknown>) =>
     emit(runId, { type: EventType.CUSTOM, name, value } as BaseEvent);
   const localTime = (instant: Date, timeZone: string) =>
@@ -513,6 +528,14 @@ export function deliveryTools(options: {
             note: "没交上：卡片没动。把产物存成文件后用 workspace_file 交付。",
           });
         }
+        /*
+         * 交付卡上的文件和程序在哪台电脑上：记下服务器这时给这位员工和这个人算出的座位。卡片预览按它找电脑，
+         * 不再靠这张卡的某一轮发过 `computer.turn_artifacts`：经过审批的写入在所有轮之外执行，没有那条事件。
+         */
+        const seat =
+          verdict.ref.workspaceFiles?.length || verdict.ref.apps?.length
+            ? await seatNow()
+            : undefined;
         // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
         const deliveredLine = randomUUID();
         const merged = await delivery.delivered(tenantId, card.id, {
@@ -521,6 +544,7 @@ export function deliveryTools(options: {
           agentId,
           actor,
           deliverable: verdict.ref,
+          ...(seat ? { seat } : {}),
         });
         if (!merged)
           return `${REFUSAL_MARKER} 这件活现在交不了：它已经结束、还在等对方处理，或已经换给别的员工。`;

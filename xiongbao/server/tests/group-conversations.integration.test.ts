@@ -20,6 +20,7 @@ import {
   HANDOFF_REF,
 } from "../src/approvals/delegation-freed";
 import type { AuditEventInput } from "../src/audit";
+import type { ChannelActivityEvent } from "../src/channels/events";
 import {
   createGroupConversations,
   createGroupRoutes,
@@ -198,6 +199,8 @@ function service(options: {
     typeof createGroupConversations
   >[0]["listenForConsent"];
   activity?: Parameters<typeof createGroupConversations>[0]["activity"];
+  /** Told when a group's transcript changed without anything said (`groupTranscriptEvent`). */
+  announce?: Parameters<typeof createGroupConversations>[0]["announce"];
   /** The board, attached only by the cases that are about the cards it holds. */
   board?: Parameters<typeof createGroupConversations>[0]["board"];
   /** A real turn runner in place of the scripted replies, for the cases about what a run carries. */
@@ -265,6 +268,7 @@ function service(options: {
       ? { listenForConsent: options.listenForConsent }
       : {}),
     ...(options.activity ? { activity: options.activity } : {}),
+    ...(options.announce ? { announce: options.announce } : {}),
     ...(options.board ? { board: options.board } : {}),
   });
   return { conversations, calls, audit };
@@ -3816,5 +3820,107 @@ describe("a failed turn with no message still holds its files for the owner", ()
     expect(await rawTranscript(teammate, channel.id)).not.toContain(
       "secret-plan",
     );
+  });
+});
+
+/*
+ * 批准后续跑（prod-anomalies 2.3 ①）：群里等审批的那一行不轮询，开着的群页面只靠频道事件重读。续跑以交付收尾、
+ * 没再说话，或者开始之后失败了，行都变了却一句话没有：要告诉群里每个人重读一下，不改会话列表的预览。
+ */
+describe("a group turn carried on after an approval, with nothing said", () => {
+  /** Run in the owner's frame (`as`), as every case here is. */
+  async function waitingGroup(owner: AgentActor, label: string) {
+    const ada = await bot(owner, "Ada");
+    const grace = await bot(owner, "Grace");
+    const said: string[] = [];
+    const announced: ChannelActivityEvent[] = [];
+    const approvalId = `${prefix}-${label}`;
+    const { conversations } = service({
+      replies: {
+        [ada]: () => "On it.",
+        [grace]: () => {
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId,
+          });
+        },
+      },
+      activity: async (_turn, _agentId, text) => {
+        said.push(text);
+      },
+      announce: async (event) => {
+        announced.push(event);
+      },
+    });
+    const channel = await conversations.create(owner.id, {
+      agentIds: [ada, grace],
+    });
+    await conversations.send(owner.id, channel.id, {
+      id: `${prefix}-${label}-ask`,
+      text: "hello",
+    });
+    await drain(conversations);
+    said.length = 0;
+    announced.length = 0;
+    return {
+      grace,
+      channel,
+      conversations,
+      approvalId,
+      said,
+      announced,
+    };
+  }
+
+  test("ended by a hand-in: the row completes and the group is told to read it again, with no preview", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const { grace, channel, conversations, approvalId, said, announced } =
+        await waitingGroup(owner, "handed-in");
+
+      await conversations.continueWaiting(approvalId, async () => ({
+        replyText: "",
+      }));
+
+      const { messages } = await conversations.list(owner.id, channel.id);
+      expect(messages.at(-1)).toMatchObject({
+        agentId: grace,
+        status: "completed",
+        text: "",
+      });
+      expect(said).toEqual([]);
+      expect(announced).toHaveLength(1);
+      expect(announced[0]).toMatchObject({
+        channelId: channel.id,
+        groupTranscript: true,
+        lastMessage: null,
+      });
+      expect(announced[0]?.memberIds).toContain(owner.id);
+    });
+  });
+
+  test("started and failed: the row fails and the group is told to read it again", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const { grace, channel, conversations, approvalId, announced } =
+        await waitingGroup(owner, "failed-after-start");
+
+      await expect(
+        conversations.continueWaiting(approvalId, async () => {
+          throw new Error("The model provider is down.");
+        }),
+      ).rejects.toThrow("The model provider is down.");
+
+      const { messages } = await conversations.list(owner.id, channel.id);
+      expect(messages.at(-1)).toMatchObject({
+        agentId: grace,
+        status: "failed",
+      });
+      expect(announced).toHaveLength(1);
+      expect(announced[0]).toMatchObject({
+        channelId: channel.id,
+        groupTranscript: true,
+      });
+    });
   });
 });

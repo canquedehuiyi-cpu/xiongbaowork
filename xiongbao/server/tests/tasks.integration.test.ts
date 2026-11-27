@@ -1,4 +1,4 @@
-import { describe, expect } from "bun:test";
+import { describe, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   type BaseEvent,
@@ -23,7 +23,10 @@ import {
   DECISION_KIND,
 } from "../src/approvals/decision-waits";
 import { waitForReplyInTranscript } from "../src/approvals/reply-in-transcript";
-import { createApprovalResumeTick } from "../src/approvals/resume-sweep";
+import {
+  CONTINUATION_FAILED,
+  createApprovalResumeTick,
+} from "../src/approvals/resume-sweep";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
@@ -43,6 +46,7 @@ import {
   channels,
   proactiveSettings,
   proactiveSuggestions,
+  taskEvents,
   users,
   workItems,
 } from "../src/db/schema";
@@ -50,6 +54,8 @@ import type { AttentionResponse } from "../src/proactive/contracts";
 import { createProactiveStore } from "../src/proactive/store";
 import type { ResponsibilityStore } from "../src/responsibilities/types";
 import { createBotTaskRoutes } from "../src/tasks/bot-task-routes";
+import { acceptedDelivery } from "../src/tasks/delivery-end";
+import { appendTaskEvent } from "../src/tasks/events";
 import { createTaskRunner } from "../src/tasks/runner";
 import { PROACTIVE_TASK_KIND } from "../src/tasks/state";
 import { createTaskStore } from "../src/tasks/store";
@@ -234,9 +240,28 @@ async function sendMessage(args: unknown, actorId: string, botId: string) {
   return "Sent.";
 }
 
+/**
+ * A card handed in, as `deliver_task` answers when it accepts one: a `delivered` line on the card's
+ * history, and `delivered: true` back to the Bot. One card for the file; a test reads its lines.
+ */
+const handedInCard = randomUUID();
+async function deliverTask(ownerUserId: string, botId: string) {
+  await runAsTenant(ownerUserId, () =>
+    appendTaskEvent(database, {
+      tenantId: ownerUserId,
+      taskId: handedInCard,
+      kind: "delivered",
+      actor: `agent:${botId}`,
+    }),
+  );
+  return JSON.stringify({ delivered: true, taskId: handedInCard });
+}
+
 /** The approval continuation runner, as index.ts builds it, with the model and the platform faked. */
 const runTurn = createTurnRunner({
   admission: serverTurnAdmission,
+  // As index.ts: a turn that ends on an accepted hand-in, saying nothing more, has answered.
+  handedIn: acceptedDelivery,
   intelligence: {
     getOrCreateThread: async () => undefined,
     getThreadMessages: async ({ threadId }) => ({
@@ -288,6 +313,14 @@ const runTurn = createTurnRunner({
         },
       },
       execute: (args) => readInbox(args, ownerUserId, agentId),
+    },
+    {
+      definition: {
+        name: "deliver_task",
+        description: "Hand the card in.",
+        parameters: { type: "object", properties: {} },
+      },
+      execute: () => deliverTask(ownerUserId, agentId),
     },
   ],
 });
@@ -1227,6 +1260,172 @@ describe("carried on after the person decides", () => {
           ),
       ),
     ).toBe(false);
+  });
+
+  /*
+   * 线上（prod-anomalies 2.3 ①）：批准之后续跑的这一段以被接受的 `deliver_task` 结束，「交付即收尾」不再让它说话。
+   * 续跑循环把没有文字的一轮当成失败：每 10 秒把同一个续跑从同一处再跑一遍，同一张卡交付 5～6 次，审批停在
+   * `consumed`，聊天里那个动作一直「正在运行」。
+   */
+  test("a carried-on turn that ends by handing its card in, saying nothing more, finishes the decision once and hands the card in once", async () => {
+    const { owner, request } = await waitingOnApproval("I sent your reply.");
+    // Once the send is answered, the Bot hands the card in, and the turn ends there with nothing said.
+    script = (input) =>
+      input.messages.filter((message) => message.role === "tool").length === 1
+        ? callTool(input, "deliver_task", {}, "call-deliver")
+        : lifecycle(input, []);
+    const before = sent.length;
+
+    await asOwner(owner, () =>
+      approvalService.decide(owner.id, request.id, "allow_once", "web"),
+    );
+    for (let tick = 0; tick < 6; tick += 1) {
+      await resumeApproval();
+      // As if the queue's ten seconds had passed: a released decision would be handed out again now.
+      await database
+        .update(workItems)
+        .set({ runAt: sql`now() - interval '1 second'` })
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            eq(workItems.key, request.id),
+          ),
+        );
+    }
+
+    const delivered = await database
+      .select()
+      .from(taskEvents)
+      .where(
+        and(
+          eq(taskEvents.tenantId, owner.id),
+          eq(taskEvents.taskId, handedInCard),
+          eq(taskEvents.kind, "delivered"),
+        ),
+      );
+    expect(delivered).toHaveLength(1);
+    expect(sent.length).toBe(before + 1);
+    expect((await approvalStore.get(owner.id, request.id)).status).toBe(
+      "completed",
+    );
+    const [resume] = await database
+      .select()
+      .from(workItems)
+      .where(
+        and(
+          eq(workItems.kind, "approval.resume"),
+          eq(workItems.key, request.id),
+        ),
+      );
+    expect(resume?.finishedAt).not.toBeNull();
+  });
+
+  /*
+   * 交付即收尾按整轮算（toolkit `last-step.ts` 的 `stepsSinceHandIn`，从人最后一条消息算起）：员工先交付，
+   * 被放行的那一步里又要跑一个需要批准的动作，停下来等人。批准之后续跑，这一段一句话都没加就结束了，交付在续跑
+   * 带进来的那段里。它照样是交付收尾的完成，不是「开始之后失败」：会话里不写失败说明。
+   */
+  test("a turn that handed its card in before it stopped for the approval completes when carried on, though the carried-on run adds nothing", async () => {
+    const { owner, item } = await seed();
+    await approvalStore.setEnabled(owner.id, true);
+    script = (input) => {
+      const answered = input.messages.filter(
+        (message) => message.role === "tool",
+      ).length;
+      if (answered === 0)
+        return callTool(input, "deliver_task", {}, "call-deliver-first");
+      if (answered === 1)
+        return callTool(
+          input,
+          "send_message",
+          { to: "sam@example.test", body: "Checked: the spec is attached." },
+          "call-after-deliver",
+        );
+      return lifecycle(input, []);
+    };
+    const task = await start(owner, item.id);
+    await tasks.idle();
+    const [request] = await database
+      .select()
+      .from(approvalRequests)
+      .where(
+        and(
+          eq(approvalRequests.ownerUserId, owner.id),
+          eq(approvalRequests.status, "pending"),
+        ),
+      );
+    if (!request) throw new Error("No approval was asked for.");
+    const logged = spyOn(console, "error");
+    try {
+      await asOwner(owner, () =>
+        approvalService.decide(owner.id, request.id, "allow_once", "web"),
+      );
+      await resumeApproval();
+      const types = logged.mock.calls.flatMap(([line]) => {
+        try {
+          return [(JSON.parse(String(line)) as { type?: string }).type];
+        } catch {
+          return [];
+        }
+      });
+      expect(types).not.toContain("approval-continuation-ended");
+    } finally {
+      logged.mockRestore();
+    }
+
+    expect((await approvalStore.get(owner.id, request.id)).status).toBe(
+      "completed",
+    );
+    expect((await conversation(task.channelId))?.lastMessage).not.toBe(
+      CONTINUATION_FAILED,
+    );
+    const delivered = await database
+      .select()
+      .from(taskEvents)
+      .where(
+        and(
+          eq(taskEvents.tenantId, owner.id),
+          eq(taskEvents.taskId, handedInCard),
+          eq(taskEvents.kind, "delivered"),
+        ),
+      );
+    expect(delivered).toHaveLength(1);
+  });
+
+  /*
+   * 单聊里，续跑开始之后失败：不重跑（它的工具已经执行过了），会话里写一条失败说明，人知道这一轮没做完。
+   */
+  test("a carried-on turn that starts and then fails is not run again, and the conversation is told it did not finish", async () => {
+    const { owner, task, request } = await waitingOnApproval("unused");
+    script = (input) =>
+      input.messages.filter((message) => message.role === "tool").length === 1
+        ? providerDown(input)
+        : reply(input, "unused");
+    const before = asked.length;
+
+    await asOwner(owner, () =>
+      approvalService.decide(owner.id, request.id, "allow_once", "web"),
+    );
+    for (let tick = 0; tick < 3; tick += 1) {
+      await resumeApproval();
+      await database
+        .update(workItems)
+        .set({ runAt: sql`now() - interval '1 second'` })
+        .where(
+          and(
+            eq(workItems.kind, "approval.resume"),
+            eq(workItems.key, request.id),
+          ),
+        );
+    }
+
+    expect(asked.length - before).toBe(1);
+    expect((await approvalStore.get(owner.id, request.id)).status).toBe(
+      "completed",
+    );
+    expect(await conversation(task.channelId)).toMatchObject({
+      lastMessage: CONTINUATION_FAILED,
+    });
   });
 
   /*

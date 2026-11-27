@@ -65,6 +65,31 @@ export function downloadHeaders(
 }
 
 /**
+ * The file's byte length, stated by the computer apart from `Content-Length`.
+ *
+ * A confined workspace streams the file from the descriptor it checked (`downloadOpened` in
+ * agent-computer/src/workspace.ts), and Bun answers a stream that is read asynchronously with
+ * `Transfer-Encoding: chunked`, dropping the `Content-Length` the response was given. This header
+ * survives that. It is a claim, not a framing: the server (`download` in server/src/computer/client.ts)
+ * counts the bytes as it reads them and refuses a body that runs past this number or stops short of it.
+ */
+export const FILE_BYTES_HEADER = "x-xiongbao-file-bytes";
+
+/**
+ * `downloadHeaders` plus `FILE_BYTES_HEADER`, for the computer's `/files/download` answer to the
+ * server. Only the computer sends it; what the server hands a browser is `downloadHeaders` alone.
+ */
+export function computerDownloadHeaders(
+  name: string,
+  bytes: number,
+): Record<string, string> {
+  return {
+    ...downloadHeaders(name, bytes),
+    [FILE_BYTES_HEADER]: String(bytes),
+  };
+}
+
+/**
  * The same escaping as `contentDisposition`, for a response the browser may render in place. Only
  * the disposition type differs; the name is quoted and encoded by the one function above, so an
  * inline response cannot carry a filename the attachment path would have neutralised.
