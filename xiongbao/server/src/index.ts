@@ -1,6 +1,7 @@
 // Must stay the first import: it refuses settings still under their names before v0.2.16 before any module reads config.
 import "../../shared/refuse-old-settings";
 import type { AbstractAgent } from "@ag-ui/client";
+import { toolSegmentsFor, turnTimeoutFor } from "@xiongbao/toolkit/limits";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { computerGuidance } from "../../shared/bot-prompt";
@@ -8,7 +9,6 @@ import { commandTimeoutMs } from "../../shared/computer-tool-words";
 import { hardModelOf } from "../../shared/hard-model";
 import { lightModelOf } from "../../shared/light-model";
 import { workOwner } from "../../shared/work-owner";
-import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
 import { createActivityStore } from "./activity/activity";
 import {
   auditRoutineStore,

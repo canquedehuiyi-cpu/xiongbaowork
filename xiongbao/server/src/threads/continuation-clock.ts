@@ -1,5 +1,5 @@
-import { TURN_LIMITS } from "../../../toolkit/src/limits";
-import type { TurnRunner } from "../../../toolkit/src/run-turn";
+import { TURN_LIMITS } from "@xiongbao/toolkit/limits";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { createTurnRunner } from "../routines/run-turn";
 import { declaresServerComputerTools } from "./chat-server-tools";
 

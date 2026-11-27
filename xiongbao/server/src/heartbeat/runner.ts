@@ -16,12 +16,12 @@
  * 在安静时段里这一次不做，下一次排到时段结束；受每天次数上限管：和巡检合起来数，超了这一次不做。
  */
 
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import { EmptyTurnError, type TurnRunner } from "@xiongbao/toolkit/run-turn";
 import {
   type HeartbeatSettings,
   isHeartbeatQuiet,
 } from "../../../shared/heartbeat";
-import { HeadlessToolSuspension } from "../../../toolkit/src/headless-tools";
-import { EmptyTurnError, type TurnRunner } from "../../../toolkit/src/run-turn";
 import { BotPausedError } from "../agents/lifecycle";
 import type { AgentActor } from "../agents/profile-types";
 import type { AuditInitiator } from "../audit";

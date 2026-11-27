@@ -5,6 +5,11 @@ import {
   type MiddlewareFunction,
   type RunAgentInput,
 } from "@ag-ui/client";
+import {
+  HeadlessToolsMiddleware,
+  SEGMENT_LIMIT_MESSAGE,
+} from "@xiongbao/toolkit/headless-tools";
+import { TURN_LIMITS } from "@xiongbao/toolkit/limits";
 import { Observable, type Subscription } from "rxjs";
 import {
   COMPUTER_TOOLS_PROP,
@@ -14,11 +19,6 @@ import {
   type TurnLimitReason,
   timeUpNotice,
 } from "../../../shared/turn-notices";
-import {
-  HeadlessToolsMiddleware,
-  SEGMENT_LIMIT_MESSAGE,
-} from "../../../toolkit/src/headless-tools";
-import { TURN_LIMITS } from "../../../toolkit/src/limits";
 import type { AgentActor } from "../agents/profile-types";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
 import {

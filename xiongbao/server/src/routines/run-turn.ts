@@ -11,6 +11,7 @@
  * PostgreSQL runner directly and have no counterpart upstream.
  */
 
+import { toolSegmentsFor, turnTimeoutFor } from "@xiongbao/toolkit/limits";
 import type { TurnAnswered, TurnScope } from "@xiongbao/toolkit/ports";
 import {
   createTurnRunner as createToolkitTurnRunner,
@@ -20,7 +21,6 @@ import {
   type RunnerLike,
   type TurnRunner,
 } from "@xiongbao/toolkit/run-turn";
-import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import {
   headlessTurnRefusal,
   modelNamedIn,

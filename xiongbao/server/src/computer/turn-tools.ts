@@ -1,4 +1,4 @@
-import type { HeadlessTool } from "../../../toolkit/src/headless-tools";
+import type { HeadlessTool } from "@xiongbao/toolkit/headless-tools";
 import { canUseComputer } from "../agents/computer-access";
 import type { AgentActor, AgentProfile } from "../agents/profile-types";
 import type { AuditInitiator, AuditStore } from "../audit";

@@ -1,5 +1,5 @@
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, eq, sql } from "drizzle-orm";
-import { HeadlessToolSuspension } from "../../../toolkit/src/headless-tools";
 import {
   type ApprovalContinuation,
   parseApprovalContinuation,

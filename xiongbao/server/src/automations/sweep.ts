@@ -18,7 +18,7 @@
  * The key format is `routines/sweep.ts`'s minute key, pinned in `minuteKey` below and asserted
  * literally in `tests/automation-sweep.integration.test.ts`.
  */
-import { TURN_LIMITS } from "../../../toolkit/src/limits";
+import { TURN_LIMITS } from "@xiongbao/toolkit/limits";
 import { assertPersonTenant, runAsTenant } from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import type { AutomationFiring, AutomationStore } from "./store";

@@ -230,6 +230,7 @@ tests/browser-search-guidance.test.ts
 tests/built-in-tool-labels.test.ts
 tests/builtin-routines.test.ts
 tests/builtin-staffing.integration.test.ts
+tests/bundled-approval-context.test.ts
 tests/bunfig-preload.test.ts
 tests/capability-activity-events.test.ts
 tests/card-autonomy.test.ts
@@ -922,6 +923,7 @@ tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
 tests/tool-selection.integration.test.ts
+tests/toolkit-imports.test.ts
 tests/turn-artifacts-chat.integration.test.ts
 tests/turn-artifacts-replay.integration.test.ts
 tests/turn-artifacts-turns.test.ts
