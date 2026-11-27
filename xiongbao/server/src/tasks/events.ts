@@ -72,10 +72,14 @@ export async function listTaskEvents(
     .orderBy(asc(taskEvents.createdAt), asc(taskEvents.id));
 }
 
-/** The kinds that say nothing to the person on their own: a round's bare end, a nudge not sent. */
+/**
+ * The kinds that say nothing to the person on their own: a round's bare end, a nudge not sent, a
+ * failure hand-over handed on.
+ */
 export const QUIET_TASK_EVENT_KINDS: readonly TaskEventKind[] = [
   "run_ended",
   "nudge_skipped",
+  "failure_handoff_carried",
 ];
 
 /**
@@ -129,6 +133,9 @@ export function taskEventSentence(
       if (detail.reason === "reassigned") return "换人接手，原来那一轮停下了";
       if (detail.reason === "superseded") return "这一轮被后来的一轮接替了";
       return withReason("这一轮出错了", text("error"));
+    case "failure_handoff":
+      // What the next round is told about the failed one; the card shows it whole, folded.
+      return withReason("留了失败交接", text("stoppedAt"));
     case "nudged":
       return "催过员工";
     case "overdue":

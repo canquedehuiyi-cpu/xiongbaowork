@@ -147,6 +147,15 @@ export type CardTurnsDeps = {
     tenantId: string,
     turn: { threadId: string; agentId: string },
   ) => Promise<void>;
+  /**
+   * The failure hand-over a new round of a card starts with (`Delivery.takeFailureHandoff`, spec
+   * 2026-11-25-borrowed-improvements 5.4): taken, and so marked handed on, once the thread is found
+   * idle. Absent: a round starts with its own words only.
+   */
+  takeFailureHandoff?: (
+    tenantId: string,
+    taskId: string,
+  ) => Promise<string | null>;
 };
 
 const BUSY = "员工这会儿正忙，稍后再试。";
@@ -213,7 +222,10 @@ export type ThreadTurnOrigin = {
  * (`tasks/nudge-run.ts`): the same start, timeout and refusals, with a different voice.
  */
 export async function startThreadTurn(
-  deps: Pick<CardTurnsDeps, "runTurn" | "runner" | "startTimeoutMs">,
+  deps: Pick<
+    CardTurnsDeps,
+    "runTurn" | "runner" | "startTimeoutMs" | "takeFailureHandoff"
+  >,
   tenantId: string,
   to: { threadId: string; agentId: string },
   text: string,
@@ -225,13 +237,31 @@ export async function startThreadTurn(
     return deps.runner.isRunning({ threadId: to.threadId });
   });
   if (busy) throw new ThreadBusy();
+  /*
+   * A round of a card whose last round failed starts with that round's hand-over, then a blank line,
+   * then its own words: where it stopped, what it had done and the files it left, so the coworker goes
+   * on from there instead of from the start. Taken only now, past the busy check, so a round refused for
+   * a busy thread does not use it up.
+   */
+  const taskId = origin.taskId;
+  const handoff =
+    taskId && deps.takeFailureHandoff
+      ? await deps.takeFailureHandoff(tenantId, taskId).catch((error) => {
+          log("task-failure-handoff-unread", {
+            taskId,
+            reason: reasonOf(error),
+          });
+          return null;
+        })
+      : null;
+  const said = handoff ? `${handoff}\n\n${text}` : text;
 
   // A uuid, because the thread lock wants one.
   const runId = randomUUID();
   const userMessage: Message = {
     id: `${origin.messagePrefix}:${runId}`,
     role: "user",
-    content: text,
+    content: said,
   };
   let began = false;
   // A turn that has not started in time (a lock that never comes) is given up, and stopped.
@@ -247,7 +277,6 @@ export async function startThreadTurn(
       ).catch(() => undefined);
     }, deps.startTimeoutMs ?? START_TIMEOUT_MS);
     // A round of the card named, not of whichever card the thread's coworker took on last.
-    const taskId = origin.taskId;
     const forCard = <T>(body: () => T): T =>
       taskId ? turnForCard(taskId, body) : body();
     runAsTenant(tenantId, () =>
@@ -260,7 +289,7 @@ export async function startThreadTurn(
             routineId: origin.source,
             agentId: to.agentId,
             threadId: to.threadId,
-            instruction: text,
+            instruction: said,
             userMessage,
             runId,
             tenantId,
