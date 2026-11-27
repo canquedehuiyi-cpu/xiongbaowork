@@ -850,7 +850,11 @@ jobs:
             aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
               "$file" "s3://$XB_DOWNLOAD_BUCKET/$TAG/${file##*/}"
           done
-      - name: Publish the GitHub Release (existing tag only)
+      # A re-run (Re-run all jobs) after this job once succeeded finds its own Release. It may replace
+      # that Release's record (--clobber), and only when the tag still names this commit and the
+      # record already there is this commit's and this digest's; anything else stops loudly.
+      - id: publish
+        name: Publish the GitHub Release (existing tag only)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -859,10 +863,52 @@ jobs:
         run: |
           set -euo pipefail
           test -s notes/release-notes.md
-          flags=()
-          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
-          gh release create "$TAG" container-images.json \
-            --verify-tag --title "$TAG" --notes-file notes/release-notes.md "${flags[@]}"
+          if view="$(gh release view "$TAG" --json tagName 2>"$RUNNER_TEMP/release-view.err")"; then
+            named="$(jq -r .tagName <<< "$view")"
+            if [ "$named" != "$TAG" ]; then
+              echo "::error::gh release view $TAG answered for '$named'"
+              exit 1
+            fi
+            # The commit the tag names on GitHub now; an annotated tag is followed to its commit.
+            ref="$(gh api "repos/$GH_REPO/git/ref/tags/$TAG")"
+            commit="$(jq -r .object.sha <<< "$ref")"
+            if [ "$(jq -r .object.type <<< "$ref")" = tag ]; then
+              commit="$(gh api "repos/$GH_REPO/git/tags/$commit" --jq .object.sha)"
+            fi
+            if [ "$commit" != "$GITHUB_SHA" ]; then
+              echo "::error::Release $TAG already exists and its tag names $commit, not $GITHUB_SHA; refusing to touch it."
+              exit 1
+            fi
+            # The record it already carries, if any (an earlier upload may have failed), must be this
+            # commit's and name the same GHCR digest.
+            published="$RUNNER_TEMP/published"
+            rm -rf "$published"
+            mkdir -p "$published"
+            if gh release download "$TAG" --pattern container-images.json --dir "$published" 2>"$RUNNER_TEMP/release-download.err"; then
+              old_commit="$(jq -r .commit "$published/container-images.json")"
+              old_digest="$(jq -r .ghcr.digest "$published/container-images.json")"
+              new_digest="$(jq -r .ghcr.digest container-images.json)"
+              if [ "$old_commit" != "$GITHUB_SHA" ] || [ "$old_digest" != "$new_digest" ]; then
+                echo "::error::Release $TAG already carries container-images.json for commit $old_commit, digest $old_digest; this run is $GITHUB_SHA, $new_digest. Refusing to replace it."
+                exit 1
+              fi
+            elif ! grep -qi 'no assets' "$RUNNER_TEMP/release-download.err"; then
+              cat "$RUNNER_TEMP/release-download.err" >&2
+              echo "::error::could not read container-images.json of the existing Release $TAG"
+              exit 1
+            fi
+            gh release upload "$TAG" container-images.json --clobber
+            echo "- GitHub Release \`$TAG\` 已存在（同一标签、同一提交）：用 --clobber 重新上传 container-images.json，没有新建。" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qi 'release not found' "$RUNNER_TEMP/release-view.err"; then
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" container-images.json \
+              --verify-tag --title "$TAG" --notes-file notes/release-notes.md "${flags[@]}"
+          else
+            cat "$RUNNER_TEMP/release-view.err" >&2
+            echo "::error::could not tell whether Release $TAG exists"
+            exit 1
+          fi
 
   # Gate 7, Linux half: a fresh runner installs this release exactly as the README tells a customer
   # to, without any registry login, and checks it runs the GHCR digest recorded above; once with the

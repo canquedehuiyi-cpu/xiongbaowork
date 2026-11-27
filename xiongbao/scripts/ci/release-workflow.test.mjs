@@ -149,19 +149,27 @@ function varsIn(node, path) {
 
 /**
  * The `vars.*` that GitHub evaluates where an Environment-only variable reads as empty: anything
- * outside `jobs` (triggers, concurrency, env), a job's own keys (`if`, `with`, `env`, `outputs`,
- * `runs-on`...), and every step of a job that names no Environment.
+ * outside `jobs` (triggers, concurrency, env); in a job that names no Environment, everything
+ * (`if`, `with`, `env`, `outputs`, steps...); in a job that names one, the keys decided before the
+ * job enters it (`if`, `needs`, `environment`, `strategy`, `runs-on`, `concurrency`). Its `env`,
+ * `outputs` and steps run inside the Environment and see its variables.
  */
-function outsideEnvironment(doc, file) {
+const BEFORE_ENVIRONMENT = [
+  "if",
+  "needs",
+  "environment",
+  "strategy",
+  "runs-on",
+  "concurrency",
+];
+function outsideEnvironment(doc, file, repoLevel = REPO_LEVEL_VARS) {
   const { jobs, ...top } = doc;
   const found = varsIn(top, file);
-  for (const [name, job] of Object.entries(jobs)) {
-    const { steps, ...own } = job;
-    found.push(...varsIn(own, `${file}.jobs.${name}`));
-    if (!job.environment)
-      found.push(...varsIn(steps ?? [], `${file}.jobs.${name}.steps`));
-  }
-  return found.filter((v) => !REPO_LEVEL_VARS.includes(v.name));
+  for (const [name, job] of Object.entries(jobs))
+    for (const [key, value] of Object.entries(job))
+      if (!job.environment || BEFORE_ENVIRONMENT.includes(key))
+        found.push(...varsIn(value, `${file}.jobs.${name}.${key}`));
+  return found.filter((v) => !repoLevel.includes(v.name));
 }
 
 test("no job-level if, and no job outside the release Environment, reads an Environment variable", () => {
@@ -548,4 +556,213 @@ test("G7 installs and checks the public GHCR image, never our private registry",
   expect(step(cleanDeploy, "linux", "digest").run).toContain(
     `"\${expected%@*}:$TAG"`,
   );
+});
+
+// ---- the device release (device-release.yml) follows the same rule ----
+
+const device = load("device-release.yml");
+// Read at job level (macos's `if:`) or in a job without an Environment (assemble), so they must be
+// repository variables; docs/acceptance/HUMAN-STEPS.md says so. XB_DOWNLOAD_BUCKET is not one of them.
+const DEVICE_REPO_LEVEL_VARS = [
+  "DEVICE_RELEASE_MACOS",
+  "DEVICE_RELEASE_REQUIRE_SIGNED",
+];
+
+test("device-release reads XB_DOWNLOAD_* only inside the device-release Environment", () => {
+  expect(
+    outsideEnvironment(device, "device-release.yml", DEVICE_REPO_LEVEL_VARS),
+  ).toEqual([]);
+  expect(DEVICE_REPO_LEVEL_VARS).not.toContain("XB_DOWNLOAD_BUCKET");
+  const steps = readFileSync(
+    join(root, "docs", "acceptance", "HUMAN-STEPS.md"),
+    "utf8",
+  );
+  for (const name of DEVICE_REPO_LEVEL_VARS)
+    expect(steps).toContain(`仓库变量 \`${name}`);
+  // download-page follows what publish read inside the Environment.
+  const publish = device.jobs.publish;
+  expect(publish.environment).toBe("device-release");
+  expect(publish.steps[0].id).toBe("channel");
+  expect(publish.outputs).toEqual({
+    download: expression("steps.channel.outputs.download"),
+  });
+  expect(device.jobs["download-page"].if).toBe(
+    expression(
+      "!cancelled() && needs.publish.result == 'success' && needs.publish.outputs.download == 'true'",
+    ),
+  );
+  // Half a download page stops publish before the Release, naming what is missing.
+  const channel = (env) =>
+    run(device, "publish", "channel", {
+      XB_DOWNLOAD_BUCKET: "",
+      XB_DOWNLOAD_ENDPOINT: "",
+      XB_DOWNLOAD_REGION: "",
+      ...env,
+    });
+  const page = {
+    XB_DOWNLOAD_BUCKET: "downloads",
+    XB_DOWNLOAD_ENDPOINT: "https://s3.example.com",
+    XB_DOWNLOAD_REGION: "cn-north-1",
+  };
+  for (const [env, message] of [
+    [
+      { ...page, XB_DOWNLOAD_ENDPOINT: "" },
+      "XB_DOWNLOAD_BUCKET is set but XB_DOWNLOAD_ENDPOINT is not",
+    ],
+    [
+      { ...page, XB_DOWNLOAD_REGION: "" },
+      "XB_DOWNLOAD_BUCKET is set but XB_DOWNLOAD_REGION is not",
+    ],
+    [
+      { XB_DOWNLOAD_ENDPOINT: "https://s3.example.com" },
+      "XB_DOWNLOAD_ENDPOINT is set but XB_DOWNLOAD_BUCKET is not",
+    ],
+    [
+      { ...page, XB_DOWNLOAD_ENDPOINT: "http://s3.example.com" },
+      "XB_DOWNLOAD_ENDPOINT must start with https://",
+    ],
+  ]) {
+    const refused = channel(env);
+    expect([message, refused.status]).toEqual([message, 1]);
+    expect(refused.log).toContain(`::error::${message}`);
+    expect(refused.outputs).toEqual({});
+  }
+  const none = channel({});
+  expect(none.status).toBe(0);
+  expect(none.outputs).toEqual({ download: "false" });
+  expect(none.log).toContain("::notice::");
+  expect(channel(page).outputs).toEqual({ download: "true" });
+  const order = publish.steps.map((s) => s.id ?? s.name);
+  expect(order.indexOf("channel")).toBeLessThan(order.indexOf("publish"));
+});
+
+// ---- publishing the GitHub Release again ----
+
+/**
+ * Runs github-release's publish step against a stub `gh`. `release` is the existing Release (null:
+ * none), `tagCommit` what the tag names on GitHub, `record` the container-images.json it carries.
+ */
+function publishRelease({
+  release: existingRelease = null,
+  tagCommit = SHA,
+  annotated = false,
+  record,
+  viewError = "release not found",
+}) {
+  const state = scratch();
+  const cwd = scratch();
+  mkdirSync(join(cwd, "notes"));
+  writeFileSync(join(cwd, "notes", "release-notes.md"), "notes");
+  writeFileSync(
+    join(cwd, "container-images.json"),
+    JSON.stringify({ commit: SHA, ghcr: { digest: D1 } }),
+  );
+  if (record)
+    writeFileSync(join(state, "container-images.json"), JSON.stringify(record));
+  const s = JSON.stringify(state);
+  const tools = stubs({
+    gh: `case "$1 $2" in
+  "release view")
+    ${existingRelease ? `echo '${JSON.stringify({ tagName: existingRelease })}'` : `echo "${viewError}" >&2; exit 1`} ;;
+  "api repos/O/r/git/ref/tags/v0.2.17")
+    echo '${JSON.stringify({ object: { type: annotated ? "tag" : "commit", sha: annotated ? "f".repeat(40) : tagCommit } })}' ;;
+  "api repos/O/r/git/tags/${"f".repeat(40)}") echo ${tagCommit} ;;
+  "release download")
+    if [ -f ${s}/container-images.json ]; then cp ${s}/container-images.json "\${@: -1}/"; else echo "no assets match the file pattern" >&2; exit 1; fi ;;
+  "release upload" | "release create") ;;
+  *) exit 2 ;;
+esac`,
+  });
+  const script = join(scratch(), "publish.sh");
+  writeFileSync(script, step(release, "github-release", "publish").run);
+  const summary = join(scratch(), "summary");
+  writeFileSync(summary, "");
+  const r = spawnSync(
+    "bash",
+    ["--noprofile", "--norc", "-eo", "pipefail", script],
+    {
+      cwd,
+      encoding: "utf8",
+      env: {
+        PATH: tools.path,
+        HOME: tmpdir(),
+        RUNNER_TEMP: scratch(),
+        GITHUB_STEP_SUMMARY: summary,
+        GITHUB_SHA: SHA,
+        GH_TOKEN: "t",
+        GH_REPO: "O/r",
+        TAG: "v0.2.17",
+        PRERELEASE: "false",
+      },
+    },
+  );
+  const calls = tools.calls();
+  return {
+    status: r.status,
+    log: r.stdout + r.stderr,
+    created: calls.filter((c) => c.startsWith("gh release create")),
+    uploaded: calls.filter((c) => c.startsWith("gh release upload")),
+  };
+}
+
+test("a first publish creates the Release from the existing tag", () => {
+  const first = publishRelease({});
+  expect(first.status).toBe(0);
+  expect(first.created).toEqual([
+    "gh release create v0.2.17 container-images.json --verify-tag --title v0.2.17 --notes-file notes/release-notes.md",
+  ]);
+  expect(first.uploaded).toEqual([]);
+});
+
+test("a re-run over its own Release replaces the record with --clobber instead of failing", () => {
+  for (const options of [
+    { release: "v0.2.17", record: { commit: SHA, ghcr: { digest: D1 } } },
+    // An earlier upload that never made it: nothing to compare, the record goes up.
+    { release: "v0.2.17" },
+    { release: "v0.2.17", annotated: true },
+  ]) {
+    const rerun = publishRelease(options);
+    expect([JSON.stringify(options), rerun.status]).toEqual([
+      JSON.stringify(options),
+      0,
+    ]);
+    expect(rerun.created).toEqual([]);
+    expect(rerun.uploaded).toEqual([
+      "gh release upload v0.2.17 container-images.json --clobber",
+    ]);
+  }
+});
+
+test("an existing Release from another commit, or with another image, is never touched", () => {
+  for (const [options, message] of [
+    [{ release: "v0.2.17", tagCommit: "9".repeat(40) }, "refusing to touch it"],
+    [
+      { release: "v0.2.17", annotated: true, tagCommit: "9".repeat(40) },
+      "refusing to touch it",
+    ],
+    [
+      {
+        release: "v0.2.17",
+        record: { commit: "9".repeat(40), ghcr: { digest: D1 } },
+      },
+      "Refusing to replace it",
+    ],
+    [
+      { release: "v0.2.17", record: { commit: SHA, ghcr: { digest: D2 } } },
+      "Refusing to replace it",
+    ],
+    [{ viewError: "HTTP 502: Bad Gateway" }, "could not tell whether Release"],
+  ]) {
+    const refused = publishRelease(options);
+    expect([message, refused.status]).toEqual([message, 1]);
+    expect(refused.log).toContain(message);
+    expect(refused.created).toEqual([]);
+    expect(refused.uploaded).toEqual([]);
+  }
+  // As written: --clobber only on the upload, and create still insists on the existing tag.
+  const script = step(release, "github-release", "publish").run;
+  expect(script).toContain(
+    'gh release upload "$TAG" container-images.json --clobber',
+  );
+  expect(script).toMatch(/gh release create "\$TAG"[^\n]*\\\n\s+--verify-tag/);
 });

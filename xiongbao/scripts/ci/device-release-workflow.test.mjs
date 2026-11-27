@@ -1824,7 +1824,10 @@ test("the device installers go up to our download page after they are published"
   expect(job.needs).toEqual(["tag-check", "publish"]);
   expect(job.if).toContain("needs.publish.result == 'success'");
   expect(job.if).toContain("!cancelled()");
-  expect(job.if).toContain("vars.XB_DOWNLOAD_BUCKET != ''");
+  // Decided inside the device-release Environment (publish's output), not by a job-level
+  // vars.XB_DOWNLOAD_BUCKET, which an Environment-only variable would leave empty.
+  expect(job.if).toContain("needs.publish.outputs.download == 'true'");
+  expect(job.if).not.toContain("vars.");
   expect(job.environment).toBe("device-release");
   expect(job.permissions).toEqual({ contents: "read" });
   const download = job.steps.find((s) =>
@@ -1958,10 +1961,7 @@ test("our channel steps skip cleanly when unconfigured", () => {
     vars: {},
     inputs: {},
   };
-  const pageConfigured = {
-    vars: { ...OWN, XB_DOWNLOAD_BUCKET: "downloads" },
-    inputs: {},
-  };
+  const pageConfigured = { outputs: { publish: { download: "true" } } };
   const mirrorIf = containerRelease.jobs.mirror.if;
   expect(when(mirrorIf, configuredNot)).toBe(false);
   expect(
@@ -1973,9 +1973,13 @@ test("our channel steps skip cleanly when unconfigured", () => {
     false,
   );
   const pageIf = workflow.jobs["download-page"].if;
-  expect(when(pageIf, { ...configuredNot, needs: ok(["publish"]) })).toBe(
-    false,
-  );
+  expect(
+    when(pageIf, {
+      outputs: { publish: { download: "false" } },
+      vars: { XB_DOWNLOAD_BUCKET: "downloads" },
+      needs: ok(["publish"]),
+    }),
+  ).toBe(false);
   expect(when(pageIf, { ...pageConfigured, needs: ok(["publish"]) })).toBe(
     true,
   );
@@ -2101,7 +2105,7 @@ test("our channel steps skip cleanly when unconfigured", () => {
   // The device release says it in publish, which runs either way, after the GitHub Release.
   const publishSteps = workflow.jobs.publish.steps;
   const notice = publishSteps.find(
-    (s) => s.if === expression("vars.XB_DOWNLOAD_BUCKET == ''"),
+    (s) => s.if === expression("steps.channel.outputs.download == 'false'"),
   );
   expect(publishSteps.indexOf(notice)).toBeGreaterThan(
     publishSteps.indexOf(step("publish", "publish")),
