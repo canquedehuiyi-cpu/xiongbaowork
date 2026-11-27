@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FILE_BYTES_HEADER } from "../../shared/file-download";
 import { reservePort } from "../../tests/support/reserved-port";
 import { DEFAULT_WORKSPACE_LIMITS } from "../src/workspace";
 
@@ -90,6 +91,10 @@ describe.skipIf(!asked)("the computer file download endpoint", () => {
       "application/octet-stream",
     );
     expect(response.headers.get("content-length")).toBe(String(payload.length));
+    // Stated apart from Content-Length too, which a confined workspace's stream loses.
+    expect(response.headers.get(FILE_BYTES_HEADER)).toBe(
+      String(payload.length),
+    );
     expect(response.headers.get("content-disposition")).toContain(
       'filename="data.bin"',
     );

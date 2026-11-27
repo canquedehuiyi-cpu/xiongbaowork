@@ -1,4 +1,5 @@
 import type { HandoffRequest } from "@xiongbao/shared/computer-control";
+import { FILE_BYTES_HEADER } from "../../../shared/file-download";
 import { HEADER } from "../../../shared/wire-headers";
 import type { NavigateResult } from "./schema";
 import { checkNavigationTarget } from "./target";
@@ -267,6 +268,58 @@ export function seatHeaders(seat: SeatAddress): Record<string, string> {
   };
 }
 
+const UNREADABLE_FILE =
+  "The Bot's computer sent back a file that couldn't be read.";
+
+const INVALID = Symbol("invalid length");
+
+/** A byte-length header: `null` when absent, `INVALID` when it is not a plain non-negative integer. */
+function byteLength(value: string | null): number | null | typeof INVALID {
+  if (value === null) return null;
+  if (!/^\d+$/.test(value)) return INVALID;
+  const bytes = Number(value);
+  return Number.isSafeInteger(bytes) ? bytes : INVALID;
+}
+
+/**
+ * `body`, held to exactly `bytes`. A chunk that would take it past the stated length is not passed
+ * on: the stream fails and the computer's body is cancelled, so the computer can never send more than
+ * it announced, which is also what keeps the size limit it checked binding here. A body that ends
+ * short fails the same way rather than handing on a truncated file as a whole one. Nothing is read
+ * before the consumer asks (`highWaterMark: 0`), so a reader that stops early, like the text
+ * preview, still costs only what it read.
+ */
+function exactly(
+  body: ReadableStream<Uint8Array>,
+  bytes: number,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  let seen = 0;
+  return new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        const { done, value } = await reader.read();
+        if (done) {
+          if (seen === bytes) controller.close();
+          else controller.error(new ComputerUnavailableError(UNREADABLE_FILE));
+          return;
+        }
+        seen += value.byteLength;
+        if (seen > bytes) {
+          await reader.cancel().catch(() => undefined);
+          controller.error(new ComputerUnavailableError(UNREADABLE_FILE));
+          return;
+        }
+        controller.enqueue(value);
+      },
+      cancel(reason) {
+        return reader.cancel(reason);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+}
+
 /**
  * Send authenticated HTTP requests to one located agent-computer process.
  *
@@ -389,19 +442,36 @@ export function createComputerTransport(
       throwMappedError(response.status, body);
     }
 
-    const length = response.headers.get("content-length");
-    const bytes =
-      length !== null && /^\d+$/.test(length) ? Number(length) : Number.NaN;
-    if (!response.body || !Number.isSafeInteger(bytes) || bytes < 0) {
+    /*
+     * The length is `Content-Length` when the computer could keep it, and `FILE_BYTES_HEADER` always.
+     * A confined workspace streams from the descriptor it checked, and Bun answers that stream chunked
+     * without `Content-Length` (shared/file-download.ts). Both present must agree; a malformed one, or
+     * neither, is refused as before.
+     */
+    const framed = byteLength(response.headers.get("content-length"));
+    const stated = byteLength(response.headers.get(FILE_BYTES_HEADER));
+    const bytes = framed ?? stated;
+    if (
+      !response.body ||
+      framed === INVALID ||
+      stated === INVALID ||
+      bytes === null ||
+      bytes === INVALID ||
+      (framed !== null && stated !== null && framed !== stated)
+    ) {
       // Nothing else will ever read this body, so release it here rather than
       // leaving the whole download budget checked out of the pool. A cancel that
       // fails must not replace the refusal the caller is told about.
       await response.body?.cancel().catch(() => undefined);
-      throw new ComputerUnavailableError(
-        "The Bot's computer sent back a file that couldn't be read.",
-      );
+      throw new ComputerUnavailableError(UNREADABLE_FILE);
     }
-    return { body: response.body, bytes };
+    // With `Content-Length`, HTTP framing already holds the body to it, and the body is passed on
+    // untouched. Without it nothing on the wire bounds a chunked body, so the stated length is
+    // enforced here, byte for byte, as it is read.
+    return {
+      body: framed === null ? exactly(response.body, bytes) : response.body,
+      bytes,
+    };
   }
 
   function post<T>(
