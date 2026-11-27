@@ -411,6 +411,57 @@ export function evidenceOf(ref: unknown): EvidenceRow[] {
   return rows;
 }
 
+/**
+ * 服务器交付时复跑员工声明的核对命令，每条的结果（`deliverableRef.reruns`，借鉴改进 PR 5）：
+ * 「复核通过：<命令>」「复核不一致：<命令>」「未复核：<命令>（<原因>）」。不一致那条的原因另放在 `why`。
+ */
+export type RerunRow = {
+  result: "passed" | "mismatch" | "unverified";
+  text: string;
+  why?: string;
+};
+
+const RERUN_RESULTS = new Set(["passed", "mismatch", "unverified"]);
+
+/** 交付记录里的复核结果，一条一行；读不懂的项不念。 */
+export function rerunsOf(ref: unknown): RerunRow[] {
+  if (!ref || typeof ref !== "object") return [];
+  const reruns = (ref as Record<string, unknown>).reruns;
+  if (!Array.isArray(reruns)) return [];
+  return reruns.flatMap((item): RerunRow[] => {
+    if (!item || typeof item !== "object") return [];
+    const { command, result, why } = item as Record<string, unknown>;
+    if (typeof command !== "string" || !command.trim()) return [];
+    if (typeof result !== "string" || !RERUN_RESULTS.has(result)) return [];
+    const reason = typeof why === "string" && why.trim() ? why.trim() : "";
+    if (result === "passed") return [{ result, text: `复核通过：${command}` }];
+    if (result === "mismatch")
+      return [
+        {
+          result,
+          text: `复核不一致：${command}`,
+          ...(reason ? { why: reason } : {}),
+        },
+      ];
+    return [
+      {
+        result: "unverified",
+        text: `未复核：${command}${reason ? `（${reason}）` : ""}`,
+      },
+    ];
+  });
+}
+
+/** 带「复核不一致」的卡，交付详情顶部的那一行。 */
+export const RERUN_WARNING = "复跑结果和员工说的不一致，验收时请留意";
+
+/** 交付记录里有复核不一致的命令时给 {@link RERUN_WARNING}，否则 null。 */
+export function rerunWarningOf(ref: unknown): string | null {
+  return rerunsOf(ref).some((row) => row.result === "mismatch")
+    ? RERUN_WARNING
+    : null;
+}
+
 /** 等你验收的卡上那一行：「交付物：回访名单 · 抽查 5 条电话都能打通」。 */
 export function deliverableLine(ref: unknown): string | null {
   const rows = evidenceOf(ref);

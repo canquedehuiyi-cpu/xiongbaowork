@@ -113,6 +113,7 @@ tests/approvals-questions.test.ts
 tests/approvals-saved-call.test.ts
 tests/approvals-store.integration.test.ts
 tests/approvals-team-desktop-words.integration.test.ts
+tests/approvals-would-allow.test.ts
 tests/approvals-zh-handoff.test.ts
 tests/approvals.test.ts
 tests/apps-page-wording.test.ts
@@ -699,6 +700,7 @@ tests/remote-coordination.test.ts
 tests/remote-person-question.integration.test.ts
 tests/request-actor.test.ts
 tests/request-trust.integration.test.ts
+tests/rerun-gate.test.ts
 tests/resource-projects.integration.test.ts
 tests/responsibilities-engine.test.ts
 tests/responsibilities-github.test.ts

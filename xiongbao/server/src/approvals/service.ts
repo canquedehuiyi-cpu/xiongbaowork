@@ -227,6 +227,18 @@ export function isApprovedExecution(candidate: ApprovalCandidate): boolean {
     return false;
   }
 }
+const askingNobody = new AsyncLocalStorage<true>();
+/** What a call made inside {@link withoutAsking} is told when the rules would have asked about it. */
+export const NOT_ASKED =
+  "这一步只在不用审批时执行，按现在的规则它要审批或被禁止，没有执行。";
+/**
+ * Run `work` so that the gate never opens a request inside it: an action the rules let through runs,
+ * and one they would ask about (or hand off) is refused with {@link NOT_ASKED} instead of asking. For
+ * a step the server takes on its own, after the fact (re-running a delivery's checks), which must
+ * never put a card in front of the person.
+ */
+export const withoutAsking = <T>(work: () => Promise<T>): Promise<T> =>
+  askingNobody.run(true, work);
 class ApprovalValidated extends HeadlessToolSuspension {
   constructor() {
     super("The action was checked before execution.", {
@@ -439,6 +451,37 @@ export function createApprovalService(
   ): Promise<ApprovalPolicyOutcome | undefined> {
     const policy = store.policy;
     if (!policy) return undefined;
+    const { outcome, continuation } = await outcomeOf(candidate, policy, true);
+    // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.
+    if (
+      outcome.review ||
+      outcome.behaviour !== "allow" ||
+      outcome.source !== "default"
+    )
+      await policy.recordDecision({
+        ownerUserId: candidate.actorId,
+        botId: candidate.botId,
+        toolRef: candidate.toolRef,
+        effect: candidate.effect,
+        scope: candidate.scope,
+        outcome,
+        target: candidate.target,
+        ...(continuation?.initiator
+          ? { initiator: continuation.initiator }
+          : {}),
+        ...callOf(continuation),
+      });
+    return outcome;
+  }
+  /**
+   * What the rules decide about this action, read only. `withReviewer` false leaves the reviewer model
+   * out: an action that needs reviewing then fails closed (asks) without a call to any model.
+   */
+  async function outcomeOf(
+    candidate: ApprovalCandidate,
+    policy: NonNullable<ApprovalStore["policy"]>,
+    withReviewer: boolean,
+  ) {
     /*
      * The Bot owner's side is read in the owner's frame whoever acts (SEC1 D9). A failure to read it
      * is not "no owner rules": it throws, and the action is not carried out (fail closed).
@@ -476,33 +519,14 @@ export function createApprovalService(
       customRulesEnabled: team.customRulesEnabled,
       autoReview: preferences.autoReview || team.enforceAutoReview,
       askBeforeChanges: preferences.enabled,
-      ...(options.review ? { model: options.review } : {}),
+      ...(options.review && withReviewer ? { model: options.review } : {}),
       ...(employee ? { security: employee.security } : {}),
       enforceDangerousCommands: team.enforceDangerousCommands,
       hostCommandsCap: team.hostCommandsCap,
       desktopActionWords: team.desktopActionWords ?? undefined,
       ...(guidance ? { guidance } : {}),
     });
-    // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.
-    if (
-      outcome.review ||
-      outcome.behaviour !== "allow" ||
-      outcome.source !== "default"
-    )
-      await policy.recordDecision({
-        ownerUserId: candidate.actorId,
-        botId: candidate.botId,
-        toolRef: candidate.toolRef,
-        effect: candidate.effect,
-        scope: candidate.scope,
-        outcome,
-        target: candidate.target,
-        ...(continuation?.initiator
-          ? { initiator: continuation.initiator }
-          : {}),
-        ...callOf(continuation),
-      });
-    return outcome;
+    return { outcome, continuation };
   }
   return {
     store,
@@ -701,6 +725,8 @@ export function createApprovalService(
           : trustedRead || !(await store.enabled(candidate.actorId))
       )
         return;
+      // Inside `withoutAsking`: nothing is opened; the step is refused instead.
+      if (askingNobody.getStore()) throw new ApprovalRefusedError(NOT_ASKED);
       const { ownConnectionRead: _trust, ...asked } = candidate;
       const action: ApprovalAction = {
         ...approvalAction(asked),
@@ -760,6 +786,56 @@ export function createApprovalService(
           continuation: action.continuation,
         },
       );
+    },
+    /**
+     * Whether `gate` would let this action through right now without asking anybody, read only: the
+     * same inputs and order as the gate (an approved action's re-check or run, a task that asks before
+     * every change, the person's earlier answer in this conversation, then `decideAction`), but it
+     * opens no request, asks nobody, records no decision and calls no reviewer model. An action that
+     * would need reviewing answers false, as does anything but a plain allow.
+     */
+    async wouldAllow(candidate: ApprovalCandidate): Promise<boolean> {
+      if (validationProbe.getStore() || executionAuthority.getStore())
+        return false;
+      const policy = store.policy;
+      const continuation = candidate.continuation ?? currentApprovalContext();
+      const inTask =
+        continuation?.threadId !== undefined &&
+        (await store.asksEveryChange?.(
+          candidate.actorId,
+          continuation.threadId,
+        )) === true;
+      const trustedRead = inTask && candidate.ownConnectionRead === true;
+      if (inTask && !trustedRead) return false;
+      if (policy && candidate.effect !== "read" && continuation?.threadId) {
+        const prior = await policy.findEquivalent({
+          ownerUserId: candidate.actorId,
+          threadId: continuation.threadId,
+          equivalence: equivalenceOf(candidate),
+          excludeToolCallId: continuation.toolCallId,
+        });
+        if (prior?.status === "pending") return false;
+        if (
+          prior?.decision === "deny" &&
+          (prior.action.userTurns ?? 0) >= userTurnsOf(continuation)
+        )
+          return false;
+      }
+      if (policy) {
+        const { outcome } = await outcomeOf(
+          trustedRead ? { ...candidate, effect: "read" } : candidate,
+          policy,
+          false,
+        );
+        return outcome.behaviour === "allow";
+      }
+      return candidate.effect === "read"
+        ? !desktopFloor(candidate) &&
+            !(
+              candidate.subject?.desktopWrite &&
+              desktopActionFloor(candidate, desktopActionWordsOf(undefined))
+            )
+        : trustedRead || !(await store.enabled(candidate.actorId));
     },
     /**
      * `via`：本人在哪里决定的（网页 `web`、微信 `wechat`、Slack / Teams 卡片），记进审批的 `decided_via`，
