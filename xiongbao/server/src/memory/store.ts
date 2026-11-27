@@ -197,6 +197,9 @@ export function createMemoryStore(database: Database) {
           sourceLink: parsed.data.sourceLink ?? null,
           observedAt,
           importDigest: digest,
+          fromCorrection: input.fromCorrection ?? false,
+          correctionCount: Math.max(0, Math.trunc(input.correctionCount ?? 0)),
+          replacesId: input.replacesId ?? null,
         })
         .onConflictDoNothing({
           target: [
@@ -226,6 +229,22 @@ export function createMemoryStore(database: Database) {
         .limit(1);
       if (!raced) throw new Error("Memory insert returned no row.");
       return { id: raced.id, duplicate: true, forgotten: !!raced.deletedAt };
+    },
+    /** 本人又一次就这件事纠正了员工：次数加一，更新时间。只改本人的。 */
+    async bumpCorrection(ownerUserId: string, id: string): Promise<void> {
+      await database
+        .update(personalMemories)
+        .set({
+          correctionCount: sql`${personalMemories.correctionCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(personalMemories.id, id),
+            eq(personalMemories.ownerUserId, ownerUserId),
+            isNull(personalMemories.deletedAt),
+          ),
+        );
     },
     async update(
       ownerUserId: string,

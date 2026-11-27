@@ -692,3 +692,103 @@ test("resetting one Bot leaves another Bot's copy of the same fact", () =>
         .where(eq(personalMemories.content, content));
     }
   }));
+
+test("a memory formed from a correction keeps its source, count and what it replaces", () =>
+  asOwner(async () => {
+    const old = `Corrected old fact ${randomUUID()}`;
+    const content = `Corrected new fact ${randomUUID()}`;
+    const formed: string[] = [];
+    try {
+      const target = await store.formMemory(owner, {
+        agentId: bot,
+        content: old,
+        sourceApp: "Docs",
+      });
+      formed.push(target.id);
+      const correction = await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "Docs",
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: target.id,
+      });
+      formed.push(correction.id);
+      const row = (await store.list(owner)).find(
+        (memory) => memory.id === correction.id,
+      );
+      expect(row).toMatchObject({
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: target.id,
+      });
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(inArray(personalMemories.id, formed));
+    }
+  }));
+
+test("a memory formed without correction fields reads back as no correction", () =>
+  asOwner(async () => {
+    const content = `Plain formed fact ${randomUUID()}`;
+    try {
+      const formed = await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "Docs",
+      });
+      const row = (await store.list(owner)).find(
+        (memory) => memory.id === formed.id,
+      );
+      expect(row).toMatchObject({
+        fromCorrection: false,
+        correctionCount: 0,
+        replacesId: null,
+      });
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(eq(personalMemories.content, content));
+    }
+  }));
+
+test("bumpCorrection counts one more correction, and only for the memory's owner", () =>
+  asOwner(async () => {
+    const content = `Bumped correction ${randomUUID()}`;
+    try {
+      const formed = await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "Docs",
+        fromCorrection: true,
+        correctionCount: 1,
+      });
+      const read = async () => {
+        const [row] = await database
+          .select({
+            count: personalMemories.correctionCount,
+            updatedAt: personalMemories.updatedAt,
+          })
+          .from(personalMemories)
+          .where(eq(personalMemories.id, formed.id));
+        if (!row) throw new Error("the formed memory is gone");
+        return row;
+      };
+      const before = await read();
+      await store.bumpCorrection(owner, formed.id);
+      const after = await read();
+      expect(after.count).toBe(2);
+      expect(after.updatedAt.getTime()).toBeGreaterThanOrEqual(
+        before.updatedAt.getTime(),
+      );
+      // Another person's id for the same row changes nothing, from either frame.
+      await store.bumpCorrection(other, formed.id);
+      await asOther(() => store.bumpCorrection(other, formed.id));
+      expect(await read()).toEqual(after);
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(eq(personalMemories.content, content));
+    }
+  }));
