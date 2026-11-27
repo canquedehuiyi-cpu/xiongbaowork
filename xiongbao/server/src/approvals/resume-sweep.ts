@@ -8,6 +8,10 @@ import { PERSON_INITIATOR } from "../audit";
 import { firingOfInitiator } from "../automations/waker-executor";
 import type { GroupConversations } from "../channels/group";
 import type { ChannelStore } from "../channels/routes";
+import {
+  markBeforeApprovedAction,
+  withApprovedActionTurn,
+} from "../computer/turn-artifacts";
 import type { Database } from "../db/client";
 import {
   intelligenceChannelMappings,
@@ -208,7 +212,14 @@ export function createApprovalResumeTick(deps: {
                 approvalService.validateReentry(action, () =>
                   executeApprovedAction(action),
                 ),
-              execute: executeApprovedAction,
+              // 先给员工的电脑记快照，续跑的那一轮才列得出这次动作写下的文件（`computer/turn-artifacts.ts`）。
+              execute: async (action) => {
+                await markBeforeApprovedAction({
+                  approvalId: input.approvalId,
+                  botId: action.botId,
+                });
+                return executeApprovedAction(action);
+              },
               continue: async ({
                 continuation: snapshot,
                 result,
@@ -415,10 +426,13 @@ export function createApprovalResumeTick(deps: {
                 reason,
                 resumeDependencies,
               );
-            await approvalService.resume(
-              input.ownerUserId,
-              input.approvalId,
-              resumeDependencies,
+            // 执行与续跑包在一起：执行前记的快照留给续跑的那个 run 沿用。
+            await withApprovedActionTurn({ personId: input.ownerUserId }, () =>
+              approvalService.resume(
+                input.ownerUserId,
+                input.approvalId,
+                resumeDependencies,
+              ),
             );
             if (
               !(await approvalQueue.finish({
