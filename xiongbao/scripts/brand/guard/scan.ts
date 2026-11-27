@@ -284,33 +284,70 @@ function erased(
   return rest;
 }
 
-const STATEMENT_START =
-  /^\s*(?:import|export)\s*(?:type\s+)?(?:\{|\*|[\w$]+\s*(?:,|from\b))/;
-const STATEMENT_FROM = /\bfrom\s+["']([^"']+)["']/;
+// What an import or re-export statement may hold, and nothing else: member names, `type`, `as`, commas,
+// braces, `* as name`, and the module in quotes. A line that holds anything more is no part of one.
+const MODULE = String.raw`["']([^"'\s]+)["']`;
+const MEMBER = String.raw`(?:type\s+)?[\w$]+(?:\s+as\s+[\w$]+)?`;
+const MEMBERS = String.raw`(?:${MEMBER}(?:\s*,\s*${MEMBER})*\s*,?)?`;
+const CLAUSE = String.raw`(?:\{\s*${MEMBERS}\s*\}|\*(?:\s+as\s+[\w$]+)?|[\w$]+(?:\s*,\s*\{\s*${MEMBERS}\s*\})?)`;
+const KEYWORD = String.raw`^\s*(?:import|export)\s+(?:type\s+)?`;
+const ONE_LINE = new RegExp(
+  String.raw`${KEYWORD}${CLAUSE}\s+from\s+${MODULE}\s*;?\s*$`,
+);
+const OPENING = new RegExp(
+  String.raw`${KEYWORD}(?:[\w$]+\s*,\s*)?\{\s*${MEMBERS}\s*$`,
+);
+const MEMBER_LINE = new RegExp(String.raw`^\s*${MEMBERS}\s*$`);
+const CLOSING = new RegExp(
+  String.raw`^\s*${MEMBERS}\s*\}\s*from\s+${MODULE}\s*;?\s*$`,
+);
+/** Only code has import statements; a document's example of one is text. */
+const CODE_FILE = /\.(?:ts|tsx|js|mjs|cjs|jsx)$/;
+/** The library's own modules, by the start of the specifier. */
+const LIBRARY_MODULE = /^@copilotkit\//;
+
+/** Whether each line starts inside a template literal (backticks counted outside quotes and regex classes). */
+function templateStarts(lines: string[]): boolean[] {
+  let open = false;
+  return lines.map((line) => {
+    const starts = open;
+    const bare = line.replace(/\\./g, "");
+    const ticks = (
+      (open
+        ? bare
+        : bare.replace(/"[^"]*"|'[^']*'|(?<=[/|(])\[[^\]]*\]/g, "")
+      ).match(/`/g) ?? []
+    ).length;
+    if (ticks % 2 === 1) open = !open;
+    return starts;
+  });
+}
 
 /**
  * The lines of every import or re-export statement whose module is the library's (`… from "@copilotkit/…"`),
  * one line or many. A name the library exports may stand there, to be given this code's own name with
- * `as`; anywhere else in the file only that own name is written.
+ * `as`; anywhere else in the file only that own name is written. Only a whole statement counts: a line
+ * that holds anything besides the statement, a line inside a template literal, a statement whose module
+ * merely contains the scope, or a multi-line list with a line that is no member gives the exemption up.
  */
 export function libraryStatementLines(lines: string[]): Set<number> {
   const inside = new Set<number>();
+  const inTemplate = templateStarts(lines);
   for (let i = 0; i < lines.length; i++) {
-    if (!STATEMENT_START.test(lines[i] as string)) continue;
-    let end = i;
-    while (
-      end < lines.length &&
-      end - i < 200 &&
-      !STATEMENT_FROM.test(lines[end] as string)
-    ) {
-      if (end > i && /[;]\s*$/.test(lines[end] as string)) break;
-      end++;
+    if (inTemplate[i]) continue;
+    const line = lines[i] as string;
+    const single = ONE_LINE.exec(line);
+    if (single) {
+      if (LIBRARY_MODULE.test(single[1] as string)) inside.add(i);
+      continue;
     }
-    const from = STATEMENT_FROM.exec(lines[end] ?? "");
-    if (from === null) continue;
-    if (PACKAGE_SPECIFIER.test(from[1] as string))
+    if (!OPENING.test(line)) continue;
+    let end = i + 1;
+    while (end < lines.length && MEMBER_LINE.test(lines[end] as string)) end++;
+    const closing = CLOSING.exec(lines[end] ?? "");
+    if (closing === null) continue;
+    if (LIBRARY_MODULE.test(closing[1] as string))
       for (let k = i; k <= end; k++) inside.add(k);
-    PACKAGE_SPECIFIER.lastIndex = 0;
     i = end;
   }
   return inside;
@@ -337,7 +374,9 @@ export function scanSources(
     if (!OLD_NAME.test(text)) continue;
     const entries = allow.filter((entry) => entry.file === path);
     const lines = text.split("\n");
-    const library = libraryStatementLines(lines);
+    const library = CODE_FILE.test(path)
+      ? libraryStatementLines(lines)
+      : new Set<number>();
     lines.forEach((line, index) => {
       if (!OLD_NAME.test(line) || library.has(index)) return;
       if (OLD_NAME.test(erased(path, line, entries, used, usedPatterns)))

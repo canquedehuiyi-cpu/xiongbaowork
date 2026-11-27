@@ -120,6 +120,44 @@ describe("one rule: an old name anywhere fails", () => {
     ]);
   });
 
+  test("only a whole import statement from the library passes: nothing it is glued to, nothing it swallows", () => {
+    const { findings } = fixture({
+      // A statement with no module, then a line that only mentions the library in a string.
+      "app/src/a.ts": [
+        "export { a };",
+        "const openbot = 1",
+        "const s = \"from '@copilotkit/x'\"",
+      ].join("\n"),
+      // Code after the statement on the same line.
+      "app/src/b.ts":
+        'import { useCopilotKit as useChatRuntime } from "@copilotkit/react-core/v2"; const openbot = 1;',
+      // An import written inside a template literal is text, not a statement.
+      "app/src/c.ts": [
+        "const prompt = `",
+        'import { CopilotKitProvider } from "@copilotkit/react-core/v2";',
+        "`;",
+      ].join("\n"),
+      // A path that merely contains the scope is some other module.
+      "app/src/d.ts":
+        'import { CopilotKitProvider as P } from "./vendor/@copilotkit/react-core";',
+      // A line in the middle that is no member of the list gives the whole statement up.
+      "app/src/e.ts": [
+        "import {",
+        "  CopilotKitProvider as P,",
+        "  openbot = 1,",
+        '} from "@copilotkit/react-core/v2";',
+      ].join("\n"),
+    });
+    expect(where(findings)).toEqual([
+      "app/src/a.ts:2",
+      "app/src/b.ts:1",
+      "app/src/c.ts:2",
+      "app/src/d.ts:1",
+      "app/src/e.ts:2",
+      "app/src/e.ts:3",
+    ]);
+  });
+
   test("an entry passes its exact text in its own file only, and an entry nothing needs is reported", () => {
     const entry: AllowEntry = {
       file: "app/src/x.ts",
