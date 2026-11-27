@@ -73,7 +73,7 @@ printf %s true > "$d/${OLD}SINGLE_USER"
 err=$(sh "$SCRIPT" "$d" "$NO_DEFAULTS" 2>&1 >/dev/null) && fail "empty new over an old value was not refused"
 case $err in *${OLD}SINGLE_USER*) ;; *) fail "the refusal does not name ${OLD}SINGLE_USER: $err" ;; esac
 
-# 5b. another tool's variable under the old prefix (the upstream-sync tooling's) is no setting: left alone,
+# 5b. another tool's variable under the old prefix (an external release tool's) is no setting: left alone,
 #     silent; a platform model key and a build identity count by their families
 d=$T/other-tool; mkdir "$d"
 printf %s example/upstream > "$d/${OLD}UPSTREAM_REPOSITORY"

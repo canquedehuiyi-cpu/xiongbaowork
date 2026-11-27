@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -80,10 +83,10 @@ let script: Script = async () => {};
 let joins = 0;
 let history: () => Response;
 let historyReads = 0;
-let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+let core: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
 
 function CoreProbe() {
-  core = useCopilotKit().copilotkit;
+  core = useChatRuntime().copilotkit;
   return null;
 }
 
@@ -264,7 +267,7 @@ let joinHeld: Promise<void> | null = null;
 let joinReached: () => void = () => {};
 
 function HoldJoin() {
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   useEffect(() => {
     const subscription = copilotCore.subscribe({
       onAgentRunStarted: async () => {
@@ -281,11 +284,11 @@ function HoldJoin() {
 function opened() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <CoreProbe />
         <HoldJoin />
         <ChannelChat channel={channel} runtimeAgentId="join-bot" />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }
@@ -438,11 +441,11 @@ test("a reply is shown once and whole after leaving its conversation and coming 
   });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <CoreProbe />
         <HoldJoin />
         <RouterProvider router={router as never} />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
   await view.findByText(ASKED_SO_FAR, undefined, { timeout: 4000 });

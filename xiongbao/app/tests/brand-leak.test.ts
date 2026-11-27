@@ -90,9 +90,34 @@ describe("one rule: an old name anywhere fails", () => {
         'import { thing } from "@copilotkit/react-core/v2";',
         'mock.module("@copilotkit/runtime", () => ({}));',
         "const c = CopilotKit;",
+        '"/repo/node_modules/.bun/@copilotkit+react-core@1.70.1/node_modules/x.js",',
       ].join("\n"),
     });
     expect(where(findings)).toEqual(["app/src/x.tsx:3"]);
+  });
+
+  test("a name inside an import statement from the library passes, one line or many; anywhere else it fails", () => {
+    const { findings } = fixture({
+      "app/src/x.tsx": [
+        "import {",
+        "  CopilotKitProvider as ChatRuntimeProvider,",
+        "  useFrontendTool,",
+        '} from "@copilotkit/react-core/v2";',
+        'import { useCopilotKit as useChatRuntime } from "@copilotkit/react-core/v2";',
+        'import type { CopilotKitProviderProps as ChatRuntimeProviderProps } from "@copilotkit/react-core/v2";',
+        'export { CopilotKitContext as ChatRuntimeContext } from "@copilotkit/react-core/v2";',
+        "const provider = CopilotKitProvider;",
+        "// the hook is useCopilotKit",
+        "import {",
+        "  CopilotKitProvider,",
+        '} from "./not-the-library";',
+      ].join("\n"),
+    });
+    expect(where(findings)).toEqual([
+      "app/src/x.tsx:8",
+      "app/src/x.tsx:9",
+      "app/src/x.tsx:11",
+    ]);
   });
 
   test("an entry passes its exact text in its own file only, and an entry nothing needs is reported", () => {

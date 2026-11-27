@@ -60,28 +60,10 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/src/components/channels/channel-chat.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
     "file": "app/src/components/channels/chat-transcript.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/src/components/channels/chat-transcript.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/src/components/channels/tool-activity.tsx",
-    "text": "CopilotKitContext",
-    "category": "dependency",
-    "reason": "依赖库的 React context 名"
   },
   {
     "file": "app/src/components/channels/tool-activity.tsx",
@@ -96,28 +78,10 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/src/lib/computers/activity.ts",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/src/lib/copilot/a2ui.ts",
-    "text": "CopilotKitProviderProps",
-    "category": "dependency",
-    "reason": "依赖库 Provider 的属性类型名"
-  },
-  {
     "file": "app/src/lib/copilot/approval-tools.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/src/lib/copilot/approval-tools.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
   },
   {
     "file": "app/src/lib/copilot/bot-offer.ts",
@@ -126,28 +90,10 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/src/lib/copilot/bot-offer.ts",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
     "file": "app/src/lib/copilot/gallery-tools.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/src/lib/copilot/gallery-tools.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/src/lib/copilot/provider.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
   },
   {
     "file": "app/src/routes/_authed/_app/bot.tsx",
@@ -156,88 +102,16 @@
     "reason": "依赖库组件渲染出的 CSS 类名"
   },
   {
-    "file": "app/tests/a2ui-breakdown.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/a2ui-frame.fixture.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/a2ui-markdown.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/a2ui.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/acp-cards.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/approval-carry-on-running.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/approval-tools.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/approval-tools.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/authoring-tool-cards.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/authoring-tool-cards.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/authoring-tool-cards.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/built-in-tool-steps.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/channel-failed-run-restore.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/channel-history-refresh.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
   },
   {
     "file": "app/tests/channel-history-refresh.test.tsx",
@@ -246,40 +120,10 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/channel-history-refresh.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/channel-join-replay.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/channel-join-replay.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/channel-join-replay.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/channel-task-conversation.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/coding-tool-cards.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
   },
   {
     "file": "app/tests/coding-tools.test.tsx",
@@ -288,82 +132,16 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/coding-tools.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/computer-activity-conversation.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/connector-approval-in-chat.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/decision-registration.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/decision-registration.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/decision-registration.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/detail-panel-preview-routes.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/external-marks.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/failed-send-attachments.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/failed-send-attachments.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/failed-send-attachments.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/gallery-failed-call.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/help-handback.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
   },
   {
     "file": "app/tests/local-tools.test.tsx",
@@ -372,34 +150,10 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/local-tools.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
     "file": "app/tests/navigation-without-page.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/navigation-without-page.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/new-conversation-model.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/new-conversation-skill.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
   },
   {
     "file": "app/tests/off-screen-tool-calls.test.tsx",
@@ -408,64 +162,10 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/off-screen-tool-calls.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/parallel-answers-send.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/question-answer-streams.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/question-parts.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/question-parts.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/question-parts.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/router.test.ts",
-    "text": "@copilotkit+react-core@1.70.1",
-    "category": "dependency",
-    "reason": "bun 安装目录里依赖包的路径（分包规则按 node_modules 路径判断）"
-  },
-  {
-    "file": "app/tests/run-elapsed-line.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/running-step-shimmer.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/server-computer-tools.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
   },
   {
     "file": "app/tests/server-computer-tools.test.tsx",
@@ -474,130 +174,16 @@
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
   },
   {
-    "file": "app/tests/server-computer-tools.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/server-run-chat.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/sign-in-card.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
     "file": "app/tests/sign-in-card.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/sign-in-card.test.tsx",
-    "text": "useCopilotKit",
-    "category": "dependency",
-    "reason": "依赖库的 React hook 名"
-  },
-  {
-    "file": "app/tests/stage-progress.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/starter-tour-route.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/step-limit-continue.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/subagent-cards.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/subtask-step.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/thinking-block.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/thinking-replay.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/tool-activity.test.tsx",
-    "text": "CopilotKitContext",
-    "category": "dependency",
-    "reason": "依赖库的 React context 名"
   },
   {
     "file": "app/tests/tool-activity.test.tsx",
     "text": "copilotkit",
     "category": "dependency",
     "reason": "依赖库对象上的属性名（hook 返回值、转发给运行时的 forwardedProps 命名空间）"
-  },
-  {
-    "file": "app/tests/transcript-late-voice.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/transcript-rail-clearance.fixture.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/turn-stop-chat.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/unoffered-tool-step.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/working-spinner.test.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "app/tests/wp32-status-shots.fixture.tsx",
-    "text": "CopilotKitProvider",
-    "category": "dependency",
-    "reason": "依赖库的 React Provider 组件名"
-  },
-  {
-    "file": "scripts/acceptance/i18n-scan.ts",
-    "text": "|copilotkit|",
-    "category": "dependency",
-    "reason": "界面文案扫描器的第三方品牌词表：依赖库组件自带的名字不算没翻的英文"
   },
   {
     "file": "server/src/copilot.ts",
@@ -616,12 +202,6 @@
     "text": "__copilotkit_interrupt_value__",
     "category": "dependency",
     "reason": "依赖库中断协议的字段名"
-  },
-  {
-    "file": "server/src/threads/local-platform.ts",
-    "text": "CopilotKitIntelligence",
-    "category": "dependency",
-    "reason": "依赖库运行时的类名"
   },
   {
     "file": "server/tests/agent-handoff-answer.integration.test.ts",
@@ -676,23 +256,5 @@
     "text": "COPILOTKIT_OPENAI_API",
     "category": "dependency",
     "reason": "依赖库运行时读取的环境变量开关"
-  },
-  {
-    "file": "toolkit/src/runtime/agents.ts",
-    "text": "CopilotKitIntelligence",
-    "category": "dependency",
-    "reason": "依赖库运行时的类名"
-  },
-  {
-    "file": "toolkit/src/runtime/expected-answers.ts",
-    "text": "CopilotKitIntelligence",
-    "category": "dependency",
-    "reason": "依赖库运行时的类名"
-  },
-  {
-    "file": "toolkit/src/runtime/thread-lock.ts",
-    "text": "CopilotKitIntelligence",
-    "category": "dependency",
-    "reason": "依赖库运行时的类名"
   }
 ]

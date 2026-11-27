@@ -8,7 +8,10 @@ import {
   test,
 } from "bun:test";
 import * as ReactCoreV2 from "@copilotkit/react-core/v2";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
@@ -86,14 +89,14 @@ function capabilities(on: boolean | undefined) {
 async function computerTools(serverRuns: boolean) {
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <ActiveBotProvider>
           <ServerComputerToolsProvider value={serverRuns}>
             <ComputerTools />
             <SignInTool />
           </ServerComputerToolsProvider>
         </ActiveBotProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
   // The permission reads the tools make settle before the cases look at what they registered.
@@ -180,11 +183,11 @@ test("a tool the server does not hold keeps its handler even with the switch on"
   }
   render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <ServerComputerToolsProvider value>
           <Other />
         </ServerComputerToolsProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
   await settleReactWork();
@@ -194,9 +197,9 @@ test("a tool the server does not hold keeps its handler even with the switch on"
 });
 
 /** The core, as the provider handed it its properties: what every run it starts carries. */
-let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+let core: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
 function Core() {
-  core = useCopilotKit().copilotkit;
+  core = useChatRuntime().copilotkit;
   return null;
 }
 const carried = () => (core?.properties ?? {}) as Record<string, unknown>;

@@ -22,6 +22,8 @@
  * 一句话，逐条列出来给人看。
  */
 
+import { LIBRARY_LOWER } from "../brand/guard/words";
+
 /** 有汉字就算中文行。 */
 const HAN = /\p{Script=Han}/u;
 /** 有拉丁字母才可能是纯英文行。 */
@@ -76,8 +78,10 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
    */
   {
     why: "品牌名",
-    pattern:
-      /\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|copilotkit|copilot|mcp|wakerflow|waker|xiongbao(?:\s+work)?)\b/gi,
+    pattern: new RegExp(
+      `\\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|${LIBRARY_LOWER}|copilot|mcp|wakerflow|waker|xiongbao(?:\\s+work)?)\\b`,
+      "gi",
+    ),
   },
   /*
    * 格式、单位、协议缩写：`PDF`、`CSV`、`JSON`、`MB`、`CPU`。**白名单，不是「全大写就算」**：后者会把

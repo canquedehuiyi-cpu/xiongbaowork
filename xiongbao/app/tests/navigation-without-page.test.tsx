@@ -8,6 +8,7 @@ import { ComputerView } from "@/components/computer/computer-view";
 import { failedComputerCall } from "@/lib/computers/call";
 import { WAITING_FOR_PERSON } from "@/lib/copilot/approval-context";
 import { ComputerTools } from "@/lib/copilot/computer-tools";
+import { CHAT_RUNTIME_HOOK } from "./chat-runtime-hook";
 
 /**
  * A navigation that opened no page draws no screen.
@@ -26,7 +27,7 @@ import { ComputerTools } from "@/lib/copilot/computer-tools";
 
 type Registered = Parameters<typeof ReactCoreV2.useFrontendTool>[0];
 const registered: Registered[] = [];
-const coreHookSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
+const coreHookSpy = spyOn(ReactCoreV2, CHAT_RUNTIME_HOOK).mockImplementation(
   () => ({ copilotkit: { stopAgent: () => undefined } }) as never,
 );
 const useFrontendToolSpy = spyOn(

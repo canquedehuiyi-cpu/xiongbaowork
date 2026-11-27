@@ -16,7 +16,7 @@ import {
   test,
 } from "bun:test";
 import type { Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -183,7 +183,7 @@ function feed(
 function drawTranscript(acp?: TranscriptAcpCards, messages = conversation) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <ChatTranscript
           {...(acp ? { acpApprovals: true, notes: acpNotes(acp) } : {})}
           busy={false}
@@ -191,7 +191,7 @@ function drawTranscript(acp?: TranscriptAcpCards, messages = conversation) {
           restoring={false}
           threadId="t-1"
         />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }
@@ -220,7 +220,7 @@ describe("和交付卡同一套附注", () => {
 
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <CopilotKitProvider>
+        <ChatRuntimeProvider>
           <ChatTranscript
             busy={false}
             messages={conversation}
@@ -237,7 +237,7 @@ describe("和交付卡同一套附注", () => {
             restoring={false}
             threadId="t-1"
           />
-        </CopilotKitProvider>
+        </ChatRuntimeProvider>
       </QueryClientProvider>,
     );
     const card = await view.findByRole("region", { name: "正在做" });

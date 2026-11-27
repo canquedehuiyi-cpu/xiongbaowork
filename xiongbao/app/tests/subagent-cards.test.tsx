@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/core";
 import {
+  CopilotKitProvider as ChatRuntimeProvider,
   CopilotChatConfigurationProvider,
-  CopilotKitProvider,
 } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -99,14 +99,14 @@ function turn(results: Partial<Record<keyof typeof TASKS, string>>): Message[] {
 function draw(messages: Message[], busy: boolean) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <CopilotChatConfigurationProvider
           agentId="general-assistant"
           threadId={PARENT}
         >
           <ChatTranscript busy={busy} messages={messages} restoring={false} />
         </CopilotChatConfigurationProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }

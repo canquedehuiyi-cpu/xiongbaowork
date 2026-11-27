@@ -206,7 +206,7 @@ const OURS_SPARE = {
  *
  * ITS OWN CONSTANT RATHER THAN {@link OURS}, because the suffix is the whole of what the adapter
  * reads and the rest of the name is the app an administrator typed. A gmail withdrawal answered
- * with a config called `Linear (${OLD_PRODUCT})` would pass, and would leave the one fixture in this file
+ * with a config called "Linear" plus the old suffix would pass, and would leave the one fixture in this file
  * that names the app it is about naming the wrong one.
  */
 const OUR_GMAIL = {
@@ -2612,7 +2612,7 @@ describe("withdrawing one person's grants", () => {
    * `unreadable` counts the rest — so both are ordinary facts about one listing and both can be
    * true at once. Written as consecutive throws the second is reachable only when the first is
    * false, so a person whose app holds one renamed config beside one unreadable row is told that
-   * `renaming it to end with (${OLD_PRODUCT}) lets disconnecting again withdraw them` — which is not true
+   * that renaming it to end with the old suffix lets disconnecting again withdraw them — which is not true
    * while a row nothing could scope the account listing to is still sitting there. The method's own
    * partial-withdrawal sentence appends that fact as its own clause; the refusal ahead of it did
    * not.

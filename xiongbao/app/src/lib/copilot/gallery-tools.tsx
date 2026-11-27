@@ -1,4 +1,7 @@
-import { useCopilotKit, useFrontendTool } from "@copilotkit/react-core/v2";
+import {
+  useCopilotKit as useChatRuntime,
+  useFrontendTool,
+} from "@copilotkit/react-core/v2";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@xiongbao/shared/component-markers";
 import {
@@ -328,7 +331,7 @@ export function useForgetRenderOnUnmount(
 
 /** `useFrontendTool`, and its renderer removed again on unmount, as `useHumanInTheLoop` does. */
 function useHumanInTheLoopTool(tool: FrontendTool) {
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   useFrontendTool(tool);
   useForgetRenderOnUnmount(tool.name, copilotCore);
 }

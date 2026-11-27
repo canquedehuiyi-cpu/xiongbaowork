@@ -87,7 +87,7 @@ describe("settingsUnderOldNamesOnly", () => {
   });
 
   test("only the product's settings count: another tool's variable under the same prefix does not", () => {
-    // The upstream-sync tooling reads these under the old prefix; they are no setting of this product.
+    // Another tool may read these under the old prefix; they are no setting of this product.
     expect(
       settingsUnderOldNamesOnly({
         [`${OLD}UPSTREAM_REPOSITORY`]: "example/upstream",
@@ -161,7 +161,7 @@ describe("the refusal", () => {
     const started = run({ XIONGBAO_PUBLIC_URL: "https://example.com" });
     expect(started.exitCode).toBe(0);
     expect(started.stderr.toString()).toBe("");
-    // A shell that still exports the upstream-sync tooling's variables starts every process as before.
+    // A shell that still exports another tool's variables under the old prefix starts every process as before.
     const upstream = run({
       [`${OLD}UPSTREAM_REPOSITORY`]: "example/upstream",
       [`${OLD}UPSTREAM_COMMIT`]: "0123abc",
@@ -170,7 +170,7 @@ describe("the refusal", () => {
     expect(upstream.stderr.toString()).toBe("");
   });
 
-  test("a runner test run from a shell that exports the upstream-sync variables still runs", () => {
+  test("a runner test run from a shell that exports another tool's old-prefix variables still runs", () => {
     const runner = join(import.meta.dir, "../../runner");
     const result = Bun.spawnSync(
       [process.execPath, "test", "tests/project-roots.test.ts"],

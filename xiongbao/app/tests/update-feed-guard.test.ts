@@ -6,7 +6,7 @@ import { LIBRARY_LOWER } from "../../scripts/brand/guard/words";
 /**
  * Nothing a Helm or Compose deployment runs knows the upstream desktop app's update feed. A server,
  * worker or page that named it would be a self-hosted deployment reaching the library vendor's download
- * host, * which is never wanted.
+ * host, which is never wanted.
  */
 const FEED_HOST = `downloads.${LIBRARY_LOWER}.ai`;
 

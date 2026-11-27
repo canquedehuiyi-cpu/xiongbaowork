@@ -1,6 +1,6 @@
 import {
   type ReactFrontendTool,
-  useCopilotKit,
+  useCopilotKit as useChatRuntime,
   useFrontendTool as useSDKFrontendTool,
 } from "@copilotkit/react-core/v2";
 import {
@@ -122,7 +122,7 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   const tool: ReactFrontendTool<T> = serverRuns
     ? { ...given, handler: undefined }
     : given;
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   // Stable for the provider's life, so the SDK's once-registered handler may keep it.
   const queryClient = useQueryClient();
   const botOf = useBotOfCall();

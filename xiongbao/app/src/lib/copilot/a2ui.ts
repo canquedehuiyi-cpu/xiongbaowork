@@ -1,4 +1,4 @@
-import type { CopilotKitProviderProps } from "@copilotkit/react-core/v2";
+import type { CopilotKitProviderProps as ChatRuntimeProviderProps } from "@copilotkit/react-core/v2";
 import {
   createGenerativeUI,
   type GenerativeUITheme,
@@ -124,7 +124,7 @@ export const XIONGBAO_UI_THEME: GenerativeUITheme = {
 const GENERATIVE_UI = {
   ui: XIONGBAO_UI,
   theme: XIONGBAO_UI_THEME,
-} satisfies NonNullable<CopilotKitProviderProps["generativeUI"]>;
+} satisfies NonNullable<ChatRuntimeProviderProps["generativeUI"]>;
 
 /**
  * Prop presence is what makes the browser send the catalog, so an unresolved or disabled capability

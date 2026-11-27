@@ -1,5 +1,5 @@
 import type { Message } from "@ag-ui/core";
-import { useCopilotKit } from "@copilotkit/react-core/v2";
+import { useCopilotKit as useChatRuntime } from "@copilotkit/react-core/v2";
 import {
   DECLINED_BY_PERSON,
   declinedByPerson,
@@ -709,7 +709,7 @@ export function useConversationActivity(
   computerId: string,
   messages: readonly Message[],
 ): void {
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   useEffect(
     () =>
       copilotCore.subscribe({

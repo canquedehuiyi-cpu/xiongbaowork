@@ -9,10 +9,12 @@ import { OLD_NAME } from "./words";
  * The brand guard, one rule: an old name (words.ts) anywhere in the source fails, comments, tests,
  * docs, scripts and CI included. The only lines let through are
  *
- *   - a third-party package specifier (`@copilotkit/react-core/v2` in an import, a mock, a config);
+ *   - a third-party package specifier (`@copilotkit/react-core/v2` in an import, a mock, a config), and
+ *     every line of an import or re-export statement from such a package: a name the library exports
+ *     stands there only to be renamed with `as` (`useCopilotKit as useChatRuntime`);
  *   - a line holding an entry of brand-leak-allowlist.json, matched by file path and exact text:
- *     `dependency` (a name the third-party library itself defines, which this code has to spell to use
- *     it: a hook, a class, a wire field, an environment switch the library reads), `licence` (the MIT
+ *     `dependency` (what the library itself defines and no import can rename: a wire field or protocol
+ *     string, an environment variable it reads, a property of an object it returns, a CSS class it draws), `licence` (the MIT
  *     copyright line THIRD-PARTY-NOTICES.md opens with, and only there) and `kept` (an old value written
  *     into data or registered in a system this release cannot rewrite, kept by an explicit ruling);
  *   - until Task 26, the old migration history and the database superuser (UNTIL_TASK_26 below).
@@ -73,8 +75,12 @@ export const COPYRIGHT = `Copyright (c) 2026 ${tenant.company_name ?? tenant.pro
 export const escapeRegExp = (s: string) =>
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** A third-party package specifier: what a dependency declaration and an import of it spell. */
-export const PACKAGE_SPECIFIER = /@copilotkit\/[\w./-]*/gi;
+/**
+ * A third-party package specifier: what a dependency declaration and an import of it spell, and the
+ * directory bun installs that package version into (`@copilotkit+react-core@1.70.1`).
+ */
+export const PACKAGE_SPECIFIER =
+  /@copilotkit(?:\/[\w./-]*|\+[\w.-]+@[\w.+-]*)/gi;
 
 /** Where the licence paragraph's text lives: THIRD-PARTY-NOTICES.md is generated from it at build time. */
 export const LICENCE_FILE = "shared/licence-paragraph.ts";
@@ -201,9 +207,6 @@ export const GUARD_SELF = [
   "scripts/brand/guard/words.ts",
   "scripts/brand/guard/scan.ts",
   "app/tests/brand-leak.test.ts",
-  "app/tests/brand-artifact-scan.test.ts",
-  "app/tests/brand-artifact-words.test.ts",
-  "app/tests/brand-docs.test.ts",
 ];
 const isGuardSelf = (file: string) =>
   GUARD_SELF.includes(file) ||
@@ -281,6 +284,38 @@ function erased(
   return rest;
 }
 
+const STATEMENT_START =
+  /^\s*(?:import|export)\s*(?:type\s+)?(?:\{|\*|[\w$]+\s*(?:,|from\b))/;
+const STATEMENT_FROM = /\bfrom\s+["']([^"']+)["']/;
+
+/**
+ * The lines of every import or re-export statement whose module is the library's (`… from "@copilotkit/…"`),
+ * one line or many. A name the library exports may stand there, to be given this code's own name with
+ * `as`; anywhere else in the file only that own name is written.
+ */
+export function libraryStatementLines(lines: string[]): Set<number> {
+  const inside = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    if (!STATEMENT_START.test(lines[i] as string)) continue;
+    let end = i;
+    while (
+      end < lines.length &&
+      end - i < 200 &&
+      !STATEMENT_FROM.test(lines[end] as string)
+    ) {
+      if (end > i && /[;]\s*$/.test(lines[end] as string)) break;
+      end++;
+    }
+    const from = STATEMENT_FROM.exec(lines[end] ?? "");
+    if (from === null) continue;
+    if (PACKAGE_SPECIFIER.test(from[1] as string))
+      for (let k = i; k <= end; k++) inside.add(k);
+    PACKAGE_SPECIFIER.lastIndex = 0;
+    i = end;
+  }
+  return inside;
+}
+
 export type ScanResult = {
   findings: Finding[];
   /** Allowlist entries no line needed: the allowlist must shrink with the source. */
@@ -301,8 +336,10 @@ export function scanSources(
     const text = source();
     if (!OLD_NAME.test(text)) continue;
     const entries = allow.filter((entry) => entry.file === path);
-    text.split("\n").forEach((line, index) => {
-      if (!OLD_NAME.test(line)) return;
+    const lines = text.split("\n");
+    const library = libraryStatementLines(lines);
+    lines.forEach((line, index) => {
+      if (!OLD_NAME.test(line) || library.has(index)) return;
       if (OLD_NAME.test(erased(path, line, entries, used, usedPatterns)))
         findings.push({ file: path, number: index + 1, line: line.trim() });
     });

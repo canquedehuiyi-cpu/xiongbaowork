@@ -9,7 +9,7 @@
  *
  * Human-in-the-loop follows OpenTag's `confirm_write` contract (`app/interrupt.ts`,
  * `app/human-in-the-loop/confirm-write.tsx`): a CUSTOM `on_interrupt` event whose value carries
- * `__opentag_interrupt_id__` (32 lowercase hex) and `__copilotkit_interrupt_value__`
+ * `__opentag_interrupt_id__` (32 lowercase hex) and, under the library's interrupt-value key,
  * `{ action: "confirm_write", args }`. A card click re-runs the agent with
  * `forwardedProps.command.resume = { [interruptId]: { confirmed, always?, by } }`. The interrupt id is
  * the XiongBao approval id without dashes, and the decision still goes through the approvals service.

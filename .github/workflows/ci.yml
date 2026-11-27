@@ -35,8 +35,7 @@ env:
   #
   # 2026-11-18: moved from 2aacf0f19f (2026-11-04, before the product directory rename and before
   # examples/xiongbao existed) to e63acdfb51 (run 44264063700, 46/46). Two things came from that staleness:
-  # the baseline had to be located under its old product directory (baseline-dir.sh still allows that for
-  # old pins), and the app baseline had to be generated with TENANT_PACKAGE_DIR=../examples/qoderwake, a
+  # the baseline had to be located under its old product directory, and the app baseline had to be generated with TENANT_PACKAGE_DIR=../examples/qoderwake, a
   # package this tree no longer carries. Both allowances are gone below; the pin now needs neither.
   # Also: 03df9efa... (an even earlier value) does not exist in this repository — prepare-baseline.sh now
   # says so by name instead of failing inside `git worktree add`.

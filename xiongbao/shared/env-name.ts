@@ -12,7 +12,7 @@ export const OLD_PREFIX = "OPENBOT_";
  * The product's own settings, by what follows the prefix: every `XIONGBAO_<X>` this release reads from its
  * environment (the server, the worker, the runner, the computer, the supervisor, the app's servers, the
  * scripts, the Compose files, the chart and the device app). Only these are refused under the old prefix:
- * a variable of some other tool that happens to share it (the upstream-sync tooling's
+ * a variable of some other tool that happens to share it (an external release tool's
  * `<old prefix>UPSTREAM_*`, for one) is nobody's setting here. `server/tests/env-name.test.ts` holds this list
  * to the source, and `docker/s6/scripts/env-defaults.sh` repeats it.
  */

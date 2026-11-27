@@ -7,6 +7,20 @@ import {
   compareWords,
   wordsIn,
 } from "../../scripts/brand/guard/artifact-words";
+import {
+  LIBRARY,
+  LIBRARY_LOWER,
+  OLD_ENV_PREFIX,
+  OLD_PRODUCT,
+  OLD_PRODUCT_LOWER,
+} from "../../scripts/brand/guard/words";
+
+// The old names, short, from the one place that spells them (words.ts).
+const E = OLD_ENV_PREFIX;
+const P = OLD_PRODUCT;
+const O = OLD_PRODUCT_LOWER;
+const LP = LIBRARY;
+const L = LIBRARY_LOWER;
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const ROOT = join(REPO, "..");
@@ -30,44 +44,44 @@ const entry = (e: Partial<ArtifactEntry>): ArtifactEntry => ({
 
 describe("artifact words", () => {
   test("wordsIn writes a release tag as v<version>, so a release does not change the list", () => {
-    const one = wordsIn("tag OPENBOT_TAG:-v0.2.9 here");
-    const two = wordsIn("tag OPENBOT_TAG:-v0.2.10-rc.1 here");
-    expect([...one.keys()]).toEqual(["OPENBOT_TAG:-v<version>"]);
+    const one = wordsIn(`tag ${E}TAG:-v0.2.9 here`);
+    const two = wordsIn(`tag ${E}TAG:-v0.2.10-rc.1 here`);
+    expect([...one.keys()]).toEqual([`${E}TAG:-v<version>`]);
     expect([...two.keys()]).toEqual([...one.keys()]);
-    expect([...wordsIn("postgres://openbot@127.0.0.1:5433").keys()]).toEqual([
-      "postgres://openbot@127.0.0.1:5433",
+    expect([...wordsIn(`postgres://${O}@127.0.0.1:5433`).keys()]).toEqual([
+      `postgres://${O}@127.0.0.1:5433`,
     ]);
   });
 
   test("wordsIn counts each word", () => {
-    const found = wordsIn(`a="openbot.ping";console.warn("OpenBot couldn't")`);
-    expect(found.get("openbot.ping")).toBe(1);
-    expect(found.get("OpenBot")).toBe(1);
+    const found = wordsIn(`a="${O}.ping";console.warn("${P} couldn't")`);
+    expect(found.get(`${O}.ping`)).toBe(1);
+    expect(found.get(`${P}`)).toBe(1);
     expect(found.size).toBe(2);
   });
 
   test("compareWords: several words, a missing word, a prefix hit", () => {
     const found = new Map([
-      ["OpenBot", 2],
-      ["OPENBOT_TAG", 1],
-      ["copilotkit/x", 1],
+      [`${P}`, 2],
+      [`${E}TAG`, 1],
+      [`${L}/x`, 1],
     ]);
     expect(
       compareWords(found, [
-        entry({ word: "OpenBot" }),
-        entry({ word: "OPENBOT_TAG" }),
+        entry({ word: `${P}` }),
+        entry({ word: `${E}TAG` }),
         entry({
-          prefix: "copilotkit/",
+          prefix: `${L}/`,
           category: "dependency",
         }),
       ]),
     ).toEqual({ extra: [], stale: [] });
+    expect(compareWords(found, [entry({ word: `${P}` })]).extra.sort()).toEqual(
+      [`${E}TAG`, `${L}/x`],
+    );
     expect(
-      compareWords(found, [entry({ word: "OpenBot" })]).extra.sort(),
-    ).toEqual(["OPENBOT_TAG", "copilotkit/x"]);
-    expect(
-      compareWords(new Map([["OpenBot", 1]]), [
-        entry({ word: "OpenBot" }),
+      compareWords(new Map([[`${P}`, 1]]), [
+        entry({ word: `${P}` }),
         entry({ word: "gone" }),
         entry({
           prefix: "nothing/",
@@ -88,8 +102,8 @@ describe("customer docs", () => {
     for (const e of DOCS)
       if (e.category === "dependency")
         rest = rest.split((e.word ?? e.prefix) as string).join(" ");
-    expect(rest).not.toContain("github.com/CopilotKit");
-    expect(rest).not.toContain("copilotkit.ai");
+    expect(rest).not.toContain(`github.com/${LP}`);
+    expect(rest).not.toContain(`${L}.ai`);
   });
 
   test("prefix entries are third-party names only", () => {

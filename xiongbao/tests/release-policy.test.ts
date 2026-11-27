@@ -10,7 +10,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { parseReleasePolicy } from "../scripts/release-manifest";
+import {
+  parseReleasePolicy,
+  readReleaseConfiguration,
+} from "../scripts/release-manifest";
 
 // The upgrade policy is reviewed with the release it describes: it lives in the tree, is read from
 // the release commit, and is refused unless it names the version being released and the database
@@ -309,5 +312,21 @@ describe("release policy", () => {
     const result = validate(repo, env);
     expect(result.exitCode).not.toBe(0);
     expect(result.output).toContain(reason);
+  });
+});
+
+describe("release source", () => {
+  test("a source named in another repository needs its commit, and says which setting", () => {
+    expect(() =>
+      readReleaseConfiguration(
+        {
+          GITHUB_REPOSITORY: "acme/xiongbao",
+          GITHUB_SHA: "a".repeat(40),
+          VERSION: "v0.3.0",
+          XIONGBAO_UPSTREAM_REPOSITORY: "example/source",
+        },
+        root,
+      ),
+    ).toThrow("XIONGBAO_UPSTREAM_COMMIT is required");
   });
 });

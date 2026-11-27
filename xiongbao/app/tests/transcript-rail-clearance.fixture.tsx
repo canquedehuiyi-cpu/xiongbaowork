@@ -1,5 +1,5 @@
 import type { Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
@@ -34,7 +34,7 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="/api/runtime">
         <TooltipProvider>
           <div
             style={{
@@ -46,7 +46,7 @@ if (root) {
             <ChatTranscript messages={messages} restoring={false} />
           </div>
         </TooltipProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }

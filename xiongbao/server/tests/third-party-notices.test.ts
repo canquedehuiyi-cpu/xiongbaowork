@@ -13,6 +13,7 @@ import {
   collectThirdPartyNotices,
   renderNoticesText,
 } from "../../scripts/brand/third-party-notices";
+import { LICENCE_PARAGRAPH } from "../../shared/licence-paragraph";
 
 const temp = mkdtempSync(join(tmpdir(), "notices-"));
 afterAll(() => rmSync(temp, { recursive: true, force: true }));
@@ -122,6 +123,15 @@ describe("third-party notices", () => {
     ]);
     expect(text).toContain("alpha@0.1.0 (UNKNOWN)");
     expect(text).toContain("zeta@2.0.0 (ISC)\nISC TEXT");
+  });
+
+  test("the MIT notice the licence asks to travel with the code comes first, before any package", () => {
+    const text = renderNoticesText([
+      { name: "alpha", version: "0.1.0", license: "MIT", licenseText: "A" },
+    ]);
+    const paragraph = text.indexOf(LICENCE_PARAGRAPH);
+    expect(paragraph).toBeGreaterThanOrEqual(0);
+    expect(paragraph).toBeLessThan(text.indexOf("alpha@0.1.0 (MIT)"));
   });
 
   test("follows a workspace package's dependencies without listing the workspace itself", () => {
