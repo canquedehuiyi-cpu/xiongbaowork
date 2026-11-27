@@ -17,6 +17,12 @@ export type MemoryRecord = {
   sourceLink: string | null;
   observedAt: string | null;
   updatedAt: string;
+  /** 本人纠正员工时抽出来的。旧服务器不给这几项。 */
+  fromCorrection?: boolean;
+  /** 本人就这件事纠正过几次。 */
+  correctionCount?: number;
+  /** 本人确认后要取代的那条记忆。 */
+  replacesId?: string | null;
 };
 export type MemorySource = {
   id: string;

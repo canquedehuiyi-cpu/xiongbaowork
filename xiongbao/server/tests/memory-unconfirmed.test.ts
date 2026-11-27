@@ -122,3 +122,68 @@ describe("the injected block", () => {
     );
   });
 });
+
+describe("corrections in the injected block", () => {
+  const corrected = (
+    id: string,
+    content: string,
+    extra: Record<string, unknown> = {},
+  ) =>
+    memory(id, content, {
+      formedBy: "bot",
+      reviewState: "unreviewed",
+      fromCorrection: true,
+      correctionCount: 1,
+      replacesId: null,
+      ...extra,
+    });
+  const notesOf = (block: string) =>
+    JSON.parse(block.split("\n")[1] ?? "[]") as {
+      id: string;
+      note?: string;
+    }[];
+
+  test("among the unconfirmed, a correction comes first when they are as relevant", () => {
+    const block = quoteMemoryContext(
+      [
+        memory("c1", "Cafeteria opens at eight"),
+        observed("o1", "Reports go to Dana"),
+        corrected("k1", "Reports go to Erin"),
+      ],
+      { query: "reports" },
+    );
+    expect(recordsOf(block).map((r) => r.id)).toEqual(["c1", "k1", "o1"]);
+  });
+
+  test("a correction names what it replaces, and the replaced memory says it is replaced", () => {
+    const old =
+      "周报一律用 Word 写，标题用宋体加粗，正文小四号字，页边距两厘米，每段首行缩进两个字，结尾署名";
+    const block = quoteMemoryContext(
+      [
+        memory("old1", old),
+        corrected("k1", "周报用 Excel 不用 Word", { replacesId: "old1" }),
+      ],
+      { query: "周报" },
+    );
+    const notes = notesOf(block);
+    expect(notes.find((r) => r.id === "k1")?.note).toBe(
+      `本人最近纠正了『${[...old].slice(0, 40).join("")}』，以这条为准`,
+    );
+    expect(notes.find((r) => r.id === "old1")?.note).toBe(
+      "已被本人最近的纠正取代，以纠正为准",
+    );
+  });
+
+  test("a memory corrected twice or more says how many times", () => {
+    const block = quoteMemoryContext(
+      [
+        corrected("k1", "周报用 Excel 不用 Word", { correctionCount: 2 }),
+        corrected("k2", "日报发给小李", { correctionCount: 1 }),
+      ],
+      { query: "周报" },
+    );
+    const notes = notesOf(block);
+    expect(notes.find((r) => r.id === "k1")?.note).toBe("本人纠正过 2 次");
+    expect(notes.find((r) => r.id === "k2")).not.toHaveProperty("note");
+  });
+});

@@ -29,6 +29,7 @@ import {
   updateMemoryMutationOptions,
 } from "@/lib/memory";
 import { queryClient } from "@/query-client";
+import { CorrectionMarks, ReplacesHint, replacedContent } from "./memories";
 
 // min-w-0 and w-full, or a select as wide as its longest option pushes its grid column off the card.
 const field = "grid min-w-0 gap-1 text-sm";
@@ -116,7 +117,11 @@ export function MemoryScreen({
             </p>
           ) : memories.data?.length ? (
             memories.data.map((memory) => (
-              <MemoryCard key={memory.id} memory={memory} />
+              <MemoryCard
+                key={memory.id}
+                memory={memory}
+                replaced={replacedContent(memory, memories.data)}
+              />
             ))
           ) : (
             <p className="text-muted-foreground">还没有任何记忆。</p>
@@ -142,7 +147,14 @@ export function memoryStatus(memory: MemoryRecord, botName: string): string {
  * One memory: its words in a box saved in place, then whether it is in use, confirming it and
  * forgetting it.
  */
-export function MemoryCard({ memory }: { memory: MemoryRecord }) {
+export function MemoryCard({
+  memory,
+  replaced = null,
+}: {
+  memory: MemoryRecord;
+  /** 这条纠正要取代的那条的内容（{@link replacedContent}）。 */
+  replaced?: string | null;
+}) {
   const [content, setContent] = useState(memory.content);
   const id = useId();
   const agents = useQuery(agentListQueryOptions());
@@ -166,6 +178,7 @@ export function MemoryCard({ memory }: { memory: MemoryRecord }) {
           {memoryStatus(memory, botName)}
         </span>
       </div>
+      <CorrectionMarks memory={memory} replaced={replaced} />
       {memory.formedBy === "bot" && (
         <p className="text-xs text-muted-foreground">
           来自 {memory.sourceApp ?? "一段对话"}
@@ -201,6 +214,7 @@ export function MemoryCard({ memory }: { memory: MemoryRecord }) {
         >
           保存
         </Button>
+        <ReplacesHint action="保存" memory={memory} />
         {memory.reviewState === "unreviewed" && (
           <Button
             size="sm"
@@ -210,6 +224,7 @@ export function MemoryCard({ memory }: { memory: MemoryRecord }) {
             确认
           </Button>
         )}
+        <ReplacesHint memory={memory} />
         <Button
           size="sm"
           variant="outline"

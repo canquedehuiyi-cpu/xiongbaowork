@@ -7,6 +7,8 @@ import {
   extractMemories,
   isDuplicateOf,
   MAX_MEMORIES_PER_TURN,
+  MAX_RELATED_MEMORIES,
+  memoryCorrectionsEnabled,
   memoryExtractEnabled,
   parseExtraction,
   similarity,
@@ -194,6 +196,7 @@ describe("轮次结束处的抽取函数", () => {
       store: {
         list: async () =>
           [{ content: "喜欢上午开会，下午留给写文档" }] as never,
+        bumpCorrection: async () => {},
         formMemory: async (_owner, input) => {
           formed.push(input);
           return {
@@ -248,6 +251,7 @@ describe("轮次结束处的抽取函数", () => {
     const { extract } = harness({
       store: {
         list: async () => memories as never,
+        bumpCorrection: async () => {},
         formMemory: async (_owner, input) => {
           formed.push(input);
           return { id: "m", duplicate: false, forgotten: false };
@@ -314,6 +318,7 @@ describe("轮次结束处的抽取函数", () => {
     const { extract, logs } = harness({
       store: {
         list: async () => [],
+        bumpCorrection: async () => {},
         formMemory: async () => {
           throw new Error("db down");
         },
@@ -334,5 +339,321 @@ describe("回退开关 XIONGBAO_MEMORY_EXTRACT", () => {
     expect(memoryExtractEnabled({ XIONGBAO_MEMORY_EXTRACT: " off " })).toBe(
       false,
     );
+  });
+});
+
+describe("纠正：认出本人纠正，判断重复与取代", () => {
+  const corrected = (relation: unknown, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      memories: [
+        {
+          content: "周报用 Excel 不用 Word",
+          kind: "preference",
+          confidence: 0.9,
+          correction: true,
+          relation,
+          ...extra,
+        },
+      ],
+    });
+
+  test("replaces:<附上的 id>：取代那条，标为纠正", () => {
+    const [memory] = parseExtraction(corrected("replaces:m1"), ["m1"]);
+    expect(memory?.relation).toEqual({ type: "replaces", id: "m1" });
+    expect(memory?.correction).toBe(true);
+  });
+
+  test("id 不在附上的名单里：按新的处理，绝不碰别人的记忆", () => {
+    const [memory] = parseExtraction(corrected("replaces:m1"), []);
+    expect(memory?.relation).toEqual({ type: "new" });
+    const [withoutList] = parseExtraction(corrected("replaces:m1"));
+    expect(withoutList?.relation).toEqual({ type: "new" });
+    const [other] = parseExtraction(corrected("repeats:m9"), ["m1"]);
+    expect(other?.relation).toEqual({ type: "new" });
+  });
+
+  test("repeats:<id> 得到重复；缺省或非法得到新的", () => {
+    const [repeats] = parseExtraction(corrected("repeats:m1"), ["m1"]);
+    expect(repeats?.relation).toEqual({ type: "repeats", id: "m1" });
+    for (const relation of [
+      undefined,
+      "new",
+      "merges:m1",
+      "replaces:",
+      3,
+      {},
+    ]) {
+      const [memory] = parseExtraction(corrected(relation), ["m1"]);
+      expect(memory?.relation).toEqual({ type: "new" });
+    }
+  });
+
+  test("correction 只认 true；缺省或别的值都不是纠正", () => {
+    for (const correction of [undefined, false, "true", 1]) {
+      const [memory] = parseExtraction(corrected("new", { correction }), [
+        "m1",
+      ]);
+      expect(memory?.correction).toBe(false);
+    }
+  });
+
+  test("提示词说清什么算纠正、什么不算，并要 correction 和 relation", () => {
+    expect(EXTRACTION_SYSTEM).toContain('"correction"');
+    expect(EXTRACTION_SYSTEM).toContain('"relation"');
+    expect(EXTRACTION_SYSTEM).toContain("repeats:<id>");
+    expect(EXTRACTION_SYSTEM).toContain("replaces:<id>");
+    // 员工的自我更正、一次性改需求不算。
+    expect(EXTRACTION_SYSTEM).toContain("corrects itself");
+    expect(EXTRACTION_SYSTEM).toContain("only for this task");
+  });
+});
+
+describe("回退开关 XIONGBAO_MEMORY_CORRECTIONS", () => {
+  test("off 才关，没设和其他值都是开", () => {
+    expect(
+      memoryCorrectionsEnabled({ XIONGBAO_MEMORY_CORRECTIONS: "off" }),
+    ).toBe(false);
+    expect(
+      memoryCorrectionsEnabled({ XIONGBAO_MEMORY_CORRECTIONS: " OFF " }),
+    ).toBe(false);
+    expect(memoryCorrectionsEnabled({})).toBe(true);
+    expect(
+      memoryCorrectionsEnabled({ XIONGBAO_MEMORY_CORRECTIONS: "on" }),
+    ).toBe(true);
+    expect(
+      memoryCorrectionsEnabled({ XIONGBAO_MEMORY_CORRECTIONS: "false" }),
+    ).toBe(true);
+  });
+});
+
+describe("抽取时附上已有记忆，按写入规则存纠正", () => {
+  const turn = {
+    ownerUserId: "u1",
+    agentId: "bot",
+    threadId: "t1",
+    runId: "r1",
+    messages: [
+      { role: "user", content: "不是这样，周报要用 Excel，不要用 Word" },
+    ],
+    reply: "好的，以后周报都用 Excel",
+    failed: false,
+  };
+  const memory = (
+    id: string,
+    content: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    id,
+    content,
+    formedBy: "person",
+    formedByAgentId: null,
+    fromCorrection: false,
+    correctionCount: 0,
+    replacesId: null,
+    ...extra,
+  });
+
+  /**
+   * `memories`：这位员工看得见的（注入它上下文的那一套，`relatedCandidates` 给的）。`unseen`：`store.list` 里有、
+   * 这位员工却看不见的（停用的、别的员工的信息源导入的）。`withoutCandidates`：不接 `relatedCandidates`。
+   */
+  function harness(options: {
+    memories: ReturnType<typeof memory>[];
+    unseen?: ReturnType<typeof memory>[];
+    answer: unknown[];
+    correctionsEnabled?: () => boolean;
+    withoutCandidates?: boolean;
+  }) {
+    const formed: Record<string, unknown>[] = [];
+    const bumped: string[] = [];
+    const prompts: string[] = [];
+    const systems: string[] = [];
+    const extract = createMemoryExtractor({
+      store: {
+        list: async () =>
+          [...options.memories, ...(options.unseen ?? [])] as never,
+        formMemory: async (_owner, input) => {
+          formed.push(input);
+          return {
+            id: `n${formed.length}`,
+            duplicate: false,
+            forgotten: false,
+          };
+        },
+        bumpCorrection: async (_owner, id) => {
+          bumped.push(id);
+        },
+      },
+      modelFor: async () => model,
+      call: async (input) => {
+        prompts.push(input.prompt);
+        systems.push(input.system);
+        return { text: JSON.stringify({ memories: options.answer }) };
+      },
+      log: () => {},
+      ...(options.correctionsEnabled
+        ? { correctionsEnabled: options.correctionsEnabled }
+        : {}),
+      ...(options.withoutCandidates
+        ? {}
+        : { relatedCandidates: async () => options.memories as never }),
+    });
+    return { extract, formed, bumped, prompts, systems };
+  }
+
+  test(`附上与本轮人话最相近的至多 ${MAX_RELATED_MEMORIES} 条，带 id，相近的在前`, async () => {
+    const memories = [
+      memory("far", "常用的项目文件夹是 reports/2026"),
+      memory("near", "周报用 Word 写"),
+      ...Array.from({ length: 6 }, (_, index) =>
+        memory(`w${index}`, `周报${"每周".repeat(index + 1)}发给团队`),
+      ),
+    ];
+    const unseen = [memory("hidden", "周报要用 Word 写", { enabled: false })];
+    const { extract, prompts } = harness({ memories, unseen, answer: [] });
+    await extract(turn);
+    const prompt = prompts[0] ?? "";
+    const listed = [...prompt.matchAll(/^\[([\w-]+)\] /gm)].map(
+      (match) => match[1],
+    );
+    expect(listed).toHaveLength(MAX_RELATED_MEMORIES);
+    expect(listed[0]).toBe("near");
+    expect(prompt).toContain("[near] 周报用 Word 写");
+    // 这位员工看不见的（停用的、别的员工的信息源导入的）不附上，哪怕它最相近；不相干的不附上。
+    expect(listed).not.toContain("hidden");
+    expect(prompt).not.toContain("周报要用 Word 写");
+    expect(listed).not.toContain("far");
+  });
+
+  test("这位员工看不见的记忆不能被取代或重复：按新的存，内容也不发给模型", async () => {
+    const unseen = [
+      memory("off", "周报用 Word 写", { enabled: false }),
+      memory("theirs", "周报要用 Word 来写", {
+        formedBy: "import",
+        sourceId: "other-bots-source",
+      }),
+    ];
+    const { extract, formed, bumped, prompts } = harness({
+      memories: [],
+      unseen,
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "replaces:off",
+        }),
+        good("周报要用 Excel 来写", {
+          correction: true,
+          relation: "repeats:theirs",
+        }),
+      ],
+    });
+    expect(await extract(turn)).toEqual({ saved: 2 });
+    expect(prompts[0]).not.toContain("Word 写");
+    expect(prompts[0]).not.toContain("Word 来写");
+    expect(formed.map((item) => item.replacesId ?? null)).toEqual([null, null]);
+    expect(bumped).toEqual([]);
+  });
+
+  test("没接 relatedCandidates：什么也不附，纠正一律按新的存", async () => {
+    const { extract, formed, prompts } = harness({
+      memories: [memory("old", "周报用 Word 写")],
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "replaces:old",
+        }),
+      ],
+      withoutCandidates: true,
+    });
+    expect(await extract(turn)).toEqual({ saved: 1 });
+    expect(prompts[0]).not.toContain("[old]");
+    expect(formed[0]).not.toHaveProperty("replacesId");
+  });
+
+  test("纠正 + repeats，且那条也是纠正：不新增，那条次数加一", async () => {
+    const { extract, formed, bumped } = harness({
+      memories: [
+        memory("c1", "周报用 Excel，不用 Word", {
+          formedBy: "bot",
+          formedByAgentId: "bot",
+          fromCorrection: true,
+          correctionCount: 1,
+        }),
+      ],
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "repeats:c1",
+        }),
+      ],
+    });
+    expect(await extract(turn)).toEqual({ saved: 0 });
+    expect(formed).toEqual([]);
+    expect(bumped).toEqual(["c1"]);
+  });
+
+  test("纠正 + replaces：新增一条待确认的纠正，记下要取代谁，旧条不动", async () => {
+    const { extract, formed, bumped } = harness({
+      memories: [memory("old", "周报用 Word 写")],
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "replaces:old",
+        }),
+      ],
+    });
+    expect(await extract(turn)).toEqual({ saved: 1 });
+    expect(formed).toEqual([
+      {
+        content: "周报用 Excel 不用 Word",
+        sourceApp: "对话（自动记下）",
+        agentId: "bot",
+        sourceRef: null,
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: "old",
+      },
+    ]);
+    expect(bumped).toEqual([]);
+  });
+
+  test("纠正 + repeats 但那条不是纠正：照常新增一条纠正", async () => {
+    const { extract, formed, bumped } = harness({
+      memories: [memory("p1", "周报用 Excel 写")],
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "repeats:p1",
+        }),
+      ],
+    });
+    expect(await extract(turn)).toEqual({ saved: 1 });
+    expect(formed[0]).toMatchObject({
+      fromCorrection: true,
+      correctionCount: 1,
+    });
+    expect(formed[0]).not.toHaveProperty("replacesId");
+    expect(bumped).toEqual([]);
+  });
+
+  test("开关关闭：纠正条目丢掉，非纠正照常保留，不附已有记忆", async () => {
+    const { extract, formed, prompts, systems } = harness({
+      memories: [memory("old", "周报用 Word 写")],
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "replaces:old",
+        }),
+        good("日报发给财务部的小李，用表格格式"),
+      ],
+      correctionsEnabled: () => false,
+    });
+    expect(await extract(turn)).toEqual({ saved: 1 });
+    expect(formed.map((item) => item.content)).toEqual([
+      "日报发给财务部的小李，用表格格式",
+    ]);
+    expect(formed[0]).not.toHaveProperty("fromCorrection");
+    expect(prompts[0]).not.toContain("[old]");
+    expect(systems[0]).not.toContain('"correction"');
   });
 });
