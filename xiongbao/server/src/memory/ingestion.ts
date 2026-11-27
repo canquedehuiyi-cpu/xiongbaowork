@@ -125,6 +125,23 @@ export function isUnconfirmed(memory: {
 export const UNCONFIRMED_NOTE =
   'Records marked status "unconfirmed" were noticed by a Bot and the person has not confirmed them. Treat them as leads only: check with the person before relying on one, and never state one as a fact.';
 
+/** 纠正提示里旧条内容取前多少字。 */
+export const REPLACED_PREVIEW_CHARS = 40;
+
+/** 一条纠正要取代的那条，在注入块里的说法。 */
+export const REPLACED_NOTE = "已被本人最近的纠正取代，以纠正为准";
+
+/** 一条有 `replacesId` 的纠正在注入块里的说法：带上旧条的前 {@link REPLACED_PREVIEW_CHARS} 个字。 */
+export function replacingNote(oldContent: string): string {
+  const preview = [...oldContent.replace(/\s+/g, " ").trim()]
+    .slice(0, REPLACED_PREVIEW_CHARS)
+    .join("");
+  return `本人最近纠正了『${preview}』，以这条为准`;
+}
+
+/** 本人就一件事纠正过不止一次时，注入块里的说法。 */
+export const correctedTimesNote = (count: number) => `本人纠正过 ${count} 次`;
+
 /**
  * 放进这一轮上下文的记忆。按 `query`（用户最新一条消息）的相关程度取，合计不超过预算（默认 4000 字符，
  * `XIONGBAO_MEMORY_INJECT_CHARS`）；放不下的在末尾说明条数和取法，员工用 `recall_personal_memory` 按需取。
@@ -132,6 +149,10 @@ export const UNCONFIRMED_NOTE =
  * 待确认的（{@link isUnconfirmed}）照样放，但每条带 `status: "unconfirmed"`，排在已确认的后面：先按相关程度
  * 挑已确认的，预算剩下的才轮到待确认的；块里有待确认的时，多一句说明它们只是线索，用之前要向本人核实
  * （{@link UNCONFIRMED_NOTE}）。没有待确认的，输出和以前一字不差。
+ *
+ * 纠正（`fromCorrection`）：待确认的纠正排在其他待确认之前（先挑纠正，预算剩下的才轮到其他待确认的）。条目可以带
+ * 一句 `note`：有 `replacesId` 的纠正说它取代了哪条（{@link replacingNote}），被一条候选纠正取代的旧条照常按
+ * 相关度放，但说它已被取代（{@link REPLACED_NOTE}），纠正过 2 次及以上的说次数（{@link correctedTimesNote}）。
  */
 export function quoteMemoryContext(
   memories: {
@@ -141,6 +162,9 @@ export function quoteMemoryContext(
     sourceId: string | null;
     formedBy?: string;
     reviewState?: string;
+    fromCorrection?: boolean;
+    correctionCount?: number;
+    replacesId?: string | null;
   }[],
   options: {
     query?: string;
@@ -154,20 +178,44 @@ export function quoteMemoryContext(
   const query = options.query ?? "";
   const confirmed = memories.filter((memory) => !isUnconfirmed(memory));
   const unconfirmed = memories.filter(isUnconfirmed);
-  const first = rankMemories(query, confirmed, budget, options.vectors);
-  const left =
-    budget - first.reduce((sum, memory) => sum + recordCost(memory), 0);
-  const picked = [
-    ...first,
-    ...(unconfirmed.length > 0 && left > 0
-      ? rankMemories(query, unconfirmed, left, options.vectors)
-      : []),
+  // 待确认的分两批：先纠正，再其他的。
+  const groups = [
+    confirmed,
+    unconfirmed.filter((memory) => memory.fromCorrection),
+    unconfirmed.filter((memory) => !memory.fromCorrection),
   ];
+  const picked: typeof memories = [];
+  let left = budget;
+  for (const group of groups) {
+    if (group.length === 0 || left <= 0) continue;
+    const chosen = rankMemories(query, group, left, options.vectors);
+    picked.push(...chosen);
+    left -= chosen.reduce((sum, memory) => sum + recordCost(memory), 0);
+  }
+  const byId = new Map(memories.map((memory) => [memory.id, memory]));
+  // 被某条候选纠正取代的旧条。
+  const replaced = new Set(
+    memories.flatMap((memory) =>
+      memory.replacesId && byId.has(memory.replacesId)
+        ? [memory.replacesId]
+        : [],
+    ),
+  );
+  const noteOf = (memory: (typeof memories)[number]) => {
+    const notes: string[] = [];
+    const old = memory.replacesId ? byId.get(memory.replacesId) : undefined;
+    if (old) notes.push(replacingNote(old.content));
+    if ((memory.correctionCount ?? 0) >= 2)
+      notes.push(correctedTimesNote(memory.correctionCount ?? 0));
+    if (replaced.has(memory.id)) notes.push(REPLACED_NOTE);
+    return notes.join("；");
+  };
   const records: {
     id: string;
     source: string;
     content: string;
     status?: "unconfirmed";
+    note?: string;
   }[] = [];
   let remaining = budget;
   for (const memory of picked) {
@@ -177,11 +225,13 @@ export function quoteMemoryContext(
       0,
       Math.min(MEMORY_RECORD_MAX_CHARS, room),
     );
+    const note = noteOf(memory);
     records.push({
       id: memory.id,
       source: memory.provenance,
       content,
       ...(isUnconfirmed(memory) ? { status: "unconfirmed" as const } : {}),
+      ...(note ? { note } : {}),
     });
     remaining -= content.length + memory.provenance.length + 100;
   }

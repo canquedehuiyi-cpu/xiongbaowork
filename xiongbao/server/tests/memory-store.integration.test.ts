@@ -792,3 +792,124 @@ test("bumpCorrection counts one more correction, and only for the memory's owner
         .where(eq(personalMemories.content, content));
     }
   }));
+
+test("confirming a correction retires what it replaces through the delete path, and records it", () =>
+  asOwner(async () => {
+    const formed: string[] = [];
+    const form = async (content: string, extra: Record<string, unknown>) => {
+      const result = await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "对话（自动记下）",
+        ...extra,
+      });
+      formed.push(result.id);
+      return result;
+    };
+    try {
+      const old = await form(`周报用 Word 写 ${randomUUID()}`, {});
+      const [oldRow] = await database
+        .select()
+        .from(personalMemories)
+        .where(eq(personalMemories.id, old.id));
+      const correction = await form(`周报用 Excel 写 ${randomUUID()}`, {
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: old.id,
+      });
+      const another = await form(`周报用 Numbers 写 ${randomUUID()}`, {
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: old.id,
+      });
+      const confirmed = await store.update(owner, correction.id, {
+        reviewState: "confirmed",
+      });
+      const rows = await database
+        .select()
+        .from(personalMemories)
+        .where(inArray(personalMemories.id, formed));
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      // Retired the way a person's delete retires it: a tombstone with no content.
+      expect(byId.get(old.id)).toMatchObject({ content: "", enabled: false });
+      expect(byId.get(old.id)?.deletedAt).toBeInstanceOf(Date);
+      // The new memory keeps what it replaced.
+      expect(confirmed.provenance).toContain(oldRow?.content ?? "missing");
+      expect(byId.get(correction.id)?.provenance).toBe(confirmed.provenance);
+      // Nothing points at the retired memory any more.
+      expect(byId.get(correction.id)).toMatchObject({ replacesId: null });
+      expect(byId.get(another.id)).toMatchObject({ replacesId: null });
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(inArray(personalMemories.id, formed));
+    }
+  }));
+
+test("forgetting a correction leaves what it would have replaced", () =>
+  asOwner(async () => {
+    const content = `Kept old fact ${randomUUID()}`;
+    const formed: string[] = [];
+    try {
+      const old = await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "Docs",
+      });
+      formed.push(old.id);
+      const correction = await store.formMemory(owner, {
+        agentId: bot,
+        content: `Corrected fact ${randomUUID()}`,
+        sourceApp: "Docs",
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: old.id,
+      });
+      formed.push(correction.id);
+      await store.remove(owner, correction.id);
+      const [kept] = await database
+        .select()
+        .from(personalMemories)
+        .where(eq(personalMemories.id, old.id));
+      expect(kept).toMatchObject({ content, deletedAt: null, enabled: true });
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(inArray(personalMemories.id, formed));
+    }
+  }));
+
+test("a memory the person wrote is retired too once they confirm the correction that replaces it", () =>
+  asOwner(async () => {
+    const formed: string[] = [];
+    try {
+      const old = await store.create(owner, {
+        content: `Person's own old fact ${randomUUID()}`,
+      });
+      formed.push(old.id);
+      const correction = await store.formMemory(owner, {
+        agentId: bot,
+        content: `Person's correction ${randomUUID()}`,
+        sourceApp: "Docs",
+        fromCorrection: true,
+        correctionCount: 1,
+        replacesId: old.id,
+      });
+      formed.push(correction.id);
+      // Editing a pending memory confirms it too.
+      const edited = await store.update(owner, correction.id, {
+        content: `Person's edited correction ${randomUUID()}`,
+      });
+      expect(edited.reviewState).toBe("edited");
+      const [retired] = await database
+        .select()
+        .from(personalMemories)
+        .where(eq(personalMemories.id, old.id));
+      expect(retired?.deletedAt).toBeInstanceOf(Date);
+      expect(edited.provenance).toContain(old.content);
+    } finally {
+      await database
+        .delete(personalMemories)
+        .where(inArray(personalMemories.id, formed));
+    }
+  }));

@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
+import { MemoryList } from "@/components/memory/memories";
+import { MemoryScreen } from "@/components/memory/memory-screen";
 import { MemorySources } from "@/components/memory/sources";
 import { ProactiveResearchSettings } from "@/components/suggestions/proactive-panel";
 import { settleReactWork } from "./settle-react-work";
@@ -188,3 +190,72 @@ test("reopening a research row after a failure starts without it", async () => {
   await view.findByRole("button", { name: "立即运行" });
   expect(view.queryByRole("alert")).toBeNull();
 });
+
+/** 记忆页上的纠正：「纠正」标记和次数，要取代的旧条，以及确认后旧条会被删除。 */
+const remembered = (id: string, content: string, extra = {}) => ({
+  id,
+  content,
+  provenance: "对话（自动记下）",
+  sourceId: null,
+  enabled: true,
+  reviewState: "confirmed",
+  formedBy: "person",
+  formedByAgentId: null,
+  sourceApp: null,
+  sourceLink: null,
+  observedAt: null,
+  updatedAt: "2026-11-27T10:00:00Z",
+  fromCorrection: false,
+  correctionCount: 0,
+  replacesId: null,
+  ...extra,
+});
+
+function servingCorrections() {
+  global.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/memory")
+      return Response.json({
+        memories: [
+          remembered("k1", "周报用 Excel 不用 Word", {
+            formedBy: "bot",
+            formedByAgentId: "expenses",
+            reviewState: "unreviewed",
+            fromCorrection: true,
+            correctionCount: 2,
+            replacesId: "old1",
+          }),
+          remembered("old1", "周报用 Word 写"),
+          remembered("p1", "我偏好上午开会。"),
+        ],
+      });
+    if (url === "/api/memory/sources") return Response.json({ sources: [] });
+    if (url === "/api/proactive/settings")
+      return Response.json({ settings: [], allowed: true });
+    if (url.startsWith("/api/channels"))
+      return Response.json({ channels: [], nextCursor: null });
+    return Response.json({
+      agents: [{ id: "expenses", name: "Expenses" }],
+      suggestions: [],
+    });
+  }) as unknown as typeof fetch;
+}
+
+for (const [name, node] of [
+  ["记忆列表", <MemoryList key="list" />],
+  [
+    "能力 › 记忆与信息源",
+    <MemoryScreen key="screen" onQuery={() => {}} query="" />,
+  ],
+] as const) {
+  test(`${name}：来自纠正的条目带「纠正」标记和次数，写明将取代哪条，确认旁注明旧条会被删除`, async () => {
+    servingCorrections();
+    const view = draw(node);
+    expect(await view.findByText("将取代：周报用 Word 写")).toBeTruthy();
+    expect(view.getAllByText("纠正")).toHaveLength(1);
+    expect(view.getByText("本人纠正过 2 次")).toBeTruthy();
+    expect(view.getAllByText("确认后旧条会被删除")).toHaveLength(1);
+    // 不是纠正的条目没有这些。
+    expect(view.queryAllByText(/将取代：/)).toHaveLength(1);
+  });
+}

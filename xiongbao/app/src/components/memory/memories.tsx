@@ -157,6 +157,7 @@ export function MemoryList({
               <MemoryRow
                 botName={botName(memory.formedByAgentId)}
                 memory={memory}
+                replaced={replacedContent(memory, memories.data)}
               />
             </Fragment>
           ))}
@@ -170,6 +171,60 @@ export function MemoryList({
   );
 }
 
+/** 一条纠正要取代的那条的内容；那条不在列表里时为 null。 */
+export function replacedContent(
+  memory: MemoryRecord,
+  memories: readonly MemoryRecord[],
+): string | null {
+  if (!memory.replacesId) return null;
+  return (
+    memories.find((other) => other.id === memory.replacesId)?.content ?? null
+  );
+}
+
+/**
+ * 一条来自纠正的记忆的标记：「纠正」和本人纠正过几次；要取代旧条的，写明将取代哪条。`replaced` 是旧条的内容，
+ * 不在列表里时写「一条较早的记忆」。
+ */
+export function CorrectionMarks({
+  memory,
+  replaced,
+}: {
+  memory: MemoryRecord;
+  replaced: string | null;
+}) {
+  if (!memory.fromCorrection && !memory.replacesId) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {memory.fromCorrection && (
+        <>
+          <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-medium text-amber-700 dark:text-amber-300">
+            纠正
+          </span>
+          <span className="text-muted-foreground">
+            本人纠正过 {Math.max(1, memory.correctionCount ?? 1)} 次
+          </span>
+        </>
+      )}
+      {memory.replacesId && (
+        <span className="text-muted-foreground">
+          将取代：{replaced ? clip(replaced) : "一条较早的记忆"}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** 确认按钮旁的一句：确认这条纠正，它要取代的旧条就会被删除。 */
+export function ReplacesHint({ memory }: { memory: MemoryRecord }) {
+  if (!memory.replacesId || memory.reviewState !== "unreviewed") return null;
+  return (
+    <span className="self-center text-muted-foreground text-xs">
+      确认后旧条会被删除
+    </span>
+  );
+}
+
 /**
  * One memory: the fact itself, then where it came from. Whether Bots use it is a switch; editing
  * its words opens a dialog, and confirming or forgetting it are the buttons beneath.
@@ -177,9 +232,11 @@ export function MemoryList({
 function MemoryRow({
   memory,
   botName,
+  replaced,
 }: {
   memory: MemoryRecord;
   botName: string;
+  replaced: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const save = useMutation(updateMemoryMutationOptions(queryClient));
@@ -208,6 +265,7 @@ function MemoryRow({
         <ItemDescription className="line-clamp-none">
           {memory.provenance} · {status}
         </ItemDescription>
+        <CorrectionMarks memory={memory} replaced={replaced} />
         {memory.formedBy === "bot" && (
           <ItemDescription className="line-clamp-none">
             来自 {memory.sourceApp ?? "一段对话"}
@@ -246,6 +304,7 @@ function MemoryRow({
                 确认
               </Button>
             )}
+            <ReplacesHint memory={memory} />
             <Button
               size="sm"
               variant="outline"
