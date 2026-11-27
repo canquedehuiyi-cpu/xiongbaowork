@@ -2325,7 +2325,7 @@ test("the person's words on the card's thread start with the failure hand-over",
     database,
     runTurn,
     runner: runner(),
-    takeFailureHandoff: delivery.takeFailureHandoff,
+    failureHandoffs: delivery,
   });
   await turns.sendAsUser(tenantId, { threadId, agentId }, "退回：B 家没核", {
     taskId,
@@ -2371,4 +2371,52 @@ test("a hand-over to a new coworker after a failed round carries the failure han
   const said = String(newcomer.seen[0]?.messages.at(-1)?.content ?? "");
   expect(said.startsWith(`${handoff}\n\n【系统转交】`)).toBe(true);
   expect(said).toContain("核对发票");
+});
+
+test("a round that did not start leaves the failure hand-over for the next one", async () => {
+  const due = new Date(Date.now() - HOUR);
+  const { tenantId, agentId, taskId } = await acceptedCard("handoff-refused", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const handoff = await failedRound(tenantId, taskId);
+  const recorder = new Recorder(agentId, "接着做。");
+  const working = unattendedTurn(() => recorder);
+  // The first try is turned away before it starts, as a paused coworker's is; the next one runs.
+  let tries = 0;
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: async (input) => {
+      tries++;
+      if (tries === 1) {
+        const paused = new Error("paused");
+        paused.name = "BotPausedError";
+        throw paused;
+      }
+      return working(input);
+    },
+    runner: runner(),
+  });
+  const text = "【系统催办】『核对发票』预计已过，先交做完的部分。";
+  await expect(nudgeRuns.startNudgeRun(tenantId, taskId, text)).rejects.toThrow(
+    CardTurnRefused,
+  );
+  // Not handed on: no round ran with it.
+  expect(await kinds(tenantId, taskId)).not.toContain(
+    "failure_handoff_carried",
+  );
+
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, text)).toBe("started");
+  await until(
+    async () => recorder.seen.length,
+    (count) => count > 0,
+  );
+  expect(recorder.seen[0]?.messages.at(-1)?.content).toBe(
+    `${handoff}\n\n${text}`,
+  );
+  // Handed on now, once.
+  const marks = (await history(tenantId, taskId)).filter(
+    (event) => event.kind === "failure_handoff_carried",
+  );
+  expect(marks).toHaveLength(1);
 });

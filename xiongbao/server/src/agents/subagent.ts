@@ -192,6 +192,12 @@ function progressIn(
     JSON.stringify({ steps, files }).length <= FAILURE_HANDOFF_CHARS;
   if (!fits()) files = [];
   while (!fits() && steps.length > 0) steps = steps.slice(1);
+  /*
+   * A step's summary is at most 100 characters, so one step always fits. Should a single one not (a
+   * tool name of its own as long as the limit), none is left, and nothing is handed back rather than an
+   * empty account that reads as "it did nothing".
+   */
+  if (steps.length === 0) return undefined;
   return { steps, files };
 }
 

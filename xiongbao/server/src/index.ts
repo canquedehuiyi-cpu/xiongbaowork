@@ -5169,8 +5169,7 @@ await startupLifecycle.run(async (startup) => {
     runTurn: unattendedTurnRunner,
     runner: localThreadRunner,
     // The person's words in a card's thread open with its failure hand-over, as the server's rounds do.
-    takeFailureHandoff: (tenantId, taskId) =>
-      deliveryLoop.takeFailureHandoff(tenantId, taskId),
+    failureHandoffs: deliveryLoop,
     // A group card's words go to the group, through the group's own send, as the person.
     groupSend: (ownerUserId, channelId, input, options) =>
       groupConversations.send(ownerUserId, channelId, input, options),

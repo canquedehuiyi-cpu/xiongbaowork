@@ -171,6 +171,25 @@ describe("failureHandoffOf", () => {
   });
 });
 
+test("截短只在码点之间切：上限处不会留下半个代理对", () => {
+  const loneSurrogate =
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  for (const lead of ["", "x"]) {
+    const text = renderFailureHandoff({
+      stoppedAt: "被停下了：步数到顶",
+      progress: null,
+      steps: [],
+      files: Array.from(
+        { length: 10 },
+        (_, index) => `${lead}${"😀".repeat(119)}${index}`,
+      ),
+    });
+    expect(text.length).toBeLessThanOrEqual(FAILURE_HANDOFF_CHARS);
+    expect(loneSurrogate.test(text)).toBe(false);
+    expect(text).toContain(NEXT_STEP);
+  }
+});
+
 describe("lastStepsOf / writtenFilesOf", () => {
   test("没有答复的调用不算做成；只记做成的写文件", () => {
     const events: BaseEvent[] = [

@@ -19,6 +19,7 @@ import {
   suppressRunnerCard,
   turnForCard,
 } from "../threads/unattended-card";
+import type { Delivery } from "./delivery";
 
 /**
  * What the person's decisions on a followed card do in its conversation (spec 2026-11-15-delivery-loop
@@ -148,14 +149,15 @@ export type CardTurnsDeps = {
     turn: { threadId: string; agentId: string },
   ) => Promise<void>;
   /**
-   * The failure hand-over a new round of a card starts with (`Delivery.takeFailureHandoff`, spec
-   * 2026-11-25-borrowed-improvements 5.4): taken, and so marked handed on, once the thread is found
-   * idle. Absent: a round starts with its own words only.
+   * The failure hand-over a new round of a card starts with (spec 2026-11-25-borrowed-improvements
+   * 5.4; `Delivery`): read once the thread is found idle, and marked handed on only once the round has
+   * started, so a round that did not start leaves it for the next one. Absent: a round starts with its
+   * own words only.
    */
-  takeFailureHandoff?: (
-    tenantId: string,
-    taskId: string,
-  ) => Promise<string | null>;
+  failureHandoffs?: Pick<
+    Delivery,
+    "peekFailureHandoff" | "failureHandoffCarried"
+  >;
 };
 
 const BUSY = "员工这会儿正忙，稍后再试。";
@@ -224,7 +226,7 @@ export type ThreadTurnOrigin = {
 export async function startThreadTurn(
   deps: Pick<
     CardTurnsDeps,
-    "runTurn" | "runner" | "startTimeoutMs" | "takeFailureHandoff"
+    "runTurn" | "runner" | "startTimeoutMs" | "failureHandoffs"
   >,
   tenantId: string,
   to: { threadId: string; agentId: string },
@@ -240,13 +242,15 @@ export async function startThreadTurn(
   /*
    * A round of a card whose last round failed starts with that round's hand-over, then a blank line,
    * then its own words: where it stopped, what it had done and the files it left, so the coworker goes
-   * on from there instead of from the start. Taken only now, past the busy check, so a round refused for
-   * a busy thread does not use it up.
+   * on from there instead of from the start. Read here and marked handed on below, once the round has
+   * started: a round refused or given up before it started (a busy thread, a paused coworker, a lock
+   * that never came) has not used it up, and the next round is given it.
    */
   const taskId = origin.taskId;
+  const handoffs = deps.failureHandoffs;
   const handoff =
-    taskId && deps.takeFailureHandoff
-      ? await deps.takeFailureHandoff(tenantId, taskId).catch((error) => {
+    taskId && handoffs
+      ? await handoffs.peekFailureHandoff(tenantId, taskId).catch((error) => {
           log("task-failure-handoff-unread", {
             taskId,
             reason: reasonOf(error),
@@ -254,7 +258,7 @@ export async function startThreadTurn(
           return null;
         })
       : null;
-  const said = handoff ? `${handoff}\n\n${text}` : text;
+  const said = handoff ? `${handoff.text}\n\n${text}` : text;
 
   // A uuid, because the thread lock wants one.
   const runId = randomUUID();
@@ -318,6 +322,16 @@ export async function startThreadTurn(
       throw refusalOf(error);
     })
     .finally(() => clearTimeout(timer));
+  // Started with it: handed on. A mark that cannot be written is logged; the round runs all the same.
+  if (taskId && handoff && handoffs)
+    await handoffs
+      .failureHandoffCarried(tenantId, taskId, handoff.id)
+      .catch((error) =>
+        log("task-failure-handoff-unmarked", {
+          taskId,
+          reason: reasonOf(error),
+        }),
+      );
   return runId;
 }
 

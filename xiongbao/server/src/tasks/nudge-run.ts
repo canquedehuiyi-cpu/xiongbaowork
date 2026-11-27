@@ -91,7 +91,7 @@ export type NudgeRuns = {
 
 export type NudgeRunsDeps = Pick<
   CardTurnsDeps,
-  "runTurn" | "runner" | "startTimeoutMs" | "takeFailureHandoff"
+  "runTurn" | "runner" | "startTimeoutMs" | "failureHandoffs"
 > & {
   database: Database;
   delivery?: Delivery;
@@ -137,10 +137,7 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
    */
   const turnDeps = {
     ...deps,
-    takeFailureHandoff:
-      deps.takeFailureHandoff ??
-      ((tenantId: string, taskId: string) =>
-        delivery.takeFailureHandoff(tenantId, taskId)),
+    failureHandoffs: deps.failureHandoffs ?? delivery,
   };
   const isExternal = async (tenantId: string, agentId: string) =>
     (await deps.isExternal?.(tenantId, agentId).catch(() => false)) ?? false;

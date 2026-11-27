@@ -11,9 +11,10 @@ import { workspaceFilesWritten } from "./evidence-gate";
  * 看板卡一轮失败时留给下一轮的交接（设计稿 2026-11-25-borrowed-improvements 5.4）。
  *
  * 从这一轮的运行事件确定性地拼出来，不调模型：停在哪（原因一句）、做到哪（卡上最近的进度和最后至多
- * 5 次工具调用）、留下什么（这一轮写过的工作区文件，至多 10 个）、下一步（固定一句）。每一段先经过
- * `mask` 再截短，拼好的全文再过一遍 `mask`、截到 {@link FAILURE_HANDOFF_CHARS} 字以内：错误文字和工具
- * 参数里带着的密钥不进卡片历史，也不进下一轮的开头消息。
+ * 5 次工具调用）、留下什么（这一轮写过的工作区文件，至多 10 个）、下一步（固定一句）。每一段（错误、
+ * 进度、每次调用的参数、每个路径）先截到 {@link MASK_INPUT_CHARS} 字、经过 `mask`，再截短；念成一段话时
+ * 每一行拼好后再各过一遍 `mask`（拼接带进来的字不会漏过），最后按行截到 {@link FAILURE_HANDOFF_CHARS} 字
+ * 以内：错误文字和工具参数里带着的密钥不进卡片历史，也不进下一轮的开头消息。
  *
  * 子代理没做完时交回的进度（`agents/subagent.ts`）复用这里的 {@link lastStepsOf} 和 {@link writtenFilesOf}。
  */
@@ -92,6 +93,16 @@ function clean(text: string, max: number): string {
   return chars.length > max
     ? `${chars.slice(0, Math.max(0, max - 1)).join("")}…`
     : flat;
+}
+
+/** `text` 开头不超过 `units` 个 UTF-16 码元的部分，按码点取，不切开代理对。 */
+function cutTo(text: string, units: number): string {
+  let kept = "";
+  for (const char of text) {
+    if (kept.length + char.length > units) break;
+    kept += char;
+  }
+  return kept;
 }
 
 /** 错误的第一句（带句末标点），压成一行。 */
@@ -201,8 +212,9 @@ export function failureHandoffOf(input: {
 }
 
 /**
- * 交接念成给员工看的一段话，不超过 {@link FAILURE_HANDOFF_CHARS} 字，已脱敏。放不下时从后往前少写，
- * 最后一句「下一步」总在。
+ * 交接念成给员工看的一段话，不超过 {@link FAILURE_HANDOFF_CHARS} 字（按 `length`，即 UTF-16 码元，
+ * 存储和测试都按它量）。每一行拼好后各过一遍 `mask`，再按行装进上限：放不下的那一行截短，之后的不再写，
+ * 最后一句「下一步」总在。截短只在码点之间切，不会切开一个代理对。
  */
 export function renderFailureHandoff(handoff: FailureHandoff): string {
   const tail = `下一步：${NEXT_STEP}`;
@@ -231,7 +243,7 @@ export function renderFailureHandoff(handoff: FailureHandoff): string {
     }
     // 放不下的那一行截短（留一个「…」），后面的不再写。
     const room = budget - body.length - (body ? 1 : 0) - 1;
-    if (room > 0) body = `${body ? `${body}\n` : ""}${line.slice(0, room)}…`;
+    if (room > 0) body = `${body ? `${body}\n` : ""}${cutTo(line, room)}…`;
     break;
   }
   return `${body}\n${tail}`;
