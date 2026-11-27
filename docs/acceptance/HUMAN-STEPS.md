@@ -27,7 +27,8 @@
 | 18 桌面操作第 2 期（macOS / Linux / 多显示器） | 待做（macOS 部分暂缓） | 需要服务器 `v0.2.10` 和同版本设备端；2026-11-13 决定苹果系统暂缓，先只做 Linux 和多显示器，macOS 各项与 Apple 证书一起以后再做，见第 18 节 |
 | 19 桌面操作第 2 期：Windows（引擎开关） | 待做 | 需要服务器和设备端都是 `v0.2.10`（含 Task 28）；验收通过并回复「Windows 验收通过」后才把 Windows 默认切到 agent-desktop，见第 19 节 |
 | 20 招入外部智能体（Codex、Claude Code）真机验收 | 待做 | 需要服务器 `v0.2.15` 和设备端 `device-v0.2.15-rc.1`（预发布，由你推标签）；Windows 一台为主，macOS 可选，见第 20 节 |
-| 21 v0.2.16 改名升级（京东云） | 待做 | 发布 `v0.2.16` 并同步到京东云仓库后，在服务器上按第 21 节逐步执行并回报；设备端重装 `device-v0.2.16` |
+| 21 v0.2.16 改名升级（京东云） | 服务器已升级（2026-11-27） | 发布 `v0.2.16` 并同步到京东云仓库后，在服务器上按第 21 节逐步执行并回报。2026-11-27 01:37 京东云升级完成：改名前备份 `pre-rebrand-20261127T013735Z.dump`，重新加密凭据 4 条，超级用户与库改名为 `xiongbao`，第 ⑤ 步服务器上的核对通过（浏览器核对、设备端重装与两天观察以用户回报为准）；设备端重装 `device-v0.2.16` |
+| 22 v0.2.17 升级（京东云） | 待做 | v0.2.16 观察两天正常、设备端在 v0.2.16 之后；发布 `v0.2.17` 并同步到京东云仓库，在服务器上按第 22 节逐步执行并回报；稳定后做 22.⑦ 清理 |
 
 ## 1. 把 `main` 设为默认分支
 
@@ -1122,3 +1123,447 @@ printf '%s\n' "select current_user, rolsuper, rolbypassrls from pg_roles where r
 应打印 `openbot_app|f|f` 和 `f`（应用角色是 v0.2.15 的名字、不是超级用户、不能改身份角色表）。再登录网页，打开历史对话核对。
 
 回滚 B 之后：数据库在新卷 `xiongbao-db-v0215-restore` 上，原来的卷 `xiongbao-db` 与停着的 `xiongbao-v0216-stopped` 先都留着；以后再升级时，第 ③ 步的卷名要换，先找 Claude 改命令。
+
+## 22. v0.2.17 升级（京东云交付容器，从 v0.2.16）
+
+v0.2.17 删掉了 v0.2.16 为过渡留下的旧名兼容，并把 v0.2.16 之前的 222 条数据库迁移合成了一条基线。**第一次启动时，迁移器先核对这个库是不是做完了 v0.2.16 改名的库、结构是不是和基线逐项一致**，一致就在一个事务里把迁移记录改写成基线一条（原来的 222 条另存一张表），紧接着执行基线之后的第一条迁移 `0001_memory_corrections`（给记忆表加三列），然后才启动服务。之后每次启动都不再做。
+
+- **核对不通过时什么都不改**：不改写迁移记录、不迁移、不启动，日志逐项打印差异，数据库没有任何改动。这时直接换回 v0.2.16、用原来的卷就能照常启动（本节末尾「回滚 A」）。
+- **这一版不做备份、不改名**，所以升级本身不需要额外的盘空间，只是多一个镜像。
+- **回到 v0.2.16** 和 v0.2.16 那次不一样，不用备份还原：撤掉 `0001` 加的三列、把留下的 222 条迁移记录放回去，再换回 v0.2.16 的容器（本节末尾「回滚 B」）。升级后写进去的数据都在，只丢记忆上的「纠正」标记。
+- 这台服务器的现状：2026-11-27 01:37 升级到 v0.2.16（改名前备份 `pre-rebrand-20261127T013735Z.dump`，卷上和 `/opt/xiongbao/upgrade-v0.2.16` 各一份），停着的 `xiongbao-v0215-rollback` 还留着。本次升级要在 v0.2.16 观察两天正常之后做。
+- 停服时间：核对加迁移只要几秒，网站中断约 2 分钟（主要是容器起停）。
+- 这台用的是内置数据库，Helm、外接库要做的事（保留原库名、迁移角色能建角色）这里都不涉及，写在 CHANGELOG 的 0.2.17 和部署手册 6.4。
+
+下面的命令都在京东云服务器上以 root 执行，原样复制即可。网页终端断开也没关系：每一步要用的东西都存在 `/opt/xiongbao/upgrade-v0.2.17` 里，重连后从断开的那一步接着做。命令里不含任何口令或密钥，输出里也不会打印。
+
+前提：
+
+- `v0.2.17` 的发布流水线成功，镜像已同步到京东云仓库，发布记录 `container-images.json` 已传到 Release（发布后由 Claude 确认）。
+- 推标签之前，GitHub 的设置照 `docs/releasing.md`「变量放在哪一级」核对一次（这个 PR 不改设置）：
+  - 用自有下载页的，`device-release` Environment 里要有变量 `XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_REGION` 和 secret `XB_DOWNLOAD_ACCESS_KEY_ID`、`XB_DOWNLOAD_SECRET_ACCESS_KEY`；
+  - 先在 `release` Environment 里确认 `XB_REGISTRY`、`XB_IMAGE_REPOSITORY` 都在，再删掉仓库级的这两个变量（带 Environment 的 job 也读得到仓库级变量；Environment 里没有就删了仓库级的，镜像同步会被跳过，第 22.0 步会拦住，但那时要补跑同步）。
+- 设备端已经是 v0.2.16（第 ① 步最后一项核对）。
+
+### 22.0 准备：下载发布记录、核对京东云镜像与 GHCR 是同一次构建、按 digest 拉新镜像
+
+1. 下载 v0.2.17 的发布记录 `container-images.json`：
+
+<!-- v0217:fetch:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.17
+  mkdir -p "$D"
+  chmod 700 "$D"
+  curl --fail --silent --show-error --location -o "$D/container-images.json" \
+    "https://github.com/canquedehuiyi-cpu/xiongbaowork/releases/download/v0.2.17/container-images.json"
+  ls -l "$D"
+)
+```
+<!-- v0217:fetch:end -->
+
+2. 从发布记录取新镜像（京东云仓库那份，按 digest）和 GHCR 那份，并记下现在跑的 v0.2.16 镜像（回滚时用）。`jq` 用正在运行的 v0.2.16 容器里自带的：
+
+<!-- v0217:images:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.17
+  NEW_IMAGE=$(docker exec -i xiongbao jq -er '.images.xiongbao.reference' < "$D/container-images.json")
+  GHCR_IMAGE=$(docker exec -i xiongbao jq -er '.ghcr.reference' < "$D/container-images.json")
+  if ! printf '%s\n' "$NEW_IMAGE" | grep -Eqx 'xiongbao-work-cn-north-1\.jcr\.service\.jdcloud\.com/xiongbao@sha256:[0-9a-f]{64}'; then
+    echo "发布记录里的镜像不是京东云仓库按 digest 的引用：$NEW_IMAGE。先把这一行发给 Claude，这次什么都没写。"
+    exit 1
+  fi
+  if ! printf '%s\n' "$GHCR_IMAGE" | grep -Eqx 'ghcr\.io/canquedehuiyi-cpu/xiongbaowork@sha256:[0-9a-f]{64}'; then
+    echo "发布记录里的 GHCR 镜像不是按 digest 的引用：$GHCR_IMAGE。先把这一行发给 Claude，这次什么都没写。"
+    exit 1
+  fi
+  OLD_IMAGE=$(docker inspect --format '{{.Config.Image}}' xiongbao)
+  if [ "$OLD_IMAGE" = "$NEW_IMAGE" ]; then
+    echo '现在跑的 xiongbao 已经是 v0.2.17 的镜像（切换之后又跑了这一步）：images.env 保持上次写的，这次什么都没写。'
+    exit 1
+  fi
+  printf 'NEW_IMAGE=%s\nGHCR_IMAGE=%s\nOLD_IMAGE=%s\n' "$NEW_IMAGE" "$GHCR_IMAGE" "$OLD_IMAGE" > "$D/images.env"
+  cat "$D/images.env"
+)
+```
+<!-- v0217:images:end -->
+
+`OLD_IMAGE` 应该是 v0.2.16 那次用的 `xiongbao-work-cn-north-1.jcr.service.jdcloud.com/xiongbao@sha256:cd6d3d27…`。把这三行发给 Claude 留底。
+
+3. 核对京东云那份和 GHCR 那份出自同一次构建。**两个 digest 本来就不相同，不相同是正常的**：GHCR 记的（`.ghcr.digest`）是多平台清单（index，里面还带构建证明），发布流水线只把其中 linux/amd64 那一个镜像拷到京东云，所以要对照的是：京东云的 `.images.xiongbao.digest` 等于 GHCR 清单里 linux/amd64 那一项的 digest。拉镜像用的始终是 `.images.xiongbao.reference`（上一步记下的 `NEW_IMAGE`）。这一步只读清单（几 KB），GHCR 匿名可读，不用登录：
+
+<!-- v0217:same-build:begin -->
+```bash
+(
+  set -eu
+  D=/opt/xiongbao/upgrade-v0.2.17
+  . "$D/images.env"
+  docker manifest inspect "$GHCR_IMAGE" > "$D/ghcr-index.json"
+  AMD64=$(docker exec -i xiongbao jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest] | if length == 1 then .[0] else error("linux/amd64 不是正好一项") end' < "$D/ghcr-index.json")
+  JCR=$(docker exec -i xiongbao jq -er '.images.xiongbao.digest' < "$D/container-images.json")
+  [ "$NEW_IMAGE" = "xiongbao-work-cn-north-1.jcr.service.jdcloud.com/xiongbao@$JCR" ] || { echo "发布记录里京东云镜像的 reference 和 digest 对不上：$NEW_IMAGE / $JCR。先发给 Claude。"; exit 1; }
+  echo "GHCR 清单里的 linux/amd64：$AMD64"
+  echo "京东云镜像的 digest：      $JCR"
+  if [ "$AMD64" = "$JCR" ]; then echo '结论：同一次构建，可以拉取。'; else echo '结论：不是同一次构建，先别往下做，把上面几行发给 Claude。'; exit 1; fi
+)
+```
+<!-- v0217:same-build:end -->
+
+最后一行应是「结论：同一次构建，可以拉取。」。服务器上 `docker manifest inspect` 连不上 GHCR（超时）时，把 `images.env` 的三行发给 Claude，由 Claude 在别处用同样的办法核对（v0.2.16 的两份就是这样核对的：GHCR `73cce557…` 清单里 linux/amd64 那一项正是京东云的 `cd6d3d27…`）。
+
+4. 登录京东云仓库：在京东云控制台注册表 `xiongbao-work` 那一行点「获取临时令牌」，把它给出的 `docker login …` 命令复制到服务器上执行，看到 `Login Succeeded` 就行。这条命令带着临时密码，只在服务器上执行，不要发给别人。
+
+5. 按 digest 拉新镜像（放在后台跑，网页终端断开也不影响）：
+
+<!-- v0217:pull:begin -->
+```bash
+(
+  . /opt/xiongbao/upgrade-v0.2.17/images.env
+  setsid nohup sh -c 'for i in 1 2 3 4 5; do docker pull "$1" && echo PULL_OK && exit 0; sleep 20; done; echo PULL_FAILED' sh "$NEW_IMAGE" \
+    > /opt/xiongbao/upgrade-v0.2.17/pull.log 2>&1 < /dev/null &
+)
+```
+<!-- v0217:pull:end -->
+
+隔一两分钟看一次，显示 `PULL_OK` 就是拉好了：
+
+```bash
+tail -n 2 /opt/xiongbao/upgrade-v0.2.17/pull.log
+```
+
+### 22.① 升级前自查（还在 v0.2.16 上，只读）
+
+先在网页里把「待审批」全部批准或拒绝，等已批准的任务续跑完，并确认这几分钟里没有正在执行的对话或任务。然后（只读：数据库查询在只读事务里跑，不改任何东西；配置只打印名字，不打印值）：
+
+<!-- v0217:check:begin -->
+```bash
+(
+  echo '--- 迁移记录与在途工作（只读）'
+  docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -X -q -A -t -v ON_ERROR_STOP=1' <<'SQL'
+SET default_transaction_read_only = on;
+SELECT 'superuser_db=' || current_user || '/' || current_database();
+SELECT 'ledger_rows=' || count(*) FROM drizzle.__drizzle_migrations;
+SELECT 'rename_rows=' || count(*) FROM drizzle.__drizzle_migrations WHERE hash IN ('b58372c5267789fbd30ae8cc0c3c997df9e9e100bb95e0331f4241be3b0f5018', '524f42fe9c4e6115e478ce41ddb39e3add950a002379bffef6acea43780a5ad5');
+SELECT 'baseline_rows=' || count(*) FROM drizzle.__drizzle_migrations WHERE hash = 'f28afdd65f58d5ead75a82654778c83eca544fc494de3ed764e9fc1b9c24f8f2';
+SELECT 'k1_credentials=' || count(*) FROM credentials WHERE encrypted_value LIKE '{"version":2,%' AND encrypted_value LIKE '%"kid":"k1"%';
+SELECT 'pending_approvals=' || count(*) FROM approval_requests WHERE status = 'pending';
+SELECT 'open_continuations=' || count(*) FROM approval_continuations WHERE state <> 'completed';
+SELECT 'open_continuation_steps=' || count(*) FROM approval_continuation_steps WHERE state <> 'completed';
+SQL
+  echo '--- 卷上 v0.2.16 改名的进行中记录'
+  docker exec xiongbao sh -c 'if [ -e /var/lib/postgresql/backup/rebrand-in-progress ] || [ -L /var/lib/postgresql/backup/rebrand-in-progress ]; then echo rebrand_in_progress=yes; else echo rebrand_in_progress=no; fi'
+  echo '--- 旧前缀的配置名（只列名字）'
+  echo "env_file_old_names=$(grep -cE '^[[:space:]]*OPENBOT_' /opt/xiongbao/.env.delivery)"
+  grep -oE '^[[:space:]]*OPENBOT_[A-Za-z0-9_]*' /opt/xiongbao/.env.delivery
+  echo "container_old_names=$(docker inspect xiongbao --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -c '^OPENBOT_')"
+  docker inspect xiongbao --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep '^OPENBOT_'
+  echo '--- 现在这个容器的卷和端口'
+  docker inspect xiongbao --format '{{range .Mounts}}{{.Name}}:{{.Destination}} {{end}}'
+  docker inspect xiongbao --format '{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}{{.HostIp}}:{{.HostPort}}->{{$p}} {{end}}{{end}}'
+  echo '--- 现在这个容器的其它启动参数'
+  docker inspect xiongbao --format 'shm={{.HostConfig.ShmSize}} memory={{.HostConfig.Memory}} cpus={{.HostConfig.NanoCpus}} restart={{.HostConfig.RestartPolicy.Name}} network={{.HostConfig.NetworkMode}} security={{.HostConfig.SecurityOpt}} capadd={{.HostConfig.CapAdd}} devices={{len .HostConfig.Devices}}'
+  echo '--- 本机所有容器'
+  docker ps -a --format '{{.Names}}  {{.Status}}  {{.Image}}'
+  echo '--- 放镜像的盘'
+  df -h /var/lib/docker | tail -n 1
+)
+```
+<!-- v0217:check:end -->
+
+逐行对照，全部符合才往下做；有一项不符合就先别升级，把整段输出发给 Claude：
+
+| 输出 | 应该是 | 不是的话 |
+| --- | --- | --- |
+| `superuser_db=` | `xiongbao/xiongbao` | 卷还没做完 v0.2.16 改名，v0.2.17 会拒绝启动 |
+| `ledger_rows=` | `222` | 迁移记录不是 v0.2.16 发布版留下的，v0.2.17 的核对会拒绝（安全，但升级会失败） |
+| `rename_rows=` | `2`（v0.2.16 的两条改名迁移 0240、0241，按发布版的 hash 认） | 同上 |
+| `baseline_rows=` | `0`（还没被接管过） | 说明已经接管过，先问 Claude |
+| `k1_credentials=` | `0`（v0.2.16 已经全部重新加密） | v0.2.17 会拒绝启动 |
+| `pending_approvals=`、`open_continuations=`、`open_continuation_steps=` | 都是 `0` | 回到网页把待审批处理完、等续跑完，再跑一次这一步 |
+| `rebrand_in_progress=` | `no` | v0.2.16 的改名没做完，v0.2.17 会拒绝启动 |
+| `env_file_old_names=`、`container_old_names=` | 都是 `0`，下面没有列出任何名字（`container_old_names` 看的是容器实际的环境，包括 `.env.delivery` 以外用 `-e` 加的，只取 `=` 前面的名字，不打印值） | 列出的名字在 v0.2.17 不再认，启动第一步就会拒绝：`.env.delivery` 里的改成 `XIONGBAO_` 开头的同名设置（v0.2.16 认新名，不用重启），再跑一次这一步；只在 `container_old_names` 里出现的，把输出发给 Claude，第 ② 步的命令要跟着改 |
+| 卷 | `xiongbao-db:/var/lib/postgresql`、`xiongbao-workspace:/workspace`、`xiongbao-profiles:/profiles`（顺序可以不同） | 第 ② 步的命令是按这几个名字写的 |
+| 端口 | `0.0.0.0:3772->3001/tcp` 与 `0.0.0.0:3773->3773/tcp`（顺序可以不同） | 同上 |
+| 其它启动参数 | `shm=67108864 memory=0 cpus=0 restart=unless-stopped network=default security=<no value> capadd=<no value> devices=0`（`network` 也可能是 `bridge`，`security`、`capadd` 也可能是 `[]`） | 当初建容器时多加了参数，第 ② 步的命令里没有 |
+| 容器 | `xiongbao`（运行中，镜像是上面的 `OLD_IMAGE`）、停着的 `xiongbao-v0215-rollback`，可能还有停着的 `xiongbao-v0212-rollback`、`xiongbao-v0214-rollback`；**没有** `xiongbao-v0216-rollback` | 有 `xiongbao-v0216-rollback` 的，第 ② 步会拒绝；有名字带 `agent-` 的员工框架镜像在跑，它们要和服务器一起升级 |
+| 放镜像的盘 | 可用空间至少 10G | 先清理（可以先做第 ⑦ 步里删旧回滚容器和旧镜像那部分） |
+
+最后核对设备端：在装了设备端的 Windows 电脑上打开「设置 → 应用 → 已安装的应用」，「熊宝数字员工 设备端」的版本应是 `0.2.16`；网页「我的设备」里这台电脑在线。还不是 0.2.16 的，先按 21.⑥ 装 v0.2.16（v0.2.17 不再清理 v0.2.15 设备端留下的旧进程和文件）。这台是交付容器，员工电脑在容器里，开发 Compose 那套 supervisor 旧标签的事不涉及。
+
+### 22.② 切换到 v0.2.17
+
+这条命令先检查新镜像在本机、没有残留的同名回滚容器，任何一项不满足就什么都不做，服务不会停：
+
+<!-- v0217:switch:begin -->
+```bash
+(
+  set -eu
+  . /opt/xiongbao/upgrade-v0.2.17/images.env
+  docker image inspect "$NEW_IMAGE" >/dev/null 2>&1 || { echo '新镜像不在本机：先做 22.0 的第 2 到 5 步。这次什么都没动。'; exit 1; }
+  if docker inspect xiongbao-v0216-rollback >/dev/null 2>&1; then
+    echo '已经有一个 xiongbao-v0216-rollback 容器（上一次切换留下的），先把情况发给 Claude。这次什么都没动。'
+    exit 1
+  fi
+  docker stop -t 30 xiongbao
+  docker rename xiongbao xiongbao-v0216-rollback
+  docker update --restart=no xiongbao-v0216-rollback
+  docker run -d --name xiongbao --restart unless-stopped --env-file /opt/xiongbao/.env.delivery \
+    -p 0.0.0.0:3772:3001 -p 0.0.0.0:3773:3773 \
+    -v xiongbao-db:/var/lib/postgresql -v xiongbao-workspace:/workspace -v xiongbao-profiles:/profiles \
+    "$NEW_IMAGE"
+)
+```
+<!-- v0217:switch:end -->
+
+这条命令里最后的 `docker run` 如果报错（例如端口被占），旧容器已经停了、改了名，网站这时是停着的：不用排查，直接执行本节末尾「回滚 A」，它会用原来的卷把 v0.2.16 起回来，然后把报错发给 Claude。
+
+### 22.③ 等服务起来，看启动日志
+
+<!-- v0217:health:begin -->
+```bash
+(
+  deadline=$((SECONDS + 300))
+  until curl -fsS --max-time 3 http://127.0.0.1:3772/health; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo
+      echo '5 分钟还没起来：先不要做别的，把下一步的输出发给 Claude。'
+      break
+    fi
+    sleep 3
+  done
+  echo
+)
+```
+<!-- v0217:health:end -->
+
+<!-- v0217:summary:begin -->
+```bash
+docker logs xiongbao 2>&1 |
+  grep -E 'migrate:|upgrade-gate:|migration-baseline-adopted|migrations-applied|基线不一致|改名升级|旧名|BaselineMismatchError|UpgradeRefusedError|MigrationsOutOfReach|PostgresError' |
+  tail -n 60
+```
+<!-- v0217:summary:end -->
+
+正常时依次是这五行（`migration-baseline-adopted` 这一行只在第一次启动出现）：
+
+- `migrate: embedded PostgreSQL is ready`
+- `{"type":"migration-baseline-adopted","replaced":222}`：结构比对通过，迁移记录改写成基线一条，原来的 222 条另存（和下面的迁移在同一个事务里，下一行出现才算提交）。
+- `{"type":"migrations-applied","status":"ok"}`：接管和基线之后的迁移（`0001_memory_corrections`）在同一个事务里提交了。迁移器不逐条打印迁移名，`0001` 有没有执行看下一块的 `ledger=` 和 `correction_columns=`。
+- `migrate: xiongbao_app password installed; NOSUPERUSER NOBYPASSRLS`
+- `migrate: xiongbao_role_writer password installed`
+
+不应该出现的：
+
+- `这个数据库的结构和 v0.2.17 的基线不一致（共 N 处）`，后面跟着逐项差异（`-` 是基线里的样子，`+` 是库里的样子）：核对没通过，**数据库没有任何改动**。
+- `这个数据库还没有完成 v0.2.16 的改名升级`、以 `upgrade-gate:` 开头的行、`这些设置还是 v0.2.16 之前的旧名`：第 ① 步某一项没过。
+- `PostgresError`、`MigrationsOutOfReach`。
+
+出现其中任何一种：新容器的启动步骤失败就退出，`--restart unless-stopped` 会让它反复重启、每次打印同样一段拒绝。每次都是整体回滚，数据库一直不动，但这不是在「重试修复」，等下去不会好。先把这段输出发给 Claude，然后按本节末尾「回滚 A」先停掉新容器、再用原来的卷起 v0.2.16。
+
+服务起来后核对迁移记录和应用角色（只读）：
+
+<!-- v0217:ledger:begin -->
+```bash
+(
+  docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -X -q -A -t -v ON_ERROR_STOP=1' <<'SQL'
+SET default_transaction_read_only = on;
+SELECT 'ledger=' || count(*) || ' ' || string_agg(left(hash, 12), ',' ORDER BY id) FROM drizzle.__drizzle_migrations;
+SELECT 'kept=' || count(*) FROM drizzle.__drizzle_migrations_before_baseline;
+SELECT 'correction_columns=' || string_agg(column_name, ',' ORDER BY column_name) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'personal_memories' AND column_name IN ('from_correction', 'correction_count', 'replaces_id');
+SQL
+  printf '%s\n' "select current_user, rolsuper, rolbypassrls from pg_roles where rolname = current_user;" |
+    docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -X -A -t'
+)
+```
+<!-- v0217:ledger:end -->
+
+应打印四行：
+
+- `ledger=2 f28afdd65f58,7f3f7a2eefff`（基线 `0000_baseline` 一条，加上 `0001_memory_corrections` 一条）
+- `kept=222`（原来的迁移记录，回滚 B 要用）
+- `correction_columns=correction_count,from_correction,replaces_id`（`0001` 加的三列）
+- `xiongbao_app|f|f`（应用角色不是超级用户，受行级安全约束）
+
+### 22.④ 浏览器里核对
+
+已经开着的网页先刷新一次（升级时连接断过），然后：
+
+1. 登录。
+2. 打开一个升级前的历史对话，内容、卡片、审批记录都在。
+3. 用到已存凭据的地方能用：模型库里正在用的模型点「测试连接」，以及平时用的连接器（如百度网盘）读一次文件。
+4. 新建一个对话，和「我的分身」说一句话，能正常回答。
+5. 可选：对员工说一句纠正（例如「不是这样，以后周报用表格」），过一会儿在「记忆」里能看到一条标着「纠正」的待确认记忆。
+
+### 22.⑤ 设备端
+
+设备端保持 v0.2.16 即可，不用重装，网页「我的设备」里在线就行。以后发了 `device-v0.2.17` 再覆盖安装（做法同 21.⑥），不用解除配对。
+
+### 22.⑥ 观察两天
+
+每天看一次，有异常把输出发给 Claude：
+
+```bash
+curl -fsS http://127.0.0.1:3772/health; echo
+docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential envelope|凭据|PostgresError|旧名' | tail -n 20
+```
+
+第一行是健康检查的结果；第二条正常时什么都不打印。两天都正常再做第 ⑦ 步。在那之前**不要删**：停着的 `xiongbao-v0216-rollback`（回滚要用它）、`/opt/xiongbao/upgrade-v0.2.17`。
+
+**特别留意交付被挡回的次数。** 这一版员工交付时，自查或结论里说「测过、通过」却没写复跑命令的，每轮第一次交付会被挡回一次。中文交付里「通过」很常见（「格式检查通过」之类），模型偶尔被挡回后不再交付、直接结束这一轮，卡片就停在那里等催办。如果被挡回明显偏多（员工那一轮的工具结果里反复出现「你在自查或结论里说测过，但没有在 rerun 里写能复跑的核对命令」，或者看板卡片做完了却迟迟交不上），在 `/opt/xiongbao/.env.delivery` 里加一行 `XIONGBAO_DELIVERY_RERUN_CLAIM_GATE=off`，按下一段的办法重建容器，并告诉 Claude。
+
+新加的三个开关默认都开，不用在 `.env.delivery` 里写：记忆纠正 `XIONGBAO_MEMORY_CORRECTIONS`、交付复跑核对 `XIONGBAO_DELIVERY_RERUN`、「说测过却没声明复跑命令」那道门 `XIONGBAO_DELIVERY_RERUN_CLAIM_GATE`。哪个出了问题要临时关，在 `.env.delivery` 里加一行 `<名字>=off`，再重建容器让它读到（env 文件只在建容器时读，`docker restart` 不会读新的；卷不动）：
+
+<!-- v0217:recreate:begin -->
+```bash
+(
+  set -eu
+  . /opt/xiongbao/upgrade-v0.2.17/images.env
+  docker stop -t 30 xiongbao
+  docker rm xiongbao
+  docker run -d --name xiongbao --restart unless-stopped --env-file /opt/xiongbao/.env.delivery \
+    -p 0.0.0.0:3772:3001 -p 0.0.0.0:3773:3773 \
+    -v xiongbao-db:/var/lib/postgresql -v xiongbao-workspace:/workspace -v xiongbao-profiles:/profiles \
+    "$NEW_IMAGE"
+)
+```
+<!-- v0217:recreate:end -->
+
+然后用第 ③ 步的第一条命令等它起来，并告诉 Claude 关了哪个。
+
+### 22.⑦ 确认稳定后清理
+
+两天都正常、确认不会再回到 v0.2.15 之后再做（v0.2.16 的回滚路线不受影响）。这一步删掉：
+
+- 数据库卷上 v0.2.16 改名前的备份 `/var/lib/postgresql/backup/pre-rebrand-*.dump`（和旁边的 `.size`）；
+- 宿主机上 v0.2.16 升级时留的 `/opt/xiongbao/upgrade-v0.2.16`（里面有同一份备份的拷贝）和 env 文件改写前的备份 `/opt/xiongbao/.env.delivery.bak-*`（v0.2.17 不认里面的旧名，留着只是多一份带密钥的文件）；
+- 停着的旧回滚容器 `xiongbao-v0215-rollback`（以及还在的 `xiongbao-v0212-rollback`、`xiongbao-v0214-rollback`）和它们的镜像。
+
+**不删** `xiongbao-v0216-rollback` 和 `/opt/xiongbao/upgrade-v0.2.17`：它们是回到 v0.2.16 的路，留到下一次升级。
+
+<!-- v0217:cleanup:begin -->
+```bash
+(
+  set -eu
+  echo '--- 删除前：卷上的备份目录'
+  docker exec -u root xiongbao ls -l /var/lib/postgresql/backup
+  docker exec -u root xiongbao sh -c 'rm -f /var/lib/postgresql/backup/pre-rebrand-*.dump /var/lib/postgresql/backup/pre-rebrand-*.dump.size'
+  echo '--- 删除后：卷上的备份目录'
+  docker exec -u root xiongbao ls -l /var/lib/postgresql/backup
+  rm -rf /opt/xiongbao/upgrade-v0.2.16
+  rm -f /opt/xiongbao/.env.delivery.bak-*
+  for c in xiongbao-v0215-rollback xiongbao-v0214-rollback xiongbao-v0212-rollback; do
+    if docker inspect "$c" >/dev/null 2>&1; then
+      img=$(docker inspect --format '{{.Config.Image}}' "$c")
+      docker rm "$c"
+      docker image rm "$img" >/dev/null 2>&1 && echo "已删镜像 $img" || echo "镜像 $img 还有别的容器在用或已经不在，跳过"
+    fi
+  done
+  echo '--- 剩下的容器'
+  docker ps -a --format '{{.Names}}  {{.Status}}  {{.Image}}'
+  ls -l /opt/xiongbao
+)
+```
+<!-- v0217:cleanup:end -->
+
+最后剩下的容器应该只有运行中的 `xiongbao` 和停着的 `xiongbao-v0216-rollback`；`/opt/xiongbao` 里有 `.env.delivery` 和 `upgrade-v0.2.17`。
+
+镜像仓库里的旧标签（可选，按需，在网页上做）：
+
+- 京东云：控制台的容器镜像仓库，注册表 `xiongbao-work`、仓库 `xiongbao`，删掉 `v0.2.15` 及更早的标签。
+- GHCR：GitHub 上 `canquedehuiyi-cpu/xiongbaowork` 这个 package 的版本列表（仓库主页右侧 Packages → xiongbaowork → Package settings 旁的版本管理），删掉 `v0.2.15` 及更早版本。
+- **`v0.2.16` 两边都不要删**：回到 v0.2.16 要用，升级演练（`upgrade-rehearsal.yml`）也按发布记录从 GHCR 拉 v0.2.16 的镜像。删掉的旧版本，它们 Release 里 `container-images.json` 记的镜像就拉不到了。
+
+### 22.9 回滚
+
+先看第 ③ 步的日志属于哪一种，**拿不准就先问 Claude**：
+
+- **A. 没有起来，日志里没有 `{"type":"migrations-applied","status":"ok"}`**（结构不一致、升级门拒绝、旧名配置被拒等；第 ② 步的 `docker run` 报错、没有新容器的也是这一种）：接管和迁移在同一个事务里，没提交就整体回滚，数据库没有任何改动。直接换回 v0.2.16、用原来的卷，什么数据都不丢。
+- **B. 已经起来了（日志里有 `migrations-applied`），但还是要回到 v0.2.16**：先撤掉 `0001` 加的三列、把留下的 222 条迁移记录放回去，再换回 v0.2.16 的容器。升级后写进去的数据都在，只丢记忆上的「纠正」标记（纠正次数、要取代哪一条）。
+
+**A. 直接换回 v0.2.16**。这条命令先停掉新容器，再看它的日志（停下的容器日志还在）：里面有 `migrations-applied` 就把新容器重新启动、什么都不换，那时要走 B。第 ② 步的 `docker run` 没成功、根本没有新容器的，它直接把 `xiongbao-v0216-rollback` 改回原名、用原来的卷启动：
+
+<!-- v0217:rollback-a:begin -->
+```bash
+(
+  set -eu
+  if ! docker inspect xiongbao >/dev/null 2>&1; then
+    docker inspect xiongbao-v0216-rollback >/dev/null 2>&1 || { echo '既没有 xiongbao 也没有 xiongbao-v0216-rollback：先把情况发给 Claude。这次什么都没动。'; exit 1; }
+    docker rename xiongbao-v0216-rollback xiongbao
+    docker update --restart=unless-stopped xiongbao
+    docker start xiongbao
+    echo '没有新容器（第 ② 步的 docker run 没成功）：已用原来的卷把 v0.2.16 起回来。'
+    exit 0
+  fi
+  docker inspect xiongbao-v0216-rollback >/dev/null 2>&1 || { echo '找不到 xiongbao-v0216-rollback：不能走 A，先把情况发给 Claude。这次什么都没动。'; exit 1; }
+  docker stop -t 30 xiongbao
+  if docker logs xiongbao 2>&1 | grep -q '"type":"migrations-applied"'; then
+    docker start xiongbao
+    echo '日志里有 migrations-applied：v0.2.17 已经接管了这个库，不能走 A。已把 v0.2.17 重新启动，要走 B。'
+    exit 1
+  fi
+  docker rm xiongbao-v0217-failed >/dev/null 2>&1 || true
+  docker rename xiongbao xiongbao-v0217-failed
+  docker update --restart=no xiongbao-v0217-failed
+  docker rename xiongbao-v0216-rollback xiongbao
+  docker update --restart=unless-stopped xiongbao
+  docker start xiongbao
+)
+```
+<!-- v0217:rollback-a:end -->
+
+然后用第 ③ 步的第一条命令等它起来。env 文件不用动（v0.2.16 同样只用 `XIONGBAO_` 开头的名字）。`xiongbao-v0217-failed` 留着别删，Claude 可能要看它的日志。
+
+**B. 撤掉基线之后的迁移、放回迁移记录，再换回 v0.2.16**。在 v0.2.17 还在运行时执行（运行镜像里没有源码里的 `rollback-after-baseline.ts`，要执行的 SQL 直接写在下面）。它先确认留下的记录正好 222 条，然后在**一个事务**里：
+
+1. 撤掉基线之后的迁移：这一版只有 `0001_memory_corrections`，就是它头注释「回滚：」下的三条 `DROP COLUMN`（源码 `server/` 下 `bun scripts/rollback-after-baseline.ts` 打印的也是这三条）；
+2. 把接管时留在 `drizzle.__drizzle_migrations_before_baseline` 里的 222 条放回迁移记录（先清空迁移记录表，连同基线和 `0001` 那两行，再原样拷回来；CHANGELOG 0.2.17「数据库迁移合成了一条基线」那一项写的就是这两句）。
+
+事务成功才停掉 v0.2.17、换回 v0.2.16；失败就整体回滚、停在那里，不切换容器。删列要等表上的锁，事务开头设了 10 秒的锁等待上限：上方打印 `canceling statement due to lock timeout` 就是有正在进行的对话或任务占着记忆表，这时什么都没改、v0.2.17 照常在跑。等一两分钟（或在网页里停掉正在跑的对话和任务）后原样再执行一次这一块；连续三次都超时，把输出发给 Claude。事务提交后到换回之前的几秒里，记忆相关的页面可能报错，换回后就好。
+
+<!-- v0217:rollback-b:begin -->
+```bash
+(
+  set -eu
+  docker inspect xiongbao-v0216-rollback >/dev/null 2>&1 || { echo '找不到 xiongbao-v0216-rollback：不能走 B，先把情况发给 Claude。这次什么都没动。'; exit 1; }
+  owner_sql() {
+    docker exec -i xiongbao sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); exec /usr/lib/postgresql/16/bin/psql "$url" -X -q -A -t -v ON_ERROR_STOP=1'
+  }
+  kept=$(echo "SELECT count(*) FROM drizzle.__drizzle_migrations_before_baseline;" | owner_sql)
+  if [ "$kept" != 222 ]; then
+    echo "留下的迁移记录是 $kept 条，不是 222：先把这一行发给 Claude。这次什么都没动。"
+    exit 1
+  fi
+  if ! owner_sql <<'SQL'
+BEGIN;
+SET LOCAL lock_timeout = '10s';
+-- 撤销 0001_memory_corrections（基线之后的迁移，新的在前）
+ALTER TABLE "public"."personal_memories" DROP COLUMN "replaces_id";
+ALTER TABLE "public"."personal_memories" DROP COLUMN "correction_count";
+ALTER TABLE "public"."personal_memories" DROP COLUMN "from_correction";
+-- 放回接管前的迁移记录
+DELETE FROM drizzle.__drizzle_migrations;
+INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash, created_at FROM drizzle.__drizzle_migrations_before_baseline;
+COMMIT;
+SQL
+  then
+    echo '事务没有完成（原因见上方），什么都没改，也没有切换容器，v0.2.17 照常在跑。'
+    exit 1
+  fi
+  echo "已撤掉 0001_memory_corrections，迁移记录已放回：$(echo "SELECT count(*) FROM drizzle.__drizzle_migrations;" | owner_sql) 条。"
+  docker rm xiongbao-v0217-stopped >/dev/null 2>&1 || true
+  docker stop -t 30 xiongbao
+  docker rename xiongbao xiongbao-v0217-stopped
+  docker update --restart=no xiongbao-v0217-stopped
+  docker rename xiongbao-v0216-rollback xiongbao
+  docker update --restart=unless-stopped xiongbao
+  docker start xiongbao
+)
+```
+<!-- v0217:rollback-b:end -->
+
+应打印「已撤掉 0001_memory_corrections，迁移记录已放回：222 条。」，然后换回 v0.2.16。用第 ③ 步的第一条命令等它起来，再登录网页、打开历史对话核对。v0.2.16 起来时迁移记录是它自己的 222 条，什么都不用迁；留下的那张 `drizzle.__drizzle_migrations_before_baseline` 表不影响 v0.2.16，下次再升级 v0.2.17 时会重新核对、重新接管。
+
+万一换回之后 v0.2.16 没起来：先不要做别的，把 `docker logs xiongbao 2>&1 | tail -n 60` 的输出发给 Claude。数据库仍在原来的卷上，`xiongbao-v0217-stopped` 也还在。

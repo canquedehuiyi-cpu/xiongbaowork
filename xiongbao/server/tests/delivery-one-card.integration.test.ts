@@ -1426,6 +1426,46 @@ describe("failure handoff", () => {
     // 之后那一轮做成了：从断点接着做的话已经过时，不带。
     expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBeNull();
   });
+
+  test("a hand-over that cannot be built is skipped, and run_failed still commits", async () => {
+    const { tenantId, threadId, cardId } =
+      await trackedThread("handoff-broken");
+    const runId = `run-${suite}-broken-events`;
+    expect(await delivery.attachRun(tenantId, cardId, runId)).toBe(true);
+    // 这一轮存下的事件里有一条是不合法的 JSON 字符串：拼交接时读它会抛错。
+    await runAsTenant(tenantId, () =>
+      database
+        .insert(threadRunEvents)
+        .values({ tenantId, threadId, runId, seq: 0, event: "{not json" }),
+    );
+    const quiet = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await delivery.runEnded(tenantId, cardId, {
+        runId,
+        failed: true,
+        error: "这一轮出错了。",
+      });
+      expect(
+        quiet.mock.calls
+          .map((call) => String(call[0]))
+          .filter(
+            (line) =>
+              line.includes('"type":"failure-handoff-skipped"') &&
+              line.includes(runId),
+          ),
+      ).toHaveLength(1);
+    } finally {
+      quiet.mockRestore();
+    }
+    const lines = (await eventsOf(tenantId, cardId)).filter(
+      (line) => line.detail.runId === runId,
+    );
+    expect(lines.map((line) => line.kind)).toEqual(["run_failed"]);
+    const card = await cardRow(tenantId, cardId);
+    expect(card?.lastError).toBe("这一轮出错了。");
+    expect(card?.activeRunRef).toBeNull();
+    expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBeNull();
+  });
 });
 
 describe("first sentence of a reply", () => {

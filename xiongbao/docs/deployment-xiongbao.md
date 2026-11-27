@@ -29,7 +29,7 @@ Release 附件 `container-images.json`，生成密钥，并把 `XIONGBAO_IMAGE` 
 需要 curl、OpenSSL 和 jq。不设置 `XIONGBAO_IMAGE` 时，Compose 使用只在源码构建后才存在的本机镜像，`up` 会失败。
 
 ```bash
-XIONGBAO_TAG=v0.2.16
+XIONGBAO_TAG=v0.2.17
 raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${XIONGBAO_TAG}/xiongbao/docker"
 mkdir -p docker
 curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
@@ -442,7 +442,7 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 单容器重建时使用原命名卷和原 env-file，镜像写成 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<新 digest>`。
 Compose 把 `.env.delivery` 中的 `XIONGBAO_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
 内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
-这一版只能从 v0.2.16 升级上来，还在 v0.2.15 或更早版本上的见 6.3。
+这一版只能从 v0.2.16 升级上来，还在 v0.2.15 或更早版本上的见 6.3；从 v0.2.16 升级的核对、回滚与清理见 6.4（回到 v0.2.16 不只是换回旧 digest）。
 停旧容器用 `docker stop`（单容器加 `--time 30`；Compose 的开发文件已给 server 设 `stop_grace_period: 30s`），
 不要用 `docker rm -f`：它直接 SIGKILL，服务端来不及收尾。微信 ClawBot 的消息按「至多一次」处理：
 关停时在跑的那一轮最多再等 7 秒，被强杀或被中止的那一轮不会重来，用户要在微信里再发一次。
@@ -585,13 +585,56 @@ v0.2.16 把配置名、数据库里的名字、已存凭据的加密格式和对
   拒绝执行并回滚，库保持原样（交付容器与外接库都一样，见第 4 节）。
 - **Helm**：`config.extraEnv` 里只写了旧名的 RLS 设置时，chart 渲染检查拒绝渲染，提示写 `XIONGBAO_RLS_ENFORCE`。
 
+### 6.4 从 v0.2.16 升级到 v0.2.17：结构核对、回滚与清理
+
+京东云交付容器的逐条命令见仓库根目录的 `docs/acceptance/HUMAN-STEPS.md` 第 22 节，这里写原理和别的部署形态要注意的地方。
+
+**升级前（还在 v0.2.16 上，只读）。** 用迁移 owner 的连接（交付容器里是 `/run/s6/container_environment/MIGRATION_DATABASE_URL`）在只读事务里查：
+
+```sql
+SET default_transaction_read_only = on;
+SELECT count(*),
+       count(*) FILTER (WHERE hash IN ('b58372c5267789fbd30ae8cc0c3c997df9e9e100bb95e0331f4241be3b0f5018',
+                                       '524f42fe9c4e6115e478ce41ddb39e3add950a002379bffef6acea43780a5ad5'))
+  FROM drizzle.__drizzle_migrations;
+```
+
+应得到 `222|2`：v0.2.16 发布版留下的 222 条迁移记录，其中含它的两条改名迁移（`0240`、`0241`，按发布版的 hash 认）。不是的话（例如曾用候选版或本机构建升级过），v0.2.17 的核对会拒绝启动：安全，但升级会失败，先找维护者。另外确认：`credentials` 里没有 `kid` 为 `k1` 的凭据，没有待审批和未完成的续跑，交付容器的卷上没有 `/var/lib/postgresql/backup/rebrand-in-progress`，容器实际的环境里只有 `XIONGBAO_` 开头的配置名（旧前缀的名字这一版点名拒绝启动；除了 env 文件，`docker inspect <容器> --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1` 只列名字、不列值，也看一眼命令行上 `-e` 加的），设备端已经是 v0.2.16。
+
+**第一次启动。** 迁移器在一个事务里、持有迁移锁：确认库做完了 v0.2.16 改名（迁移记录、应用角色、凭据格式），读系统目录把结构（表、列、约束、索引、行级安全策略、授权、函数、触发器等）和基线逐项比对，一致就把迁移记录改写成基线一条，原来的行留在 `drizzle.__drizzle_migrations_before_baseline`，再执行基线之后的迁移（这一版是 `0001_memory_corrections`）。日志依次有 `{"type":"migration-baseline-adopted","replaced":222}` 和 `{"type":"migrations-applied","status":"ok"}`，后一行出现才算提交。之后 `drizzle.__drizzle_migrations` 是 2 行（基线 hash 以 `f28afdd65f58` 开头，`0001` 以 `7f3f7a2eefff` 开头）。第二次启动起什么都不做。
+
+**核对不通过。** 日志写「这个数据库的结构和 v0.2.17 的基线不一致（共 N 处）」并逐项列出差异（`-` 是基线里的样子，`+` 是库里的样子），整个事务回滚，数据库没有任何改动，服务不启动。换回 v0.2.16 的镜像、用原来的卷就能照常启动。差异若是手工改过库，改回 v0.2.16 的样子再升级；说不清来历的交给维护者，不要手工改迁移记录表。基线的结构按 PostgreSQL 16 与 17 记录。
+
+**回到 v0.2.16（已经接管成功之后）。** 不需要备份还原。在 v0.2.17 还在运行时，用迁移 owner 的连接在一个事务里撤掉基线之后的迁移、放回接管前的迁移记录，成功后再停掉 v0.2.17、用原来的卷起 v0.2.16。运行镜像里没有源码的 `scripts/`，所以 SQL 直接写在这里（基线之后每一条迁移的撤销语句在它头注释的「回滚：」下，倒序执行；源码 `server/` 下 `bun scripts/rollback-after-baseline.ts` 会打印出来）。这一版只有 `0001_memory_corrections`：
+
+```sql
+BEGIN;
+SET LOCAL lock_timeout = '10s';
+ALTER TABLE "public"."personal_memories" DROP COLUMN "replaces_id";
+ALTER TABLE "public"."personal_memories" DROP COLUMN "correction_count";
+ALTER TABLE "public"."personal_memories" DROP COLUMN "from_correction";
+DELETE FROM drizzle.__drizzle_migrations;
+INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash, created_at FROM drizzle.__drizzle_migrations_before_baseline;
+COMMIT;
+```
+
+执行前先确认 `SELECT count(*) FROM drizzle.__drizzle_migrations_before_baseline;` 是 222（接管时留下的 v0.2.16 迁移记录）。锁等待超时（`canceling statement due to lock timeout`）时整个事务回滚、什么都没改，等正在进行的对话或任务结束后再执行一次。撤掉三列会丢掉记忆上的「纠正」标记，其余数据都在。
+
+只放回记录、不撤三列，v0.2.16 能启动，但下次升级时结构对不上会被拒；什么都不做就换回 v0.2.16，v0.2.16 的迁移器会拒绝启动（库不动）。同样的撤销与放回（演练里分两个事务跑）已在升级演练（`upgrade-rehearsal.yml`）里用 v0.2.16 的真实镜像跑过。
+
+**升级后留意交付被挡回的次数。** 默认开启的「说测过却没写复跑命令就挡回一次」对中文交付里常见的「通过」也会触发；挡回明显偏多时设 `XIONGBAO_DELIVERY_RERUN_CLAIM_GATE=off` 并重建容器。
+
+**外接数据库与 Helm。** 迁移 Job 照常跑 `scripts/migrate.ts`，同样核对和接管；迁移角色要能建角色。用内置数据库的已有 Helm release，升级时在 values 里保留原来的库名（`--set postgresql.auth.database=<原库名>`，以后每次升级都带上），见 charts README 的 Upgrades。
+
+**确认 v0.2.17 稳定后清理。** v0.2.16 改名前的备份（数据库卷上的 `/var/lib/postgresql/backup/pre-rebrand-*.dump` 和旁边的 `.size`，以及拷到宿主机的那份）、v0.2.16 升级前的 env 备份、v0.2.15 的回滚容器和镜像都可以删了；镜像仓库里 v0.2.15 及更早的标签按需删除，`v0.2.16` 留着（回到 v0.2.16 和升级演练都要用）。
+
 ## 7. 版本固定与来源校验
 
 每个 GitHub Release 附带 `container-images.json`，记录该标签发布时经过 Gate 1 验证的 digest。
 部署和升级使用 digest，而不是可移动的标签；部署前可校验镜像由本仓库的发布流程构建。
 
 ```bash
-XIONGBAO_TAG=v0.2.16
+XIONGBAO_TAG=v0.2.17
 gh release download "$XIONGBAO_TAG" -R canquedehuiyi-cpu/xiongbaowork --pattern container-images.json
 XIONGBAO_IMAGE="$(jq -er '(.ghcr // .images.xiongbao).reference' container-images.json)"
 gh attestation verify "oci://$XIONGBAO_IMAGE" -R canquedehuiyi-cpu/xiongbaowork

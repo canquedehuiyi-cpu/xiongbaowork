@@ -971,25 +971,45 @@ export function createDelivery(database: Database): Delivery {
                 : { runId: round.runId, error },
           });
           if (error === null) return;
-          // What the next round is told about this one: the round's events, read without a model.
-          const handoff = failureHandoffOf({
-            error: round.error?.trim() || error,
-            events:
-              round.events ??
-              (await storedRunEvents(transaction, tenantId, round.runId)),
-            progress: await latestProgress(transaction, tenantId, taskId),
-          });
-          await appendTaskEvent(transaction, {
-            tenantId,
-            taskId,
-            kind: "failure_handoff",
-            actor: "system",
-            detail: {
-              runId: round.runId,
-              stoppedAt: handoff.stoppedAt,
-              text: renderFailureHandoff(handoff),
-            },
-          });
+          /*
+           * What the next round is told about this one: the round's events, read without a model.
+           * Optional, unlike the lines above: built and written in a savepoint of its own, so a hand-over
+           * that cannot be built (a stored event that does not parse, a shape the reader did not expect)
+           * is skipped with a log line, and run_failed, last_error and the cleared run still commit.
+           * Without the savepoint the throw would roll them back and leave the card looking busy.
+           */
+          try {
+            await transaction.transaction(async (savepoint) => {
+              const handoff = failureHandoffOf({
+                error: round.error?.trim() || error,
+                events:
+                  round.events ??
+                  (await storedRunEvents(savepoint, tenantId, round.runId)),
+                progress: await latestProgress(savepoint, tenantId, taskId),
+              });
+              await appendTaskEvent(savepoint, {
+                tenantId,
+                taskId,
+                kind: "failure_handoff",
+                actor: "system",
+                detail: {
+                  runId: round.runId,
+                  stoppedAt: handoff.stoppedAt,
+                  text: renderFailureHandoff(handoff),
+                },
+              });
+            });
+          } catch (failure) {
+            console.error(
+              JSON.stringify({
+                type: "failure-handoff-skipped",
+                taskId,
+                runId: round.runId,
+                error:
+                  failure instanceof Error ? failure.message : String(failure),
+              }),
+            );
+          }
         }),
       ),
 

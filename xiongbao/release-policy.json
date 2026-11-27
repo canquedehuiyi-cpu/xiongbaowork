@@ -1,19 +1,19 @@
 {
   "$schema": "./shared/release-policy.schema.json",
-  "version": "v0.2.16",
+  "version": "v0.2.17",
   "compatibility": {
     "launcherApi": 1,
     "configSchema": 1,
     "extensionApi": 1,
     "database": {
       "from": ["0080_wakerflow_quota_contracts"],
-      "to": "0080_wakerflow_quota_contracts",
+      "to": "0001_memory_corrections",
       "rollbackCompatible": false
     },
     "intelligenceCapabilities": []
   },
   "upgrade": {
-    "fromVersions": ["v0.2.15"],
+    "fromVersions": ["v0.2.16"],
     "requiresDowntime": true,
     "recovery": "restore-backup"
   }
