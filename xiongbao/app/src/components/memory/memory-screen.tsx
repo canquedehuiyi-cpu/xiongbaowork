@@ -214,6 +214,7 @@ export function MemoryCard({
         >
           保存
         </Button>
+        <ReplacesHint action="保存" memory={memory} />
         {memory.reviewState === "unreviewed" && (
           <Button
             size="sm"

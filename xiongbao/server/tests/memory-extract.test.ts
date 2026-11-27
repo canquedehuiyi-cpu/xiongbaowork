@@ -453,10 +453,16 @@ describe("抽取时附上已有记忆，按写入规则存纠正", () => {
     ...extra,
   });
 
+  /**
+   * `memories`：这位员工看得见的（注入它上下文的那一套，`relatedCandidates` 给的）。`unseen`：`store.list` 里有、
+   * 这位员工却看不见的（停用的、别的员工的信息源导入的）。`withoutCandidates`：不接 `relatedCandidates`。
+   */
   function harness(options: {
     memories: ReturnType<typeof memory>[];
+    unseen?: ReturnType<typeof memory>[];
     answer: unknown[];
     correctionsEnabled?: () => boolean;
+    withoutCandidates?: boolean;
   }) {
     const formed: Record<string, unknown>[] = [];
     const bumped: string[] = [];
@@ -464,7 +470,8 @@ describe("抽取时附上已有记忆，按写入规则存纠正", () => {
     const systems: string[] = [];
     const extract = createMemoryExtractor({
       store: {
-        list: async () => options.memories as never,
+        list: async () =>
+          [...options.memories, ...(options.unseen ?? [])] as never,
         formMemory: async (_owner, input) => {
           formed.push(input);
           return {
@@ -487,6 +494,9 @@ describe("抽取时附上已有记忆，按写入规则存纠正", () => {
       ...(options.correctionsEnabled
         ? { correctionsEnabled: options.correctionsEnabled }
         : {}),
+      ...(options.withoutCandidates
+        ? {}
+        : { relatedCandidates: async () => options.memories as never }),
     });
     return { extract, formed, bumped, prompts, systems };
   }
@@ -498,12 +508,9 @@ describe("抽取时附上已有记忆，按写入规则存纠正", () => {
       ...Array.from({ length: 6 }, (_, index) =>
         memory(`w${index}`, `周报${"每周".repeat(index + 1)}发给团队`),
       ),
-      memory("hidden", "周报要用 Word 写", {
-        formedBy: "bot",
-        formedByAgentId: "other-bot",
-      }),
     ];
-    const { extract, prompts } = harness({ memories, answer: [] });
+    const unseen = [memory("hidden", "周报要用 Word 写", { enabled: false })];
+    const { extract, prompts } = harness({ memories, unseen, answer: [] });
     await extract(turn);
     const prompt = prompts[0] ?? "";
     const listed = [...prompt.matchAll(/^\[([\w-]+)\] /gm)].map(
@@ -512,9 +519,55 @@ describe("抽取时附上已有记忆，按写入规则存纠正", () => {
     expect(listed).toHaveLength(MAX_RELATED_MEMORIES);
     expect(listed[0]).toBe("near");
     expect(prompt).toContain("[near] 周报用 Word 写");
-    // 另一位员工记下的这位员工看不见，也不附上；不相干的不附上。
+    // 这位员工看不见的（停用的、别的员工的信息源导入的）不附上，哪怕它最相近；不相干的不附上。
     expect(listed).not.toContain("hidden");
+    expect(prompt).not.toContain("周报要用 Word 写");
     expect(listed).not.toContain("far");
+  });
+
+  test("这位员工看不见的记忆不能被取代或重复：按新的存，内容也不发给模型", async () => {
+    const unseen = [
+      memory("off", "周报用 Word 写", { enabled: false }),
+      memory("theirs", "周报要用 Word 来写", {
+        formedBy: "import",
+        sourceId: "other-bots-source",
+      }),
+    ];
+    const { extract, formed, bumped, prompts } = harness({
+      memories: [],
+      unseen,
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "replaces:off",
+        }),
+        good("周报要用 Excel 来写", {
+          correction: true,
+          relation: "repeats:theirs",
+        }),
+      ],
+    });
+    expect(await extract(turn)).toEqual({ saved: 2 });
+    expect(prompts[0]).not.toContain("Word 写");
+    expect(prompts[0]).not.toContain("Word 来写");
+    expect(formed.map((item) => item.replacesId ?? null)).toEqual([null, null]);
+    expect(bumped).toEqual([]);
+  });
+
+  test("没接 relatedCandidates：什么也不附，纠正一律按新的存", async () => {
+    const { extract, formed, prompts } = harness({
+      memories: [memory("old", "周报用 Word 写")],
+      answer: [
+        good("周报用 Excel 不用 Word", {
+          correction: true,
+          relation: "replaces:old",
+        }),
+      ],
+      withoutCandidates: true,
+    });
+    expect(await extract(turn)).toEqual({ saved: 1 });
+    expect(prompts[0]).not.toContain("[old]");
+    expect(formed[0]).not.toHaveProperty("replacesId");
   });
 
   test("纠正 + repeats，且那条也是纠正：不新增，那条次数加一", async () => {

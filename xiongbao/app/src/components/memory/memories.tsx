@@ -215,12 +215,20 @@ export function CorrectionMarks({
   );
 }
 
-/** 确认按钮旁的一句：确认这条纠正，它要取代的旧条就会被删除。 */
-export function ReplacesHint({ memory }: { memory: MemoryRecord }) {
+/**
+ * 「确认」或「保存」按钮旁的一句：确认这条纠正，或改过它的字（改过也算确认），它要取代的旧条就会被删除。
+ */
+export function ReplacesHint({
+  memory,
+  action = "确认",
+}: {
+  memory: MemoryRecord;
+  action?: "确认" | "保存";
+}) {
   if (!memory.replacesId || memory.reviewState !== "unreviewed") return null;
   return (
     <span className="self-center text-muted-foreground text-xs">
-      确认后旧条会被删除
+      {action}后旧条会被删除
     </span>
   );
 }
@@ -398,6 +406,7 @@ function EditMemoryDialog({
           ) : null}
         </DialogBody>
         <DialogFooter className="mt-4">
+          <ReplacesHint action="保存" memory={memory} />
           <Button onClick={onClose} size="sm" variant="outline">
             取消
           </Button>

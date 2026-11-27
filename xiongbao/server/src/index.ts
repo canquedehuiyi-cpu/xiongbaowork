@@ -4642,6 +4642,8 @@ await startupLifecycle.run(async (startup) => {
   });
   const extractTurnMemories = createMemoryExtractor({
     store: personalMemoryStore,
+    relatedCandidates: (ownerUserId, agentId) =>
+      memoryIngestion.visibleTo(ownerUserId, agentId),
     modelFor: agentModelFor,
     enabled: async (ownerUserId, agentId) =>
       editionHasMemory(config.edition) &&

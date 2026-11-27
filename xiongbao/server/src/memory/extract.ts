@@ -7,6 +7,7 @@ import {
 import { findSensitive } from "../learning/sensitive";
 import { firstJsonObject } from "../wakerflows/generator";
 import type { MemoryStore } from "./store";
+import type { MemoryRecord } from "./types";
 
 /**
  * 每一轮结束后，从这一轮的对话里抽出值得记住的事（期 2 · Task 2.2）。
@@ -419,6 +420,15 @@ export type ExtractableTurn = {
 export type MemoryExtractorDeps = {
   store: Pick<MemoryStore, "list" | "formMemory" | "bumpCorrection">;
   /**
+   * 这位员工这一轮看得见的记忆，与注入它上下文的是同一套范围（`MemoryIngestion.visibleTo`）：启用的；本人给的；
+   * 这位员工自己的信息源导入的；它自己记下的。附给抽取模型的已有记忆、可被重复或取代的目标，只从这里挑：
+   * 别的员工的信息源导入的、停用的，内容不会发给这位员工的模型。没有它就什么也不附，纠正一律按新的存。
+   */
+  relatedCandidates?: (
+    ownerUserId: string,
+    agentId: string,
+  ) => Promise<readonly MemoryRecord[]>;
+  /**
    * 员工的模型，已经按这个人计量。`light`：轻量轮用的便宜模型，员工设置里有 `lightModel` 时用它，没有就是
    * 员工平时的模型（接口先留好，`lightModel` 合入之前两个意图拿到的是同一个）。在本人帧里调用。
    */
@@ -476,18 +486,21 @@ export function createMemoryExtractor(deps: MemoryExtractorDeps) {
       )();
       // Compared with what this employee can already see: what the person or an app gave, and what this
       // employee itself noticed. Another employee's observation is not visible to this one, so it is no
-      // reason for this one not to keep its own -- and it is never offered to the model to repeat or
-      // replace.
+      // reason for this one not to keep its own. (Only compared here, never sent anywhere.)
       const visible = (await deps.store.list(turn.ownerUserId)).filter(
         (memory) =>
           memory.formedBy !== "bot" || memory.formedByAgentId === turn.agentId,
       );
-      const related = corrections
-        ? relatedMemoriesOf(
-            personWordsOf(turn.messages),
-            visible.filter((memory) => typeof memory.id === "string"),
-          )
-        : [];
+      // What is sent to the model, and may be repeated or replaced, is narrower: exactly what this employee's
+      // context is given (`relatedCandidates`), so nothing disabled or read through another employee's
+      // source leaves for this employee's model.
+      const related =
+        corrections && deps.relatedCandidates
+          ? relatedMemoriesOf(
+              personWordsOf(turn.messages),
+              await deps.relatedCandidates(turn.ownerUserId, turn.agentId),
+            )
+          : [];
       const candidates = await extractMemories(transcript, model, {
         ...(deps.call ? { call: deps.call } : {}),
         related,

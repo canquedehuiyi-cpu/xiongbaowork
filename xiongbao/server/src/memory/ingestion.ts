@@ -474,6 +474,19 @@ export function createMemoryIngestion(options: {
       ),
     };
   }
+  /**
+   * 这位员工此刻看得见的记忆，放进上下文前的候选：启用的、未删除的；本人给的；这位员工自己的、同步正常的信息源
+   * 导入的；它自己记下、所读应用它仍持有的。最近更新的 {@link CONTEXT_CANDIDATES} 条。
+   */
+  async function visibleTo(ownerUserId: string, botId: string) {
+    return store.retrieve(
+      ownerUserId,
+      await eligibleSources(ownerUserId, botId),
+      "",
+      await formedFor(botId),
+      { limit: CONTEXT_CANDIDATES },
+    );
+  }
   async function syncEachDue() {
     for (const source of await store.dueSources()) {
       try {
@@ -541,6 +554,11 @@ export function createMemoryIngestion(options: {
       );
     },
     /**
+     * 这位员工此刻看得见的记忆：与 {@link contextFor} 挑选的候选是同一套（{@link visibleTo}）。抽取附给模型的已有
+     * 记忆从这里挑。
+     */
+    visibleTo,
+    /**
      * 这一轮上下文里的记忆。`query` 是用户最新一条消息：候选多取一些（最近更新的 {@link CONTEXT_CANDIDATES} 条），
      * 再按相关程度挑进预算（`quoteMemoryContext`）。
      */
@@ -550,13 +568,7 @@ export function createMemoryIngestion(options: {
       query = "",
       threadId?: string,
     ) {
-      const memories = await store.retrieve(
-        ownerUserId,
-        await eligibleSources(ownerUserId, botId),
-        "",
-        await formedFor(botId),
-        { limit: CONTEXT_CANDIDATES },
-      );
+      const memories = await visibleTo(ownerUserId, botId);
       /*
        * 同一线程里话题没变就逐字节复用上次的块，前缀缓存才不会每轮失效（`sticky.ts`）。
        */

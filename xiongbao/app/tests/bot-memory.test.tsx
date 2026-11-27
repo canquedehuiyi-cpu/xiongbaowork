@@ -259,3 +259,23 @@ for (const [name, node] of [
     expect(view.queryAllByText(/将取代：/)).toHaveLength(1);
   });
 }
+
+test("能力 › 记忆与信息源：改过字保存也算确认，「保存」旁同样注明旧条会被删除", async () => {
+  servingCorrections();
+  const view = draw(<MemoryScreen onQuery={() => {}} query="" />);
+  expect(await view.findByText("保存后旧条会被删除")).toBeTruthy();
+  expect(view.getAllByText("保存后旧条会被删除")).toHaveLength(1);
+});
+
+test("记忆列表：编辑一条待确认的纠正时，对话框的「保存」旁注明旧条会被删除", async () => {
+  servingCorrections();
+  const view = draw(<MemoryList />);
+  await view.findByText("将取代：周报用 Word 写");
+  expect(view.queryByText("保存后旧条会被删除")).toBeNull();
+  const user = userEvent.setup({ document });
+  // 第一条就是那条纠正。
+  await user.click(
+    view.getAllByRole("button", { name: "编辑" })[0] as HTMLElement,
+  );
+  expect(await view.findByText("保存后旧条会被删除")).toBeTruthy();
+});
