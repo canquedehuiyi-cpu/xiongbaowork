@@ -109,7 +109,7 @@ function publisher(
   return {
     repo,
     env: {
-      GITHUB_REPOSITORY: "CopilotKit/OpenBot",
+      GITHUB_REPOSITORY: "acme/xiongbao",
       GITHUB_SHA: git(repo, "rev-parse", "HEAD"),
       VERSION: "v0.4.0",
     },
