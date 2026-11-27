@@ -133,3 +133,103 @@ test("delivery.delivered 事件带上交付的员工 id，群聊标记也带", a
     ),
   ).toMatchObject({ kind: "delivered", taskId: "t1", agentId: "bot-1" });
 });
+
+/**
+ * 交付卡记下文件所在的电脑：deliver_task 把服务器这时算出的座位交给 `delivered`，存进卡片的 deliverable_ref。
+ * 卡片预览按它找电脑，不再靠这张卡的某一轮发过 `computer.turn_artifacts`（经过审批的写入没有这条事件）。
+ * 座位不写进对话里的交付卡事件；算不出座位也照常交付。
+ */
+test("deliver_task 把文件所在的座位记到卡上，不写进对话事件；算不出座位照常交", async () => {
+  const run = async (
+    seatOf: (() => Promise<string | undefined>) | undefined,
+    items: { kind: string; ref: string }[],
+  ) => {
+    const handed: { seat?: string; deliverable: unknown }[] = [];
+    const said: { name?: string; value?: unknown }[] = [];
+    let asked = 0;
+    const [, deliver] = deliveryTools({
+      delivery: {
+        cardOfRun: async () => ({
+          id: "t1",
+          tracked: true,
+          acceptedAt: new Date(),
+          status: "in_progress",
+          threadRef: "thread-1",
+          criteria: "写好",
+        }),
+        delivered: async (
+          _tenant: string,
+          _task: string,
+          input: { seat?: string; deliverable: unknown },
+        ) => {
+          handed.push(input);
+          return {};
+        },
+      } as never,
+      gate: {
+        checkEvidence: async () => ({
+          ok: true,
+          ref: {
+            kind: "deliverable",
+            ...(items.some((item) => item.kind === "workspace_file")
+              ? { workspaceFiles: ["reports/a.xlsx"] }
+              : { notes: ["结论"] }),
+          },
+        }),
+      } as never,
+      board: {} as never,
+      ownerUserId: "owner",
+      agentId: "bot-1",
+      emit: (_runId, event) => {
+        said.push(event as { name?: string; value?: unknown });
+      },
+      ...(seatOf
+        ? {
+            seatOf: () => {
+              asked += 1;
+              return seatOf();
+            },
+          }
+        : {}),
+    });
+    const answer = await withinModelRun(
+      { runId: "r1", threadId: "thread-1" },
+      () =>
+        (deliver as NonNullable<typeof deliver>).execute({
+          items,
+          checks: ["打开看过"],
+        }),
+    );
+    return { handed, said, asked, answer: String(answer) };
+  };
+  const file = [{ kind: "workspace_file", ref: "reports/a.xlsx" }];
+
+  const kept = await run(async () => "person:owner", file);
+  expect(kept.handed).toHaveLength(1);
+  expect(kept.handed[0]?.seat).toBe("person:owner");
+  const event = kept.said.find((e) => e.name === "delivery.delivered") as {
+    value: { deliverable: Record<string, unknown> };
+  };
+  expect(event.value.deliverable.seat).toBeUndefined();
+
+  const failing = await run(async () => {
+    throw new Error("computer gone");
+  }, file);
+  expect(failing.answer).toContain('"delivered":true');
+  expect(failing.handed).toHaveLength(1);
+  expect(Object.hasOwn(failing.handed[0] as object, "seat")).toBe(false);
+
+  // A words-only hand-in has no file on any computer: nothing is asked or kept.
+  const words = await run(
+    async () => "person:owner",
+    [{ kind: "note", ref: "结论" }],
+  );
+  expect(words.asked).toBe(0);
+  expect(words.handed).toHaveLength(1);
+  expect(Object.hasOwn(words.handed[0] as object, "seat")).toBe(false);
+
+  // Wired without a gateway: nothing kept, the hand-in goes through.
+  const none = await run(undefined, file);
+  expect(none.handed).toHaveLength(1);
+  expect(Object.hasOwn(none.handed[0] as object, "seat")).toBe(false);
+});

@@ -32,6 +32,11 @@ import {
  * into the run, opens nothing. (Run streams also drop a forged turn-artifacts event before it is
  * stored: `threads/run-side-events.ts`.)
  *
+ * A CARD KEEPS ITS SEAT. A hand-in that lists files or programs keeps the seat the server took it on
+ * (`deliverable_ref.seat`), because a card's rounds need not announce one: a file written by an approved
+ * action is written outside every round, so no `computer.turn_artifacts` names it. A card from before
+ * that, with no seat anywhere, is read from the employee's seat on its owner's own computer only.
+ *
  * REFUSAL IS THE ONLY OTHER ANSWER. Every rule that does not hold gives `null`, and the route
  * answers that exactly as it answers "there is no such employee", so the answer cannot be used to
  * learn which conversations, runs, cards or files exist.
@@ -134,7 +139,14 @@ export type ArtifactAccessDeps = {
     botId: string;
     /** Whose card it is. */
     ownerId: string;
-    seat: string;
+    /**
+     * The seat the card's files were made on, as text: the one kept with the hand-in
+     * (`deliverable_ref.seat`), else the one the card's rounds announced. Absent when nothing recorded
+     * one (a card handed in before cards kept it, whose rounds announced none: its files were written
+     * by an approved action, outside every round). Two different ones announced, and no seat kept,
+     * is no card at all (null), not an absent seat.
+     */
+    seat?: string;
     workspaceFiles: string[];
     /** The running programs the card lists (port and landing path); absent when it lists none. */
     apps?: DeliveredApp[];
@@ -361,6 +373,14 @@ async function seatFor(
       return null;
     return (await deps.botIsLive(ownerId, botId)) ? expected : null;
   };
+  /** The employee's seat on this person's own computer, or null when it runs on another one. */
+  const ownComputer = async (ownerId: string): Promise<ComputerSeat | null> => {
+    if (ownerId === "") return null;
+    const seat = await deps.seatFor(botId, ownerId);
+    return seat.key.kind === "person" && seat.key.personId === ownerId
+      ? seat
+      : null;
+  };
 
   if (task !== undefined) {
     // One kind of scope at a time.
@@ -372,14 +392,15 @@ async function seatFor(
         ? (card.apps ?? []).some((app) => app.port === wanted.appPort)
         : strings(card.workspaceFiles).some(wanted.files);
     if (!listed) return null;
-    if ("appPort" in wanted) {
-      // A card with a program and no file may carry no seat of its own.
-      const named = seatOf(botId, card.seat);
-      return confirmed(
-        named ?? (await deps.seatFor(botId, card.ownerId)),
-        card.ownerId,
-      );
-    }
+    /*
+     * A card on which nothing recorded a seat (see `cardFor`) is read from the employee's seat on the
+     * card owner's OWN computer, and from no other: what a recorded seat could ever open too, since
+     * `confirmed` accepts only the seat the server works out for the owner now. An employee that runs
+     * on a computer of its own (isolated), which everybody who uses it shares, is not guessed at: such a
+     * card needs a recorded seat.
+     */
+    if (card.seat === undefined)
+      return confirmed(await ownComputer(card.ownerId), card.ownerId);
     return confirmed(seatOf(botId, card.seat), card.ownerId);
   }
 

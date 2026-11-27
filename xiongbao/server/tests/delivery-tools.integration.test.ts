@@ -2154,6 +2154,37 @@ describe("deliver_task and a workspace file", () => {
     );
   });
 
+  test("the seat the hand-in was taken on is kept on the card, and not on its delivered line", async () => {
+    const card = await acceptedCard("workspace-seat");
+    const runId = randomUUID();
+    expect(await delivery.attachRun(card.tenantId, card.cardId, runId)).toBe(
+      true,
+    );
+    const deliverable = {
+      kind: "deliverable" as const,
+      workspaceFiles: ["测试-test.txt"],
+    };
+    const merged = await delivery.delivered(card.tenantId, card.cardId, {
+      runId,
+      agentId: card.agentId,
+      actor: `agent:${card.agentId}`,
+      deliverable,
+      seat: `person:${card.tenantId}`,
+    });
+    expect(merged?.seat).toBe(`person:${card.tenantId}`);
+    expect((await cardRow(card.tenantId, card.cardId))?.deliverableRef).toEqual(
+      { ...deliverable, seat: `person:${card.tenantId}` },
+    );
+    const lines = await eventsOf(card.tenantId, card.cardId);
+    const line = lines.find((row) => row.kind === "delivered");
+    expect(line?.detail).toMatchObject({ runId, deliverable });
+    const detail = line?.detail as
+      | { deliverable?: Record<string, unknown> }
+      | undefined;
+    expect(detail?.deliverable).toBeDefined();
+    expect(Object.hasOwn(detail?.deliverable as object, "seat")).toBe(false);
+  });
+
   test("a path that leaves the workspace → bounced, and the card keeps nothing", async () => {
     const card = await acceptedCard("workspace-escape");
     for (const ref of ["../secrets.env", "/etc/passwd", "C:\\work\\x.md"]) {

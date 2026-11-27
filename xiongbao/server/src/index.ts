@@ -241,6 +241,7 @@ import { createComponentStore } from "./components/store";
 import { createArtifactAccessDeps } from "./computer/artifact-access-store";
 import {
   botOwnership,
+  computerKeyText,
   createComputerSeatResolver,
 } from "./computer/computer-key";
 import { createComputerGateway, localAppsAllowed } from "./computer/gateway";
@@ -2887,6 +2888,18 @@ await startupLifecycle.run(async (startup) => {
       // A round with no browser behind it (a nudge, a hand-over) reads times on the person's saved zone.
       savedTimeZone: async () =>
         (await readWorkHours(database, actorId)).timeZone,
+      /*
+       * The seat the evidence gate looks for the files on, kept on the card: what its preview reads from
+       * (`computer/artifact-access-store.ts`), worked out in the card person's frame as it is there.
+       */
+      seatOf: computerGateway
+        ? () =>
+            runAsTenant(actorId, async () =>
+              computerKeyText(
+                (await computerGateway.seatFor(botId, actorId)).key,
+              ),
+            )
+        : undefined,
     }),
     // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*
