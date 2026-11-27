@@ -31,6 +31,9 @@ import {
   overdueChip,
   overdueMinutes,
   pendingExtension,
+  type RerunRow,
+  rerunsOf,
+  rerunWarningOf,
   type TaskEvent,
   taskEventsQueryOptions,
 } from "@/lib/tasks/delivery";
@@ -264,6 +267,124 @@ export function EvidenceLine({
   );
 }
 
+/** 服务器复核的一行：通过打勾，不一致用 warn 样式（琥珀色底），未复核灰着。 */
+function RerunLine({ row }: { row: RerunRow }) {
+  const warn = row.result === "mismatch";
+  return (
+    <li
+      className={cn(
+        "flex flex-wrap items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-[13px]",
+        warn
+          ? "border-(--wb-amber) bg-(--wb-amber-soft) text-(--wb-amber-fg)"
+          : "border-(--wb-line) bg-(--wb-card)",
+      )}
+      data-warn={warn ? "" : undefined}
+    >
+      <svg
+        aria-hidden="true"
+        className={cn(
+          "shrink-0",
+          row.result === "passed"
+            ? "text-(--wb-green)"
+            : warn
+              ? "text-(--wb-amber)"
+              : "text-(--wb-muted)",
+        )}
+        fill="none"
+        height="16"
+        stroke="currentColor"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+        width="16"
+      >
+        {row.result === "passed" ? (
+          <path d="M5 12l4 4 10-10" />
+        ) : warn ? (
+          <path d="M12 4l9 16H3zM12 10v4M12 17v.5" />
+        ) : (
+          <path d="M5 12h14" />
+        )}
+      </svg>
+      <span
+        className={cn(
+          "min-w-0 flex-1 [overflow-wrap:anywhere]",
+          row.result === "unverified" ? "text-(--wb-fg2)" : null,
+        )}
+        data-result={row.result}
+      >
+        {row.text}
+      </span>
+      {row.why ? (
+        <span className="basis-full pl-[26px] text-[12px] [overflow-wrap:anywhere]">
+          {row.why}
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * 交付物与证据（设计稿 2）：交付物一行行、员工自查，紧接着服务器交付时复跑员工声明的核对命令的结果（借鉴改进
+ * PR 5）；复跑对不上、挡回两次后照收的卡，这一段顶部先有一行警告。最后是验收标准。
+ */
+export function DeliveryEvidence({
+  deliverable,
+  criteria,
+  taskId,
+  agentId,
+}: {
+  deliverable: unknown;
+  criteria?: string | null;
+  taskId: string;
+  agentId: string | null;
+}) {
+  const evidence = evidenceOf(deliverable);
+  const reruns = rerunsOf(deliverable);
+  const warning = rerunWarningOf(deliverable);
+  return (
+    <section aria-label="交付物与证据" className="flex flex-col gap-2">
+      <h3 className={SECTION_TITLE}>交付物与证据</h3>
+      {warning ? (
+        <p
+          className="m-0 rounded-[10px] bg-(--wb-amber-soft) px-3 py-2 font-medium text-(--wb-amber-fg) text-[13px]"
+          role="alert"
+        >
+          {warning}
+        </p>
+      ) : null}
+      {evidence.length > 0 ? (
+        evidence.map((row, index) => (
+          <EvidenceLine
+            agentId={agentId}
+            // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
+            key={index}
+            row={row}
+            taskId={taskId}
+          />
+        ))
+      ) : (
+        <p className="m-0 text-(--wb-muted) text-[13px]">还没交成果。</p>
+      )}
+      {reruns.length > 0 ? (
+        <ul
+          aria-label="服务器复核"
+          className="m-0 flex list-none flex-col gap-2 p-0"
+        >
+          {reruns.map((row, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付记录里的行，先后不会变。
+            <RerunLine key={index} row={row} />
+          ))}
+        </ul>
+      ) : null}
+      <span className="text-(--wb-muted) text-[12px] leading-[1.6]">
+        {criteria
+          ? `验收标准（派活时写下的）：${criteria}`
+          : "派活时没写验收标准。"}
+      </span>
+    </section>
+  );
+}
+
 /**
  * 逾期卡上「服务器替你盯着」那一段（设计稿 5）：流水里核对器替你做过的事——叫醒员工问进度（第几次）、记为
  * 逾期、通知你（或留到开工清点）。只念流水里真有的行：没人核对过的时段不写成「一直在盯」。你自己点的「再催」
@@ -402,7 +523,6 @@ function TaskDetail({ taskId }: { taskId: string }) {
   const late = overdueMinutes(task, now);
   const formerly =
     late === null ? formerOverdueMinutes(task, history, now) : null;
-  const evidence = evidenceOf(task.deliverableRef);
   const asking = pendingExtension(history);
   const status = task.status;
   const handedIn = status === "awaiting_review" || status === "done";
@@ -687,27 +807,12 @@ function TaskDetail({ taskId }: { taskId: string }) {
         </section>
       ) : null}
 
-      <section aria-label="交付物与证据" className="flex flex-col gap-2">
-        <h3 className={SECTION_TITLE}>交付物与证据</h3>
-        {evidence.length > 0 ? (
-          evidence.map((row, index) => (
-            <EvidenceLine
-              agentId={task.executorAgentId}
-              // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
-              key={index}
-              row={row}
-              taskId={task.id}
-            />
-          ))
-        ) : (
-          <p className="m-0 text-(--wb-muted) text-[13px]">还没交成果。</p>
-        )}
-        <span className="text-(--wb-muted) text-[12px] leading-[1.6]">
-          {task.criteria
-            ? `验收标准（派活时写下的）：${task.criteria}`
-            : "派活时没写验收标准。"}
-        </span>
-      </section>
+      <DeliveryEvidence
+        agentId={task.executorAgentId}
+        criteria={task.criteria}
+        deliverable={task.deliverableRef}
+        taskId={task.id}
+      />
 
       {stacked ? null : (
         <>

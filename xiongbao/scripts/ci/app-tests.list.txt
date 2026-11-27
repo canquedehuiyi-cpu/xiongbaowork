@@ -286,6 +286,7 @@ tests/default-agent.test.ts
 tests/delivery-app-open.test.tsx
 tests/delivery-evidence-download.test.tsx
 tests/delivery-loop-briefing.test.tsx
+tests/delivery-rerun.test.tsx
 tests/design-tokens.test.ts
 tests/detail-panel-preview-routes.test.tsx
 tests/detail-panel-preview.test.tsx
