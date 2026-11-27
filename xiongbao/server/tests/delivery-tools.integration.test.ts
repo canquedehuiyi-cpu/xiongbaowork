@@ -2428,7 +2428,7 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
   const counted = {
     items: [{ kind: "note", ref: "data.csv 共 100 行，已去重。" }],
     checks: ["数过行数：100 行"],
-    rerun: ["wc -l data.csv"],
+    rerun: ["bun test tests/rows.test.ts"],
   };
 
   test("a re-run that does not match is bounced twice; the third hand-in goes through, marked 复核不一致", async () => {
@@ -2438,15 +2438,15 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
       async (run) => {
         for (const event of ranCommand(
           "c1",
-          "wc -l data.csv",
+          "bun test tests/rows.test.ts",
           0,
-          "100 data.csv",
+          "100 pass",
         ))
           run.draw(event);
       },
     );
     const ran: string[] = [];
-    const tools = rerunTools(card, "150 data.csv", ran);
+    const tools = rerunTools(card, "150 pass", ran);
 
     for (const attempt of [1, 2]) {
       const answer = await handIn(card, tools, counted);
@@ -2455,20 +2455,24 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
         bounced: true,
       });
       expect(answer.rerunBounce).toBe(true);
-      expect(String(answer.reason)).toContain("wc -l data.csv");
-      expect(String(answer.reason)).toContain("150 data.csv");
+      expect(String(answer.reason)).toContain("bun test tests/rows.test.ts");
+      expect(String(answer.reason)).toContain("150 pass");
       expect((await cardRow(card.tenantId, card.cardId))?.deliverableRef).toBe(
         null,
       );
     }
     const third = await handIn(card, tools, counted);
     expect(third.delivered).toBe(true);
-    expect(ran).toEqual(["wc -l data.csv", "wc -l data.csv", "wc -l data.csv"]);
+    expect(ran).toEqual([
+      "bun test tests/rows.test.ts",
+      "bun test tests/rows.test.ts",
+      "bun test tests/rows.test.ts",
+    ]);
 
     const row = await cardRow(card.tenantId, card.cardId);
     expect(row?.status).toBe("awaiting_review");
     expect(row?.deliverableRef).toMatchObject({
-      reruns: [{ command: "wc -l data.csv", result: "mismatch" }],
+      reruns: [{ command: "bun test tests/rows.test.ts", result: "mismatch" }],
     });
     const bounces = (await eventsOf(card.tenantId, card.cardId)).filter(
       (event) => event.kind === "bounced",
@@ -2481,25 +2485,35 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
 
   test("a re-run that matches is recorded as passed", async () => {
     const card = await acceptedCard("rerun-passed", undefined, async (run) => {
-      for (const event of ranCommand("c1", "wc -l data.csv", 0, "100 data.csv"))
+      for (const event of ranCommand(
+        "c1",
+        "bun test tests/rows.test.ts",
+        0,
+        "100 pass",
+      ))
         run.draw(event);
     });
     const answer = await handIn(
       card,
-      rerunTools(card, "100 data.csv", []),
+      rerunTools(card, "100 pass", []),
       counted,
     );
     expect(answer.delivered).toBe(true);
     expect(
       (await cardRow(card.tenantId, card.cardId))?.deliverableRef,
     ).toMatchObject({
-      reruns: [{ command: "wc -l data.csv", result: "passed" }],
+      reruns: [{ command: "bun test tests/rows.test.ts", result: "passed" }],
     });
   });
 
   test("XIONGBAO_DELIVERY_RERUN=off: nothing is re-run and nothing is recorded", async () => {
     const card = await acceptedCard("rerun-off", undefined, async (run) => {
-      for (const event of ranCommand("c1", "wc -l data.csv", 0, "100 data.csv"))
+      for (const event of ranCommand(
+        "c1",
+        "bun test tests/rows.test.ts",
+        0,
+        "100 pass",
+      ))
         run.draw(event);
     });
     const ran: string[] = [];
@@ -2508,7 +2522,7 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
     try {
       const answer = await handIn(
         card,
-        rerunTools(card, "150 data.csv", ran),
+        rerunTools(card, "150 pass", ran),
         counted,
       );
       expect(answer.delivered).toBe(true);
@@ -2553,9 +2567,9 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
       async (run) => {
         for (const event of ranCommand(
           "c1",
-          "wc -l data.csv",
+          "bun test tests/rows.test.ts",
           0,
-          "100 data.csv",
+          "100 pass",
         ))
           run.draw(event);
       },
@@ -2575,8 +2589,8 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
           toolRef: "computer_run_command",
           effect: "write",
           scope: "workspace",
-          args: { command: "wc -l data.csv" },
-          subject: { command: "wc -l data.csv", runner: false },
+          args: { command: "bun test tests/rows.test.ts" },
+          subject: { command: "bun test tests/rows.test.ts", runner: false },
         } as never,
         status: "completed",
         decision: "allow_once",
@@ -2585,7 +2599,7 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
     const ran: string[] = [];
     const answer = await handIn(
       card,
-      rerunTools(card, "150 data.csv", ran),
+      rerunTools(card, "150 pass", ran),
       counted,
     );
     expect(answer.delivered).toBe(true);
@@ -2595,7 +2609,7 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
     ).toMatchObject({
       reruns: [
         {
-          command: "wc -l data.csv",
+          command: "bun test tests/rows.test.ts",
           result: "unverified",
           why: "这条命令当初是经审批才执行的，复跑不再执行",
         },
@@ -2610,9 +2624,9 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
       async (run) => {
         for (const event of ranCommand(
           "c1",
-          "wc -l data.csv",
+          "bun test tests/rows.test.ts",
           0,
-          "100 data.csv",
+          "100 pass",
         ))
           run.draw(event);
       },

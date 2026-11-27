@@ -13,6 +13,7 @@ import {
   rerunChecks,
   rerunClaimGateOn,
 } from "../src/tasks/rerun-gate";
+import { offloadCommandResult } from "../src/tool-output";
 
 /**
  * 交付时复跑核对命令（规格 2026-11-25-borrowed-improvements §5.5）：说法门、复跑判定、从运行事件读出跑过的
@@ -169,13 +170,13 @@ describe("复跑", () => {
   test("复跑的是基准那次的原命令", async () => {
     const stub = runner((command) => result(command, 0, "3 passed"));
     await rerunChecks({
-      commands: ["bun test"],
-      runs: [ran("cd app && bun test 2>&1 | tail -5", 0, "3 passed", 1)],
+      commands: ["cd app && bun test | tail -5"],
+      runs: [ran("cd app &&  bun test  | tail -5", 0, "3 passed", 1)],
       canExecute: true,
       wouldAllow: allow,
       run: stub.run,
     });
-    expect(stub.calls).toEqual(["cd app && bun test 2>&1 | tail -5"]);
+    expect(stub.calls).toEqual(["cd app &&  bun test  | tail -5"]);
   });
 
   test("最近一次失败、更早一次成功：按最近一次挡回（Review Focus 2）", async () => {
@@ -342,7 +343,7 @@ describe("复跑", () => {
 
   test("至多复跑 3 条", async () => {
     const stub = runner((command) => result(command, 0, "1"));
-    const commands = ["make check", "bun test", "pytest -q", "bun run lint"];
+    const commands = ["bun test", "pytest -q", "go test ./...", "cargo test"];
     const outcome = await rerunChecks({
       commands,
       runs: commands.map((command, index) => ran(command, 0, "1", index)),
@@ -399,74 +400,112 @@ describe("复跑：允许名单和截断对齐（评审 C1、I2）", () => {
   test("执行的命令和声明的不同：交付记录另记实际执行的", async () => {
     const outcome = await rerunChecks({
       commands: ["bun test"],
-      runs: [ran("cd app && bun test 2>&1 | tail -5", 0, "3 passed", 1)],
+      runs: [ran("bun  test", 0, "3 passed", 1)],
       canExecute: true,
       wouldAllow: allow,
       run: async (command) => result(command, 0, "3 passed"),
     });
     expect(outcome.outcomes).toEqual([
-      {
-        command: "bun test",
-        result: "passed",
-        ran: "cd app && bun test 2>&1 | tail -5",
-      },
+      { command: "bun test", result: "passed", ran: "bun  test" },
     ]);
   });
 
-  test("长输出只留尾：按尾部比，复跑完整输出一致就通过", async () => {
-    const body = Array.from({ length: 400 }, (_, i) => `case ${i + 1} ok`).join(
-      "\n",
-    );
-    const outcome = await rerunChecks({
-      commands: ["bun test"],
+  test("名单外的命令最近一次失败照样挡回（复审回归）；成功的记未复核、不执行", async () => {
+    const stub = runner((command) => result(command, 0, "ok"));
+    const failed = await rerunChecks({
+      commands: ["npm run lint"],
       runs: [
-        ran("bun test", 0, "", 1, {
-          stdout: `…（前面省略 390 行）…\n${body.split("\n").slice(-10).join("\n")}\n400 pass`,
-        }),
+        ran("npm run lint", 0, "ok", 1),
+        ran("npm run lint", 1, "3 problems", 2),
       ],
       canExecute: true,
       wouldAllow: allow,
-      run: async (command) => result(command, 0, `${body}\n400 pass`),
+      run: stub.run,
     });
-    expect(outcome).toEqual({
-      bounce: null,
-      outcomes: [{ command: "bun test", result: "passed" }],
+    expect(failed.bounce).toContain("这条命令最近一次没有成功");
+    expect(failed.outcomes).toEqual([
+      {
+        command: "npm run lint",
+        result: "mismatch",
+        why: "这条命令最近一次没有成功",
+      },
+    ]);
+    const passed = await rerunChecks({
+      commands: ["npm run lint"],
+      runs: [ran("npm run lint", 0, "ok", 1)],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
     });
+    expect(passed.bounce).toBeNull();
+    expect(passed.outcomes[0]?.result).toBe("unverified");
+    expect(passed.outcomes[0]?.why).toContain("package 脚本");
+    expect(stub.calls).toEqual([]);
   });
 
-  test("长输出留头尾：开头和结尾各自对齐；数字真的变了照样挡回", async () => {
-    const body = Array.from({ length: 300 }, (_, i) => `case ${i + 1} ok`).join(
-      "\n",
+  /** 一大段测试输出：每行一个用例，最后一行是通过数。 */
+  const suite = (cases: number, passed = cases) =>
+    `${Array.from({ length: cases }, (_, i) => `case ${i + 1} ok (${i % 7} assertions)`).join("\n")}\n${passed} pass\n`;
+  /** 员工那次的结果，经真实的工具结果收紧（`tool-output.ts`）后存下的样子。 */
+  const stored = async (stdout: string, truncated = false) => {
+    const kept = await offloadCommandResult(
+      { command: "bun test", exitCode: 0, stdout, stderr: "", truncated },
+      { id: "call-1" },
     );
-    const stored = `Running 300 tests\n…（中间省略 298 行，约 9000 字节）…\ncase 300 ok\n300 pass`;
-    const check = (rerun: string) =>
-      rerunChecks({
-        commands: ["bun test"],
-        runs: [ran("bun test", 0, "", 1, { stdout: stored })],
-        canExecute: true,
-        wouldAllow: allow,
-        run: async (command) => result(command, 0, rerun),
-      });
-    expect(
-      (await check(`Running 300 tests\n${body}\n300 pass`)).outcomes[0]?.result,
-    ).toBe("passed");
-    const changed = await check(`Running 300 tests\n${body}\n250 pass`);
+    return ran("bun test", 0, kept.stdout, 1, {
+      stdout: kept.stdout,
+      stderr: kept.stderr,
+      truncated,
+    });
+  };
+  /** 电脑截掉前面、只留最后 64KB（`agent-computer/src/shell.ts` 的 `clamp`）。 */
+  const clamp = (text: string) =>
+    Buffer.from(text, "utf8")
+      .subarray(-64 * 1024)
+      .toString("utf8");
+  const check = async (baseline: CardCommandRun, rerun: string, cut = false) =>
+    rerunChecks({
+      commands: ["bun test"],
+      runs: [baseline],
+      canExecute: true,
+      wouldAllow: allow,
+      run: async (command) =>
+        result(command, 0, cut ? clamp(rerun) : rerun, { truncated: cut }),
+    });
+
+  test("长输出留头尾（真实的 excerpt 形状）：开头结尾各自对齐，一致就通过", async () => {
+    const baseline = await stored(suite(2000));
+    // 真的被收紧成了头尾，标记里的行数、字节数不当数字比。
+    expect(baseline.stdout).toContain("…（中间省略");
+    expect((await check(baseline, suite(2000))).outcomes).toEqual([
+      { command: "bun test", result: "passed" },
+    ]);
+  });
+
+  test("长输出留头尾：结尾的通过数真的变了，照样挡回", async () => {
+    const baseline = await stored(suite(2000));
+    const changed = await check(baseline, suite(2000, 1500));
     expect(changed.outcomes[0]?.result).toBe("mismatch");
     expect(changed.bounce).toContain("结尾");
   });
 
+  test("长输出只留尾（电脑截掉前面，切在行中间）：按结尾比", async () => {
+    const full = suite(6000);
+    const baseline = await stored(clamp(full), true);
+    expect(baseline.truncated).toBe(true);
+    expect((await check(baseline, full)).outcomes[0]?.result).toBe("passed");
+    // 复跑也被电脑截了：两边都只比结尾。
+    expect((await check(baseline, full, true)).outcomes[0]?.result).toBe(
+      "passed",
+    );
+    expect((await check(baseline, suite(6000, 5000))).outcomes[0]?.result).toBe(
+      "mismatch",
+    );
+  });
+
   test("截断后对不齐：未复核，不挡回", async () => {
-    const outcome = await rerunChecks({
-      commands: ["bun test"],
-      runs: [
-        ran("bun test", 0, "", 1, {
-          stdout: "a 1\na 2\n…（中间省略 300 行，约 9000 字节）…\nb 3\nb 4",
-        }),
-      ],
-      canExecute: true,
-      wouldAllow: allow,
-      run: async (command) => result(command, 0, "only 5"),
-    });
+    const baseline = await stored(suite(2000));
+    const outcome = await check(baseline, "only 5 pass");
     expect(outcome.bounce).toBeNull();
     expect(outcome.outcomes[0]?.result).toBe("unverified");
     expect(outcome.outcomes[0]?.why).toContain("对不齐");

@@ -353,13 +353,12 @@ const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 200);
 
 /**
- * 逐条复跑员工声明的核对命令。不在允许名单里的（`shared/rerun-command.ts`：写回、安装、删除、联网写入、接了别的
- * 命令的），记「未复核」。其余的找这张卡里最近一次跑的同一条核对作基准（整条命令按同一规则解析，不按子串），
- * 再按次序判断：没跑过、经审批执行过的、电脑不能由服务器执行的、按规则现在要审批的、截断后对不齐的，都记
- * 「未复核」，不挡回；最近一次没成功的挡回；其余的复跑，退出码或数字对不上的挡回。
+ * 逐条复跑员工声明的核对命令。每条先找这张卡里最近一次跑的同一条命令作基准（整条命令一字不差，空白不计；不按子串），
+ * 再按次序判断：没跑过的、经审批执行过的记「未复核」；最近一次没成功的挡回；认不出来的（不在允许名单里，见
+ * `shared/rerun-command.ts`）、电脑不能由服务器执行的、按规则现在要审批的、截断后对不齐的记「未复核」，不挡回；
+ * 其余的复跑，退出码或数字对不上的挡回。
  *
- * 复跑执行的是基准那次的原命令（员工写的可能少了 `cd <目录> && ` 或后面的过滤），交付记录里写员工声明的
- * 命令，实际执行的不一样时另记在 `ran`。
+ * 复跑执行的是基准那次的原命令，交付记录里写员工声明的命令，两者空白不同时另记实际执行的在 `ran`。
  */
 export async function rerunChecks(input: {
   commands: readonly string[];
@@ -380,15 +379,12 @@ export async function rerunChecks(input: {
         ...outcome,
         ...(ran && ran !== command ? { ran } : {}),
       });
-    // 只认允许名单里的核对命令；写回、安装、删除、联网写入、接了别的命令的，一律不复跑。
-    const allowed = isRerunnable(command);
-    if (!allowed.ok) {
-      done({ result: "unverified", why: allowed.why });
-      continue;
-    }
-    // 基准：这张卡里最近一次跑的同一条核对命令（整条命令按同一规则解析，不按子串）。
+    /*
+     * 基准：这张卡里最近一次跑的同一条命令（整条命令一字不差，空白不计）。名单外的命令也照样找：经审批和
+     * 「最近一次没成功」只读历史、不执行任何东西，不归允许名单管。
+     */
     const baseline = input.runs
-      .filter((run) => sameCheckCommand(run.command, command))
+      .filter((run) => sameCommand(run.command, command))
       .reduce<CardCommandRun | undefined>(
         (latest, run) => (!latest || run.at > latest.at ? run : latest),
         undefined,
@@ -408,6 +404,12 @@ export async function rerunChecks(input: {
       bounces.push(
         `「${command}」：${LATEST_FAILED}（退出码 ${baseline.exitCode}）。先修好、再跑一次确认通过后再交。\n最近一次输出末尾：\n${tailOf(baseline.output)}`,
       );
+      continue;
+    }
+    // 允许名单只决定要不要真去执行：认不出来的（package 脚本、make、带写回参数的……）不复跑。
+    const allowed = isRerunnable(baseline.command);
+    if (!allowed.ok) {
+      unverified(allowed.why);
       continue;
     }
     if (!input.canExecute) {

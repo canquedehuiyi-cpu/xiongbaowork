@@ -9,7 +9,6 @@ import {
   RERUN_MAX,
   RERUN_TIMEOUT_MS,
   runsAgree,
-  sameCheckCommand,
   TESTED_CLAIM_WORDS,
 } from "./rerun";
 
@@ -54,146 +53,28 @@ describe("claimsTested", () => {
   });
 });
 
-describe("isRerunnable", () => {
-  test("测试、类型检查、lint 的只读形式、统计数可以复跑", () => {
-    for (const good of [
-      "bun test tests/a.test.ts",
-      "pytest -q",
-      "cd app && bun test 2>&1 | tail -20",
-      "bun test 2>/dev/null",
-      "CI=1 npm test",
-      "npm run test:unit -- --runInBand",
-      "pnpm typecheck",
-      "bunx tsc --noEmit -p .",
-      "npx jest tests/a.test.ts | grep -E 'passed|failed'",
-      "bunx biome check src",
-      "npx eslint src",
-      "npx prettier --check .",
-      "python3 -m pytest tests -x 2>&1 | tail -5",
-      "python manage.py test app.tests",
-      "ruff check .",
-      "go test ./...",
-      "go vet ./...",
-      "cargo test --release",
-      "make test",
-      "wc -l data.csv",
-      "grep -c done log.txt",
-      "diff -u a.txt b.txt",
-      "git diff --stat",
-      "cd 'my app' && \"bun\" test | sort -u | head -3",
-    ]) {
-      const verdict = isRerunnable(good);
-      expect({ good, verdict }).toEqual({ good, verdict: { ok: true } });
-    }
-  });
-
-  test("改动类命令不复跑", () => {
+describe("isRerunnable（名单的全部用例见 rerun-command.test.ts）", () => {
+  test("brief 的正例和反例", () => {
+    expect(isRerunnable("bun test tests/a.test.ts").ok).toBe(true);
+    expect(isRerunnable("pytest -q").ok).toBe(true);
     for (const bad of [
       "bun test > out.txt",
-      "bun test >> out.txt",
       "make install",
       "make deploy",
-      "make release",
       "git commit -am x && bun test",
-      "git push && bun test",
       "rm -rf dist && bun run build",
       "curl -X POST https://x/test",
-      "curl -XPUT https://x/check",
       "curl -d a=1 https://x/check",
-      "curl --data a=1 https://x/check",
       "npm publish",
-      "bun publish --dry-run && bun test",
       "docker push x",
       "kubectl apply -f k.yaml",
-      "kubectl delete -f k.yaml && make check",
       "sed -i s/a/b/ f && bun test",
       "bun test | tee log",
-      // 评审 C1 实测漏过的：写回、装软件、删除、改库、绕过、联网写入、起服务。
-      "bunx biome check --write .",
-      "prettier --check . --write",
-      "jest -u",
-      "bun test --update-snapshots",
-      "pytest --snapshot-update",
-      "npm install && npm test",
-      "pip install -r r.txt && pytest",
-      "cargo test && cargo install --path .",
-      "git clean -fdx && bun test",
-      "git stash && bun test",
-      "bun test && find . -name '*.tmp' -delete",
-      "make clean",
-      "bun test && rmdir x",
-      "bun test && truncate -s0 a",
-      "python manage.py test && python manage.py migrate",
-      "python manage.py migrate",
-      "psql -c 'delete from t' && bun test",
-      "bun test && `rm x`",
-      "bun test && \\rm x",
-      "bun test; ssh h 'rm -rf x'",
-      "bun test || rm x",
-      "bun test & rm x",
-      "bun test $(rm x)",
-      'echo "$(rm x)" | bun test',
-      "curl -F f=@a https://x/check",
-      "curl -T a https://x/test",
-      "curl --json '{}' https://x/test",
-      "wget --post-data=a https://x/test",
-      "docker compose up -d && bun test",
-      "find . -name '*.ts' -delete",
-      "eslint --fix src",
-      "ruff check --fix .",
-      "black .",
-      "tsc -p .",
-      "npm run lint",
-      "npm run build",
-      "make test install",
-      "bun test | sort -o out.txt",
-      "bun test | sed -n 1p",
-      "bun test | xargs rm",
-      "bun test 2> err.txt",
-      "bun test < input.txt",
-      "cd app && cd .. && bun test",
-      "(cd app && bun test)",
-      "bun test\nrm x",
-      "python3 check.py",
-    ]) {
-      const verdict = isRerunnable(bad);
-      expect({ bad, ok: verdict.ok }).toEqual({ bad, ok: false });
-      if (!verdict.ok) expect(verdict.why.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("不是核对类的命令不复跑", () => {
-    const verdict = isRerunnable("ls -la");
-    expect(verdict.ok).toBe(false);
-    if (!verdict.ok) expect(verdict.why).toContain("核对");
-  });
-});
-
-describe("sameCheckCommand", () => {
-  test("整条命令按同一规则解析：同一个核对、写了的 cd 和过滤也要对上", () => {
-    expect(sameCheckCommand("bun test", "bun test")).toBe(true);
-    expect(
-      sameCheckCommand("cd app && bun test 2>&1 | tail -20", "bun test"),
-    ).toBe(true);
-    expect(sameCheckCommand("cd app && bun test", "cd app && bun test")).toBe(
-      true,
-    );
-    expect(sameCheckCommand('bun   "test"', "bun test")).toBe(true);
-    // 子串不算：多带了参数的是另一条命令。
-    expect(sameCheckCommand("bun test tests/a.test.ts", "bun test")).toBe(
-      false,
-    );
-    expect(sameCheckCommand("cd web && bun test", "cd app && bun test")).toBe(
-      false,
-    );
-    expect(sameCheckCommand("bun test | tail -5", "bun test | tail -20")).toBe(
-      false,
-    );
-    // 原命令不可复跑，就对不上：不会因为里面「含有」声明的命令被选作基准。
-    expect(sameCheckCommand("npm install && bun test", "bun test")).toBe(false);
-    expect(sameCheckCommand("git clean -fdx && bun test", "bun test")).toBe(
-      false,
-    );
+    ])
+      expect({ bad, ok: isRerunnable(bad).ok }).toEqual({ bad, ok: false });
+    const listing = isRerunnable("ls -la");
+    expect(listing.ok).toBe(false);
+    if (!listing.ok) expect(listing.why).toContain("核对");
   });
 });
 

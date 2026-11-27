@@ -1,286 +1,167 @@
 /**
  * Which commands the server may run a second time at delivery (spec 2026-11-25-borrowed-improvements
- * §5.5: 改动类命令不复跑), by an allow list rather than a list of what to refuse.
+ * §5.5: 改动类命令不复跑). Only what is recognised is re-run; everything else is not.
  *
- * A command is re-run only when its whole text has this shape, and nothing else:
+ * A command is re-run only when its whole text is, word for word, of this shape:
  *
- *     [cd <dir> &&] [NAME=value …] <a known check, in its read-only form> [| <read-only filter>]…
+ *     [cd <path> && ]<a known check, called directly> [| <read-only filter>]…
  *
- * A known check is a test runner, a type check or a linter run without writing anything back
- * (`bun test`, `pytest`, `tsc --noEmit`, `eslint .`, `biome check`, `prettier --check`, `go vet`,
- * `cargo test`, `make test`, `wc -l`, `grep`, `diff`…). The filters after a pipe only read
- * (`tail`, `head`, `grep`, `wc`, `sort`, `cut`…). Anything else is refused: a second command after
- * `;`, `&&` (but the `cd` in front), `||` or `&`; backticks, `$(…)`, `$VAR`, `\`, a newline or a
- * subshell; a redirect into a file (`2>&1` and `>/dev/null` only); a write-back flag (`--write`,
- * `--fix`, `-u`, `--update-snapshots`…); a word such as `install`, `migrate` or `clean`; and every
- * program this list does not know. Refusing a command costs a 「未复核」 on the card, never a bounce,
- * so the list errs on the side of refusing.
+ * 1. Characters: letters, digits, space and `._/:=@,+-`, plus `|` between the check and a filter and
+ *    the `&&` of a leading `cd`. A quote, a brace, `$`, a backtick, `*`, `?`, `~`, `\`, `;`, `>`, `<`,
+ *    a newline, a tab or any full-width character, and the command is not re-run: nothing the shell
+ *    would expand, substitute, redirect or split is left for it to do.
+ * 2. No `NAME=value` in front, and no `env`: the first word is the program.
+ * 3. The program is one of a handful of checks called directly, each with the flags it may carry; a
+ *    word that does not start with `-` is a path (or a test name, a package) and is allowed, every
+ *    other word must be on that program's own list, so `-iu` or `--update-snapshots` is refused
+ *    because nobody listed it, not because somebody remembered to forbid it.
+ * 4. Package scripts (`npm test`, `npm run …`, `yarn …`, `pnpm …`, `bun run …`), mvn, gradle, make and
+ *    a project's own scripts are never re-run: what they do is not in the command.
+ * 5. After a pipe, only `tail`/`head` (`-n N`, `-N`), `grep` (`-n`, `-v`, `-i`, `-E`, one pattern word)
+ *    and `wc -l`.
+ *
+ * Refusing costs a 「未复核」 on the card, never a bounce, so the list errs on the side of refusing.
  */
 
-/** One command parsed into the shape above: words unquoted. */
-export type CheckCommand = {
-  /** The directory of a leading `cd <dir> &&`. */
-  cd?: string;
-  /** `NAME=value` words in front of the check. */
-  env: string[];
-  /** The check itself: the program and its arguments. */
-  check: string[];
-  /** Each read-only filter after a pipe, as its words. */
-  filters: string[][];
-};
-
-type Parsed = { ok: true; command: CheckCommand } | { ok: false; why: string };
+type Parsed = { ok: true; words: string[] } | { ok: false; why: string };
 
 const WHY = {
-  chained:
-    "命令里有 ;、||、&、反引号、$(…)、变量、反斜杠、括号或换行：复跑只认单条核对命令",
-  andThen: "命令用 && 接了别的命令：复跑只认开头的「cd <目录> &&」",
   writesFile: "命令把输出写进文件",
-  readsFile: "命令里有输入重定向",
-  writeBack:
-    "命令带写回类参数（--write、--fix、-u、--update-snapshots 等），会改动文件",
-  changes: "命令会安装、迁移、清理、发布或改动东西",
-  notCheck: "不像核对命令（测试、类型检查、lint 的只读形式、统计数）",
-  filter: "管道后面只认只读的过滤（tail、head、grep、wc、sort、cut 等）",
-  quote: "命令的引号没有配对",
+  characters:
+    "命令里有不认识的字符（引号、花括号、$、反引号、*、?、~、\\、;、<、换行或全角标点等）：复跑只认直接调用的核对命令",
+  andThen: "命令用 && 接了别的命令：复跑只认开头的「cd <路径> && 」",
+  env: "命令前面带了环境变量（NAME=value 或 env）：不复跑",
+  notCheck:
+    "不是认得的核对命令（直接调用的测试、类型检查、lint）；package 脚本、make、mvn、gradle 和项目自己的脚本不复跑",
+  flag: "命令带了这个核对程序名单之外的参数",
+  filter: "管道后面只认 tail、head、grep（-n -v -i -E 加一个模式词）和 wc -l",
 } as const;
 
-type Item = { word: string } | { op: "&&" | "|" };
+/** Every character a re-run command may hold: the shape above, nothing the shell would act on. */
+const ALLOWED_CHARS = /^[A-Za-z0-9 ._/:=@,+|&-]*$/;
 
-/** Words and the two operators the shape allows, or why the text is refused. */
-function tokens(text: string): { ok: true; items: Item[] } | Parsed {
-  const items: Item[] = [];
-  let word = "";
-  let inWord = false;
-  let quote: "'" | '"' | null = null;
-  const end = () => {
-    if (inWord) items.push({ word });
-    word = "";
-    inWord = false;
-  };
-  for (let index = 0; index < text.length; index++) {
-    const char = text[index] as string;
-    if (quote === "'") {
-      if (char === "'") quote = null;
-      else word += char;
-      continue;
-    }
-    if (char === "`" || char === "\\" || char === "\n" || char === "$")
-      return { ok: false, why: WHY.chained };
-    if (quote === '"') {
-      if (char === '"') quote = null;
-      else word += char;
-      continue;
-    }
-    if (char === "'" || char === '"') {
-      quote = char;
-      inWord = true;
-      continue;
-    }
-    if (char === " " || char === "\t") {
-      end();
-      continue;
-    }
-    if (char === ";" || char === "(" || char === ")")
-      return { ok: false, why: WHY.chained };
-    if (char === "<") return { ok: false, why: WHY.readsFile };
-    if (char === "&") {
-      if (text[index + 1] === "&") {
-        end();
-        items.push({ op: "&&" });
-        index++;
-        continue;
-      }
-      return { ok: false, why: WHY.chained };
-    }
-    if (char === "|") {
-      if (text[index + 1] === "|") return { ok: false, why: WHY.chained };
-      end();
-      items.push({ op: "|" });
-      continue;
-    }
-    if (char === ">") {
-      // Only a stream into another stream, or into nothing: `2>&1`, `>/dev/null`, `2>/dev/null`.
-      const stream = inWord && /^[12]?$/.test(word) ? word : null;
-      if (stream === null && inWord) return { ok: false, why: WHY.writesFile };
-      const rest = text.slice(index + 1);
-      const into = rest.match(/^&[12](?=\s|$|\|)|^\s*\/dev\/null(?=\s|$|\|)/);
-      if (!into) return { ok: false, why: WHY.writesFile };
-      word = "";
-      inWord = false;
-      index += into[0].length;
-      continue;
-    }
-    word += char;
-    inWord = true;
-  }
-  if (quote) return { ok: false, why: WHY.quote };
-  end();
-  return { ok: true, items };
-}
-
-/** A word that writes back what it checks, or sends it somewhere. */
-const WRITE_BACK =
-  /^(?:-u|-w|--write|--fix|--fix-[\w-]+|--apply|--apply-unsafe|--unsafe|--update|--update-snapshots?|--updateSnapshot|--snapshot-update|--watch|--watchAll|--in-place|--output[\w-]*|--outfile|--outputFile|--junitxml|--junit-xml|--html|--cov-report|--coverageDirectory)(?:=.*)?$/;
-
-/** A word that names a change rather than a check, whichever program it is given to. */
-const CHANGE_WORD =
-  /^(?:install|uninstall|i|ci|add|remove|rm|delete|migrate|makemigrations|clean|deploy|publish|push|release|upgrade|update|reset|apply|destroy|init|create|drop|exec|shell|run-server|runserver|serve|start|up|down)$/;
-
-/** Programs that only read the files they are given and print what they found. */
-const READERS = new Set([
-  "wc",
-  "grep",
-  "egrep",
-  "fgrep",
-  "diff",
-  "cmp",
-  "head",
-  "tail",
-  "cat",
-  "sha256sum",
-  "md5sum",
-]);
-
-/** A package script name that is a test or a type check (`test`, `test:unit`, `typecheck`). */
-const SCRIPT =
-  /^(?:test|tests|typecheck|type-check|types|check-types)(?::[\w:.-]+)?$/;
-
-const has = (words: readonly string[], ...wanted: string[]) =>
-  words.some((word) => wanted.includes(word));
+/** A word that is a path, a test name or a package, not a flag. */
+const plainWord = (word: string) => word !== "" && !word.startsWith("-");
 
 /**
- * Whether these words (program first, environment words already taken off) are a known check in its
- * read-only form; why not, otherwise.
+ * A program's flags: those that stand alone, and those that take the next word (or `=value`) as
+ * their value. `checkValue` checks a value when not any plain word will do.
  */
-function knownCheck(words: readonly string[]): string | null {
-  const [program, ...args] = words;
-  if (!program) return WHY.notCheck;
-  const first = args[0];
-  const name = program.replace(/^\.\//, "");
-  // Tools that only read what they are given (their -u, -w, -i mean something else there).
-  if (READERS.has(name)) return null;
-  if (name === "git")
-    return first === "diff" && !args.some((word) => /^--output/.test(word))
-      ? null
-      : WHY.notCheck;
-  if (args.some((word) => WRITE_BACK.test(word))) return WHY.writeBack;
-  switch (name) {
-    case "npx":
-    case "bunx":
-    case "pnpx":
-      return args.length > 0 && !first?.startsWith("-")
-        ? knownCheck(args)
-        : WHY.notCheck;
-    case "bun":
-      if (first === "test") return changeIn(args.slice(1));
-      if (first === "run" && args[1] && SCRIPT.test(args[1]))
-        return changeIn(args.slice(2));
-      if (first === "x" && args.length > 1) return knownCheck(args.slice(1));
-      return WHY.notCheck;
-    case "npm":
-      if (first === "test" || first === "t") return changeIn(args.slice(1));
-      if ((first === "run" || first === "run-script") && args[1])
-        return SCRIPT.test(args[1]) ? changeIn(args.slice(2)) : WHY.notCheck;
-      return WHY.notCheck;
-    case "pnpm":
-    case "yarn":
-      if (first === "exec" && args.length > 1) return knownCheck(args.slice(1));
-      if (first === "run" && args[1])
-        return SCRIPT.test(args[1]) ? changeIn(args.slice(2)) : WHY.notCheck;
-      if (first && SCRIPT.test(first)) return changeIn(args.slice(1));
-      return WHY.notCheck;
-    case "jest":
-    case "vitest":
-    case "mocha":
-    case "pytest":
-    case "py.test":
-    case "mypy":
-    case "pyright":
-    case "flake8":
-    case "pylint":
-    case "eslint":
-      return changeIn(args);
-    case "python":
-    case "python3":
-      if (first === "-m" && args[1]) {
-        if (
-          [
-            "pytest",
-            "unittest",
-            "mypy",
-            "flake8",
-            "pylint",
-            "pyright",
-          ].includes(args[1])
-        )
-          return changeIn(args.slice(2));
-        if (args[1] === "ruff") return knownCheck(args.slice(1));
-        return WHY.notCheck;
-      }
-      if (first === "manage.py" && args[1] === "test")
-        return changeIn(args.slice(2));
-      return WHY.notCheck;
-    case "ruff":
-      return first === "check"
-        ? changeIn(args.slice(1))
-        : first === "format" && has(args, "--check")
-          ? changeIn(args.slice(1))
-          : WHY.notCheck;
-    case "black":
-    case "isort":
-      return has(args, "--check", "--check-only")
-        ? changeIn(args)
-        : WHY.writeBack;
-    case "tsc":
-      return has(args, "--noEmit") ? changeIn(args) : WHY.notCheck;
-    case "biome":
-      return first && ["check", "lint", "ci"].includes(first)
-        ? changeIn(args.slice(1))
-        : first === "format"
-          ? WHY.writeBack
-          : WHY.notCheck;
-    case "prettier":
-      return has(args, "--check", "-c", "--list-different", "-l")
-        ? changeIn(args)
-        : WHY.writeBack;
-    case "go":
-      return first === "test" || first === "vet"
-        ? changeIn(args.slice(1))
-        : WHY.notCheck;
-    case "cargo":
-      return first && ["test", "check", "clippy"].includes(first)
-        ? changeIn(args.slice(1))
-        : WHY.notCheck;
-    case "deno":
-      return first && ["test", "check", "lint"].includes(first)
-        ? changeIn(args.slice(1))
-        : WHY.notCheck;
-    case "node":
-      return first === "--test" ? changeIn(args.slice(1)) : WHY.notCheck;
-    case "make":
-      return args.length > 0 &&
-        args.every(
-          (word) => word.startsWith("-") || word === "test" || word === "check",
-        ) &&
-        args.some((word) => word === "test" || word === "check") &&
-        !args.some((word) => /^-(?:C|f|-file|-directory)/.test(word))
-        ? null
-        : WHY.notCheck;
-    case "mvn":
-    case "gradle":
-    case "gradlew":
-      return first === "test" || first === "check" || first === "verify"
-        ? changeIn(args.slice(1))
-        : WHY.notCheck;
-    default:
-      return WHY.notCheck;
+type Flags = {
+  alone: readonly string[];
+  valued?: readonly string[];
+  /** Flags whose whole word is fixed, `=` and all (`--maxfail=3`, `-count=1`). */
+  exact?: RegExp;
+  checkValue?: (flag: string, value: string) => boolean;
+  /** Whether a plain word may stand on its own (a path, a test name). */
+  paths?: boolean;
+};
+
+/** Whether `args` are all paths or flags this program lists. */
+function argsAllowed(args: readonly string[], flags: Flags): boolean {
+  for (let index = 0; index < args.length; index++) {
+    const word = args[index] as string;
+    if (plainWord(word)) {
+      if (flags.paths === false) return false;
+      continue;
+    }
+    if (flags.alone.includes(word)) continue;
+    if (flags.exact?.test(word)) continue;
+    const [name, inline] = word.includes("=")
+      ? [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)]
+      : [word, undefined];
+    if (!flags.valued?.includes(name)) return false;
+    const value = inline ?? args[index + 1];
+    if (value === undefined || !plainWord(value)) return false;
+    if (flags.checkValue && !flags.checkValue(name, value)) return false;
+    if (inline === undefined) index++;
   }
+  return true;
 }
 
-/** The arguments of a check that names a change (`make test install`, `npm test -- clean`). */
-function changeIn(args: readonly string[]): string | null {
-  return args.some((word) => CHANGE_WORD.test(word)) ? WHY.changes : null;
+/** `bun test`, `vitest run`, `jest`. */
+const JS_TEST: Flags = {
+  alone: ["--run", "--bail", "--silent"],
+  valued: ["-t", "--testNamePattern", "--reporter"],
+};
+const PYTEST: Flags = {
+  alone: ["-q", "-x", "-v"],
+  valued: ["-k", "-p"],
+  exact: /^--maxfail=\d+$/,
+  checkValue: (flag, value) => flag !== "-p" || value === "no:cacheprovider",
+};
+const CARGO: Flags = {
+  alone: ["--workspace", "--all-targets", "--quiet"],
+  valued: ["-p"],
+};
+const GO: Flags = {
+  alone: ["-v", "-count=1"],
+  valued: ["-run"],
+};
+const TSC: Flags = {
+  alone: ["--noEmit"],
+  valued: ["-p", "--project"],
+  paths: false,
+};
+const LINT: Flags = { alone: ["--quiet"] };
+const MYPY: Flags = { alone: ["--strict"] };
+
+/** The flags of the check these words call, or null when they call nothing this list knows. */
+function checkOf(words: readonly string[]): {
+  args: readonly string[];
+  flags: Flags;
+  needs?: string;
+} | null {
+  const [first, second, third] = words;
+  // `npx <tool>` runs the project's own copy of a tool on this list, and nothing else.
+  if (first === "npx") {
+    if (second === "vitest" && third === "run")
+      return { args: words.slice(3), flags: JS_TEST };
+    if (second === "jest") return { args: words.slice(2), flags: JS_TEST };
+    if (second === "tsc")
+      return { args: words.slice(2), flags: TSC, needs: "--noEmit" };
+    if (second === "eslint") return { args: words.slice(2), flags: LINT };
+    if (second === "biome" && third === "lint")
+      return { args: words.slice(3), flags: LINT };
+    return null;
+  }
+  switch (first) {
+    case "bun":
+      return second === "test"
+        ? { args: words.slice(2), flags: JS_TEST }
+        : null;
+    case "vitest":
+      return second === "run" ? { args: words.slice(2), flags: JS_TEST } : null;
+    case "jest":
+      return { args: words.slice(1), flags: JS_TEST };
+    case "pytest":
+      return { args: words.slice(1), flags: PYTEST };
+    case "python":
+    case "python3":
+      return second === "-m" && third === "pytest"
+        ? { args: words.slice(3), flags: PYTEST }
+        : null;
+    case "cargo":
+      return second === "test" || second === "check" || second === "clippy"
+        ? { args: words.slice(2), flags: CARGO }
+        : null;
+    case "go":
+      return second === "test" || second === "vet"
+        ? { args: words.slice(2), flags: GO }
+        : null;
+    case "tsc":
+      return { args: words.slice(1), flags: TSC, needs: "--noEmit" };
+    case "eslint":
+      return { args: words.slice(1), flags: LINT };
+    case "biome":
+      return second === "lint" ? { args: words.slice(2), flags: LINT } : null;
+    case "ruff":
+      return second === "check" ? { args: words.slice(2), flags: LINT } : null;
+    case "mypy":
+      return { args: words.slice(1), flags: MYPY };
+    default:
+      return null;
+  }
 }
 
 /** Whether these words, after a pipe, only read what comes in. */
@@ -289,78 +170,77 @@ function readOnlyFilter(words: readonly string[]): boolean {
   switch (program) {
     case "tail":
     case "head":
-    case "grep":
-    case "egrep":
-    case "fgrep":
+      return (
+        args.length === 0 ||
+        (args.length === 1 && /^-\d+$/.test(args[0] as string)) ||
+        (args.length === 2 &&
+          args[0] === "-n" &&
+          /^\d+$/.test(args[1] as string))
+      );
+    case "grep": {
+      const patterns = args.filter(plainWord);
+      return (
+        patterns.length === 1 &&
+        args.every(
+          (word) => plainWord(word) || ["-n", "-v", "-i", "-E"].includes(word),
+        )
+      );
+    }
     case "wc":
-    case "cut":
-    case "tr":
-      return true;
-    case "sort":
-      return !args.some((word) => /^(?:-o|--output)/.test(word));
-    case "uniq":
-      return args.every((word) => word.startsWith("-"));
+      return args.length === 1 && args[0] === "-l";
     default:
       return false;
   }
 }
 
-/** A command in the one shape that may be re-run, or why it is not. */
+/** A command in the one shape that may be re-run, as its words, or why it is not. */
 export function parseCheckCommand(text: string): Parsed {
-  const read = tokens(text.trim());
-  if (!("items" in read)) return read;
-  const segments: string[][] = [[]];
-  const ops: ("&&" | "|")[] = [];
-  for (const item of read.items) {
-    if ("op" in item) {
-      ops.push(item.op);
-      segments.push([]);
-    } else (segments.at(-1) as string[]).push(item.word);
+  const trimmed = text.trim();
+  if (trimmed.includes(">")) return { ok: false, why: WHY.writesFile };
+  if (!ALLOWED_CHARS.test(trimmed)) return { ok: false, why: WHY.characters };
+  let rest = trimmed;
+  const prefix: string[] = [];
+  const cd = rest.match(/^cd ([^\s|&]+) && /);
+  if (cd) {
+    if (!plainWord(cd[1] as string)) return { ok: false, why: WHY.andThen };
+    prefix.push("cd", cd[1] as string, "&&");
+    rest = rest.slice(cd[0].length);
   }
-  if (segments.some((segment) => segment.length === 0))
-    return { ok: false, why: WHY.chained };
-  let cd: string | undefined;
-  if (ops[0] === "&&") {
-    const [first] = segments;
-    if (first?.[0] !== "cd" || first.length !== 2)
-      return { ok: false, why: WHY.andThen };
-    cd = first[1];
-    segments.shift();
-    ops.shift();
-  }
-  if (ops.includes("&&")) return { ok: false, why: WHY.andThen };
-  const [main, ...filters] = segments as [string[], ...string[][]];
-  const env: string[] = [];
-  while (main.length > 0 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(main[0] as string))
-    env.push(main.shift() as string);
-  if (main[0] === "cd") return { ok: false, why: WHY.andThen };
-  const why = knownCheck(main);
-  if (why) return { ok: false, why };
+  if (rest.includes("&")) return { ok: false, why: WHY.andThen };
+  const [main = "", ...piped] = rest.split("|");
+  const split = (part: string) => part.split(" ").filter(Boolean);
+  const words = split(main);
+  const filters = piped.map(split);
+  const [program] = words;
+  if (!program || filters.some((filter) => filter.length === 0))
+    return { ok: false, why: WHY.characters };
+  if (program === "cd") return { ok: false, why: WHY.andThen };
+  if (program === "env" || program.includes("="))
+    return { ok: false, why: WHY.env };
+  const check = checkOf(words);
+  if (!check) return { ok: false, why: WHY.notCheck };
+  if (check.needs && !check.args.includes(check.needs))
+    return { ok: false, why: WHY.notCheck };
+  if (!argsAllowed(check.args, check.flags))
+    return { ok: false, why: WHY.flag };
   if (!filters.every(readOnlyFilter)) return { ok: false, why: WHY.filter };
   return {
     ok: true,
-    command: { ...(cd !== undefined ? { cd } : {}), env, check: main, filters },
+    words: [
+      ...prefix,
+      ...words,
+      ...filters.flatMap((filter) => ["|", ...filter]),
+    ],
   };
 }
 
 /**
- * Whether a command the coworker ran is the check it named for re-running: both parse into the shape
- * above and run the same check, word for word (quotes and spacing aside). A `cd` or a filter the
- * coworker wrote must be the one it ran too; one it left out may be there.
+ * Whether a command the coworker ran is the check it named for re-running: both are in the shape above
+ * and are the same command, whole, word for word (spacing aside) — the `cd` in front and the filters
+ * after included.
  */
 export function sameCheckCommand(ran: string, named: string): boolean {
   const done = parseCheckCommand(ran);
   const said = parseCheckCommand(named);
-  if (!done.ok || !said.ok) return false;
-  const words = (list: readonly string[]) => JSON.stringify(list);
-  if (words(done.command.check) !== words(said.command.check)) return false;
-  if (said.command.cd !== undefined && said.command.cd !== done.command.cd)
-    return false;
-  if (
-    said.command.filters.length > 0 &&
-    JSON.stringify(said.command.filters) !==
-      JSON.stringify(done.command.filters)
-  )
-    return false;
-  return true;
+  return done.ok && said.ok && done.words.join(" ") === said.words.join(" ");
 }
