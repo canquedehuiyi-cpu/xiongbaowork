@@ -410,7 +410,7 @@ describe("复跑：允许名单和截断对齐（评审 C1、I2）", () => {
     ]);
   });
 
-  test("声明 bun test、最近一次跑的是 cd app && bun test 且失败：挡回，ran 记原始命令（裁定）", async () => {
+  test("声明 bun test、最近一次跑的是 cd app && bun test 且失败：挡回，ran 记原始命令；最近的一次胜出（裁定）", async () => {
     const stub = runner((command) => result(command, 0, "3 pass"));
     const outcome = await rerunChecks({
       commands: ["bun test"],
@@ -422,8 +422,24 @@ describe("复跑：允许名单和截断对齐（评审 C1、I2）", () => {
       wouldAllow: allow,
       run: stub.run,
     });
-    // 整条对得上的那次更早且成功，但先按整条找：整条对上的优先。
-    expect(outcome.bounce).toBeNull();
+    // 较早一次整条对上的成功，较晚一次带 cd 的失败：最近的一次胜出，挡回（裁定）。
+    expect(outcome.bounce).toContain("这条命令最近一次没有成功");
+    expect(outcome.outcomes[0]?.ran).toBe("cd app && bun test");
+    // 反方向：较早一次失败，较晚一次成功，不挡回。
+    const recovered = await rerunChecks({
+      commands: ["bun test"],
+      runs: [
+        ran("cd app && bun test", 1, "1 fail", 1),
+        ran("bun test", 0, "3 pass", 2),
+      ],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    expect(recovered.bounce).toBeNull();
+    expect(recovered.outcomes).toEqual([
+      { command: "bun test", result: "passed" },
+    ]);
     const fallback = await rerunChecks({
       commands: ["bun test"],
       runs: [ran("cd app && bun test 2>&1 | tail -5", 1, "1 fail", 2)],

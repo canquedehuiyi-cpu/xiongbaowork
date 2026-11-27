@@ -111,6 +111,8 @@ const GO: Flags = {
 };
 const TSC: Flags = {
   alone: ["--noEmit"],
+  // `-p`/`--project` take a path, kept on purpose: it only names a tsconfig to read; with `--noEmit`
+  // tsc writes nothing and loads no code from it (decided 2026-11-27).
   valued: ["-p", "--project"],
   paths: false,
 };

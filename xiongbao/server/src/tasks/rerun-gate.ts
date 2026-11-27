@@ -354,8 +354,8 @@ const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 200);
 
 /**
- * 逐条复跑员工声明的核对命令。每条先找这张卡里最近一次跑的同一条命令作基准（整条命令一字不差，空白不计；不按子串；
- * 对不上整条的，再找去掉开头 cd 和结尾只读过滤后一致的），
+ * 逐条复跑员工声明的核对命令。每条先找这张卡里最近一次跑的同一条命令作基准（整条一字不差、空白不计，或去掉开头 cd
+ * 和结尾只读过滤后一致；不按子串；两者之间也是最近的一次胜出），
  * 再按次序判断：没跑过的、经审批执行过的记「未复核」；最近一次没成功的挡回；认不出来的（不在允许名单里，见
  * `shared/rerun-command.ts`）、电脑不能由服务器执行的、按规则现在要审批的、截断后对不齐的记「未复核」，不挡回；
  * 其余的复跑，退出码或数字对不上的挡回。
@@ -391,15 +391,18 @@ export async function rerunChecks(input: {
         undefined,
       );
     /*
-     * 对不上整条的，再找去掉开头 `cd <路径> && ` 和结尾只读过滤后与声明一致的（员工写 `bun test`，跑的是
-     * `cd app && bun test`）：失败照样挡回，要不要执行仍按那条原始命令走允许名单，`ran` 记原始命令。
+     * 整条对上的，和去掉开头 `cd <路径> && `、结尾只读过滤后与声明一致的（员工写 `bun test`，跑的是
+     * `cd app && bun test`），一起比先后：最近的一次胜出，整条对上并不优先，这样「最近一次没成功」才
+     * 真是最近一次。失败照样挡回；要不要执行仍按那条原始命令走允许名单，`ran` 记原始命令。
      */
     const named = command.replace(/\s+/g, " ").trim();
-    const baseline =
-      latestOf(input.runs.filter((run) => sameCommand(run.command, command))) ??
-      latestOf(
-        input.runs.filter((run) => commandForms(run.command).includes(named)),
-      );
+    const baseline = latestOf(
+      input.runs.filter(
+        (run) =>
+          sameCommand(run.command, command) ||
+          commandForms(run.command).includes(named),
+      ),
+    );
     if (!baseline) {
       done({ result: "unverified", why: NOT_RUN });
       continue;
