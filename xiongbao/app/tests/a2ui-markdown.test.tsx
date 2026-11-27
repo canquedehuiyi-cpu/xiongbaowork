@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import {
   GenerativeUISurface,
   standardUI,
@@ -121,10 +121,10 @@ function Committed({ surfaceId, drawn }: { surfaceId: string; drawn: Drawn }) {
 function renderSurface(drawn: Drawn) {
   const surfaceId = `surface-${Math.random().toString(36).slice(2)}`;
   return render(
-    <CopilotKitProvider {...generativeUiProviderOptions(true)}>
+    <ChatRuntimeProvider {...generativeUiProviderOptions(true)}>
       <Committed surfaceId={surfaceId} drawn={drawn} />
       <GenerativeUISurface id={surfaceId} />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
 }
 

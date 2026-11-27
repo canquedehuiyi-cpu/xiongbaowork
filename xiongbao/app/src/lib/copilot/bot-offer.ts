@@ -1,5 +1,8 @@
 import type { RunAgentInput, Tool } from "@ag-ui/core";
-import { type AbstractAgent, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  type AbstractAgent,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect } from "react";
 import { defer, from, mergeMap } from "rxjs";
@@ -248,7 +251,7 @@ export function offerItsOwnTools(
  * tools.
  */
 export function BotOffers(): null {
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   const queries = useQueryClient();
   useEffect(() => {
     const give = (agent: AbstractAgent) =>

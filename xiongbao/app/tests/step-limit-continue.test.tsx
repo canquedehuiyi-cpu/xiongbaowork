@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { EventType, type Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
@@ -91,7 +91,7 @@ function Harness({
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <ChatTranscript
           busy={busy}
           messages={messages}
@@ -102,7 +102,7 @@ function Harness({
           })}
           restoring={false}
         />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

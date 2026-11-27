@@ -49,7 +49,7 @@ const CHECKLIST = {
       fix: {
         kind: "env",
         names: ["OPENAI_API_KEY"],
-        docsUrl: "https://github.com/CopilotKit/openbot#quick-start",
+        docsUrl: "https://github.com/example/app#quick-start",
         page: { label: "Credentials", path: "/admin/credentials" },
       },
     },

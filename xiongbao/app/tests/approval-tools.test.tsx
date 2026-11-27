@@ -14,6 +14,7 @@ import { cleanup, render } from "@testing-library/react";
 import { failedComputerCall } from "@/lib/computers/call";
 import { observeApprovalAgent } from "@/lib/copilot/approval-context";
 import { useFrontendTool } from "@/lib/copilot/approval-tools";
+import { CHAT_RUNTIME_HOOK } from "./chat-runtime-hook";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -34,7 +35,7 @@ import { settleReactWork } from "./settle-react-work";
 type Registered = Parameters<typeof ReactCoreV2.useFrontendTool>[0];
 const registered: Registered[] = [];
 const stopped: unknown[] = [];
-const coreHookSpy = spyOn(ReactCoreV2, "useCopilotKit").mockImplementation(
+const coreHookSpy = spyOn(ReactCoreV2, CHAT_RUNTIME_HOOK).mockImplementation(
   () =>
     ({
       copilotkit: { stopAgent: (input: unknown) => stopped.push(input) },

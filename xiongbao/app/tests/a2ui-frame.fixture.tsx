@@ -1,7 +1,7 @@
 import type { Message } from "@ag-ui/core";
 import {
+  CopilotKitProvider as ChatRuntimeProvider,
   CopilotChatConfigurationProvider,
-  CopilotKitProvider,
 } from "@copilotkit/react-core/v2";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
@@ -151,7 +151,7 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider
+      <ChatRuntimeProvider
         runtimeUrl="/api/runtime"
         {...generativeUiProviderOptions(true)}
       >
@@ -168,7 +168,7 @@ if (root) {
             </div>
           </TooltipProvider>
         </CopilotChatConfigurationProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }

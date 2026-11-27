@@ -8,7 +8,7 @@
   "version": "v0.2.0",
   "source": {
     "commit": "1111111111111111111111111111111111111111",
-    "upstreamRepository": "CopilotKit/openbot",
+    "upstreamRepository": "example/source",
     "upstreamCommit": "2222222222222222222222222222222222222222",
     "modified": true
   },

@@ -4,7 +4,7 @@ import {
   CopilotChatConfigurationProvider,
   UseAgentUpdate,
   useAgent,
-  useCopilotKit,
+  useCopilotKit as useChatRuntime,
 } from "@copilotkit/react-core/v2";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -499,7 +499,7 @@ export function ChannelChat({
   compactionDivider?: (compaction: LastCompaction) => ReactNode;
 }) {
   // The core attaches the frontend tool registry; direct agent runs do not.
-  const { copilotkit: copilotCore } = useCopilotKit();
+  const { copilotkit: copilotCore } = useChatRuntime();
   // Mentions are scoped to the channel's permitted agents.
   const { data: agentProfiles } = useQuery(agentListQueryOptions());
   // Groups expand into their members in the `@` menu (spec B1); a failed read just lists no Groups.

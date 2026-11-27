@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
@@ -336,7 +336,7 @@ afterAll(async () => {
 function app(inConversation: boolean) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <ActiveBotProvider>
           <ComputerTools />
           {inConversation ? (
@@ -345,7 +345,7 @@ function app(inConversation: boolean) {
             <p>Settings</p>
           )}
         </ActiveBotProvider>
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

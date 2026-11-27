@@ -8,7 +8,10 @@ import {
 } from "bun:test";
 import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
@@ -77,10 +80,10 @@ let gatewaySnapshot: readonly Message[] = [];
 let runRequests: { path: string; input: RunAgentInput }[] = [];
 let activityRequests: ActivityRequest[] = [];
 let runEvents: (input: RunAgentInput) => unknown[];
-let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+let core: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
 
 function CoreProbe() {
-  core = useCopilotKit().copilotkit;
+  core = useChatRuntime().copilotkit;
   return null;
 }
 function stored(messages: unknown[]) {
@@ -184,13 +187,13 @@ afterAll(() => {
 function tree(selected: AgentChannel, generativeUi = false) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider
+      <ChatRuntimeProvider
         runtimeUrl="http://localhost/api/runtime"
         {...generativeUiProviderOptions(generativeUi)}
       >
         <CoreProbe />
         <ChannelChat channel={selected} runtimeAgentId="refresh-bot" />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

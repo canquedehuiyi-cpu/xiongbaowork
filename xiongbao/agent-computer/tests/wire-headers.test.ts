@@ -10,22 +10,23 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { matchesToken, offeredToken } from "../src/authorisation";
 import { startEgressFilter, stopEgressFilter } from "../src/egress";
 import { HEADER, readWireHeader } from "../src/wire-headers";
 
 /**
- * The headers the server sends a computer. Only the `x-xiongbao-*` names count: the `x-openbot-*`
- * names the computer took for a few releases are gone, so a request that carries only those has no
+ * The headers the server sends a computer. Only the `x-xiongbao-*` names count: the old product's
+ * `x-…-*` names the computer took for a few releases are gone, so a request that carries only those has no
  * token, no Bot and no person.
  */
 
 // The names this computer used to take, written out so the tests can show they grant nothing.
 const OLD = {
-  botId: "x-openbot-bot-id",
-  personId: "x-openbot-person-id",
-  computerToken: "x-openbot-computer-token",
-  egress: "x-openbot-egress",
+  botId: `x-${OLD_PRODUCT_LOWER}-bot-id`,
+  personId: `x-${OLD_PRODUCT_LOWER}-person-id`,
+  computerToken: `x-${OLD_PRODUCT_LOWER}-computer-token`,
+  egress: `x-${OLD_PRODUCT_LOWER}-egress`,
 } as const;
 
 const SECRET = "a-long-development-secret";

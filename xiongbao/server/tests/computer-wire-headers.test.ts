@@ -1,6 +1,6 @@
 // The headers the server puts on every call to a computer: which Bot, which person, and the computer's token.
 //
-// They were renamed from `x-openbot-*` to `x-xiongbao-*`, and the computer no longer takes the old names. The server
+// They were renamed from the old product's `x-…-*` names to `x-xiongbao-*`, and the computer no longer takes the old names. The server
 // sends only the new ones (shared/wire-headers.ts). So every way the server reaches a computer is checked here for the
 // new names and the absence of the old: the gateway's transport, the shared computer's provider, the egress policy
 // push, the question of which Bots a computer carries, and the browser routes.
@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readWireHeader } from "../../agent-computer/src/wire-headers";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { reservePort } from "../../tests/support/reserved-port";
 import { computerCaller } from "../src/browser/calls";
 import { createComputerTransport, seatHeaders } from "../src/computer/client";
@@ -30,9 +31,9 @@ const NEW = {
   computerToken: "x-xiongbao-computer-token",
 };
 const OLD = [
-  "x-openbot-bot-id",
-  "x-openbot-person-id",
-  "x-openbot-computer-token",
+  `x-${OLD_PRODUCT_LOWER}-bot-id`,
+  `x-${OLD_PRODUCT_LOWER}-person-id`,
+  `x-${OLD_PRODUCT_LOWER}-computer-token`,
 ];
 
 const TOKEN = "wire-headers-server-token";
@@ -55,7 +56,8 @@ function recording(body: unknown = {}) {
 /** None of the old names is on `headers`, under any spelling. */
 function expectNoOldNames(headers: Headers) {
   for (const name of OLD) expect(headers.get(name)).toBeNull();
-  for (const [name] of headers) expect(name).not.toMatch(/^x-openbot-/);
+  for (const [name] of headers)
+    expect(name.startsWith(`x-${OLD_PRODUCT_LOWER}-`)).toBe(false);
 }
 
 describe("the seat headers", () => {

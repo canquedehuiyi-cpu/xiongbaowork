@@ -1,22 +1,29 @@
 /*
- * Compatibility windows recorded in the source itself, for old names the allowlist cannot hold.
- *
- * WHY NOT THE ALLOWLIST. An old name that a rule erases (an `x-…` wire header, say) is never a
- * finding, so an allowlist entry for it would be reported stale; and the allowlist only shrinks, so
- * a new compat point cannot be added to it anyway. Such a point carries a comment instead:
+ * Compatibility windows recorded in the source itself: a point that keeps reading an old value for a
+ * while carries a comment
  *
  *   legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，<what it covers>
  *
- * and this check fails once the current version reaches `removeIn`, the way the allowlist's own
- * expiry does for its entries. A line that names `legacy-compat` with a colon, or directly followed by `introducedIn`
- * or `removeIn`, but does not fit the format is reported too: a window nobody can read is a window nobody enforces.
+ * and this check fails once the current version reaches `removeIn`. A line that names `legacy-compat`
+ * with a colon, or directly followed by `introducedIn` or `removeIn`, but does not fit the format is
+ * reported too: a window nobody can read is a window nobody enforces.
  */
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { compare } from "./allowlist";
 import { REPO } from "./scan";
+
+/** Versions compared by number, X.Y.Z. */
+export const compare = (a: string, b: string): number => {
+  const x = a.split(".").map(Number);
+  const y = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+};
 
 /**
  * Any line that means to record a window: the word and a colon, full- or half-width, or the word

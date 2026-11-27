@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { OLD_ENV_PREFIX } from "../../scripts/brand/guard/words";
 
 /*
  * The dev server (`vite.config.ts`) and the installed app's server (`serve.ts`) never run the API
@@ -9,7 +10,7 @@ import { join } from "node:path";
  * so neither this suite's DOM nor its environment is involved.
  */
 const APP = join(import.meta.dir, "..");
-const OLD = "OPENBOT_";
+const OLD = OLD_ENV_PREFIX;
 
 function run(script: string, env: Record<string, string> = {}) {
   const result = Bun.spawnSync({

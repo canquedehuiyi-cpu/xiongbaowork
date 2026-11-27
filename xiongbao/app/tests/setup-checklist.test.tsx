@@ -85,7 +85,7 @@ const ADMIN: Checklist = {
       fix: {
         kind: "env",
         names: ["OPENAI_API_KEY"],
-        docsUrl: "https://github.com/CopilotKit/openbot#quick-start",
+        docsUrl: "https://github.com/example/app#quick-start",
         page: { label: "Credentials", path: "/admin/credentials" },
       },
     }),
@@ -98,7 +98,7 @@ const ADMIN: Checklist = {
         kind: "env",
         names: ["AGENT_COMPUTER_URL", "COMPUTER_TOKEN"],
         docsUrl:
-          "https://github.com/CopilotKit/openbot/blob/main/docs/configuration.md#computer-and-supervisor",
+          "https://github.com/example/app/blob/main/docs/configuration.md#computer-and-supervisor",
       },
     }),
     ROW({ id: "apps", title: "More apps" }),
@@ -111,7 +111,7 @@ const ADMIN: Checklist = {
         kind: "env",
         names: ["OPENTAG_SHARED_SECRET", "OPENTAG_URL"],
         docsUrl:
-          "https://github.com/CopilotKit/openbot/blob/main/docs/configuration.md",
+          "https://github.com/example/app/blob/main/docs/configuration.md",
       },
     }),
   ],
@@ -194,7 +194,7 @@ test("an admin is shown the variable to set, the page, and the guide", async () 
   expect(model.getByText("OPENAI_API_KEY")).not.toBeNull();
   const guide = model.getByRole("link", { name: "设置指南" });
   expect(guide.getAttribute("href")).toBe(
-    "https://github.com/CopilotKit/openbot#quick-start",
+    "https://github.com/example/app#quick-start",
   );
   expect(guide.getAttribute("target")).toBe("_blank");
 

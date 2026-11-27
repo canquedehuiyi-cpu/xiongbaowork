@@ -1,4 +1,4 @@
-import type { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
+import type { CopilotKitIntelligence as IntelligencePlatform } from "@copilotkit/runtime/v2";
 import type { ThreadLock } from "../ports";
 
 /**
@@ -15,7 +15,7 @@ export const THREAD_LOCK_TTL_SECONDS = 120;
 
 /** The four platform calls the lock makes, and nothing else of the client. */
 export type ThreadLockClient = Pick<
-  CopilotKitIntelligence,
+  IntelligencePlatform,
   | "getOrCreateThread"
   | "ɵacquireThreadLock"
   | "ɵrenewThreadLock"

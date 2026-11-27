@@ -10,7 +10,7 @@ import {
 import {
   BuiltInAgent,
   type BuiltInAgentConfiguration,
-  CopilotKitIntelligence,
+  CopilotKitIntelligence as IntelligencePlatform,
 } from "@copilotkit/runtime/v2";
 import {
   concatMap,
@@ -749,12 +749,12 @@ export class UnavailableAgent extends AbstractAgent {
  * `browserWsUrl` may be a path, where the server carries the socket on its own address and has no
  * public URL to write before it: the page resolves a path against itself.
  */
-export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
+export class IntelligenceKnowingANewThread extends IntelligencePlatform {
   readonly #browserClientWsUrl: string | undefined;
   readonly #lockConflictWaitMs: number;
 
   constructor(
-    config: ConstructorParameters<typeof CopilotKitIntelligence>[0] & {
+    config: ConstructorParameters<typeof IntelligencePlatform>[0] & {
       browserWsUrl?: string;
       /** How long a lock refused as retryable is asked for again. See `LOCK_CONFLICT_WAIT_MS`. */
       lockConflictWaitMs?: number;
@@ -773,8 +773,8 @@ export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
 
   /** A thread, or the client's 404 for one nobody has run yet, unprinted. */
   override async getThread(
-    params: Parameters<CopilotKitIntelligence["getThread"]>[0],
-  ): ReturnType<CopilotKitIntelligence["getThread"]> {
+    params: Parameters<IntelligencePlatform["getThread"]>[0],
+  ): ReturnType<IntelligencePlatform["getThread"]> {
     const answer = await askPlatform(this, {
       method: "GET",
       path: `/api/threads/${encodeURIComponent(params.threadId)}?${new URLSearchParams({ userId: params.userId })}`,
@@ -782,15 +782,15 @@ export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
     if (answer?.status === 404) throw expectedRefusal(answer);
     if (answered(answer))
       return bodyOf<{
-        thread: Awaited<ReturnType<CopilotKitIntelligence["getThread"]>>;
+        thread: Awaited<ReturnType<IntelligencePlatform["getThread"]>>;
       }>(answer).thread;
     return super.getThread(params);
   }
 
   /** A thread's history, and none at all for a thread nobody has run yet, without printing its 404. */
   override async getThreadMessages(
-    params: Parameters<CopilotKitIntelligence["getThreadMessages"]>[0],
-  ): ReturnType<CopilotKitIntelligence["getThreadMessages"]> {
+    params: Parameters<IntelligencePlatform["getThreadMessages"]>[0],
+  ): ReturnType<IntelligencePlatform["getThreadMessages"]> {
     const answer = await askPlatform(this, {
       method: "GET",
       path: `/api/threads/${encodeURIComponent(params.threadId)}/messages?${new URLSearchParams({ userId: params.userId })}`,
@@ -803,7 +803,7 @@ export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
     if (answer?.status === 404) return { messages: [] };
     if (answered(answer))
       return bodyOf<
-        Awaited<ReturnType<CopilotKitIntelligence["getThreadMessages"]>>
+        Awaited<ReturnType<IntelligencePlatform["getThreadMessages"]>>
       >(answer);
     return historyOrEmpty(() => super.getThreadMessages(params), {
       messages: [],
@@ -824,8 +824,8 @@ export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
    * client gives the refusal back at once and always did; the run before usually let go in time.
    */
   override async ɵacquireThreadLock(
-    params: Parameters<CopilotKitIntelligence["ɵacquireThreadLock"]>[0],
-  ): ReturnType<CopilotKitIntelligence["ɵacquireThreadLock"]> {
+    params: Parameters<IntelligencePlatform["ɵacquireThreadLock"]>[0],
+  ): ReturnType<IntelligencePlatform["ɵacquireThreadLock"]> {
     const giveUpAt = Date.now() + this.#lockConflictWaitMs;
     let delayMs = LOCK_CONFLICT_RETRY_FIRST_MS;
     for (;;) {
@@ -842,7 +842,7 @@ export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
       }
       if (answered(answer))
         return bodyOf<
-          Awaited<ReturnType<CopilotKitIntelligence["ɵacquireThreadLock"]>>
+          Awaited<ReturnType<IntelligencePlatform["ɵacquireThreadLock"]>>
         >(answer);
       return super.ɵacquireThreadLock(params);
     }
@@ -850,7 +850,7 @@ export class IntelligenceKnowingANewThread extends CopilotKitIntelligence {
 
   /** The base client's lock request, unprinted. */
   #askForLock(
-    params: Parameters<CopilotKitIntelligence["ɵacquireThreadLock"]>[0],
+    params: Parameters<IntelligencePlatform["ɵacquireThreadLock"]>[0],
   ) {
     return askPlatform(this, {
       method: "POST",

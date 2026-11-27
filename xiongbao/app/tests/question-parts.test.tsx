@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
@@ -130,9 +133,9 @@ type Renderer = ComponentType<Record<string, unknown>>;
 
 /** The `ask_person` step as the transcript draws it, through the SDK's own registry. */
 async function askedStep(args: Record<string, unknown>, result: string) {
-  let copilotCore: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+  let copilotCore: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
   function Capture() {
-    copilotCore = useCopilotKit().copilotkit;
+    copilotCore = useChatRuntime().copilotkit;
     return null;
   }
   const renderer = () =>
@@ -140,15 +143,15 @@ async function askedStep(args: Record<string, unknown>, result: string) {
       (candidate) => candidate.name === "ask_person",
     )?.render as Renderer | undefined;
   const tree = render(
-    <CopilotKitProvider>
+    <ChatRuntimeProvider>
       <EscalationTool />
       <Capture />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
   await waitFor(() => expect(renderer()).toBeDefined());
   const Step = renderer() as Renderer;
   tree.rerender(
-    <CopilotKitProvider>
+    <ChatRuntimeProvider>
       <EscalationTool />
       <Capture />
       <Step
@@ -158,7 +161,7 @@ async function askedStep(args: Record<string, unknown>, result: string) {
         status="complete"
         toolCallId="call-ask"
       />
-    </CopilotKitProvider>,
+    </ChatRuntimeProvider>,
   );
   return tree;
 }

@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   focusManager,
@@ -79,7 +82,7 @@ type Handler = (args: unknown, context: unknown) => Promise<unknown>;
  * consumers when a tool is added, so a read at render time sees the registry before the tool did.
  */
 class Registry {
-  copilotCore?: ReturnType<typeof useCopilotKit>["copilotkit"];
+  copilotCore?: ReturnType<typeof useChatRuntime>["copilotkit"];
   get renderer() {
     return this.copilotCore?.renderToolCalls.find(
       (candidate) => candidate.name === "computer_request_sign_in",
@@ -92,7 +95,7 @@ class Registry {
 }
 
 function Capture({ kept }: { kept: Registry }) {
-  kept.copilotCore = useCopilotKit().copilotkit;
+  kept.copilotCore = useChatRuntime().copilotkit;
   return null;
 }
 
@@ -105,7 +108,7 @@ function Providers({
 }) {
   return (
     <QueryClientProvider client={queries}>
-      <CopilotKitProvider>{children}</CopilotKitProvider>
+      <ChatRuntimeProvider>{children}</ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

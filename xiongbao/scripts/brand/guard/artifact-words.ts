@@ -1,23 +1,37 @@
-import type { Category, Plan } from "./allowlist";
+import { LIBRARY, OLD_NAME } from "./words";
 
-// What a delivered artifact (page, extension, image, document) says about the upstream, as whole words (spec 5.1-C).
-export const WORD =
-  /[A-Za-z0-9_.:/@$-]*(?:openbot|copilotkit|qoder)[A-Za-z0-9_.:/@$-]*/gi;
+const OLD = `(?:${OLD_NAME.source})`;
 
-// `word` or `prefix`, never both; a prefix entry is only for third-party names.
+// What a delivered artifact (page, extension, image, document) says of an old name, as whole words (spec 5.1-C).
+export const WORD = new RegExp(
+  `[A-Za-z0-9_.:/@$-]*${OLD}[A-Za-z0-9_.:/@$-]*`,
+  "gi",
+);
+
+/**
+ * Why a built artifact may still say a word: `dependency`, the third-party library's own code and names
+ * bundled with it; `kept`, an old value the source keeps by ruling (brand-leak-allowlist.json, `kept`);
+ * `build-path`, the build machine's path, a word of its own (see scan-artifact.ts); `until-task-26`, the
+ * database superuser and its database, renamed by Task 26 with the migration baseline (scan.ts,
+ * UNTIL_TASK_26), when these entries go too.
+ */
+export const ARTIFACT_CATEGORIES = [
+  "dependency",
+  "kept",
+  "build-path",
+  "until-task-26",
+] as const;
+
+// `word` or `prefix`, never both; a prefix entry is only for the third-party library.
 export type ArtifactEntry = {
   word?: string;
   prefix?: string;
-  category: Category;
-  plan: Plan;
+  category: (typeof ARTIFACT_CATEGORIES)[number];
   note: string;
-  // A legacy-compat word's release window, as in the source allowlist.
-  introducedIn?: string;
-  removeIn?: string;
 };
 
 /**
- * A release tag inside a word (`OPENBOT_TAG:-v0.2.9`) changes every release and is not a brand word:
+ * A release tag inside a word (`<OLD>_TAG:-v0.2.9`) changes every release and is not a brand word:
  * word lists hold it as `v<version>`, and the ratchet compares lists in this form.
  */
 export const versionless = (word: string): string =>
@@ -35,29 +49,31 @@ export function wordsIn(text: string): Map<string, number> {
 /**
  * Words of text where `/` always ends a word, for file lists and for compiled binaries.
  *
- * A path is not one word: one `/app/shared/openbot-actor.ts` says `openbot-actor.ts`, and
- * `.../node_modules/@copilotkit/shared/package.json` says `@copilotkit`. A word also starts at the brand
+ * A path is not one word: one `/app/shared/<old>-actor.ts` says `<old>-actor.ts`, and
+ * `.../node_modules/@<library>/shared/package.json` says `@<library>`. A word also starts at the brand
  * name unless a separator (`_ . : @ $ -`) comes right before it. A Rust binary packs its string
- * literals back to back with nothing between them (`...chromium` + `openbot-runner` + `/proc.config`
+ * literals back to back with nothing between them (`...chromium` + `<old>-runner` + `/proc.config`
  * ...), so the glue in front of the name belongs to another literal. A version (`@1.85.0`) is dropped
- * from the end, and a bun store directory (`@copilotkit+shared@1.85.0+232c2669fb60c3cc`) loses its
+ * from the end, and a bun store directory (`@<library>+shared@1.85.0+232c2669fb60c3cc`) loses its
  * version and hash, so the list does not change when a dependency is upgraded.
  */
-export const SEGMENT_WORD =
-  /(?:[A-Za-z0-9_.:@$-]*[_.:@$-])?(?:openbot|copilotkit|qoder)[A-Za-z0-9_.:@$-]*/gi;
+export const SEGMENT_WORD = new RegExp(
+  `(?:[A-Za-z0-9_.:@$-]*[_.:@$-])?${OLD}[A-Za-z0-9_.:@$-]*`,
+  "gi",
+);
 const VERSION_TAIL = /@v?\d+\.\d+[\w.-]*$/;
 
-const BRAND_WORD = /openbot|copilotkit|qoder/i;
+const BRAND_WORD = OLD_NAME;
 
 /**
  * Literals a compiler packs back to back have no separator between them: cut where a lowercase letter
  * or digit runs into an ALL-CAPS name (`runnerXIONGBAO_…`), and where a brand word starts right after a
- * letter or digit (`…ENGINEOPENBOT_…`). camelCase such as `$openbotOut` or `OpenBot` is left whole.
+ * letter or digit (`…ENGINE<OLD>_…`). camelCase such as `$<old>Out` or `<Old>` is left whole.
  */
 function unglue(raw: string): string[] {
   return raw
     .replace(/([a-z0-9])(?=[A-Z]{2,})/g, "$1\u0000")
-    .replace(/(?<=[A-Za-z0-9])(?=openbot|copilotkit|qoder)/gi, "\u0000")
+    .replace(new RegExp(`(?<=[A-Za-z0-9])(?=${OLD})`, "gi"), "\u0000")
     .split("\u0000")
     .filter((piece) => BRAND_WORD.test(piece));
 }
@@ -98,7 +114,7 @@ export function compareWords(
 }
 
 // Said by the page's own footer, not by us: reported in the job summary, never a failure.
-export const ALWAYS_REPORT = ["Powered by CopilotKit"];
+export const ALWAYS_REPORT = [`Powered by ${LIBRARY}`];
 
 /** Length of the UTF-8 sequence starting at `i`, or 0 when it is not a valid one. */
 function utf8Length(bytes: Uint8Array, i: number): number {

@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BrowserContext, Cookie } from "playwright";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import * as sessionCookies from "../src/session-cookies";
 
 /**
@@ -26,7 +27,7 @@ import * as sessionCookies from "../src/session-cookies";
  */
 
 const FILE = sessionCookies.SESSION_COOKIES_FILE;
-const OLDER_FILE = "openbot-session-cookies.json";
+const OLDER_FILE = `${OLD_PRODUCT_LOWER}-session-cookies.json`;
 
 const cookie = (name: string, value: string): Cookie => ({
   name,

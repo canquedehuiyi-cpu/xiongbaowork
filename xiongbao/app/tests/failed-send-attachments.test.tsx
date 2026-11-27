@@ -8,7 +8,10 @@ import {
 } from "bun:test";
 import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { CopilotKitProvider, useCopilotKit } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useCopilotKit as useChatRuntime,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -88,11 +91,11 @@ let uploads: string[];
  * rather than as a hang.
  */
 let runAnswers: ((input: RunAgentInput) => Promise<Response>)[];
-let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+let core: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
 let originalFetch: typeof fetch;
 
 function CoreProbe() {
-  core = useCopilotKit().copilotkit;
+  core = useChatRuntime().copilotkit;
   return null;
 }
 
@@ -249,10 +252,10 @@ async function mounted() {
   cacheChannel();
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <CoreProbe />
         <ChannelChat channel={channel} runtimeAgentId="failed-send-bot" />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
   await view.findByText(opening.content);

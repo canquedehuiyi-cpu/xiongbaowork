@@ -2403,7 +2403,7 @@ export type ComposioVendor = {
  * choose, so it is where the provenance goes.
  *
  * This legacy one is what configs created before the product was renamed carry. Lookup is by NAME,
- * so a deployment that already holds "Linear (OpenBot)" must keep finding it, or enabling the app
+ * so a deployment that already holds "Linear (<old suffix>)" must keep finding it, or enabling the app
  * again would create the second config this provenance exists to prevent. Renaming `englishName`
  * later would orphan configs made under the earlier non-legacy suffix: only this one is remembered.
  *

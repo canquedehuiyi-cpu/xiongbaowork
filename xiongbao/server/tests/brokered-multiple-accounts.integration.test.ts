@@ -4,6 +4,7 @@ import { ComposioMultipleConnectedAccountsError } from "@composio/core";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { z } from "zod";
+import { OLD_PRODUCT } from "../../scripts/brand/guard/words";
 import { equivalenceOf } from "../src/approvals/service";
 import type { ApprovalCandidate, ApprovalGate } from "../src/approvals/types";
 import { createAuditStore } from "../src/audit";
@@ -143,7 +144,13 @@ function composioHolding(toolkit: string, accounts: HeldAccount[]) {
       list: async (query: { toolkit?: string }) => ({
         items:
           query.toolkit === toolkit
-            ? [{ id: config, name: `${toolkit} (OpenBot)`, status: "ENABLED" }]
+            ? [
+                {
+                  id: config,
+                  name: `${toolkit} (${OLD_PRODUCT})`,
+                  status: "ENABLED",
+                },
+              ]
             : [],
         nextCursor: null,
       }),

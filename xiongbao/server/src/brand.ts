@@ -63,7 +63,8 @@ export function supportUrl(): string | undefined {
   return current.supportUrl;
 }
 
-// The upstream line stays fixed: its MIT licence requires the notice to be kept.
+// The product's own line. The MIT notice of the code it was first built from travels in
+// THIRD-PARTY-NOTICES.md (shared/licence-paragraph.ts), as the licence asks.
 export function copyrightLine(year = 2026): string {
-  return `Copyright (c) ${year} ${companyName()}; portions Copyright (c) 2026 CopilotKit (MIT)`;
+  return `Copyright (c) ${year} ${companyName()}`;
 }

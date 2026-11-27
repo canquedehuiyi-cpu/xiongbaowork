@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
+import { LICENCE_PARAGRAPH } from "../../shared/licence-paragraph";
 
 export type ThirdPartyNotice = {
   name: string;
@@ -155,6 +156,12 @@ export function renderNoticesText(notices: ThirdPartyNotice[]): string {
   );
   return [
     "Third-party software notices",
+    "",
+    "Portions of this product are distributed under the following license.",
+    "",
+    LICENCE_PARAGRAPH,
+    "",
+    "----------------------------------------",
     "",
     "This product includes the following third-party packages.",
     "",

@@ -360,7 +360,7 @@ async function askedInTheConversation(options: { recurring?: boolean } = {}) {
   const made = await call("create_goal", {
     title: "Morning XiongBao release check",
     instruction:
-      "Check the latest release on github.com/CopilotKit/OpenBot/releases and tell the person what changed since the last check.",
+      "Check the latest release on github.com/example/app/releases and tell the person what changed since the last check.",
     successCriteria:
       "The person is told the latest release and what changed in it.",
     ...(options.recurring ? { recurring: true } : {}),

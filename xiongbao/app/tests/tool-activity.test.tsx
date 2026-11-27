@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { CopilotKitContext } from "@copilotkit/react-core/v2/context";
+import { CopilotKitContext as ChatRuntimeContext } from "@copilotkit/react-core/v2/context";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, renderHook } from "@testing-library/react";
@@ -197,7 +197,7 @@ test("a tool step is named in words and counted as tools", () => {
 
 test("the tools the agent SDK has a renderer for are the ones the app draws", () => {
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <CopilotKitContext.Provider
+    <ChatRuntimeContext.Provider
       value={
         {
           copilotkit: {
@@ -208,7 +208,7 @@ test("the tools the agent SDK has a renderer for are the ones the app draws", ()
       }
     >
       {children}
-    </CopilotKitContext.Provider>
+    </ChatRuntimeContext.Provider>
   );
   const { result } = renderHook(() => useDrawnTool(), { wrapper });
   expect(result.current("showBarChart")).toBe(true);

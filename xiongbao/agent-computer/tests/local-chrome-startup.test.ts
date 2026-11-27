@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { OLD_ENV_PREFIX } from "../../scripts/brand/guard/words";
 import {
   localChromeConfiguration,
   requireAvailablePort,
@@ -112,7 +113,7 @@ describe("starting the local computer", () => {
       {
         env: {
           COMPUTER_TOKEN: "test-token",
-          OPENBOT_LOCAL_COMPUTER_DIR: "relative",
+          [`${OLD_ENV_PREFIX}LOCAL_COMPUTER_DIR`]: "relative",
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -123,7 +124,7 @@ describe("starting the local computer", () => {
       new Response(child.stderr).text(),
     ]);
     expect(code).toBe(1);
-    expect(stderr).toContain("OPENBOT_LOCAL_COMPUTER_DIR");
+    expect(stderr).toContain(`${OLD_ENV_PREFIX}LOCAL_COMPUTER_DIR`);
     expect(stderr).toContain("XIONGBAO_LOCAL_COMPUTER_DIR");
   });
 

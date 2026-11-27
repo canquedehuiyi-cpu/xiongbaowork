@@ -12,6 +12,7 @@ import {
   LOCAL_TOOL_NAMES,
   LOCAL_TOOL_PARAMETERS,
 } from "../../shared/local-tools";
+import { CHAT_RUNTIME_HOOK } from "./chat-runtime-hook";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -31,7 +32,7 @@ let registered = new Map<string, Registered>();
 const stopped: unknown[] = [];
 mock.module("@copilotkit/react-core/v2", () => ({
   ...original,
-  useCopilotKit: () => ({
+  [CHAT_RUNTIME_HOOK]: () => ({
     copilotkit: { stopAgent: (input: unknown) => stopped.push(input) },
   }),
   useFrontendTool: (tool: Registered) => {

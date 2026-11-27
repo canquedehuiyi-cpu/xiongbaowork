@@ -27,6 +27,7 @@ import {
   pluginKeys,
 } from "@/lib/plugins/queries";
 import { Route as ActivityRoute } from "@/routes/_authed/settings/_personal/activity";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -99,7 +100,7 @@ const startedByXiongBao = {
     change: "plugin_granted",
     kind: "mcp",
     refs: ["routines/create_goal", "routines/list_goals"],
-    actor: "openbot:always-on",
+    actor: `${OLD_PRODUCT_LOWER}:always-on`,
   },
   createdAt: "2026-11-07T11:00:00Z",
 };
