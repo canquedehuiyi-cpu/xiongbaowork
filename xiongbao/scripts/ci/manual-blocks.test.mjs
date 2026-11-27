@@ -476,3 +476,89 @@ test("no gitee.com in the README, deployment manuals or docker files", () => {
     }).toEqual({ file, gitee: false });
   }
 });
+
+// The v0.2.17 upgrade sheet (docs/acceptance/HUMAN-STEPS.md, section 22) is what the JD Cloud server runs,
+// pasted as it is. Every block must extract and parse as bash, and what the blocks spell out by hand must be
+// what the code holds: the hashes of v0.2.16's two rename migrations the upgrade gate recognises, the
+// baseline's and 0001's hashes the start-up leaves in the ledger, and the undo of 0001 exactly as
+// scripts/rollback-after-baseline.ts reads it, with the ledger put back the way the CHANGELOG says.
+// Those files never change once released (their hashes are in deployed ledgers), so this holds after
+// later migrations are added too.
+test("every v0.2.17 upgrade-sheet block parses and carries the code's hashes and undo SQL", async () => {
+  const sheet = readFileSync(
+    join(root, "docs", "acceptance", "HUMAN-STEPS.md"),
+    "utf8",
+  );
+  const names = [
+    ...new Set(
+      [...sheet.matchAll(/^<!-- (v0217:[a-z0-9-]+):begin -->$/gm)].map(
+        (match) => match[1],
+      ),
+    ),
+  ];
+  expect(names.length).toBeGreaterThanOrEqual(12);
+  const blocks = {};
+  for (const name of names) {
+    const { lang, body } = extractBlock(sheet, name);
+    expect({ name, lang }).toEqual({ name, lang: "bash" });
+    const parsed = spawnSync("bash", ["-n"], { input: body, encoding: "utf8" });
+    expect({ name, status: parsed.status, stderr: parsed.stderr }).toEqual({
+      name,
+      status: 0,
+      stderr: "",
+    });
+    blocks[name] = body;
+  }
+
+  const drizzle = join(product, "server", "drizzle");
+  const { RENAME_MIGRATIONS } = await import(
+    "../../server/src/db/upgrade-gate.ts"
+  );
+  const { readMigrationFolder } = await import(
+    "../../server/src/db/migration-reach.ts"
+  );
+  const { rollbackBlock } = await import(
+    "../../server/scripts/rollback-after-baseline.ts"
+  );
+  expect(RENAME_MIGRATIONS.length).toBe(2);
+  for (const [, hash] of RENAME_MIGRATIONS)
+    expect(blocks["v0217:check"]).toContain(`'${hash}'`);
+
+  const [baseline, corrections] = await readMigrationFolder(drizzle);
+  expect([baseline?.tag, corrections?.tag]).toEqual([
+    "0000_baseline",
+    "0001_memory_corrections",
+  ]);
+  expect(blocks["v0217:check"]).toContain(`hash = '${baseline.hash}'`);
+  expect(sheet).toContain(
+    `\`ledger=2 ${baseline.hash.slice(0, 12)},${corrections.hash.slice(0, 12)}\``,
+  );
+
+  // One transaction: 0001's own undo, as rollback-after-baseline.ts reads it from the file, then the
+  // ledger put back from the rows the adoption kept.
+  const statements = rollbackBlock(
+    corrections.tag,
+    readFileSync(join(drizzle, `${corrections.tag}.sql`), "utf8"),
+  );
+  expect(statements).toHaveLength(3);
+  const transaction =
+    /owner_sql <<'SQL'\n(BEGIN;\n[\s\S]*?\nCOMMIT;)\nSQL/.exec(
+      blocks["v0217:rollback-b"],
+    )?.[1];
+  expect(typeof transaction).toBe("string");
+  const lines = String(transaction)
+    .split("\n")
+    .filter((line) => !line.startsWith("--"));
+  expect(lines).toEqual([
+    "BEGIN;",
+    ...statements,
+    "DELETE FROM drizzle.__drizzle_migrations;",
+    "INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash, created_at FROM drizzle.__drizzle_migrations_before_baseline;",
+    "COMMIT;",
+  ]);
+  const restore =
+    "BEGIN; DELETE FROM drizzle.__drizzle_migrations; INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash, created_at FROM drizzle.__drizzle_migrations_before_baseline; COMMIT;";
+  expect(readFileSync(join(product, "CHANGELOG.md"), "utf8")).toContain(
+    restore,
+  );
+});
