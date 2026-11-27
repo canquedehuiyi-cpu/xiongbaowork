@@ -2908,7 +2908,8 @@ export function createGroupConversations(deps: {
          * 但行从等待变成了完成，开着的群页面不轮询等审批的行：告诉群里每个人重读一下，不改会话列表的预览。
          */
         if (!outcome.replyText) {
-          await announceTranscript(row.channelId);
+          // 行已经记成完成；通知没发出去只是页面晚点刷新，不该把这一行改成失败。
+          await announceTranscript(row.channelId).catch(() => undefined);
           return outcome;
         }
         await deps.activity?.(
