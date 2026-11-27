@@ -609,6 +609,7 @@ SELECT count(*),
 
 ```sql
 BEGIN;
+SET LOCAL lock_timeout = '10s';
 ALTER TABLE "public"."personal_memories" DROP COLUMN "replaces_id";
 ALTER TABLE "public"."personal_memories" DROP COLUMN "correction_count";
 ALTER TABLE "public"."personal_memories" DROP COLUMN "from_correction";
@@ -617,7 +618,7 @@ INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash,
 COMMIT;
 ```
 
-执行前先确认 `SELECT count(*) FROM drizzle.__drizzle_migrations_before_baseline;` 是 222（接管时留下的 v0.2.16 迁移记录）。撤掉三列会丢掉记忆上的「纠正」标记，其余数据都在。
+执行前先确认 `SELECT count(*) FROM drizzle.__drizzle_migrations_before_baseline;` 是 222（接管时留下的 v0.2.16 迁移记录）。锁等待超时（`canceling statement due to lock timeout`）时整个事务回滚、什么都没改，等正在进行的对话或任务结束后再执行一次。撤掉三列会丢掉记忆上的「纠正」标记，其余数据都在。
 
 只放回记录、不撤三列，v0.2.16 能启动，但下次升级时结构对不上会被拒；什么都不做就换回 v0.2.16，v0.2.16 的迁移器会拒绝启动（库不动）。同样的撤销与放回（演练里分两个事务跑）已在升级演练（`upgrade-rehearsal.yml`）里用 v0.2.16 的真实镜像跑过。
 

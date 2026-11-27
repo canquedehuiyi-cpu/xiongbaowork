@@ -551,6 +551,7 @@ test("every v0.2.17 upgrade-sheet block parses and carries the code's hashes and
     .filter((line) => !line.startsWith("--"));
   expect(lines).toEqual([
     "BEGIN;",
+    "SET LOCAL lock_timeout = '10s';",
     ...statements,
     "DELETE FROM drizzle.__drizzle_migrations;",
     "INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash, created_at FROM drizzle.__drizzle_migrations_before_baseline;",

@@ -1142,7 +1142,7 @@ v0.2.17 删掉了 v0.2.16 为过渡留下的旧名兼容，并把 v0.2.16 之前
 - `v0.2.17` 的发布流水线成功，镜像已同步到京东云仓库，发布记录 `container-images.json` 已传到 Release（发布后由 Claude 确认）。
 - 推标签之前，GitHub 的设置照 `docs/releasing.md`「变量放在哪一级」核对一次（这个 PR 不改设置）：
   - 用自有下载页的，`device-release` Environment 里要有变量 `XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_REGION` 和 secret `XB_DOWNLOAD_ACCESS_KEY_ID`、`XB_DOWNLOAD_SECRET_ACCESS_KEY`；
-  - 仓库级的 `XB_REGISTRY`、`XB_IMAGE_REPOSITORY` 已经没人读了，可以删掉。
+  - 先在 `release` Environment 里确认 `XB_REGISTRY`、`XB_IMAGE_REPOSITORY` 都在，再删掉仓库级的这两个变量（带 Environment 的 job 也读得到仓库级变量；Environment 里没有就删了仓库级的，镜像同步会被跳过，第 22.0 步会拦住，但那时要补跑同步）。
 - 设备端已经是 v0.2.16（第 ① 步最后一项核对）。
 
 ### 22.0 准备：下载发布记录、核对京东云镜像与 GHCR 是同一次构建、按 digest 拉新镜像
@@ -1318,6 +1318,8 @@ SQL
 ```
 <!-- v0217:switch:end -->
 
+这条命令里最后的 `docker run` 如果报错（例如端口被占），旧容器已经停了、改了名，网站这时是停着的：不用排查，直接执行本节末尾「回滚 A」，它会用原来的卷把 v0.2.16 起回来，然后把报错发给 Claude。
+
 ### 22.③ 等服务起来，看启动日志
 
 <!-- v0217:health:begin -->
@@ -1478,22 +1480,31 @@ docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential env
 
 先看第 ③ 步的日志属于哪一种，**拿不准就先问 Claude**：
 
-- **A. 没有起来，日志里没有 `{"type":"migrations-applied","status":"ok"}`**（结构不一致、升级门拒绝、旧名配置被拒等）：接管和迁移在同一个事务里，没提交就整体回滚，数据库没有任何改动。直接换回 v0.2.16、用原来的卷，什么数据都不丢。
+- **A. 没有起来，日志里没有 `{"type":"migrations-applied","status":"ok"}`**（结构不一致、升级门拒绝、旧名配置被拒等；第 ② 步的 `docker run` 报错、没有新容器的也是这一种）：接管和迁移在同一个事务里，没提交就整体回滚，数据库没有任何改动。直接换回 v0.2.16、用原来的卷，什么数据都不丢。
 - **B. 已经起来了（日志里有 `migrations-applied`），但还是要回到 v0.2.16**：先撤掉 `0001` 加的三列、把留下的 222 条迁移记录放回去，再换回 v0.2.16 的容器。升级后写进去的数据都在，只丢记忆上的「纠正」标记（纠正次数、要取代哪一条）。
 
-**A. 直接换回 v0.2.16**（这条命令会先核对日志：里面有 `migrations-applied` 就什么都不做，那时要走 B）：
+**A. 直接换回 v0.2.16**。这条命令先停掉新容器，再看它的日志（停下的容器日志还在）：里面有 `migrations-applied` 就把新容器重新启动、什么都不换，那时要走 B。第 ② 步的 `docker run` 没成功、根本没有新容器的，它直接把 `xiongbao-v0216-rollback` 改回原名、用原来的卷启动：
 
 <!-- v0217:rollback-a:begin -->
 ```bash
 (
   set -eu
-  docker inspect xiongbao-v0216-rollback >/dev/null 2>&1 || { echo '找不到 xiongbao-v0216-rollback：不能走 A，先把情况发给 Claude。'; exit 1; }
+  if ! docker inspect xiongbao >/dev/null 2>&1; then
+    docker inspect xiongbao-v0216-rollback >/dev/null 2>&1 || { echo '既没有 xiongbao 也没有 xiongbao-v0216-rollback：先把情况发给 Claude。这次什么都没动。'; exit 1; }
+    docker rename xiongbao-v0216-rollback xiongbao
+    docker update --restart=unless-stopped xiongbao
+    docker start xiongbao
+    echo '没有新容器（第 ② 步的 docker run 没成功）：已用原来的卷把 v0.2.16 起回来。'
+    exit 0
+  fi
+  docker inspect xiongbao-v0216-rollback >/dev/null 2>&1 || { echo '找不到 xiongbao-v0216-rollback：不能走 A，先把情况发给 Claude。这次什么都没动。'; exit 1; }
+  docker stop -t 30 xiongbao
   if docker logs xiongbao 2>&1 | grep -q '"type":"migrations-applied"'; then
-    echo '日志里有 migrations-applied：v0.2.17 已经接管了这个库，不能走 A，要走 B。这次什么都没动。'
+    docker start xiongbao
+    echo '日志里有 migrations-applied：v0.2.17 已经接管了这个库，不能走 A。已把 v0.2.17 重新启动，要走 B。'
     exit 1
   fi
   docker rm xiongbao-v0217-failed >/dev/null 2>&1 || true
-  docker stop -t 30 xiongbao
   docker rename xiongbao xiongbao-v0217-failed
   docker update --restart=no xiongbao-v0217-failed
   docker rename xiongbao-v0216-rollback xiongbao
@@ -1510,7 +1521,7 @@ docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential env
 1. 撤掉基线之后的迁移：这一版只有 `0001_memory_corrections`，就是它头注释「回滚：」下的三条 `DROP COLUMN`（源码 `server/` 下 `bun scripts/rollback-after-baseline.ts` 打印的也是这三条）；
 2. 把接管时留在 `drizzle.__drizzle_migrations_before_baseline` 里的 222 条放回迁移记录（先清空迁移记录表，连同基线和 `0001` 那两行，再原样拷回来；CHANGELOG 0.2.17「数据库迁移合成了一条基线」那一项写的就是这两句）。
 
-事务成功才停掉 v0.2.17、换回 v0.2.16；失败就整体回滚、停在那里，不切换容器。事务提交后到换回之前的几秒里，记忆相关的页面可能报错，换回后就好。
+事务成功才停掉 v0.2.17、换回 v0.2.16；失败就整体回滚、停在那里，不切换容器。删列要等表上的锁，事务开头设了 10 秒的锁等待上限：上方打印 `canceling statement due to lock timeout` 就是有正在进行的对话或任务占着记忆表，这时什么都没改、v0.2.17 照常在跑。等一两分钟（或在网页里停掉正在跑的对话和任务）后原样再执行一次这一块；连续三次都超时，把输出发给 Claude。事务提交后到换回之前的几秒里，记忆相关的页面可能报错，换回后就好。
 
 <!-- v0217:rollback-b:begin -->
 ```bash
@@ -1525,8 +1536,9 @@ docker logs --since 24h xiongbao 2>&1 | grep -E 'rls-not-enforced|Credential env
     echo "留下的迁移记录是 $kept 条，不是 222：先把这一行发给 Claude。这次什么都没动。"
     exit 1
   fi
-  owner_sql <<'SQL'
+  if ! owner_sql <<'SQL'
 BEGIN;
+SET LOCAL lock_timeout = '10s';
 -- 撤销 0001_memory_corrections（基线之后的迁移，新的在前）
 ALTER TABLE "public"."personal_memories" DROP COLUMN "replaces_id";
 ALTER TABLE "public"."personal_memories" DROP COLUMN "correction_count";
@@ -1536,6 +1548,10 @@ DELETE FROM drizzle.__drizzle_migrations;
 INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at) SELECT id, hash, created_at FROM drizzle.__drizzle_migrations_before_baseline;
 COMMIT;
 SQL
+  then
+    echo '事务没有完成（原因见上方），什么都没改，也没有切换容器，v0.2.17 照常在跑。'
+    exit 1
+  fi
   echo "已撤掉 0001_memory_corrections，迁移记录已放回：$(echo "SELECT count(*) FROM drizzle.__drizzle_migrations;" | owner_sql) 条。"
   docker rm xiongbao-v0217-stopped >/dev/null 2>&1 || true
   docker stop -t 30 xiongbao
