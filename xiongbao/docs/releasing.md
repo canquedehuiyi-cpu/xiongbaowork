@@ -214,6 +214,44 @@ different image is never moved; a re-run over the same copy succeeds.
 The server pulls by digest, `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>@<platform manifest digest>`; see
 [the deployment manual](deployment-xiongbao.md), section 7.
 
+### 变量放在哪一级（仓库级 / Environment 级，v0.2.17 起）
+
+GitHub 的 Environment 变量只在声明了该 Environment 的 job 的步骤里看得见；job 级 `if:` 和没有声明
+Environment 的 job（比如 G7 的 `clean-deploy.yml`）读到的是空串。v0.2.16 的 mirror 被悄悄跳过、G7 失败，
+都是因为这个。现在 `release.yml` 只在声明了 `release` Environment 的 job（`promote` 的第一步、`mirror`、
+`github-release`）的步骤里读这些变量，由 `promote` 把「拷不拷到自有仓库」「下载页地址」作为 job 输出交给
+后面的 job；`clean-deploy.yml` 不读任何变量，下载页地址由 `release.yml` 作为输入传进去（手动运行 G7 时自己填）。
+测试 `scripts/ci/release-workflow.test.mjs` 盯着这条规则。
+
+| 放哪 | 名称 |
+| --- | --- |
+| 仓库级（必须） | 无：镜像发布流程不需要任何仓库级变量 |
+| `release` Environment（放仓库级也能读到，同名时 Environment 优先） | 变量 `XB_REGISTRY`、`XB_IMAGE_REPOSITORY`、`XB_JDCLOUD_REGION`、`XB_JDCLOUD_REGISTRY_NAME`、`XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_BASE_URL`、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_REGION` |
+| 只放 `release` Environment | secret `XB_JDCLOUD_ACCESS_KEY_ID`、`XB_JDCLOUD_SECRET_ACCESS_KEY`（或 `XB_REGISTRY_USERNAME`、`XB_REGISTRY_PASSWORD`）、`XB_DOWNLOAD_ACCESS_KEY_ID`、`XB_DOWNLOAD_SECRET_ACCESS_KEY` |
+
+- 成对的变量只设了一半（`XB_REGISTRY` 与 `XB_IMAGE_REPOSITORY`，`XB_DOWNLOAD_BUCKET` 与 `XB_DOWNLOAD_BASE_URL`），
+  `promote` 在打任何标签之前报错，写明缺的是哪个变量；都没设时 mirror 跳过，步骤摘要和 notice 里写明是有意跳过。
+- v0.2.16 为绕过问题加的仓库级 `XB_REGISTRY`、`XB_IMAGE_REPOSITORY` 不再被发布流程读取，可以删掉；留着就必须和
+  Environment 里的值一致，免得以后有人以为改它有用。
+- 设备端发布 `device-release.yml` 用同一套做法：`publish` 的第一步在 `device-release` Environment 里读
+  `XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_REGION`，只设一半就在发布之前报错，再把结果作为
+  job 输出交给 `download-page`。所以 `XB_DOWNLOAD_BUCKET` 不需要仓库级的一份，但设备端要上传下载页，这三个变量和
+  `XB_DOWNLOAD_ACCESS_KEY_ID`、`XB_DOWNLOAD_SECRET_ACCESS_KEY` 两个 secret 要设在 `device-release` Environment
+  （它看不到 `release` Environment 里的值）。设备端仍要求仓库级的只有 `DEVICE_RELEASE_MACOS`、
+  `DEVICE_RELEASE_REQUIRE_SIGNED`（job 级 `if:` 和没有 Environment 的 `assemble` 读它们，见 HUMAN-STEPS）。
+
+**重跑。** 后面的 job 失败后重跑（Re-run all jobs，或对同一标签手动运行），`image` 先查 GHCR 上的
+`sha-<commit>` 和版本标签：已经有了，就用 `gh attestation verify` 核对它的 provenance（本仓库 `release.yml`、
+这个提交、GitHub 托管的 runner），对得上就复用那个 digest、不再构建，G1 照样再跑一遍；对不上、两个标签指向
+不同 digest、或查不清，就报错停下，不会造一个 `promote` 会拒绝的新 digest。`promote` 不移动不可变标签的规则不变。
+`github-release` 之前已经成功过时，它不再因为 Release 已存在而失败：先确认标签在 GitHub 上仍指向这个提交、
+Release 上已有的 `container-images.json`（如果有）是这个提交、同一个 GHCR digest 的，再用 `--clobber` 重新上传；
+标签指向别的提交或记录对不上就报错，不动那个 Release。
+
+**G7 只测 GHCR。** `clean-deploy.yml` 按 README 原样匿名拉取公开的 GHCR 镜像，核对的是 `container-images.json`
+里的 `ghcr`。JCR 是私有的，匿名拉取只会失败，客户从 JCR 拉取本来就要先登录（部署手册 7.1）；JCR 那份由
+`mirror` 用凭据回读校验。
+
 ## Deploying a release
 
 `container-images.json` pins a digest for every image the release published. Deploy those, not tags:
