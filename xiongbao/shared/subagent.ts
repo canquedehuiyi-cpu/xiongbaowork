@@ -164,10 +164,23 @@ export type SubagentResult =
   /** It ran and did not finish. */
   | ({
       error: string;
+      /**
+       * How far it got before it stopped, so the Bot can carry on from there instead of from the
+       * start: its last few tool calls (each a name, a masked one-line summary of the arguments, and
+       * whether it worked) and the workspace files it wrote. Absent when it made no call, and on a
+       * result written before it was kept.
+       */
+      progress?: SubagentProgress;
       threadId: string;
       steps: number;
       ms?: number;
     } & SubagentModelFacts);
+
+/** What a subagent that did not finish had done (`SubagentResult`'s `progress`). */
+export type SubagentProgress = {
+  steps: { tool: string; summary: string; ok: boolean }[];
+  files: string[];
+};
 
 /** The result, read back from the text a tool call carries, or null when it is not one. */
 export function readSubagentResult(text: string): SubagentResult | null {
