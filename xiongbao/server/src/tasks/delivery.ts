@@ -232,6 +232,14 @@ export type Delivery = {
       agentId: string;
       actor: TaskEventActor;
       deliverable: DeliverableRef;
+      /**
+       * The computer the hand-in's files and programs are on (`computerKeyText` of the seat the server
+       * works out for the coworker and the card's person), kept on the card as `deliverable_ref.seat`
+       * so its preview does not depend on a round having announced it (`computer.turn_artifacts`): a
+       * file written by an approved action is written outside every round. Not written to the
+       * `delivered` line or the chat's card, which carry `deliverable` as handed in.
+       */
+      seat?: string;
       /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
       eventId?: string;
     },
@@ -720,7 +728,9 @@ export function createDelivery(database: Database): Delivery {
             isDeliverableRef(card.deliverableRef)
               ? card.deliverableRef
               : undefined,
-            input.deliverable,
+            input.seat
+              ? { ...input.deliverable, seat: input.seat }
+              : input.deliverable,
           );
           await transaction
             .update(tasks)
@@ -1633,6 +1643,9 @@ export function mergeDeliverables(
     (port) => !askedNow.has(port) && apps.some((app) => app.port === port),
   );
   if (unverifiedApps.length) merged.unverifiedApps = unverifiedApps;
+  // The computer of the latest hand-in that named one: the seat the server took that hand-in on.
+  const seat = added.seat ?? held?.seat;
+  if (seat) merged.seat = seat;
   return merged;
 }
 

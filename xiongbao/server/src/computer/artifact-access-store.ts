@@ -193,8 +193,24 @@ export function createArtifactAccessDeps(
           ? deliveredAppsOf(card.deliverable.apps)
           : [];
         if (files.length === 0 && apps.length === 0) return null;
+        const found = {
+          botId: card.botId,
+          ownerId: actor.id,
+          workspaceFiles: files,
+          ...(apps.length > 0 ? { apps } : {}),
+        };
 
-        // The computer the files were made on is the one the card's own rounds announced for its employee.
+        /*
+         * The computer the hand-in was taken on, kept with it (`deliverable_ref.seat`, written only by
+         * the server: `tasks/delivery-tools.ts`). The rules still check it against the seat the server
+         * works out now (`confirmed`).
+         */
+        const kept = isRecord(card.deliverable)
+          ? card.deliverable.seat
+          : undefined;
+        if (typeof kept === "string") return { ...found, seat: kept };
+
+        // A card from before that: the computer its own rounds announced for its employee.
         const logged = await database
           .selectDistinct({
             runId: sql<string>`${taskEvents.detail}->>'runId'`,
@@ -233,15 +249,14 @@ export function createArtifactAccessDeps(
             )
               seats.add(item.value.seat);
           }
-        // One computer or none: two different ones are not guessed between.
-        if (seats.size !== 1) return null;
-        return {
-          botId: card.botId,
-          ownerId: actor.id,
-          seat: [...seats][0] as string,
-          workspaceFiles: files,
-          ...(apps.length > 0 ? { apps } : {}),
-        };
+        // Two different computers are not guessed between.
+        if (seats.size > 1) return null;
+        /*
+         * None: its files were written where no round announced them (an approved action runs outside
+         * every round). The seat is left absent, and the rules decide what that may open.
+         */
+        if (seats.size === 0) return found;
+        return { ...found, seat: [...seats][0] as string };
       }),
   };
 }

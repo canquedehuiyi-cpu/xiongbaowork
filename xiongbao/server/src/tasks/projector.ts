@@ -169,6 +169,15 @@ export type DeliverableRef = {
   apps?: { port: number; path: string; title: string }[];
   /** The ports of `apps` the server could not request a page from (a paired personal computer): the card says 未核实. */
   unverifiedApps?: number[];
+  /**
+   * The computer the coworker's `workspaceFiles` and `apps` are on, as `computerKeyText` writes it
+   * (`person:<id>` or `bot:<id>`): the seat the server itself worked out for the coworker and the card's
+   * person when it took the hand-in (`delivery.delivered`'s `seat`), never anything the coworker said.
+   * A delivery card's preview and download read from it (`computer/artifact-access-store.ts`), still
+   * checked against the seat the server works out at that time. Absent on a card handed in before
+   * cards kept it, and on one with no file or program.
+   */
+  seat?: string;
 };
 
 /**
