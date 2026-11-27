@@ -410,6 +410,62 @@ describe("复跑：允许名单和截断对齐（评审 C1、I2）", () => {
     ]);
   });
 
+  test("声明 bun test、最近一次跑的是 cd app && bun test 且失败：挡回，ran 记原始命令（裁定）", async () => {
+    const stub = runner((command) => result(command, 0, "3 pass"));
+    const outcome = await rerunChecks({
+      commands: ["bun test"],
+      runs: [
+        ran("bun test", 0, "3 pass", 1),
+        ran("cd app && bun test", 1, "1 fail", 2),
+      ],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    // 整条对得上的那次更早且成功，但先按整条找：整条对上的优先。
+    expect(outcome.bounce).toBeNull();
+    const fallback = await rerunChecks({
+      commands: ["bun test"],
+      runs: [ran("cd app && bun test 2>&1 | tail -5", 1, "1 fail", 2)],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    expect(fallback.bounce).toContain("这条命令最近一次没有成功");
+    expect(fallback.outcomes).toEqual([
+      {
+        command: "bun test",
+        result: "mismatch",
+        why: "这条命令最近一次没有成功",
+        ran: "cd app && bun test 2>&1 | tail -5",
+      },
+    ]);
+  });
+
+  test("按去掉 cd 找到的基准成功了：执行与否仍按原始命令走允许名单", async () => {
+    const stub = runner((command) => result(command, 0, "3 pass"));
+    const runnable = await rerunChecks({
+      commands: ["bun test"],
+      runs: [ran("cd app && bun test", 0, "3 pass", 1)],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    expect(runnable.outcomes).toEqual([
+      { command: "bun test", result: "passed", ran: "cd app && bun test" },
+    ]);
+    const refused = await rerunChecks({
+      commands: ["bun test"],
+      runs: [ran("cd app && bun test 2>&1 | tail -5", 0, "3 pass", 1)],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    expect(refused.outcomes[0]?.result).toBe("unverified");
+    expect(refused.outcomes[0]?.ran).toBe("cd app && bun test 2>&1 | tail -5");
+    expect(stub.calls).toEqual(["cd app && bun test"]);
+  });
+
   test("名单外的命令最近一次失败照样挡回（复审回归）；成功的记未复核、不执行", async () => {
     const stub = runner((command) => result(command, 0, "ok"));
     const failed = await rerunChecks({

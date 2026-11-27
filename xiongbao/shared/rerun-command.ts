@@ -14,7 +14,9 @@
  * 3. The program is one of a handful of checks called directly, each with the flags it may carry; a
  *    word that does not start with `-` is a path (or a test name, a package) and is allowed, every
  *    other word must be on that program's own list, so `-iu` or `--update-snapshots` is refused
- *    because nobody listed it, not because somebody remembered to forbid it.
+ *    because nobody listed it, not because somebody remembered to forbid it. No listed flag takes a
+ *    value that is written to or loaded as a module (no `--reporter`); a word starting with `@` (an
+ *    argument file) is not a path.
  * 4. Package scripts (`npm test`, `npm run …`, `yarn …`, `pnpm …`, `bun run …`), mvn, gradle, make and
  *    a project's own scripts are never re-run: what they do is not in the command.
  * 5. After a pipe, only `tail`/`head` (`-n N`, `-N`), `grep` (`-n`, `-v`, `-i`, `-E`, one pattern word)
@@ -41,7 +43,12 @@ const WHY = {
 const ALLOWED_CHARS = /^[A-Za-z0-9 ._/:=@,+|&-]*$/;
 
 /** A word that is a path, a test name or a package, not a flag. */
-const plainWord = (word: string) => word !== "" && !word.startsWith("-");
+/**
+ * A word that is a path, a test name or a package, not a flag. Not one starting with `@` either:
+ * pytest and mypy read `@file` as more arguments, out of a file the command does not show.
+ */
+const plainWord = (word: string) =>
+  word !== "" && !word.startsWith("-") && !word.startsWith("@");
 
 /**
  * A program's flags: those that stand alone, and those that take the next word (or `=value`) as
@@ -82,7 +89,11 @@ function argsAllowed(args: readonly string[], flags: Flags): boolean {
 /** `bun test`, `vitest run`, `jest`. */
 const JS_TEST: Flags = {
   alone: ["--run", "--bail", "--silent"],
-  valued: ["-t", "--testNamePattern", "--reporter"],
+  /*
+   * Only test-name patterns take a value here. No `--reporter`: `blob` and `html` write files, and a
+   * path is loaded and run as a reporter module.
+   */
+  valued: ["-t", "--testNamePattern"],
 };
 const PYTEST: Flags = {
   alone: ["-q", "-x", "-v"],
@@ -243,4 +254,32 @@ export function sameCheckCommand(ran: string, named: string): boolean {
   const done = parseCheckCommand(ran);
   const said = parseCheckCommand(named);
   return done.ok && said.ok && done.words.join(" ") === said.words.join(" ");
+}
+
+/**
+ * The forms a command the coworker ran can be named by, for finding the run a named check stands
+ * for: the whole command, then without a leading `cd <path> && `, without the read-only filters (and
+ * a `2>&1`) at its end, and without both — spacing aside. Only for finding that run: whether it is
+ * re-run is still decided on the whole command it was.
+ */
+export function commandForms(text: string): string[] {
+  const whole = text.replace(/\s+/g, " ").trim();
+  const forms = [whole];
+  const cd = whole.match(/^cd [^\s|&;]+ && (.+)$/);
+  const withoutFilters = (command: string): string | null => {
+    const [main = "", ...piped] = command.split(" | ");
+    if (piped.length === 0)
+      return / 2>&1$/.test(command) ? command.replace(/ 2>&1$/, "") : null;
+    if (!piped.every((filter) => readOnlyFilter(filter.split(" "))))
+      return null;
+    return main.replace(/ 2>&1$/, "").trim() || null;
+  };
+  const bare = withoutFilters(whole);
+  if (bare) forms.push(bare);
+  if (cd?.[1]) {
+    forms.push(cd[1]);
+    const both = withoutFilters(cd[1]);
+    if (both) forms.push(both);
+  }
+  return [...new Set(forms)];
 }

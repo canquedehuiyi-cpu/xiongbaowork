@@ -16,6 +16,7 @@ import { type BaseEvent, EventType } from "@ag-ui/client";
 import { HEADLESS_WAITING_EVENT } from "@xiongbao/toolkit/headless-tools";
 import {
   claimsTested,
+  commandForms,
   isRerunnable,
   NO_RERUN_PREFIX,
   RERUN_MAX,
@@ -353,7 +354,8 @@ const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 200);
 
 /**
- * 逐条复跑员工声明的核对命令。每条先找这张卡里最近一次跑的同一条命令作基准（整条命令一字不差，空白不计；不按子串），
+ * 逐条复跑员工声明的核对命令。每条先找这张卡里最近一次跑的同一条命令作基准（整条命令一字不差，空白不计；不按子串；
+ * 对不上整条的，再找去掉开头 cd 和结尾只读过滤后一致的），
  * 再按次序判断：没跑过的、经审批执行过的记「未复核」；最近一次没成功的挡回；认不出来的（不在允许名单里，见
  * `shared/rerun-command.ts`）、电脑不能由服务器执行的、按规则现在要审批的、截断后对不齐的记「未复核」，不挡回；
  * 其余的复跑，退出码或数字对不上的挡回。
@@ -383,11 +385,20 @@ export async function rerunChecks(input: {
      * 基准：这张卡里最近一次跑的同一条命令（整条命令一字不差，空白不计）。名单外的命令也照样找：经审批和
      * 「最近一次没成功」只读历史、不执行任何东西，不归允许名单管。
      */
-    const baseline = input.runs
-      .filter((run) => sameCommand(run.command, command))
-      .reduce<CardCommandRun | undefined>(
+    const latestOf = (runs: readonly CardCommandRun[]) =>
+      runs.reduce<CardCommandRun | undefined>(
         (latest, run) => (!latest || run.at > latest.at ? run : latest),
         undefined,
+      );
+    /*
+     * 对不上整条的，再找去掉开头 `cd <路径> && ` 和结尾只读过滤后与声明一致的（员工写 `bun test`，跑的是
+     * `cd app && bun test`）：失败照样挡回，要不要执行仍按那条原始命令走允许名单，`ran` 记原始命令。
+     */
+    const named = command.replace(/\s+/g, " ").trim();
+    const baseline =
+      latestOf(input.runs.filter((run) => sameCommand(run.command, command))) ??
+      latestOf(
+        input.runs.filter((run) => commandForms(run.command).includes(named)),
       );
     if (!baseline) {
       done({ result: "unverified", why: NOT_RUN });

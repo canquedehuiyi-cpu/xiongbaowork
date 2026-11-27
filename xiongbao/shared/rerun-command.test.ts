@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseCheckCommand, sameCheckCommand } from "./rerun-command";
+import {
+  commandForms,
+  parseCheckCommand,
+  sameCheckCommand,
+} from "./rerun-command";
 
 /**
  * 交付复跑的命令名单（规格 2026-11-25-borrowed-improvements §5.5「改动类命令不复跑」；控制方裁定：正向允许，
@@ -17,7 +21,7 @@ describe("认得出来的核对命令：复跑", () => {
       "bun test -t dedupe",
       "bun test --testNamePattern=dedupe",
       "vitest run src/a.test.ts",
-      "npx vitest run --reporter dot",
+      "npx vitest run -t dedupe --bail",
       "jest",
       "npx jest tests/a.test.ts --bail",
       "pytest",
@@ -200,6 +204,25 @@ describe("认不出来的一律不复跑", () => {
       expect({ bad, ok: ok(bad) }).toEqual({ bad, ok: false });
   });
 
+  test("复审 pr5-rereview-2.md：--reporter 一律不收，@ 开头的词不是路径", () => {
+    for (const bad of [
+      "vitest run --reporter=blob",
+      "vitest run --reporter=html",
+      "npx vitest run --reporter ./evil.js",
+      "npx vitest run --reporter=./x.js",
+      "bun test --reporter=junit",
+      "bun test --reporter dot",
+      "npx jest --reporter=./x.js",
+      "pytest @args.txt",
+      "python -m pytest @a",
+      "mypy @flags.txt",
+      "bun test @x",
+      "cd @x && bun test",
+      "bun test -t @x",
+    ])
+      expect({ bad, ok: ok(bad) }).toEqual({ bad, ok: false });
+  });
+
   test("说得出为什么", () => {
     const why = (command: string) => {
       const parsed = parseCheckCommand(command);
@@ -231,5 +254,29 @@ describe("sameCheckCommand：整条命令一字不差（空白不计）", () => 
       sameCheckCommand("INSTA_UPDATE=always cargo test", "cargo test"),
     ).toBe(false);
     expect(sameCheckCommand("npm install && bun test", "bun test")).toBe(false);
+  });
+});
+
+describe("commandForms：找基准时一条命令可以被叫作的样子", () => {
+  test("整条、去掉开头 cd、去掉结尾只读过滤（含 2>&1）、两样都去掉", () => {
+    expect(commandForms("cd app && bun test 2>&1 | tail -5")).toEqual([
+      "cd app && bun test 2>&1 | tail -5",
+      "cd app && bun test",
+      "bun test 2>&1 | tail -5",
+      "bun test",
+    ]);
+    expect(commandForms("cd app &&  npm run lint")).toEqual([
+      "cd app && npm run lint",
+      "npm run lint",
+    ]);
+    expect(commandForms("bun test 2>&1")).toEqual([
+      "bun test 2>&1",
+      "bun test",
+    ]);
+  });
+
+  test("结尾不是只读过滤的不去掉", () => {
+    expect(commandForms("bun test | tee log")).toEqual(["bun test | tee log"]);
+    expect(commandForms("bun test && rm x")).toEqual(["bun test && rm x"]);
   });
 });

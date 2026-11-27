@@ -7,7 +7,11 @@
 
 import { parseCheckCommand } from "./rerun-command";
 
-export { parseCheckCommand, sameCheckCommand } from "./rerun-command";
+export {
+  commandForms,
+  parseCheckCommand,
+  sameCheckCommand,
+} from "./rerun-command";
 
 /** At most this many commands are re-run per delivery. */
 export const RERUN_MAX = 3;
