@@ -60,6 +60,7 @@ describe("automatic memory: XIONGBAO_MEMORY_EXTRACT_PER_DAY", () => {
     const run = createMemoryExtractor({
       store: {
         list: async () => [],
+        bumpCorrection: async () => {},
         formMemory: async () => ({
           id: "m",
           duplicate: false,
@@ -107,6 +108,7 @@ describe("automatic memory: XIONGBAO_MEMORY_EXTRACT_PER_DAY", () => {
       const run = createMemoryExtractor({
         store: {
           list: async () => [],
+          bumpCorrection: async () => {},
           formMemory: async () => ({
             id: "m",
             duplicate: false,
