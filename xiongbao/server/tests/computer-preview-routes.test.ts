@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type { BaseEvent } from "@ag-ui/client";
 import type { MiddlewareHandler } from "hono";
+import {
+  computerDownloadHeaders,
+  FILE_BYTES_HEADER,
+} from "../../shared/file-download";
 import { TEXT_PREVIEW_BYTES } from "../../shared/preview-kind";
 import type { AgentActor } from "../src/agents/profile-types";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import type { ArtifactAccessDeps } from "../src/computer/artifact-access";
+import { createComputerTransport } from "../src/computer/client";
 import { personSeat } from "../src/computer/computer-key";
 import type { ComputerGateway } from "../src/computer/gateway";
 import {
@@ -736,5 +741,166 @@ describe("a stream shorter than its declared length", () => {
     expect(body.text).toBe("你好");
     expect(body.truncated).toBe(false);
     expect(body.bytes).toBe(TEXT_PREVIEW_BYTES * 2);
+  });
+});
+
+/*
+ * A confined workspace (COMPUTER_PER_BOT_USERS=on, an employee other than the default one) streams
+ * the file from the descriptor it checked, and Bun answers that stream chunked, without
+ * Content-Length. The computer states the length in FILE_BYTES_HEADER instead. Here the gateway's
+ * download goes through the real transport, so what the routes get is what `client.ts` makes of such
+ * an answer: the length it states, and a body held to exactly that length.
+ */
+describe("a confined computer's download, sent chunked with its length in a header", () => {
+  function chunkedAnswer(
+    name: string,
+    bytes: Uint8Array,
+    stated: number = bytes.byteLength,
+  ) {
+    const upstream = streamOf(bytes, 4);
+    const headers = computerDownloadHeaders(name, stated);
+    delete headers["Content-Length"];
+    return {
+      response: new Response(upstream.stream, { headers }),
+      state: upstream.state,
+    };
+  }
+
+  function gatewayOverTransport(
+    answer: (path: string) => Response,
+  ): ComputerGateway {
+    const transport = createComputerTransport({
+      fetchImpl: (async (url: string) =>
+        answer(
+          new URL(url).searchParams.get("path") ?? "",
+        )) as unknown as typeof fetch,
+    });
+    // As gateway.ts does it, less the decision and the audit row.
+    return {
+      seatFor: async (botId: string, personId: string) =>
+        personSeat(personId, botId),
+      downloadFile: async (
+        _seat: unknown,
+        _actor: unknown,
+        input: { path: string },
+        signal?: AbortSignal,
+      ) => ({
+        ...(await transport.download(
+          "http://agent-computer:4100",
+          "bot-17",
+          `/files/download?path=${encodeURIComponent(input.path)}`,
+          signal,
+        )),
+        name: input.path.split("/").pop() ?? "download",
+      }),
+    } as unknown as ComputerGateway;
+  }
+
+  test("the answer itself has no Content-Length, only the stated length", () => {
+    const { response } = chunkedAnswer("a.txt", bytesOf("hello"));
+    expect(response.headers.get("content-length")).toBeNull();
+    expect(response.headers.get(FILE_BYTES_HEADER)).toBe("5");
+  });
+
+  test("the text preview reads it", async () => {
+    const text = "第一行\n第二行\n第三行\n";
+    const gateway = gatewayOverTransport(
+      (path) => chunkedAnswer(path, bytesOf(text)).response,
+    );
+    const response = await appFor(gateway).request(
+      `${base}/text?path=${encode("测试-test.txt")}`,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      kind: "text",
+      text,
+      truncated: false,
+      bytes: bytesOf(text).byteLength,
+    });
+  });
+
+  test("the inline preview serves it with its length", async () => {
+    const html = "<p>hello</p>";
+    const gateway = gatewayOverTransport(
+      (path) => chunkedAnswer(path, bytesOf(html)).response,
+    );
+    const response = await appFor(gateway).request(
+      `${base}/preview?path=${encode("site/index.html")}`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-length")).toBe(
+      String(bytesOf(html).byteLength),
+    );
+    expect(await response.text()).toBe(html);
+  });
+
+  test("the download serves it with its length", async () => {
+    const bytes = Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 255]);
+    const gateway = gatewayOverTransport(
+      (path) => chunkedAnswer(path, bytes).response,
+    );
+    const response = await appFor(gateway).request(
+      `${base}/download?path=${encode("out/data.bin")}`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-length")).toBe("10");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  });
+
+  test("a body that runs past the stated length is refused, and the computer's stream cancelled", async () => {
+    const states: Array<{ cancelled: boolean; pulled: number }> = [];
+    const gateway = gatewayOverTransport((path) => {
+      const answer = chunkedAnswer(path, bytesOf("0123456789"), 6);
+      states.push(answer.state);
+      return answer.response;
+    });
+
+    const text = await appFor(gateway).request(`${base}/text?path=a.txt`);
+    expect(text.status).toBe(503);
+    expect(await text.json()).toEqual({
+      error: "The Bot's computer sent back a file that couldn't be read.",
+    });
+
+    const download = await appFor(gateway).request(
+      `${base}/download?path=a.bin`,
+    );
+    // The headers are already on their way; the body is cut off rather than overrun.
+    await expect(download.arrayBuffer()).rejects.toThrow("couldn't be read");
+
+    const preview = await appFor(gateway).request(`${base}/preview?path=a.png`);
+    await expect(preview.arrayBuffer()).rejects.toThrow("couldn't be read");
+
+    expect(states.map((state) => state.cancelled)).toEqual([true, true, true]);
+  });
+
+  test("a body that ends short of the stated length is refused", async () => {
+    const gateway = gatewayOverTransport(
+      (path) => chunkedAnswer(path, bytesOf("0123"), 10).response,
+    );
+    const text = await appFor(gateway).request(`${base}/text?path=a.txt`);
+    expect(text.status).toBe(503);
+    const download = await appFor(gateway).request(
+      `${base}/download?path=a.bin`,
+    );
+    await expect(download.arrayBuffer()).rejects.toThrow("couldn't be read");
+  });
+
+  test("a stated length that disagrees with Content-Length is refused before any route answers", async () => {
+    const gateway = gatewayOverTransport(
+      () =>
+        new Response(bytesOf("hello"), {
+          headers: {
+            ...computerDownloadHeaders("a.txt", 5),
+            [FILE_BYTES_HEADER]: "4",
+          },
+        }),
+    );
+    for (const route of ["download", "preview", "text"]) {
+      const name = route === "preview" ? "a.png" : "a.txt";
+      const response = await appFor(gateway).request(
+        `${base}/${route}?path=${name}`,
+      );
+      expect(response.status).toBe(503);
+    }
   });
 });
