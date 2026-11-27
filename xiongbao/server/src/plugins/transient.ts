@@ -1,4 +1,4 @@
-import { NETWORK_CODES } from "../../../toolkit/src/network-error";
+import { NETWORK_CODES } from "@xiongbao/toolkit/network-error";
 import { englishName } from "../brand";
 /**
  * An app's read that failed for a reason that passes, tried again before the Bot hears of it.

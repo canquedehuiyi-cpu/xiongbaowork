@@ -35,9 +35,9 @@ import type {
   ToolExecution,
 } from "@xiongbao/toolkit/granted-tool";
 import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import { toolSegmentsFor, turnTimeoutFor } from "@xiongbao/toolkit/limits";
 import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import { z } from "zod";
-import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";

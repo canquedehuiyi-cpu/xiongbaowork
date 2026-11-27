@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **网页单聊里需要先批准的动作，又能弹出批准卡片了。** 以前在镜像部署里，「改动之前先问」开着（或有规则要求先问）时，员工写文件、跑命令会被直接拒绝，工具结果是「This action needs your approval, but it was not started from a conversation that can ask you」，页面上也没有批准卡片；不打包直接跑源码时没有这个问题，所以测试一直没发现。原因是服务器有几处用相对路径引用 toolkit，镜像打包（`bun build --packages=external`）时被内联成第二份，执行工具和审批各读一份上下文。现在服务器对 toolkit 一律用包名引用，并加了按镜像方式打包后再跑的回归测试和禁止相对引用的检查。同一原因也让后台例行任务、找回密码续跑里「等人批准」的暂停认不出来，一并修好。本项不带迁移。
+
 ## 0.2.16
 
 这一版把系统里剩下的上游旧名字统一换成熊宝自己的名字（数据库、配置名、凭据格式、对话历史里系统写的名字、发布记录），并删掉了熊宝用不上的浏览器录制扩展与云端学习。是过渡版：旧名在这一版仍然被认，到 v0.2.17 才删。

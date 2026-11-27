@@ -1,7 +1,7 @@
 import { buildResponsibilityTurn } from "@xiongbao/shared/responsibility-turn";
+import { toolSegmentsFor, turnTimeoutFor } from "@xiongbao/toolkit/limits";
 import type { ComponentCatalog } from "@xiongbao/toolkit/ports";
 import { z } from "zod";
-import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import { canUseComputer } from "../agents/computer-access";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
