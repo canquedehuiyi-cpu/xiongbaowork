@@ -66,6 +66,130 @@ describe("settle", () => {
   });
 
   /*
+   * 交付即收尾：被接受的交付之后这一轮不再说话。这是完成，不是「什么也没说」，否则审批续跑会把它当失败重跑、
+   * 重复交付（prod-anomalies 2.3 ①）。
+   */
+  describe("a hand-in the host accepts", () => {
+    const handedIn = (name: string, result: string) =>
+      name === "deliver_task" && JSON.parse(result).delivered === true;
+    const handIn = (result: string): Message[] => [
+      {
+        id: "assistant_call",
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "deliver_task", arguments: "{}" },
+          },
+        ],
+      },
+      { id: "tool_1", role: "tool", toolCallId: "call_1", content: result },
+    ];
+
+    test("then silence completes with an empty reply", () => {
+      expect(
+        settle(
+          evidence({
+            added: handIn(JSON.stringify({ delivered: true })),
+            handedIn,
+          }),
+        ),
+      ).toEqual({ kind: "completed", replyText: "", components: [] });
+    });
+
+    test("a bounced hand-in is no hand-in: still empty", () => {
+      expect(
+        settle(
+          evidence({
+            added: handIn(JSON.stringify({ bounced: true })),
+            handedIn,
+          }),
+        ),
+      ).toEqual({ kind: "empty" });
+    });
+
+    test("without the host's predicate, silence is empty as before", () => {
+      expect(
+        settle(
+          evidence({ added: handIn(JSON.stringify({ delivered: true })) }),
+        ),
+      ).toEqual({ kind: "empty" });
+    });
+
+    /*
+     * The boundary is the turn, as the agent's own "delivery ends the turn" counts it: everything
+     * after the person's latest message, however many runs the host cut it into.
+     */
+    const asked: Message = { id: "user_1", role: "user", content: "Fix it." };
+    const approved: Message = {
+      id: "approval:1",
+      role: "tool",
+      toolCallId: "call_check",
+      content: "checked",
+    };
+
+    test("a hand-in earlier in this turn counts when the carried-on run ends at once", () => {
+      // Handed in, let one more step for a reminder, stopped there on an approval; carried on after
+      // the decision, the agent ends the turn without asking the model, so this run adds nothing.
+      expect(
+        settle(
+          evidence({
+            added: [],
+            handedIn,
+            conversation: [
+              asked,
+              ...handIn(JSON.stringify({ delivered: true })),
+              {
+                id: "assistant_check",
+                role: "assistant",
+                content: "",
+                toolCalls: [
+                  {
+                    id: "call_check",
+                    type: "function",
+                    function: { name: "computer_run_command", arguments: "{}" },
+                  },
+                ],
+              },
+              approved,
+            ],
+          }),
+        ),
+      ).toEqual({ kind: "completed", replyText: "", components: [] });
+    });
+
+    test("a hand-in from before the person's latest message is an earlier turn's: still empty", () => {
+      expect(
+        settle(
+          evidence({
+            added: [],
+            handedIn,
+            conversation: [
+              { id: "user_0", role: "user", content: "Do the first card." },
+              ...handIn(JSON.stringify({ delivered: true })),
+              asked,
+            ],
+          }),
+        ),
+      ).toEqual({ kind: "empty" });
+    });
+
+    test("an interrupt still outranks it", () => {
+      expect(
+        settle(
+          evidence({
+            added: handIn(JSON.stringify({ delivered: true })),
+            handedIn,
+            pendingInterrupts: [interrupt()],
+          }),
+        ),
+      ).toEqual({ kind: "interrupted" });
+    });
+  });
+
+  /*
    * Each row adds one condition that outranks everything below it, on top of evidence that would
    * otherwise settle as the row below. The order is the contract.
    */

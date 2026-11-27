@@ -83,6 +83,7 @@ tests/approval-open-transaction.integration.test.ts
 tests/approval-outcomes-for-person.test.ts
 tests/approval-recovery-port.integration.test.ts
 tests/approval-recovery-port.test.ts
+tests/approval-resume-handed-in.test.ts
 tests/approval-rule-backtest.test.ts
 tests/approval-rule-translate.test.ts
 tests/approval-rules-save.integration.test.ts
