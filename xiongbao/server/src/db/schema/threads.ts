@@ -18,7 +18,7 @@ const updatedAt = () =>
 
 /**
  * Threads owned by this deployment, when it runs in local mode
- * (`INTELLIGENCE_MODE=local`) instead of against CopilotKit Intelligence.
+ * (`INTELLIGENCE_MODE=local`) instead of against the hosted Intelligence back end.
  *
  * The shape mirrors what the runtime's local thread endpoints need: a thread
  * record the `/threads` list can page over, the latest message snapshot, and
@@ -32,7 +32,10 @@ export const threads = pgTable(
     agentId: text("agent_id").notNull(),
     name: text("name"),
     /** The ag-ui Message[] as of the last finalized run. */
-    messagesSnapshot: jsonb("messages_snapshot").$type<unknown[]>().notNull().default([]),
+    messagesSnapshot: jsonb("messages_snapshot")
+      .$type<unknown[]>()
+      .notNull()
+      .default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -79,7 +82,9 @@ export const threadRuns = pgTable(
     eventCount: integer("event_count").notNull().default(0),
     createdAt: createdAt(),
   },
-  (table) => [index("thread_runs_thread_idx").on(table.threadId, table.createdAt)],
+  (table) => [
+    index("thread_runs_thread_idx").on(table.threadId, table.createdAt),
+  ],
 );
 
 export type ThreadRecord = typeof threads.$inferSelect;

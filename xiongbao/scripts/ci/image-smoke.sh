@@ -70,8 +70,8 @@ if [ "$healthy" = true ]; then
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'xiongbao_app|f|f'
   check docker exec "$name" sh -c 'PGPASSWORD=xiongbao /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
   check docker exec -u apiuser "$name" sh -c 'test ! -r /run/s6/container_environment/MIGRATION_DATABASE_URL'
-  # A new volume migrates under the old superuser (migration 0054 needs it) and is renamed on that same
-  # first boot: the owner URL names the new superuser and database, and so does the cluster.
+  # A new volume is created and migrated under xiongbao (superuser and database alike): the owner URL
+  # names them, and so does the cluster.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, current_database(), (select rolname from pg_roles where oid = 10)"')" = 'xiongbao|xiongbao|xiongbao'
   # /app is root's and read-only to everyone else (see the Dockerfile): neither the API's user nor a
   # Bot's can rewrite the code the API runs or the app it serves.

@@ -43,13 +43,17 @@ const renamed: UpgradeFacts = {
   oldCredentials: 0,
 };
 
+/** Stand-ins for the roles' names before v0.2.16: the decision only repeats what the database said. */
+const OLD_APP_ROLE = "legacy_app";
+const OLD_WRITER_ROLE = "legacy_role_writer";
+
 describe("the decision", () => {
   test("a database the migrator has never touched is never refused", () => {
     expect(
       upgradeRefusal({
         applied: 0,
         missingMigrations: RENAME_MIGRATIONS.map(([tag]) => tag),
-        oldRoles: ["openbot_app"],
+        oldRoles: [OLD_APP_ROLE],
         oldCredentials: 3,
       }),
     ).toBeUndefined();
@@ -66,8 +70,8 @@ describe("the decision", () => {
         "迁移记录里没有 v0.2.16 的改名迁移（0240_rebrand_names）",
       ],
       [
-        { ...renamed, oldRoles: ["openbot_role_writer"] },
-        "应用角色仍是改名前的名字（openbot_role_writer）",
+        { ...renamed, oldRoles: [OLD_WRITER_ROLE] },
+        `应用角色仍是改名前的名字（${OLD_WRITER_ROLE}）`,
       ],
       [
         { ...renamed, oldCredentials: 2 },
@@ -86,13 +90,31 @@ describe("the decision", () => {
     const refusal = upgradeRefusal({
       applied: 240,
       missingMigrations: RENAME_MIGRATIONS.map(([tag]) => tag),
-      oldRoles: RENAMED_ROLES.map(([old]) => old),
+      oldRoles: [OLD_APP_ROLE, OLD_WRITER_ROLE],
       oldCredentials: 5,
     });
     expect(refusal).toContain("0240_rebrand_names、0241_rebrand_history");
-    expect(refusal).toContain("openbot_app、openbot_role_writer");
+    expect(refusal).toContain(`${OLD_APP_ROLE}、${OLD_WRITER_ROLE}`);
     expect(refusal).toContain("5 条");
   });
+});
+
+test("the old application roles are recognised by the digests of the names v0.2.16's history created", () => {
+  // 0054 created the application role, 0109 the role writer, under the names before v0.2.16's rename.
+  const created = [
+    "xiongbao/server/drizzle/0054_app_role.sql",
+    "xiongbao/server/recovery/recovery-20261018-v1/sql/0109_role_writer_authority.sql",
+  ].map((path) => {
+    const file = spawnSync("git", ["show", `${V0216_COMMIT}:${path}`], {
+      cwd: import.meta.dir,
+      encoding: "utf8",
+    });
+    expect(file.status).toBe(0);
+    const name = /\bCREATE ROLE ([a-z_]+)/.exec(file.stdout)?.[1];
+    if (!name) throw new Error(`${path} creates no role`);
+    return createHash("sha256").update(name).digest("hex");
+  });
+  expect(RENAMED_ROLES.map(([digest]) => digest)).toEqual(created);
 });
 
 test("the rename migrations are recognised by the hashes v0.2.16 recorded for them", () => {
@@ -186,7 +208,11 @@ afterAll(async () => {
      * recreates the old roles (0054, 0109). Nothing references them once these databases are gone; drop
      * them so a known-password login does not outlive the suite. Ones another database still uses stay.
      */
-    for (const [role] of RENAMED_ROLES) {
+    const digests = RENAMED_ROLES.map(([digest]) => digest);
+    const old = await admin<{ rolname: string }[]>`
+      select rolname from pg_roles
+       where encode(sha256(convert_to(rolname, 'UTF8')), 'hex') in ${admin(digests)}`;
+    for (const { rolname: role } of old) {
       const [held] = await admin<{ refs: number }[]>`
         select count(*)::int as refs from pg_shdepend d join pg_roles r on r.oid = d.refobjid
          where r.rolname = ${role}`;

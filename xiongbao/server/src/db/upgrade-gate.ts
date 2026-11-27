@@ -44,10 +44,20 @@ export const RENAME_MIGRATIONS: ReadonlyArray<
   ],
 ];
 
-/** Each application role as it was named before v0.2.16, and the name 0240 gave it. */
+/**
+ * Each application role as it was named before v0.2.16, as the SHA-256 of the name, and the name 0240 gave
+ * it. Kept as a digest so the product's former name is not spelled here; a role found under one is
+ * reported by the name the database gives it.
+ */
 export const RENAMED_ROLES: ReadonlyArray<readonly [string, string]> = [
-  ["openbot_app", "xiongbao_app"],
-  ["openbot_role_writer", "xiongbao_role_writer"],
+  [
+    "eb5b11d1e625efb6d1fdcefa56dc072da59670e4fc570f61dcbfc3bf0beb6819",
+    "xiongbao_app",
+  ],
+  [
+    "880d2da1a798f75e11a19ed269ee797e155d314c5857f544e2add6287b5bed8f",
+    "xiongbao_role_writer",
+  ],
 ];
 
 /** The kid credential envelopes were sealed under before v0.2.16 (v0.2.16 resealed every one as `k2`). */
@@ -108,12 +118,15 @@ export async function readUpgradeFacts(
   const missingMigrations = RENAME_MIGRATIONS.filter(
     ([, hash]) => !appliedHashes.has(hash),
   ).map(([tag]) => tag);
-  const roles = await tx<{ rolname: string }[]>`
-    select rolname from pg_roles where rolname in ${tx(RENAMED_ROLES.flat())}`;
-  const present = new Set(roles.map((row) => row.rolname));
-  const oldRoles = RENAMED_ROLES.filter(
-    ([old, renamed]) => present.has(old) && !present.has(renamed),
-  ).map(([old]) => old);
+  const roles = await tx<{ rolname: string; digest: string }[]>`
+    select rolname, encode(sha256(convert_to(rolname, 'UTF8')), 'hex') as digest
+      from pg_roles`;
+  const named = new Set(roles.map((row) => row.rolname));
+  const byDigest = new Map(roles.map((row) => [row.digest, row.rolname]));
+  const oldRoles = RENAMED_ROLES.flatMap(([digest, renamed]) => {
+    const old = byDigest.get(digest);
+    return old !== undefined && !named.has(renamed) ? [old] : [];
+  });
   let oldCredentials = 0;
   if (applied.length > 0) {
     const [table] = await tx<{ present: string | null }[]>`

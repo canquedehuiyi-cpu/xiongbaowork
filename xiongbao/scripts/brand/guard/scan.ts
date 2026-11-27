@@ -16,8 +16,7 @@ import { OLD_NAME } from "./words";
  *     `dependency` (what the library itself defines and no import can rename: a wire field or protocol
  *     string, an environment variable it reads, a property of an object it returns, a CSS class it draws), `licence` (the MIT
  *     copyright line THIRD-PARTY-NOTICES.md opens with, and only there) and `kept` (an old value written
- *     into data or registered in a system this release cannot rewrite, kept by an explicit ruling);
- *   - until Task 26, the old migration history and the database superuser (UNTIL_TASK_26 below).
+ *     into data or registered in a system this release cannot rewrite, kept by an explicit ruling).
  *
  * An entry that stops matching fails too, so the list only shrinks.
  */
@@ -95,111 +94,6 @@ export type AllowEntry = {
 };
 
 /*
- * TEMPORARY, expires with Task 26 (the migrations squashed into one baseline). Until that baseline the old
- * migration history keeps its old names byte for byte, and so does the database superuser: historical
- * migration 0054 grants to that role by name, so a database migrated from empty needs it, and the CI, the
- * development Compose file, the image's first boot and the test helpers all still create it. Task 26
- * replaces server/drizzle/ and the recovery overlays' sql/ and meta/ with the baseline, renames the superuser and
- * its default database, deletes the tests that freeze the old history, and deletes this whole block.
- * brand-leak.test.ts fails on a pattern here that no longer matches anything.
- */
-export const UNTIL_TASK_26: {
-  paths: { prefix: string; reason: string }[];
-  patterns: { file?: string; pattern: RegExp; reason: string }[];
-} = {
-  paths: [
-    { prefix: "server/drizzle/", reason: "the migration history" },
-    {
-      prefix: "server/recovery/",
-      reason: "the recovery overlay's migration history and its snapshots",
-    },
-    {
-      prefix: "server/tests/rebrand-history.test.ts",
-      reason: "test of migration 0241, deleted with it",
-    },
-    {
-      prefix: "server/tests/rebrand-migration.test.ts",
-      reason: "test of migration 0240, deleted with it",
-    },
-    {
-      prefix: "server/tests/support/renamed-by-0240.ts",
-      reason: "replays historical migration text under the names 0240 gave",
-    },
-    {
-      prefix: "server/tests/recovery-",
-      reason: "tests that freeze the recovery migrations byte for byte",
-    },
-    {
-      prefix: "server/tests/helpers/recovery-lint-source.ts",
-      reason: "restores frozen recovery test text",
-    },
-    {
-      prefix: "docker/tests/rebrand-superuser.test.sh",
-      reason: "test of the first-boot superuser rename",
-    },
-  ],
-  patterns: [
-    {
-      pattern:
-        /\b(?:postgres(?:ql)?|mysql):\/\/openbot(?::[^@\s'"`]*)?@|(?<=[\w.%-]:)openbot(?=@)|(?<![\w.-])openbot:openbot@/g,
-      reason:
-        "the superuser and its public default password in connection strings",
-    },
-    {
-      pattern:
-        /(?:-U|--username[= ]|PGUSER=|POSTGRES_USER(?::|=|:-)|POSTGRES_PASSWORD(?::|=|:-)|PASSWORD(?::-|=)|OWNER(?: TO)?|FOR ROLE|IN ROLE)\s*["']?openbot\b/g,
-      reason: "the superuser named on a command line or in a setting",
-    },
-    {
-      pattern:
-        /(?:-d|createdb[^\n]*?)\s+openbot\b|(?<=:543[23]\/)openbot(?:_test)?\b|database: openbot\b|POSTGRES_DB: openbot_test|openbot_test\b/g,
-      reason: "the superuser's default database and the old test database",
-    },
-    {
-      pattern:
-        /\bopenbot_(?:app|role_writer|team_person_leaves_groups|grant_stamp_admissible)\b/g,
-      reason:
-        "role and function names as historical migrations and the frozen CI baseline still spell them",
-    },
-    // Files where every remaining mention is the superuser, its public default password or its database.
-    ...[
-      ".env.example",
-      "docs/configuration.md",
-      "docs/deployment.md",
-      "docs/deployment-xiongbao.md",
-      "docs/development-environment-xiongbao.md",
-      "server/tests/server-readiness-gates.test.ts",
-      "server/tests/support/database.ts",
-      "server/tests/support/database.test.ts",
-      "server/tests/test-database-url.integration.test.ts",
-      "tests/compose.test.ts",
-      "tests/update-local.test.ts",
-      "worker/tests/readiness.test.ts",
-    ].map((file) => ({
-      file,
-      pattern: /\bopenbot\d?\b/g,
-      reason: "the superuser, its public default password and its database",
-    })),
-    {
-      file: "server/src/db/schema/threads.ts",
-      pattern: /instead of against CopilotKit Intelligence\./g,
-      reason:
-        "a recovery test freezes this file's bytes and sha256; the baseline unfreezes it",
-    },
-    {
-      file: "server/src/auth/role-writer-lifecycle.ts",
-      pattern: /PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot"|`openbot`/g,
-      reason: "the public default password historical migration 0054 sets",
-    },
-  ],
-};
-
-/** Whether a whole file waits for Task 26. */
-export function untilTask26Excluded(file: string): boolean {
-  return UNTIL_TASK_26.paths.some(({ prefix }) => file.startsWith(prefix));
-}
-
-/*
  * The guard's own dictionary and the fixtures that prove it finds those words: they have to spell them.
  * The allowlist and the artifact word lists are themselves lists of what may still be said.
  */
@@ -253,7 +147,7 @@ export function scannedFiles(repo = REPO): string[] {
   ];
   return files.filter((path) => {
     if (path === "bun.lock" || path.endsWith("/bun.lock")) return false;
-    if (isGuardSelf(path) || untilTask26Excluded(path)) return false;
+    if (isGuardSelf(path)) return false;
     const full = join(repo, path);
     return existsSync(full) && statSync(full).isFile();
   });
@@ -261,13 +155,11 @@ export function scannedFiles(repo = REPO): string[] {
 
 export type Finding = { file: string; number: number; line: string };
 
-/** What survives of one line once the package specifiers, the file's entries and the Task 26 names are erased. */
+/** What survives of one line once the package specifiers and the file's entries are erased. */
 function erased(
-  file: string,
   line: string,
   entries: AllowEntry[],
   used: Set<AllowEntry>,
-  usedPatterns: Set<object>,
 ): string {
   let rest = line.replace(PACKAGE_SPECIFIER, " ");
   for (const entry of entries)
@@ -275,12 +167,6 @@ function erased(
       used.add(entry);
       rest = rest.split(entry.text).join(" ");
     }
-  for (const exclusion of UNTIL_TASK_26.patterns) {
-    if (exclusion.file !== undefined && exclusion.file !== file) continue;
-    const next = rest.replace(exclusion.pattern, " ");
-    if (next !== rest) usedPatterns.add(exclusion);
-    rest = next;
-  }
   return rest;
 }
 
@@ -357,8 +243,6 @@ export type ScanResult = {
   findings: Finding[];
   /** Allowlist entries no line needed: the allowlist must shrink with the source. */
   unused: AllowEntry[];
-  /** Task 26 patterns that erased nothing, as `<file or *> <pattern>`. */
-  unusedPatterns: string[];
 };
 
 /** The rule over any set of sources, so a fixture goes through exactly what the tree does. */
@@ -368,7 +252,6 @@ export function scanSources(
 ): ScanResult {
   const findings: Finding[] = [];
   const used = new Set<AllowEntry>();
-  const usedPatterns = new Set<object>();
   for (const { path, source } of sources) {
     const text = source();
     if (!OLD_NAME.test(text)) continue;
@@ -379,16 +262,13 @@ export function scanSources(
       : new Set<number>();
     lines.forEach((line, index) => {
       if (!OLD_NAME.test(line) || library.has(index)) return;
-      if (OLD_NAME.test(erased(path, line, entries, used, usedPatterns)))
+      if (OLD_NAME.test(erased(line, entries, used)))
         findings.push({ file: path, number: index + 1, line: line.trim() });
     });
   }
   return {
     findings,
     unused: allow.filter((entry) => !used.has(entry)),
-    unusedPatterns: UNTIL_TASK_26.patterns
-      .filter((exclusion) => !usedPatterns.has(exclusion))
-      .map(({ file, pattern }) => `${file ?? "*"} ${pattern}`),
   };
 }
 

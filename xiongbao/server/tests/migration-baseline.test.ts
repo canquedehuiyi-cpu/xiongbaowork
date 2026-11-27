@@ -5,7 +5,10 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import postgres from "postgres";
 import { applyRelease, MIGRATIONS_FOLDER } from "../scripts/migrate";
-import { rollbackAfterBaseline } from "../scripts/rollback-after-baseline";
+import {
+  rollbackAfterBaseline,
+  rollbackScript,
+} from "../scripts/rollback-after-baseline";
 import {
   applyMigrations,
   MIGRATIONS_JOURNAL,
@@ -185,13 +188,11 @@ async function memoryCorrectionColumns(client: postgres.Sql) {
   ).map(({ name }) => name);
 }
 
-/** Every statement of every migration after the baseline undone, newest first. */
+/** Every migration after the baseline undone, newest first, by the script an operator runs. */
 async function undoAfterBaseline(client: postgres.Sql) {
-  const undo = await rollbackAfterBaseline(MIGRATIONS_FOLDER);
-  await client.begin(async (tx) => {
-    for (const { statements } of undo)
-      for (const statement of statements) await tx.unsafe(statement);
-  });
+  await client.unsafe(
+    rollbackScript(await rollbackAfterBaseline(MIGRATIONS_FOLDER)),
+  );
 }
 
 afterAll(async () => {
@@ -284,6 +285,38 @@ describe.skipIf(!owner)("against v0.2.16's history", () => {
       await finish(history);
     }
   }, 600_000);
+
+  test("undoing the migrations after the baseline takes their ledger rows too, so a restart runs them again", async () => {
+    // Somebody runs the undo and starts v0.2.17 again instead of going back to v0.2.16: with the rows
+    // left, the migrator would take the undone migrations as applied and serve without their columns.
+    const database = await newDatabase("undo");
+    try {
+      await applyRelease(database.client, MIGRATIONS_FOLDER);
+      const full = await folderLedger();
+      await undoAfterBaseline(database.client);
+      expect(await memoryCorrectionColumns(database.client)).toEqual([]);
+      expect(
+        (await ledger(database.client)).map(({ hash, created_at }) => [
+          hash,
+          created_at,
+        ]),
+      ).toEqual(full.slice(0, 1));
+      await applyRelease(database.client, MIGRATIONS_FOLDER);
+      expect(await memoryCorrectionColumns(database.client)).toEqual([
+        "correction_count",
+        "from_correction",
+        "replaces_id",
+      ]);
+      expect(
+        (await ledger(database.client)).map(({ hash, created_at }) => [
+          hash,
+          created_at,
+        ]),
+      ).toEqual(full);
+    } finally {
+      await finish(database);
+    }
+  }, 300_000);
 
   test("a migration after the baseline does not change what the adoption compares", async () => {
     // A folder with one more migration after the baseline than this tree has: a database v0.2.16 left

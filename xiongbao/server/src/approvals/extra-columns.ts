@@ -30,10 +30,9 @@ import type { ActionKind, ActionKindPolicy, ApprovalVia } from "./types";
  * 再加一个写函数（X 系列多账号的 `approval_rules.account` 就是这样加的，原来的 `approvals/rule-account.ts`
  * 已并进这里）。
  *
- * DRIZZLE 不知道这些列，它们只由恢复层迁移（recovery/recovery-20261018-v1/sql）手写加上。
- * `db:generate` 只比对 schema 与 drizzle/meta 的快照，两边都没有这些列，所以生成的迁移既不加也不删它们；
- * 但任何对照真实数据库同步 schema 的做法（例如 `drizzle-kit push`）会把它们当成多余的列删掉，连同审批的
- * 种类、团队设置和规则针对的账号。不要对部署的库那样做。
+ * DRIZZLE 不知道这些列：它们由迁移手写加上（原在恢复层迁移里，现已并进基线 `drizzle/0000_baseline.sql`），
+ * Drizzle 的 schema 里没有它们。任何对照真实数据库同步 schema 的做法（例如 `drizzle-kit push`）会把它们
+ * 当成多余的列删掉，连同审批的种类、团队设置和规则针对的账号。不要对部署的库那样做。
  *
  * 这些片段只在单表查询里用（`from(approvalRules)` / `from(approvalTeamSettings)` / `from(approvalRequests)`、
  * 对应表的 returning）；表名限定列名，所以不会和别的表的同名列混。
