@@ -54,7 +54,7 @@ import {
   deliveryTools,
   offeredDeliveryTools,
 } from "../src/tasks/delivery-tools";
-import { listTaskEvents } from "../src/tasks/events";
+import { appendTaskEvent, listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
 import { noteAttachedFastPath } from "../src/tasks/fastpath-gate";
 import type { FileProbe } from "../src/tasks/file-evidence";
@@ -62,7 +62,7 @@ import {
   createTaskProjector,
   type TaskProjector,
 } from "../src/tasks/projector";
-import { rerunBouncesOf } from "../src/tasks/rerun-gate";
+import { cardRoundRuns, rerunBouncesOf } from "../src/tasks/rerun-gate";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
@@ -2380,7 +2380,7 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
       agentId: card.agentId,
       timeZone: () => ZONE,
       rerun: {
-        cardRounds: (tenantId, taskId) => gate.cardRounds(tenantId, taskId),
+        cardHistory: (tenantId, taskId) => gate.cardHistory(tenantId, taskId),
         rerunBounces: (tenantId, taskId) =>
           rerunBouncesOf(database, tenantId, taskId),
         canExecute: async () => true,
@@ -2544,6 +2544,122 @@ describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)"
       (event) => event.kind === "bounced",
     );
     expect(bounce?.detail.gate).toBe("rerunClaimBounce");
+  });
+
+  test("a command an approval let through is never re-run, found in the approval store (review I1)", async () => {
+    const card = await acceptedCard(
+      "rerun-approved",
+      undefined,
+      async (run) => {
+        for (const event of ranCommand(
+          "c1",
+          "wc -l data.csv",
+          0,
+          "100 data.csv",
+        ))
+          run.draw(event);
+      },
+    );
+    // The approval that let this call through, as the store keeps it: the card's round, the call's id.
+    await runAsTenant(card.tenantId, () =>
+      database.insert(approvalRequests).values({
+        id: `ap-${randomUUID()}`,
+        tenantId: card.tenantId,
+        ownerUserId: card.tenantId,
+        runId: card.firstRun,
+        toolCallId: "c1",
+        actionDigest: `digest-${randomUUID()}`,
+        action: {
+          actorId: card.tenantId,
+          botId: card.agentId,
+          toolRef: "computer_run_command",
+          effect: "write",
+          scope: "workspace",
+          args: { command: "wc -l data.csv" },
+          subject: { command: "wc -l data.csv", runner: false },
+        } as never,
+        status: "completed",
+        decision: "allow_once",
+      }),
+    );
+    const ran: string[] = [];
+    const answer = await handIn(
+      card,
+      rerunTools(card, "150 data.csv", ran),
+      counted,
+    );
+    expect(answer.delivered).toBe(true);
+    expect(ran).toEqual([]);
+    expect(
+      (await cardRow(card.tenantId, card.cardId))?.deliverableRef,
+    ).toMatchObject({
+      reruns: [
+        {
+          command: "wc -l data.csv",
+          result: "unverified",
+          why: "这条命令当初是经审批才执行的，复跑不再执行",
+        },
+      ],
+    });
+  });
+
+  test("after a hand-over only the new coworker's rounds count (review I3)", async () => {
+    const card = await acceptedCard(
+      "rerun-handover",
+      undefined,
+      async (run) => {
+        for (const event of ranCommand(
+          "c1",
+          "wc -l data.csv",
+          0,
+          "100 data.csv",
+        ))
+          run.draw(event);
+      },
+    );
+    const next = `agent-${suite}-rerun-handover-b`;
+    const nextThread = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const handed = await delivery.reassign(card.tenantId, card.cardId, {
+      agentId: next,
+      threadRef: nextThread,
+      actor: `user:${card.tenantId}`,
+    });
+    expect(handed.ok).toBe(true);
+    // The new coworker's own round, filed on the card as its rounds are.
+    const round = await turn({
+      tenantId: card.tenantId,
+      agentId: next,
+      threadId: nextThread,
+      ask: "接着做",
+      work: async (run) => {
+        for (const event of ranCommand("d1", "pytest -q", 0, "7 passed"))
+          run.draw(event);
+      },
+    });
+    await runAsTenant(card.tenantId, () =>
+      appendTaskEvent(database, {
+        tenantId: card.tenantId,
+        taskId: card.cardId,
+        kind: "run_ended",
+        actor: `agent:${next}`,
+        detail: { runId: round.runId },
+      }),
+    );
+    const history = await until(
+      () => gate.cardHistory(card.tenantId, card.cardId),
+      (found) =>
+        found.rounds.some(
+          (one) =>
+            one.runId === round.runId &&
+            one.events.some(
+              (event) => event.type === EventType.TOOL_CALL_RESULT,
+            ),
+        ),
+    );
+    expect(history.rounds.map((one) => one.runId)).toEqual([round.runId]);
+    expect(
+      cardRoundRuns(history.rounds, history.approved).map((run) => run.command),
+    ).toEqual(["pytest -q"]);
   });
 
   test("an external employee's hand-in goes through neither gate", async () => {

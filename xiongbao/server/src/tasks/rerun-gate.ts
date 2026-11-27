@@ -18,11 +18,12 @@ import {
   claimsTested,
   isRerunnable,
   NO_RERUN_PREFIX,
-  outputsAgree,
   RERUN_MAX,
   RERUN_TIMEOUT_MS,
+  runsAgree,
+  sameCheckCommand,
 } from "../../../shared/rerun";
-import { COMMAND_TOOL, ranCheckCommand } from "../../../shared/verify";
+import { COMMAND_TOOL } from "../../../shared/verify";
 import { XIONGBAO_WAITING_METADATA } from "../../../shared/waiting";
 import type { ApprovalCandidate } from "../approvals/types";
 import { currentApprovalContext } from "../approvals/types";
@@ -69,19 +70,35 @@ export type RerunOutcome = {
   command: string;
   result: "passed" | "mismatch" | "unverified";
   why?: string;
+  /** 实际复跑的命令（这张卡里那次的原命令），和员工写的不一样时才记。 */
+  ran?: string;
 };
 
 /** 这张卡里员工跑过的一次 `computer_run_command`：命令、退出码、存下的输出，以及它是不是经审批才执行的。 */
 export type CardCommandRun = {
   command: string;
   exitCode: number;
+  /** 标准输出，有标准错误就接在后面：挡回原因里念它的末尾。 */
   output: string;
-  /** 存下的输出不全（电脑截断，或只留了头尾）：比较时只比两边都有的部分。 */
+  /** 存下的两路输出，原样（长输出可能只留了尾、或头尾，带省略标记）：比较时按它们的截断方式对齐。 */
+  stdout: string;
+  stderr: string;
+  /** 电脑截掉了前面（`agent-computer` 只留最后 64KB）。 */
   truncated: boolean;
-  /** 这次调用等过审批：结果是批准后才执行出来的，复跑会绕过那次批准，所以不复跑。 */
+  /** 这条命令经审批放行执行过（这一次，或这张卡上别的哪一次）：复跑会绕过那次批准，所以不复跑。 */
   approved: boolean;
   /** 在这张卡各轮事件里的先后位置，越大越晚。 */
   at: number;
+  /** 这次调用的 id（只在它那一轮里唯一）和那一轮的运行号，跟审批存储里的请求对得上。 */
+  toolCallId: string;
+  runId?: string;
+};
+
+/** 审批存储里，这张卡上经审批放行执行过（或已批准待执行）的一条命令。 */
+export type ApprovedCommand = {
+  command: string;
+  runId?: string;
+  toolCallId?: string;
 };
 
 type ToolEvent = BaseEvent & {
@@ -185,41 +202,78 @@ export function cardCommandRuns(
       typeof result.exitCode === "number" && result.ok !== false
         ? result.exitCode
         : -1;
-    const output =
-      typeof result.stdout === "string" || typeof result.stderr === "string"
-        ? outputOf(result)
-        : typeof result.error === "string"
-          ? result.error
-          : (content ?? "");
+    const streams =
+      typeof result.stdout === "string" || typeof result.stderr === "string";
+    const stdout = streams
+      ? typeof result.stdout === "string"
+        ? result.stdout
+        : ""
+      : typeof result.error === "string"
+        ? result.error
+        : (content ?? "");
+    const stderr =
+      streams && typeof result.stderr === "string" ? result.stderr : "";
     runs.push({
       command,
       exitCode,
-      output,
-      truncated:
-        result.truncated === true ||
-        typeof result.outputNote === "string" ||
-        typeof result.outputFile === "string",
+      output: outputOf({ stdout, stderr }),
+      stdout,
+      stderr,
+      truncated: result.truncated === true,
       approved,
       at: call.at,
+      toolCallId: id,
     });
   }
   return runs.sort((a, b) => a.at - b.at);
 }
 
+/** 两条命令是不是同一条：去掉多余空白后一字不差，或按复跑的规则解析后是同一个核对。 */
+function sameCommand(a: string, b: string): boolean {
+  const plain = (text: string) => text.replace(/\s+/g, " ").trim();
+  return (
+    plain(a) === plain(b) || (sameCheckCommand(a, b) && sameCheckCommand(b, a))
+  );
+}
+
 /**
  * 这张卡各轮（按先后）跑过的命令：一轮一轮地读（工具调用的 id 只在它那一轮里唯一），先后位置接着排。
+ *
+ * 「经审批」按命令算，两种来源取并集：运行事件里等过审批的调用（不管结果落在哪一轮），和审批存储里这张卡上
+ * 经审批放行执行过的请求（`approved`，按运行号加调用 id，或按命令对上）。凡是这样执行过的命令，这张卡上
+ * 每一次运行都记为经审批，一次都不复跑。
  */
 export function cardRoundRuns(
-  rounds: readonly (readonly BaseEvent[])[],
+  rounds: readonly { runId?: string; events: readonly BaseEvent[] }[],
+  approved: readonly ApprovedCommand[] = [],
 ): CardCommandRun[] {
   const runs: CardCommandRun[] = [];
   let offset = 0;
-  for (const events of rounds) {
-    for (const run of cardCommandRuns(events))
-      runs.push({ ...run, at: run.at + offset });
-    offset += events.length;
+  for (const round of rounds) {
+    for (const run of cardCommandRuns(round.events))
+      runs.push({
+        ...run,
+        at: run.at + offset,
+        ...(round.runId ? { runId: round.runId } : {}),
+      });
+    offset += round.events.length;
   }
-  return runs;
+  const byStore = (run: CardCommandRun) =>
+    approved.some(
+      (request) =>
+        (request.toolCallId !== undefined &&
+          request.toolCallId === run.toolCallId &&
+          request.runId === run.runId) ||
+        sameCommand(request.command, run.command),
+    );
+  const waited = runs.filter((run) => run.approved).map((run) => run.command);
+  return runs.map((run) =>
+    run.approved ||
+    byStore(run) ||
+    waited.some((command) => sameCommand(command, run.command))
+      ? { ...run, approved: true }
+      : run,
+  );
 }
 
 /** 命令的输出：标准输出，有标准错误就接在后面。 */
@@ -299,11 +353,13 @@ const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 200);
 
 /**
- * 逐条复跑员工声明的核对命令。每条先找这张卡里最近一次的运行作基准（比较方式与 `ranCheckCommand` 相同），
- * 再按次序判断：没跑过、经审批执行的、改动类的、电脑不能由服务器执行的、按规则现在要审批的，都记「未复核」，
- * 不挡回；最近一次没成功的挡回；其余的复跑，退出码或数字对不上的挡回。
+ * 逐条复跑员工声明的核对命令。不在允许名单里的（`shared/rerun-command.ts`：写回、安装、删除、联网写入、接了别的
+ * 命令的），记「未复核」。其余的找这张卡里最近一次跑的同一条核对作基准（整条命令按同一规则解析，不按子串），
+ * 再按次序判断：没跑过、经审批执行过的、电脑不能由服务器执行的、按规则现在要审批的、截断后对不齐的，都记
+ * 「未复核」，不挡回；最近一次没成功的挡回；其余的复跑，退出码或数字对不上的挡回。
  *
- * 复跑执行的是基准那次的原命令（员工写的可能少了 `cd <目录> && ` 之类的前缀），交付记录里写员工声明的命令。
+ * 复跑执行的是基准那次的原命令（员工写的可能少了 `cd <目录> && ` 或后面的过滤），交付记录里写员工声明的
+ * 命令，实际执行的不一样时另记在 `ran`。
  */
 export async function rerunChecks(input: {
   commands: readonly string[];
@@ -318,33 +374,40 @@ export async function rerunChecks(input: {
   const outcomes: RerunOutcome[] = [];
   const bounces: string[] = [];
   for (const command of commands) {
-    const unverified = (why: string) =>
-      outcomes.push({ command, result: "unverified", why });
-    const matching = input.runs.filter((run) =>
-      ranCheckCommand(run.command, command),
-    );
-    const baseline = matching.reduce<CardCommandRun | undefined>(
-      (latest, run) => (!latest || run.at > latest.at ? run : latest),
-      undefined,
-    );
-    if (!baseline) {
-      unverified(NOT_RUN);
+    const done = (outcome: Omit<RerunOutcome, "command">, ran?: string) =>
+      outcomes.push({
+        command,
+        ...outcome,
+        ...(ran && ran !== command ? { ran } : {}),
+      });
+    // 只认允许名单里的核对命令；写回、安装、删除、联网写入、接了别的命令的，一律不复跑。
+    const allowed = isRerunnable(command);
+    if (!allowed.ok) {
+      done({ result: "unverified", why: allowed.why });
       continue;
     }
+    // 基准：这张卡里最近一次跑的同一条核对命令（整条命令按同一规则解析，不按子串）。
+    const baseline = input.runs
+      .filter((run) => sameCheckCommand(run.command, command))
+      .reduce<CardCommandRun | undefined>(
+        (latest, run) => (!latest || run.at > latest.at ? run : latest),
+        undefined,
+      );
+    if (!baseline) {
+      done({ result: "unverified", why: NOT_RUN });
+      continue;
+    }
+    const unverified = (why: string) =>
+      done({ result: "unverified", why }, baseline.command);
     if (baseline.approved) {
       unverified(APPROVED);
       continue;
     }
     if (baseline.exitCode !== 0) {
-      outcomes.push({ command, result: "mismatch", why: LATEST_FAILED });
+      done({ result: "mismatch", why: LATEST_FAILED }, baseline.command);
       bounces.push(
         `「${command}」：${LATEST_FAILED}（退出码 ${baseline.exitCode}）。先修好、再跑一次确认通过后再交。\n最近一次输出末尾：\n${tailOf(baseline.output)}`,
       );
-      continue;
-    }
-    const verdict = isRerunnable(baseline.command);
-    if (!verdict.ok) {
-      unverified(verdict.why);
       continue;
     }
     if (!input.canExecute) {
@@ -368,19 +431,31 @@ export async function rerunChecks(input: {
       unverified(TIMED_OUT);
       continue;
     }
-    const output = outputOf(again);
-    const agreed = outputsAgree(
-      { exitCode: baseline.exitCode, output: baseline.output },
-      { exitCode: again.exitCode, output },
-      baseline.truncated,
+    const verdict = runsAgree(
+      {
+        exitCode: baseline.exitCode,
+        stdout: baseline.stdout,
+        stderr: baseline.stderr,
+        truncated: baseline.truncated,
+      },
+      {
+        exitCode: again.exitCode,
+        stdout: again.stdout,
+        stderr: again.stderr,
+        truncated: again.truncated,
+      },
     );
-    if (agreed.agree) {
-      outcomes.push({ command, result: "passed" });
+    if ("unaligned" in verdict) {
+      unverified(`原来的输出被截断，和复跑的对不齐（${verdict.unaligned}）`);
       continue;
     }
-    outcomes.push({ command, result: "mismatch", why: agreed.why });
+    if (verdict.agree) {
+      done({ result: "passed" }, baseline.command);
+      continue;
+    }
+    done({ result: "mismatch", why: verdict.why }, baseline.command);
     bounces.push(
-      `「${command}」：复跑结果和这张卡里最近一次不一致（${agreed.why}）。原来退出码 ${baseline.exitCode}，复跑退出码 ${again.exitCode}。\n原来输出末尾：\n${tailOf(baseline.output)}\n复跑输出末尾：\n${tailOf(output)}`,
+      `「${command}」：复跑结果和这张卡里最近一次不一致（${verdict.why}）。原来退出码 ${baseline.exitCode}，复跑退出码 ${again.exitCode}。\n原来输出末尾：\n${tailOf(baseline.output)}\n复跑输出末尾：\n${tailOf(outputOf(again))}`,
     );
   }
   return {
@@ -410,8 +485,17 @@ export async function rerunBouncesOf(
 
 /** 复跑要的四样：这张卡的运行事件、能不能执行、规则放不放行、真去执行。`deliveryTools` 的 `rerun` 选项。 */
 export type RerunDeps = {
-  /** 这张卡各轮的运行事件，一轮一组，按先后排好（证据门的 `cardRounds`）。 */
-  cardRounds(tenantId: string, taskId: string): Promise<BaseEvent[][]>;
+  /**
+   * 这张卡上现在这位员工的各轮运行事件（一轮一组，按先后排好），和审批存储里这些轮次上经审批放行执行过的
+   * 命令（证据门的 `cardHistory`）。换过员工的，前一位员工的轮次不在里面。
+   */
+  cardHistory(
+    tenantId: string,
+    taskId: string,
+  ): Promise<{
+    rounds: { runId: string; events: BaseEvent[] }[];
+    approved: ApprovedCommand[];
+  }>;
   /** 这张卡因复跑挡回过几次。 */
   rerunBounces(tenantId: string, taskId: string): Promise<number>;
   canExecute(): Promise<boolean>;

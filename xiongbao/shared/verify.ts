@@ -69,12 +69,11 @@ export const WRITE_FILE_TOOL = "computer_write_file";
 const PROSE_FILE = /\.(md|markdown|txt|rst|log|docx?|pdf|pptx?)$/i;
 
 /** A command that is itself a check: what a run does after a change to see that it holds. */
-export const VERIFYING_COMMAND =
+const VERIFYING_COMMAND =
   /\b(test|tests|check|build|verify|validate|lint|tsc|diff|assert|pytest|jest|vitest|make)\b|\bwc\s+-l\b|\bhead\s/i;
 
 /** A command that changes a file in place, other than by redirecting into one. */
-export const IN_PLACE_COMMAND =
-  /\bsed\s+-i\b|\bpatch\b|\bgit\s+apply\b|\b(mv|cp)\s/;
+const IN_PLACE_COMMAND = /\bsed\s+-i\b|\bpatch\b|\bgit\s+apply\b|\b(mv|cp)\s/;
 
 const argumentsOf = (input: unknown): Record<string, unknown> => {
   if (typeof input === "object" && input !== null)

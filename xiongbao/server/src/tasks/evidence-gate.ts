@@ -2,12 +2,14 @@ import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
+  approvalRequests,
   attachments,
   groupBotThreads,
   intelligenceChannelMappings,
   taskEvents,
   tasks,
   threadRunEvents,
+  threadRuns,
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { runEventsSoFar } from "../threads/run-side-events";
@@ -121,9 +123,18 @@ export type EvidenceGate = {
  * What the server reads off a run for a card that ends without a hand-in (`channels/dispatch.ts`): the
  * workspace files its coworker wrote. Apart from {@link EvidenceGate}, which judges a hand-in.
  */
-/** The card's rounds as their events, oldest first (`cardRounds` on the evidence gate). */
-export type CardRounds = {
-  cardRounds(tenantId: string, taskId: string): Promise<BaseEvent[][]>;
+/**
+ * What re-running a hand-in's checks reads of the card (`rerun-gate.ts`): the rounds of the coworker
+ * the card is with now, oldest first, and the shell commands an approval let through in them.
+ */
+export type CardHistory = {
+  cardHistory(
+    tenantId: string,
+    taskId: string,
+  ): Promise<{
+    rounds: { runId: string; events: BaseEvent[] }[];
+    approved: { command: string; runId: string; toolCallId: string }[];
+  }>;
 };
 
 export type RunFiles = {
@@ -413,7 +424,7 @@ function partMet(part: string, whole: string): boolean {
 export function createEvidenceGate(
   database: Database,
   options: { fileProbe?: FileProbe; appProbe?: AppProbe } = {},
-): EvidenceGate & RunFiles & CardRounds {
+): EvidenceGate & RunFiles & CardHistory {
   /** Every run the card has had: the one that opened it, the one on it now, and each in its history. */
   async function runsOf(tenantId: string, taskId: string): Promise<string[]> {
     const [card] = await database
@@ -516,13 +527,59 @@ export function createEvidenceGate(
 
   return {
     /**
-     * The card's rounds, oldest first, each as its events: for re-running a hand-in's checks
-     * (`rerun-gate.ts`), which compares with the latest run of a command. A round with nothing stored
-     * yet is the one still open here, so it comes last.
+     * For re-running a hand-in's checks (`rerun-gate.ts`), which compares with the latest run of a
+     * command on the coworker's own computer: only the rounds of the coworker the card is with now,
+     * and none from before its latest hand-over (a command the previous coworker ran is never run
+     * again on this one's computer, nor its output taken as the baseline). Oldest first; a round with
+     * nothing stored yet is the one still open here, so it comes last. With them, the shell commands
+     * an approval let through (or is about to) in those rounds, from the approval store.
      */
-    cardRounds: (tenantId, taskId) =>
-      runAsTenant(tenantId, async () =>
-        (await roundsOf(tenantId, taskId))
+    cardHistory: (tenantId, taskId) =>
+      runAsTenant(tenantId, async () => {
+        const [card] = await database
+          .select({ agentId: tasks.executorAgentId })
+          .from(tasks)
+          .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
+          .limit(1);
+        const agentId = card?.agentId ?? null;
+        const [handedOver] = await database
+          .select({ at: sql<string>`max(${taskEvents.createdAt})` })
+          .from(taskEvents)
+          .where(
+            and(
+              eq(taskEvents.tenantId, tenantId),
+              eq(taskEvents.taskId, taskId),
+              eq(taskEvents.kind, "reassigned"),
+            ),
+          );
+        const since = handedOver?.at ? new Date(handedOver.at).getTime() : null;
+        const rounds = await roundsOf(tenantId, taskId);
+        const runners = rounds.length
+          ? await database
+              .select({ id: threadRuns.id, agentId: threadRuns.agentId })
+              .from(threadRuns)
+              .where(
+                and(
+                  eq(threadRuns.tenantId, tenantId),
+                  inArray(
+                    threadRuns.id,
+                    rounds.map((round) => round.runId),
+                  ),
+                ),
+              )
+          : [];
+        const ranBy = new Map(runners.map((row) => [row.id, row.agentId]));
+        const kept = rounds
+          .filter((round) => {
+            const by = ranBy.get(round.runId);
+            if (by !== undefined && agentId !== null && by !== agentId)
+              return false;
+            return !(
+              since !== null &&
+              round.startedAt !== undefined &&
+              round.startedAt < since
+            );
+          })
           .sort((a, b) =>
             a.startedAt === b.startedAt
               ? 0
@@ -531,9 +588,46 @@ export function createEvidenceGate(
                 : b.startedAt === undefined
                   ? -1
                   : a.startedAt - b.startedAt,
-          )
-          .map((round) => round.events),
-      ),
+          );
+        const requests = kept.length
+          ? await database
+              .select({
+                runId: approvalRequests.runId,
+                toolCallId: approvalRequests.toolCallId,
+                action: approvalRequests.action,
+              })
+              .from(approvalRequests)
+              .where(
+                and(
+                  eq(approvalRequests.tenantId, tenantId),
+                  inArray(
+                    approvalRequests.runId,
+                    kept.map((round) => round.runId),
+                  ),
+                  inArray(approvalRequests.status, [
+                    "approved",
+                    "consumed",
+                    "completed",
+                  ]),
+                  sql`${approvalRequests.action}->>'toolRef' = 'computer_run_command'`,
+                ),
+              )
+          : [];
+        const approved = requests.flatMap((row) => {
+          const action = row.action as {
+            args?: { command?: unknown };
+            subject?: { command?: unknown };
+          };
+          const command = action.subject?.command ?? action.args?.command;
+          return typeof command === "string" && command.trim()
+            ? [{ command, runId: row.runId, toolCallId: row.toolCallId }]
+            : [];
+        });
+        return {
+          rounds: kept.map(({ runId, events }) => ({ runId, events })),
+          approved,
+        };
+      }),
 
     workspaceFilesOf: ({ tenantId, runRef }) =>
       runAsTenant(tenantId, async () => {

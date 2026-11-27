@@ -624,7 +624,11 @@ export function deliveryTools(options: {
           else {
             const checked = await rerunChecks({
               commands: value.rerun,
-              runs: cardRoundRuns(await deps.cardRounds(tenantId, card.id)),
+              runs: await deps
+                .cardHistory(tenantId, card.id)
+                .then((history) =>
+                  cardRoundRuns(history.rounds, history.approved),
+                ),
               canExecute: await deps.canExecute(),
               wouldAllow: (command) => deps.wouldAllow(command),
               run: (command) => deps.run(command, execution?.signal),

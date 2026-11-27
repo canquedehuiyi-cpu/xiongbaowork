@@ -29,9 +29,12 @@ const ran = (
   command,
   exitCode,
   output,
+  stdout: output,
+  stderr: "",
   truncated: false,
   approved: false,
   at,
+  toolCallId: `call-${at}`,
   ...extra,
 });
 
@@ -352,6 +355,124 @@ describe("复跑", () => {
   });
 });
 
+describe("复跑：允许名单和截断对齐（评审 C1、I2）", () => {
+  test("基准只认整条命令解析后同一个核对：含有声明命令的复合命令不当基准", async () => {
+    const stub = runner((command) => result(command, 0, "12 passed"));
+    const outcome = await rerunChecks({
+      commands: ["bun test"],
+      runs: [
+        ran("bun test", 0, "12 passed", 1),
+        ran("npm install && bun test", 0, "12 passed", 5),
+        ran("git clean -fdx && bun test", 0, "12 passed", 6),
+      ],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    expect(stub.calls).toEqual(["bun test"]);
+    expect(outcome.outcomes).toEqual([
+      { command: "bun test", result: "passed" },
+    ]);
+  });
+
+  test("声明的命令不在允许名单里：未复核，什么都不执行", async () => {
+    const stub = runner((command) => result(command, 0, ""));
+    const outcome = await rerunChecks({
+      commands: ["bunx biome check --write .", "jest -u", "make clean"],
+      runs: [
+        ran("bunx biome check --write .", 0, "", 1),
+        ran("jest -u", 0, "", 2),
+        ran("make clean", 0, "", 3),
+      ],
+      canExecute: true,
+      wouldAllow: allow,
+      run: stub.run,
+    });
+    expect(outcome.outcomes.map((one) => one.result)).toEqual([
+      "unverified",
+      "unverified",
+      "unverified",
+    ]);
+    expect(stub.calls).toEqual([]);
+  });
+
+  test("执行的命令和声明的不同：交付记录另记实际执行的", async () => {
+    const outcome = await rerunChecks({
+      commands: ["bun test"],
+      runs: [ran("cd app && bun test 2>&1 | tail -5", 0, "3 passed", 1)],
+      canExecute: true,
+      wouldAllow: allow,
+      run: async (command) => result(command, 0, "3 passed"),
+    });
+    expect(outcome.outcomes).toEqual([
+      {
+        command: "bun test",
+        result: "passed",
+        ran: "cd app && bun test 2>&1 | tail -5",
+      },
+    ]);
+  });
+
+  test("长输出只留尾：按尾部比，复跑完整输出一致就通过", async () => {
+    const body = Array.from({ length: 400 }, (_, i) => `case ${i + 1} ok`).join(
+      "\n",
+    );
+    const outcome = await rerunChecks({
+      commands: ["bun test"],
+      runs: [
+        ran("bun test", 0, "", 1, {
+          stdout: `…（前面省略 390 行）…\n${body.split("\n").slice(-10).join("\n")}\n400 pass`,
+        }),
+      ],
+      canExecute: true,
+      wouldAllow: allow,
+      run: async (command) => result(command, 0, `${body}\n400 pass`),
+    });
+    expect(outcome).toEqual({
+      bounce: null,
+      outcomes: [{ command: "bun test", result: "passed" }],
+    });
+  });
+
+  test("长输出留头尾：开头和结尾各自对齐；数字真的变了照样挡回", async () => {
+    const body = Array.from({ length: 300 }, (_, i) => `case ${i + 1} ok`).join(
+      "\n",
+    );
+    const stored = `Running 300 tests\n…（中间省略 298 行，约 9000 字节）…\ncase 300 ok\n300 pass`;
+    const check = (rerun: string) =>
+      rerunChecks({
+        commands: ["bun test"],
+        runs: [ran("bun test", 0, "", 1, { stdout: stored })],
+        canExecute: true,
+        wouldAllow: allow,
+        run: async (command) => result(command, 0, rerun),
+      });
+    expect(
+      (await check(`Running 300 tests\n${body}\n300 pass`)).outcomes[0]?.result,
+    ).toBe("passed");
+    const changed = await check(`Running 300 tests\n${body}\n250 pass`);
+    expect(changed.outcomes[0]?.result).toBe("mismatch");
+    expect(changed.bounce).toContain("结尾");
+  });
+
+  test("截断后对不齐：未复核，不挡回", async () => {
+    const outcome = await rerunChecks({
+      commands: ["bun test"],
+      runs: [
+        ran("bun test", 0, "", 1, {
+          stdout: "a 1\na 2\n…（中间省略 300 行，约 9000 字节）…\nb 3\nb 4",
+        }),
+      ],
+      canExecute: true,
+      wouldAllow: allow,
+      run: async (command) => result(command, 0, "only 5"),
+    });
+    expect(outcome.bounce).toBeNull();
+    expect(outcome.outcomes[0]?.result).toBe("unverified");
+    expect(outcome.outcomes[0]?.why).toContain("对不齐");
+  });
+});
+
 describe("cardCommandRuns", () => {
   const call = (
     id: string,
@@ -406,17 +527,23 @@ describe("cardCommandRuns", () => {
         command: "bun test",
         exitCode: 0,
         output: "3 pass\nwarn",
+        stdout: "3 pass",
+        stderr: "warn",
         truncated: false,
         approved: false,
         at: 0,
+        toolCallId: "a",
       },
       {
         command: "pytest -q",
         exitCode: 1,
         output: "1 failed",
+        stdout: "1 failed",
+        stderr: "",
         truncated: true,
         approved: false,
         at: 4,
+        toolCallId: "b",
       },
     ]);
   });
@@ -433,18 +560,20 @@ describe("cardCommandRuns", () => {
     expect(runs).toEqual([]);
   });
 
-  test("只留了头尾的输出算截断", () => {
+  test("存下的两路输出原样留着（省略标记交给比较时按截断方式对齐）", () => {
+    const stdout = "start 1\n…（中间省略 9 行，约 99 字节）…\nend 2";
     const [only] = cardCommandRuns(
       call("a", "bun test", {
         ok: true,
         exitCode: 0,
-        stdout: "head…tail",
+        stdout,
         stderr: "",
         truncated: false,
         outputNote: "完整内容存到工作区",
       }),
     );
-    expect(only?.truncated).toBe(true);
+    expect(only?.stdout).toBe(stdout);
+    expect(only?.truncated).toBe(false);
   });
 
   test("等过审批的调用记为经审批执行（等人事件或中断里写着 approval）", () => {
@@ -484,13 +613,88 @@ describe("cardCommandRuns", () => {
 
   test("一轮一轮地读：同一个调用 id 在不同轮里是两次运行，先后接着排", () => {
     const runs = cardRoundRuns([
-      call("a", "bun test", { ok: true, exitCode: 0, stdout: "1 passed" }),
-      call("a", "bun test", { ok: true, exitCode: 1, stdout: "1 failed" }),
+      {
+        runId: "r1",
+        events: call("a", "bun test", {
+          ok: true,
+          exitCode: 0,
+          stdout: "1 passed",
+        }),
+      },
+      {
+        runId: "r2",
+        events: call("a", "bun test", {
+          ok: true,
+          exitCode: 1,
+          stdout: "1 failed",
+        }),
+      },
     ]);
-    expect(runs.map((run) => [run.exitCode, run.at])).toEqual([
-      [0, 0],
-      [1, 4],
+    expect(runs.map((run) => [run.exitCode, run.at, run.runId])).toEqual([
+      [0, 0, "r1"],
+      [1, 4, "r2"],
     ]);
+  });
+
+  test("跨轮的审批（评审 I1）：第 1 轮等审批，第 2 轮这条命令再跑，也记经审批", () => {
+    const runs = cardRoundRuns([
+      {
+        runId: "r1",
+        events: [
+          ...call("a", "bun test"),
+          {
+            type: EventType.CUSTOM,
+            name: HEADLESS_WAITING_EVENT,
+            value: { kind: "approval", continuation: { toolCallId: "a" } },
+          } as BaseEvent,
+        ],
+      },
+      {
+        runId: "r2",
+        events: call("x", "bun  test", {
+          ok: true,
+          exitCode: 0,
+          stdout: "1 passed",
+        }),
+      },
+    ]);
+    expect(runs.map((run) => [run.runId, run.approved])).toEqual([
+      ["r1", true],
+      ["r2", true],
+    ]);
+  });
+
+  test("审批存储里经审批执行过的（按运行号加调用 id，或按命令）：记经审批；两种来源取并集", () => {
+    const rounds = [
+      {
+        runId: "r1",
+        events: call("a", "pytest -q", { ok: true, exitCode: 0, stdout: "1" }),
+      },
+      {
+        runId: "r2",
+        events: [
+          ...call("b", "go test ./...", { ok: true, exitCode: 0, stdout: "2" }),
+          ...call("c", "make test", { ok: true, exitCode: 0, stdout: "3" }),
+        ],
+      },
+    ];
+    const runs = cardRoundRuns(rounds, [
+      // 按运行号加调用 id 对上。
+      { runId: "r1", toolCallId: "a", command: "pytest  -q" },
+      // 审批执行的那次不在任何一轮的事件里，只按命令对上同一条命令。
+      { command: "go test ./..." },
+    ]);
+    expect(runs.map((run) => [run.command, run.approved])).toEqual([
+      ["pytest -q", true],
+      ["go test ./...", true],
+      ["make test", false],
+    ]);
+    // 另一轮里的同一个调用 id 不算。
+    expect(
+      cardRoundRuns(rounds, [
+        { runId: "r9", toolCallId: "c", command: "rm -rf x" },
+      ]).map((run) => run.approved),
+    ).toEqual([false, false, false]);
   });
 
   test("被拒绝或出错的调用记为没成功", () => {

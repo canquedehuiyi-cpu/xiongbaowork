@@ -2906,8 +2906,8 @@ await startupLifecycle.run(async (startup) => {
        * 先问这个人能不能用这台电脑；先用审批服务只读预判，真执行时也不开审批请求。没有电脑时都记「未复核」。
        */
       rerun: {
-        cardRounds: (tenantId, taskId) =>
-          evidenceGate.cardRounds(tenantId, taskId),
+        cardHistory: (tenantId, taskId) =>
+          evidenceGate.cardHistory(tenantId, taskId),
         rerunBounces: (tenantId, taskId) =>
           rerunBouncesOf(database, tenantId, taskId),
         ...(computerGateway
