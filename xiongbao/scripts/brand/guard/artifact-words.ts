@@ -11,15 +11,12 @@ export const WORD = new RegExp(
 /**
  * Why a built artifact may still say a word: `dependency`, the third-party library's own code and names
  * bundled with it; `kept`, an old value the source keeps by ruling (brand-leak-allowlist.json, `kept`);
- * `build-path`, the build machine's path, a word of its own (see scan-artifact.ts); `until-task-26`, the
- * database superuser and its database, renamed by Task 26 with the migration baseline (scan.ts,
- * UNTIL_TASK_26), when these entries go too.
+ * `build-path`, the build machine's path, a word of its own (see scan-artifact.ts).
  */
 export const ARTIFACT_CATEGORIES = [
   "dependency",
   "kept",
   "build-path",
-  "until-task-26",
 ] as const;
 
 // `word` or `prefix`, never both; a prefix entry is only for the third-party library.

@@ -93,7 +93,7 @@ export const personalMemories = pgTable(
     intelligenceMemoryId: text("intelligence_memory_id"),
     /** sha256 of the content last written to Intelligence, so an edit is mirrored exactly once. */
     intelligenceDigest: text("intelligence_digest"),
-    /** 这条是本人纠正员工时抽出来的（0242）。 */
+    /** 这条是本人纠正员工时抽出来的（迁移 0001_memory_corrections，合进 main 时编号 0242）。 */
     fromCorrection: boolean("from_correction").notNull().default(false),
     /** 本人就这件事纠正过几次；不是纠正的为 0。 */
     correctionCount: integer("correction_count").notNull().default(0),

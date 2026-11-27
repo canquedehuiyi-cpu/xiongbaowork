@@ -31,9 +31,9 @@ afterEach(() => {
 describe("the database address", () => {
   test("is taken out of the environment, so Bun cannot prefer it to the parts", () => {
     process.env.DATABASE_URL =
-      "postgres://openbot:openbot@127.0.0.1:5432/xiongbao";
+      "postgres://xiongbao:xiongbao@127.0.0.1:5432/xiongbao";
 
-    createDatabase("postgres://openbot:openbot@127.0.0.1:5432/xiongbao");
+    createDatabase("postgres://xiongbao:xiongbao@127.0.0.1:5432/xiongbao");
 
     expect(process.env.DATABASE_URL).toBeUndefined();
   });
@@ -53,7 +53,7 @@ describe("the database address", () => {
     let message = "";
     try {
       createDatabase(
-        `postgres://openbot:${secret}@127.0.0.1:notaport/xiongbao`,
+        `postgres://xiongbao:${secret}@127.0.0.1:notaport/xiongbao`,
       );
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
@@ -64,14 +64,14 @@ describe("the database address", () => {
 
   test("refuses a URL with no host, which would otherwise parse and connect nowhere", () => {
     // `new URL` accepts this: the scheme is "xiongbao:" and there is no host at all.
-    expect(() => createDatabase("openbot:openbot@localhost/xiongbao")).toThrow(
-      /names no host/,
-    );
+    expect(() =>
+      createDatabase("xiongbao:xiongbao@localhost/xiongbao"),
+    ).toThrow(/names no host/);
   });
 
   test("refuses a URL that names no database, rather than connecting to a default", () => {
     expect(() =>
-      createDatabase("postgres://openbot:openbot@127.0.0.1:5432"),
+      createDatabase("postgres://xiongbao:xiongbao@127.0.0.1:5432"),
     ).toThrow(/names no database/);
   });
 
@@ -82,7 +82,7 @@ describe("the database address", () => {
      * and the range, the way every other malformed address does.
      */
     expect(() =>
-      createDatabase("postgres://openbot:openbot@127.0.0.1:0/xiongbao"),
+      createDatabase("postgres://xiongbao:xiongbao@127.0.0.1:0/xiongbao"),
     ).toThrow(/DATABASE_URL names a port that is not between 1 and 65535/);
   });
 
@@ -94,26 +94,26 @@ describe("the database address", () => {
      * find a literal `%`.
      */
     expect(() =>
-      createDatabase("postgres://openbot:100%pure@127.0.0.1:5432/xiongbao"),
+      createDatabase("postgres://xiongbao:100%pure@127.0.0.1:5432/xiongbao"),
     ).toThrow(/DATABASE_URL has a password that is not percent-encoded/);
   });
 
   test("refuses a username holding one too", () => {
     expect(() =>
-      createDatabase("postgres://open%bot:openbot@127.0.0.1:5432/xiongbao"),
+      createDatabase("postgres://open%bot:xiongbao@127.0.0.1:5432/xiongbao"),
     ).toThrow(/DATABASE_URL has a username that is not percent-encoded/);
   });
 
   test("refuses a database name holding one too", () => {
     expect(() =>
-      createDatabase("postgres://openbot:openbot@127.0.0.1:5432/open%bot"),
+      createDatabase("postgres://xiongbao:xiongbao@127.0.0.1:5432/open%bot"),
     ).toThrow(/DATABASE_URL has a database name that is not percent-encoded/);
   });
 
   test("still accepts a password that IS percent-encoded, decoding it", () => {
     // The escape a correctly written password uses: `%40` is `@`, which cannot be written raw.
     expect(() =>
-      createDatabase("postgres://openbot:p%40ss@127.0.0.1:5432/xiongbao"),
+      createDatabase("postgres://xiongbao:p%40ss@127.0.0.1:5432/xiongbao"),
     ).not.toThrow();
   });
 
@@ -155,7 +155,7 @@ describe("connection parameters on the URL", () => {
  * tell a managed database to carry, so the documented configuration could not connect at all.
  */
 describe("sslmode on the URL", () => {
-  const base = "postgres://openbot:openbot@db.example.com:5432/xiongbao";
+  const base = "postgres://xiongbao:xiongbao@db.example.com:5432/xiongbao";
 
   test("require encrypts without checking the certificate, as libpq's require does", () => {
     const options = addressOf(`${base}?sslmode=require`);
@@ -233,7 +233,7 @@ describe("sslmode on the URL", () => {
     let message = "";
     try {
       addressOf(
-        `postgres://openbot:${secret}@db.example.com:5432/xiongbao?sslmode=verify-full&sslrootcert=/nonexistent/ca.pem`,
+        `postgres://xiongbao:${secret}@db.example.com:5432/xiongbao?sslmode=verify-full&sslrootcert=/nonexistent/ca.pem`,
         "1.4.0",
       );
     } catch (error) {

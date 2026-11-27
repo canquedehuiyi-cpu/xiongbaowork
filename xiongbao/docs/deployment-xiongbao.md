@@ -189,8 +189,8 @@ server {
 
 ## 4. 外接 PostgreSQL：分开迁移和运行
 
-外接数据库推荐 pgvector/pg17，先准备名为 `openbot` 的迁移 owner 与独立数据库。
-迁移 `0054` 的 default privileges 指定 owner 名 `openbot`；用不同 owner 时需逐项检查授权。
+外接数据库推荐 pgvector/pg17，先准备迁移 owner 与独立数据库（名字不限，示例用 `xiongbao`）。
+基线迁移的 default privileges 属于执行迁移的 owner 自己，之后的迁移新建的表自动授给应用角色；请始终用同一个 owner 迁移。
 下面连接串是格式示例，密码使用实际私密值并按 URL 规则编码。
 
 ```dotenv

@@ -1,0 +1,96 @@
+# The upgrade from the last release to this tree, rehearsed before the release: the published v0.2.16 image
+# builds a database volume (its whole migration history, its renamed superuser), then this tree's image
+# takes it over (xiongbao/scripts/ci/upgrade-rehearsal.sh): the ledger taken onto the baseline the history
+# was squashed into, a second start doing nothing, the way back to v0.2.16, and a volume whose structure
+# was changed by hand refused with the difference printed. See that script for what it asserts.
+#
+# Runs on pull requests that touch what the upgrade runs, and by hand (Actions → this workflow → Run
+# workflow) with the release to upgrade from. That release's image is pulled from GHCR by the digest its
+# release recorded, without logging in: the package is public.
+name: 熊宝升级演练（v0.2.16 → 本分支）
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/upgrade-rehearsal.yml
+      - xiongbao/Dockerfile
+      - xiongbao/docker/s6/**
+      - xiongbao/scripts/ci/upgrade-rehearsal.sh
+      - xiongbao/server/drizzle/**
+      - xiongbao/server/scripts/migrate.ts
+      - xiongbao/server/scripts/rollback-after-baseline.ts
+      - xiongbao/server/src/db/apply-migrations.ts
+      - xiongbao/server/src/db/baseline-adoption.ts
+      - xiongbao/server/src/db/migration-reach.ts
+      - xiongbao/server/src/db/schema-structure.ts
+      - xiongbao/server/src/db/upgrade-gate.ts
+  workflow_dispatch:
+    inputs:
+      from_tag:
+        description: 从哪个已发布版本升级（它的镜像建库）
+        type: string
+        default: v0.2.16
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-rehearsal-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: xiongbao
+
+jobs:
+  rehearsal:
+    name: upgrade from ${{ inputs.from_tag || 'v0.2.16' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FROM_TAG: ${{ inputs.from_tag || 'v0.2.16' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: The image of the release upgraded from (its recorded GHCR digest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$FROM_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Not a release tag: '$FROM_TAG'"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/from" "$RUNNER_TEMP/rehearsal"
+          gh release download "$FROM_TAG" -R "$GITHUB_REPOSITORY" --pattern container-images.json --dir "$RUNNER_TEMP/from"
+          reference="$(jq -er '.ghcr.reference' "$RUNNER_TEMP/from/container-images.json")"
+          if [[ ! "$reference" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::$FROM_TAG's container-images.json has no GHCR digest: '$reference'"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/docker-config"
+          printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
+          DOCKER_CONFIG="$RUNNER_TEMP/docker-config" docker pull "$reference"
+          printf 'from_tag=%s\nfrom_image=%s\n' "$FROM_TAG" "$reference" | tee "$RUNNER_TEMP/rehearsal/from.txt"
+          echo "OLD_IMAGE=$reference" >> "$GITHUB_ENV"
+      - name: Build this tree's image
+        run: docker build -f Dockerfile -t xiongbao:rehearsal .
+      - name: Rehearse the upgrade
+        run: bash scripts/ci/upgrade-rehearsal.sh "$OLD_IMAGE" xiongbao:rehearsal "$RUNNER_TEMP/rehearsal"
+      - name: Print container logs (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/rehearsal/*.log; do
+            [ -f "$f" ] && bash scripts/ci/print-diagnostics.sh "$f" || true
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: upgrade-rehearsal-evidence
+          path: ${{ runner.temp }}/rehearsal/
+          if-no-files-found: error

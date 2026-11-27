@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 import { getTableName, is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import * as schema from "../src/db/schema";
@@ -561,62 +560,5 @@ describe("XiongBao database schema", () => {
         method: "btree",
       },
     ]);
-  });
-
-  /*
-   * The callback columns arrive as an alteration, not in the base schema.
-   *
-   * Every deployment of this has already applied 0000, so editing it in place changes a file the
-   * database has recorded as run and the columns never appear. They are added by 0001, and this
-   * says so, because the alternative failure is silent: the code reads a column the deployment
-   * does not have.
-   */
-  test("adds the callback token columns in their own migration", async () => {
-    const migration = await readFile(
-      new URL("../drizzle/0001_swift_morph.sql", import.meta.url),
-      "utf8",
-    );
-    expect(migration).toContain(
-      `ALTER TABLE "agent_profiles" ADD COLUMN "callback_token_hash" text;`,
-    );
-    expect(migration).toContain(
-      `ALTER TABLE "agent_profiles" ADD COLUMN "callback_token_issued_at" timestamp with time zone;`,
-    );
-  });
-
-  test("keeps the agent profile migration aligned with the schema", async () => {
-    const migration = await readFile(
-      new URL("../drizzle/0000_schema.sql", import.meta.url),
-      "utf8",
-    );
-    const normalizedMigration = migration.replace(/\s+/g, " ").trim();
-
-    expect(normalizedMigration).toContain(
-      `CREATE TYPE "public"."agent_visibility" AS ENUM('public', 'private')`,
-    );
-    expect(normalizedMigration).toContain(
-      `"agent_id" text PRIMARY KEY NOT NULL, "owner_user_id" text, "title" text NOT NULL, "role_description" text NOT NULL, "avatar_seed" text NOT NULL, "visibility" "agent_visibility" NOT NULL, "deleted_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL, "updated_at" timestamp with time zone DEFAULT now() NOT NULL`,
-    );
-    expect(normalizedMigration).toContain(
-      `CREATE TABLE "agent_preferences" ( "user_id" text NOT NULL, "agent_id" text NOT NULL, "hidden_at" timestamp with time zone,`,
-    );
-    expect(normalizedMigration).toContain(
-      `CONSTRAINT "agent_preferences_user_id_agent_id_pk" PRIMARY KEY("user_id","agent_id")`,
-    );
-    expect(normalizedMigration).toContain(
-      `ALTER TABLE "agent_profiles" ADD CONSTRAINT "agent_profiles_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action`,
-    );
-    expect(normalizedMigration).toContain(
-      `ALTER TABLE "agent_profiles" ADD CONSTRAINT "agent_profiles_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action`,
-    );
-    expect(normalizedMigration).toContain(
-      `ALTER TABLE "agent_preferences" ADD CONSTRAINT "agent_preferences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action`,
-    );
-    expect(normalizedMigration).toContain(
-      `ALTER TABLE "agent_preferences" ADD CONSTRAINT "agent_preferences_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action`,
-    );
-    expect(normalizedMigration).toContain(
-      `CREATE INDEX "agent_profiles_visibility_deleted_idx" ON "agent_profiles" USING btree ("visibility","deleted_at")`,
-    );
   });
 });

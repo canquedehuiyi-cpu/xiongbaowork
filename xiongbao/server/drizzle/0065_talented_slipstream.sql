@@ -1,2 +1,0 @@
-ALTER TABLE "model_usage" DROP CONSTRAINT "model_usage_source_check";--> statement-breakpoint
-ALTER TABLE "model_usage" ADD CONSTRAINT "model_usage_source_check" CHECK ("model_usage"."source" IN ('configured', 'bound', 'observed', 'unknown'));

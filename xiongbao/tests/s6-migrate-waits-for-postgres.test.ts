@@ -9,6 +9,7 @@
  */
 import { afterEach, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -94,8 +95,8 @@ test("migrate.sh waits for the embedded database before it migrates", () => {
 });
 
 test("migrate.sh checks the volume may be migrated once the database is ready, before the migrator", () => {
-  // The check itself (a volume v0.2.15 made, v0.2.16's unfinished rename) is tested against real
-  // PostgreSQL by docker/tests/upgrade-gate.test.sh and, in the boot's order, rebrand-superuser.test.sh.
+  // The check itself (v0.2.16's unfinished rename, a volume under other names) is tested by
+  // docker/tests/upgrade-gate.test.sh; the migrator's half by server/tests/upgrade-gate.test.ts.
   const migrate = readFileSync(join(SCRIPTS, "migrate.sh"), "utf8");
   const ready = migrate.indexOf("echo 'migrate: embedded PostgreSQL is ready'");
   const gate = migrate.indexOf(
@@ -112,35 +113,40 @@ test("migrate.sh checks the volume may be migrated once the database is ready, b
   expect(statSync(join(SCRIPTS, "upgrade-gate.sh")).mode & 0o111).toBe(0o111);
 });
 
-test("migrate.sh renames the superuser and the database last, then writes the connection strings the API reads", () => {
-  // The rename and the strings themselves are tested against real PostgreSQL by
-  // docker/tests/rebrand-superuser.test.sh.
+test("migrate.sh logs in as xiongbao first, and writes the connection strings the API reads last", () => {
   const migrate = readFileSync(join(SCRIPTS, "migrate.sh"), "utf8");
-  // The names this boot connects with come from the database, before anything else talks to it.
-  const names = migrate.indexOf('"$SUPERUSER" names ');
-  const gate = migrate.indexOf('"$(dirname "$0")/upgrade-gate.sh" ');
-  expect(names).toBeGreaterThan(-1);
-  expect(gate).toBeGreaterThan(names);
-  // The first ask is the readiness wait; a refusal waiting cannot change (exit 3) stops at once instead
-  // of being reported as a database that never came up. Both are tested in rebrand-superuser.test.sh.
-  expect(migrate).toContain('"$SUPERUSER" names --wait 30 ');
-  expect(migrate).toMatch(/\n {2}3\) exit 1 ;;\n/);
-  // After the migrations and the application roles' passwords: no other session on the database.
-  const rename = migrate.indexOf('"$SUPERUSER" rename ');
-  expect(rename).toBeGreaterThan(migrate.indexOf("scripts/migrate.ts"));
-  expect(rename).toBeGreaterThan(migrate.lastIndexOf("psql"));
-  // Then the strings, under the names the database answers to after it, last.
-  const urls = migrate.indexOf('"$(dirname "$0")/database-urls.sh" ');
-  expect(urls).toBeGreaterThan(rename);
-  expect(migrate.lastIndexOf('"$SUPERUSER" names ')).toBeGreaterThan(rename);
-  expect(migrate.lastIndexOf('"$SUPERUSER" names ')).toBeLessThan(urls);
-  expect(migrate.trim().split("\n").at(-1)).toStartWith(
-    '"$(dirname "$0")/database-urls.sh" ',
+  // Every volume's superuser and database are xiongbao: new ones are created under it (postgres-init.sh),
+  // and v0.2.16 renamed the older ones. Nothing renames anything any more.
+  expect(migrate).toContain("DB_USER=xiongbao\n");
+  expect(migrate).toContain("DB_NAME=xiongbao\n");
+  expect(migrate).not.toContain("rebrand-superuser");
+  expect(existsSync(join(SCRIPTS, "rebrand-superuser.sh"))).toBe(false);
+  // The readiness wait is a login as that superuser, for up to 30 seconds, before the check; a login that
+  // never succeeds says the volume may predate v0.2.16 and stops.
+  const login = migrate.indexOf(
+    '-U "$DB_USER" -d "$DB_NAME" \\\n  -c \'SELECT 1\'',
   );
-  // migrate.sh no longer reads an owner URL postgres-init wrote with names it could not know yet.
+  const gate = migrate.indexOf('"$(dirname "$0")/upgrade-gate.sh" ');
+  expect(login).toBeGreaterThan(-1);
+  expect(gate).toBeGreaterThan(login);
+  expect(migrate).toContain('[ "$waited" -ge 30 ]');
+  expect(migrate).toContain("先换回 v0.2.16 镜像启动一次");
+  // The strings, last, under those names.
+  expect(migrate.trim().split("\n").at(-1)).toBe(
+    '"$(dirname "$0")/database-urls.sh" "$DB_USER" "$DB_NAME"',
+  );
+  expect(migrate.lastIndexOf("psql")).toBeLessThan(
+    migrate.indexOf('"$(dirname "$0")/database-urls.sh" '),
+  );
+  // migrate.sh no longer reads an owner URL postgres-init wrote.
   expect(migrate).not.toContain("MIGRATION_DATABASE_URL");
   const init = readFileSync(join(SCRIPTS, "postgres-init.sh"), "utf8");
   expect(init).not.toContain("/run/s6/container_environment");
-  for (const script of ["rebrand-superuser.sh", "database-urls.sh"])
-    expect(statSync(join(SCRIPTS, script)).mode & 0o111).toBe(0o111);
+  // A new volume is created under xiongbao, with no extension the baseline does not have.
+  expect(init).toContain(
+    '"$BIN/initdb" -D "$DATA" -A scram-sha-256 -U xiongbao ',
+  );
+  expect(init).toContain('"$BIN/createdb" -h 127.0.0.1 -U xiongbao xiongbao');
+  expect(init).not.toContain("CREATE EXTENSION");
+  expect(statSync(join(SCRIPTS, "database-urls.sh")).mode & 0o111).toBe(0o111);
 });

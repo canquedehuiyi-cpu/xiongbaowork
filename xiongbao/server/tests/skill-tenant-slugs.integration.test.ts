@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createDatabase } from "../src/db/client";
 import {
@@ -15,11 +14,11 @@ import {
 } from "../src/db/schema";
 import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
-import { repeatAfterEach } from "../src/work/loop";
 import {
   type LoadedTenantPackage,
   synchronizeTenantPackage,
 } from "../src/tenant-package";
+import { repeatAfterEach } from "../src/work/loop";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -141,32 +140,6 @@ const catalogue = (slugs: string[]): LoadedTenantPackage => ({
   checksum: `skill-slug-${suite}`,
 });
 
-/**
- * The data statement of migration 0113, read from the file rather than restated here, so the test
- * proves what the migration does and not what somebody remembered it doing.
- */
-async function rekeyStatement() {
-  const file = await readFile(
-    new URL(
-      "../recovery/recovery-20261018-v1/sql/0113_tenant_skill_slugs.sql",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-  const statement = file
-    .split("--> statement-breakpoint")
-    .map((part) =>
-      part
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("--"))
-        .join("\n")
-        .trim(),
-    )
-    .find((part) => /^UPDATE\s+"skills"/i.test(part));
-  if (!statement) throw new Error("0113 has no UPDATE on skills");
-  return statement.replace(/;\s*$/, "");
-}
-
 beforeAll(async () => {
   // The server and its tools are a deployment catalogue row that both tenants read: written in the
   // `system` frame that owns the catalogue, as it was stamped before the frame was explicit.
@@ -217,61 +190,6 @@ afterAll(async () => {
     await database.delete(mcpServers).where(eq(mcpServers.id, server));
   });
   await database.$client.close();
-});
-
-describe("(a) an old-style tenant row through migration 0113 and the catalogue sync", () => {
-  test("both rows survive, the tenant's on a uuid id with its tools carried along", async () => {
-    // The shape every tenant row had before 0113: id = slug.
-    await asTenant(tenantA, async () => {
-      await database.insert(skills).values({
-        id: legacySlug,
-        slug: legacySlug,
-        ownerUserId: null,
-        title: "Mine",
-        summary: "Written here.",
-        instructions: "Tenant A's own instructions.",
-        origin: "yours",
-      });
-      await database
-        .insert(skillTools)
-        .values({ skillId: legacySlug, ref: refA, declaredBy: null });
-    });
-
-    // 0113's re-key, in the tenant's frame so it reaches only this suite's rows. The cascade is what
-    // carries `skill_tools`; without `ON UPDATE CASCADE` this statement fails on the foreign key.
-    const statement = await rekeyStatement();
-    await asTenant(tenantA, async () => database.execute(sql.raw(statement)));
-
-    await synchronizeTenantPackage(database, catalogue([legacySlug]));
-
-    const rows = await allRows(legacySlug);
-    expect(rows).toHaveLength(2);
-    const system = rows.find((row) => row.tenantId === "system");
-    const tenant = rows.find((row) => row.tenantId === tenantA);
-    expect(system?.id).toBe(legacySlug);
-    expect(system?.origin).toBe("catalogue");
-    expect(tenant?.id).toMatch(UUID);
-    expect(tenant?.instructions).toBe("Tenant A's own instructions.");
-    expect(await toolsOf(tenant?.id as string)).toEqual([refA]);
-    expect(await toolsOf(legacySlug)).toEqual([refB]);
-
-    // A second sync neither collides with the tenant's row nor overwrites it.
-    await synchronizeTenantPackage(database, catalogue([legacySlug]));
-    const again = await allRows(legacySlug);
-    expect(again).toHaveLength(2);
-    expect(again.find((row) => row.tenantId === tenantA)).toEqual(tenant);
-  });
-
-  test("the tenant's row shadows the catalogue's in its own list, and only there", async () => {
-    const [own] = await listed(tenantA, legacySlug);
-    expect(own?.instructions).toBe("Tenant A's own instructions.");
-    expect(own?.tools).toEqual([refA]);
-    expect(await listed(tenantA, legacySlug)).toHaveLength(1);
-
-    const [other] = await listed(tenantB, legacySlug);
-    expect(other?.id).toBe(legacySlug);
-    expect(other?.instructions).toBe("The catalogue's instructions.");
-  });
 });
 
 describe("(b) two tenants writing the same slug", () => {

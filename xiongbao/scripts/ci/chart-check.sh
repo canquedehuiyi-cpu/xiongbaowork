@@ -35,7 +35,7 @@ inline=(
   --set-string database.existingSecret=
   --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao
 )
-owner=(--set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao)
+owner=(--set-string database.migrationUrl=postgres://xiongbao:o@db.internal:5432/xiongbao)
 
 helm dependency build "$chart" >/dev/null
 for values in "$external" "$bundled"; do
@@ -65,7 +65,7 @@ out="$(render --values "$external" "${inline[@]}" "${owner[@]}" \
   fail "External database inline: database.roleWriterUrl did not reach the API."
 echo "ok: external database inline carries the role-writer URL"
 # The migrations Job migrates as the owner, never as the API's xiongbao_app.
-[[ "$out" == *'value: "postgres://openbot:o@db.internal:5432/xiongbao"'* ]] ||
+[[ "$out" == *'value: "postgres://xiongbao:o@db.internal:5432/xiongbao"'* ]] ||
   fail "External database inline: the migrations Job is not given database.migrationUrl."
 echo "ok: external database inline migrates with the owner's URL"
 

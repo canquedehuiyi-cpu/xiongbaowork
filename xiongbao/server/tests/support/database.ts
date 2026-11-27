@@ -10,16 +10,8 @@ import { SQL } from "bun";
  */
 let cachedTestDatabaseUrl: string | undefined;
 
-/**
- * The names a live database goes by, both refused: the first is the name a new volume, a development
- * Compose install from before v0.2.16 and CI's own superuser still carry until the migrations are squashed
- * into a baseline (R4 Task 26, which drops it from here), the second the name since; either can be
- * somebody's real data.
- */
-const LIVE_DATABASE_NAMES: ReadonlySet<string> = new Set([
-  "openbot",
-  "xiongbao",
-]);
+/** The name a live database goes by (development Compose, the delivery image): somebody's real data. */
+const LIVE_DATABASE_NAMES: ReadonlySet<string> = new Set(["xiongbao"]);
 
 export function testDatabaseUrl() {
   cachedTestDatabaseUrl ??= testDatabaseUrlFrom(process.env);
@@ -41,7 +33,7 @@ export function testDatabaseUrlFrom(
     url = new URL(raw);
   } catch {
     throw new Error(
-      "TEST_DATABASE_URL must be a PostgreSQL URL such as postgres://openbot:openbot@localhost:5432/xiongbao_test.",
+      "TEST_DATABASE_URL must be a PostgreSQL URL such as postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test.",
     );
   }
   if (!/^postgres(?:ql)?:$/.test(url.protocol)) {

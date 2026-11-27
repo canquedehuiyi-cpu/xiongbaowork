@@ -400,17 +400,20 @@ describe("the RLS enforcement mode a deployment runs with", () => {
 });
 
 /**
- * `0054_app_role.sql` creates `xiongbao_app` with the password `openbot`, printed in this repository.
- * A migration cannot tell whether an operator changed it (PostgreSQL does not hand back passwords),
- * so the server checks the one credential it does hold: its own connection string.
+ * The baseline migration creates `xiongbao_app` with the password `xiongbao`, printed in this repository,
+ * and before v0.2.17 migration 0054 created it with the product's former name as the password. A
+ * migration cannot tell whether an operator changed either (PostgreSQL does not hand back passwords), so
+ * the server checks the one credential it does hold: its own connection string.
  */
 describe("the public default database password", () => {
   const appUrl = (password: string) =>
     `postgres://xiongbao_app:${password}@db.example.com:5432/xiongbao`;
 
   test.each([
-    appUrl("openbot"),
-    "postgres://openbot:openbot@db.example.com:5432/xiongbao",
+    appUrl("xiongbao"),
+    "postgres://xiongbao:xiongbao@db.example.com:5432/xiongbao",
+    "postgresql://xiongbao_app:%78iongbao@db.example.com/xiongbao",
+    // The default before v0.2.17, percent-encoded as an operator's URL may carry it.
     "postgresql://xiongbao_app:%6Fpenbot@db.example.com/xiongbao",
   ])("is recognised in %p", (url) => {
     expect(usesPublicDefaultDatabasePassword(url)).toBeTrue();
@@ -418,7 +421,7 @@ describe("the public default database password", () => {
 
   test.each([
     appUrl("a-real-secret"),
-    appUrl("openbot2"),
+    appUrl("xiongbao2"),
     "postgres://xiongbao_app@db.example.com/xiongbao",
     "not a url",
     undefined,
@@ -431,7 +434,7 @@ describe("the public default database password", () => {
     let thrown: unknown;
     try {
       checkDatabaseCredential({
-        url: appUrl("openbot"),
+        url: appUrl("xiongbao"),
         production: true,
         report: (event) => diagnostics.push(event),
       });
@@ -449,7 +452,7 @@ describe("the public default database password", () => {
   test("development is told and keeps running", () => {
     const diagnostics: ReadinessDiagnostic[] = [];
     checkDatabaseCredential({
-      url: appUrl("openbot"),
+      url: appUrl("xiongbao"),
       production: false,
       report: (event) => diagnostics.push(event),
     });
@@ -475,7 +478,7 @@ describe("the public default database password", () => {
  */
 describe("the public default role writer password", () => {
   const writerUrl =
-    "postgres://xiongbao_role_writer:openbot@postgres:5432/xiongbao";
+    "postgres://xiongbao_role_writer:xiongbao@postgres:5432/xiongbao";
 
   test("production refuses it, naming the role writer's setting", () => {
     const diagnostics: ReadinessDiagnostic[] = [];

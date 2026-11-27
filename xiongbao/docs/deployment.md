@@ -27,7 +27,7 @@ the container and is deliberately not published: it holds real logins and its on
 process beside it.
 
 **PostgreSQL, if you ask for it.** `EMBEDDED_POSTGRES=on` starts one inside the container, creates
-the database and the `vector` extension the first time, and runs the migrations on every start. It
+the database the first time, and runs the migrations on every start. It
 listens on loopback only and is never published, so there is no password to manage.
 
 Give it a volume at `/var/lib/postgresql` — the parent, not the data directory itself. Without one,
@@ -40,13 +40,10 @@ leaves the cluster uncreated — and because `api` waits on `postgres` and `migr
 starts, the platform reports the deploy a success, and the URL serves a 502. Mounting the parent
 leaves `data` as an ordinary subdirectory, which is what PostgreSQL asks for. A Docker named volume
 works either way; a platform volume does not. Platforms that offer no persistent volume are the ones to
-point at a managed database instead: set `DATABASE_URL` and leave `EMBEDDED_POSTGRES` off. The
-`vector` extension must be available there, and the role in `DATABASE_URL` has to be the one that
-creates it. The first migration creates it and migration `0010` drops it again, since nothing stores
-vectors any more, and only the extension's owner can drop it. So do not enable it ahead of time as
-an administrator: that leaves the migrations failing with `must be owner of extension vector`. RDS,
-Cloud SQL and Azure Database all offer it; [Your own database](../charts/xiongbao/README.md#your-own-database-which-is-what-a-real-deployment-uses)
-has the grant each one needs.
+point at a managed database instead: set `DATABASE_URL` and leave `EMBEDDED_POSTGRES` off. No
+extension is needed (the migration baseline uses none); the role that migrates must be able to create
+roles, since the baseline creates the application's two. [Your own database](../charts/xiongbao/README.md#your-own-database-which-is-what-a-real-deployment-uses)
+has what each managed service needs.
 
 **Not in it:**
 
@@ -120,7 +117,7 @@ and the fix would not be available.
 
 | Variable | |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL with the `vector` extension, or where the owner that migrates can create it. Not needed with `EMBEDDED_POSTGRES=on`. **The role it names must not be a superuser or hold `BYPASSRLS`** — PostgreSQL does not apply row-level security to either, not even under `FORCE ROW LEVEL SECURITY` (FORCE binds the table's owner, not the connected role), so an owner credentials string leaves tenant isolation resting on the application's tenant context alone. `0054_app_role.sql` creates `xiongbao_app` with the data privileges the server needs; migration and test-database reset are the two jobs that do need the owner, because creating a role and `TRUNCATE` are not data privileges. The server checks its own role at boot, prints `{"type":"rls-not-enforced", …}` on stderr and exits; `XIONGBAO_RLS_ENFORCE=warn` (or `NODE_ENV=development`/`test` with it unset) keeps it running instead. Under `NODE_ENV=production` it also refuses a `DATABASE_URL` whose password is still `0054`'s public `openbot`. See [the database role](configuration.md#the-database-role-and-xiongbao_rls_enforce). |
+| `DATABASE_URL` | PostgreSQL 16 or 17 (no extension needed). Not needed with `EMBEDDED_POSTGRES=on`. **The role it names must not be a superuser or hold `BYPASSRLS`** — PostgreSQL does not apply row-level security to either, not even under `FORCE ROW LEVEL SECURITY` (FORCE binds the table's owner, not the connected role), so an owner credentials string leaves tenant isolation resting on the application's tenant context alone. The baseline migration (`server/drizzle/0000_baseline.sql`) creates `xiongbao_app` with the data privileges the server needs; migration and test-database reset are the two jobs that do need the owner, because creating a role and `TRUNCATE` are not data privileges. The server checks its own role at boot, prints `{"type":"rls-not-enforced", …}` on stderr and exits; `XIONGBAO_RLS_ENFORCE=warn` (or `NODE_ENV=development`/`test` with it unset) keeps it running instead. Under `NODE_ENV=production` it also refuses a `DATABASE_URL` whose password is still a public default (the baseline's `xiongbao`, or the one migrations before v0.2.17 set). See [the database role](configuration.md#the-database-role-and-xiongbao_rls_enforce). |
 | an identity provider | `GOOGLE_OAUTH_*`, `MICROSOFT_OAUTH_*` or `OKTA_OAUTH_*`, with `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `INITIAL_ADMIN_EMAILS`. See the README |
 | `EMBEDDED_POSTGRES` | `on` to run the database inside the container. Off by default |
 | `KEY_ENCRYPTION_KEY` | base64 32 bytes. `openssl rand -base64 32`. The example key is refused in production |

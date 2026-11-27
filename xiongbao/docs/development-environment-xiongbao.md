@@ -24,30 +24,29 @@ docker start xiongbao-postgres-1        # 已存在则直接起；别新建
 
 | 用途 | 连接串 |
 | --- | --- |
-| 运行期（服务端、测试用） | `postgres://xiongbao_app:<口令>@127.0.0.1:5433/<库名>`（口令与库名同下一行；迁移 `0240` 把应用角色改名为 `xiongbao_app`，SCRAM 口令不变（md5 口令会被 PostgreSQL 清空，要重新设）） |
-| 迁移/清库（需要 owner 权限） | `postgres://openbot:openbot@127.0.0.1:5433/openbot` |
+| 运行期（服务端、测试用） | `postgres://xiongbao_app:<口令>@127.0.0.1:5433/<库名>`（库名同下一行；口令是基线建角色时的公开默认值 `xiongbao`，或你改过的） |
+| 迁移/清库（需要 owner 权限） | `postgres://xiongbao:xiongbao@127.0.0.1:5433/xiongbao` |
 
-`xiongbao_app` 能读写数据、能在 `public` schema 里建表（迁移 `0054` 给了 `CREATE`），但**不能 `TRUNCATE`**——清库脚本因此必须用 owner 串跑。RLS 对所有带 `tenant_id` 的表开启 `FORCE`，并且**读和写各自一条策略**（迁移 `0072`）：`FOR SELECT` 允许"本租户 / `system` / `platform`"，所以平台内置目录人人可读；`FOR INSERT`/`UPDATE`/`DELETE` 只认"本租户，或当前处于 `platform` 作用域"，所以拿着别人的 id 也改不动、删不掉平台行。应用层仍然比对 `currentTenant()`（`src/waker-groups/store.ts` 是范例），但那是副防线而不是唯一的防线。
+v0.2.17 起超级用户、口令、库名都叫 `xiongbao`（迁移合成基线之后，不再需要改名前的超级用户）。这台机器上 v0.2.17 之前建的数据卷仍是旧超级用户，要删卷重建一次（`docker compose down -v` 后重新起、重新迁移）。
 
-> **两个坑（本仓库当前实况）**：① 角色决定主防线是否存在——`openbot` 是超级用户，**RLS 不约束超级用户**（`FORCE` 只管表 owner），照 owner 串起服务端就只剩应用层一道，且静默。`.env.example` 现已默认 `xiongbao_app`；`docker-compose.yml` 里只有一次性的 `migrate` 服务用 owner 串（建角色必须它）。服务端启动时会查 `pg_roles`，发现自己是超级用户或 `BYPASSRLS` 就 `console.error` 一条 `rls-not-enforced`，设 `XIONGBAO_RLS_ENFORCE=refuse` 则直接拒绝启动（判定函数与绊线测试在 `src/db/rls-role.ts` / `tests/rls-role.test.ts`）。② `deployment_packages` 被豁免于 FORCE 策略（`0062`：部署包目录是平台发给所有租户的内容，不是租户数据）。
+`xiongbao_app` 能读写数据，不能在 schema 里建对象（基线只给了 `USAGE`），也**不能 `TRUNCATE`**——清库脚本因此必须用 owner 串跑。RLS 对所有带 `tenant_id` 的表开启 `FORCE`，并且**读和写各自一条策略**（迁移 `0072`）：`FOR SELECT` 允许"本租户 / `system` / `platform`"，所以平台内置目录人人可读；`FOR INSERT`/`UPDATE`/`DELETE` 只认"本租户，或当前处于 `platform` 作用域"，所以拿着别人的 id 也改不动、删不掉平台行。应用层仍然比对 `currentTenant()`（`src/waker-groups/store.ts` 是范例），但那是副防线而不是唯一的防线。
 
-集成测试用**另一个库** `openbot_test`：跑测试时 `DATABASE_URL` 与 `TEST_DATABASE_URL` 都指它。`openbot` 是开发库，不要拿它当测试库。
+> **两个坑（本仓库当前实况）**：① 角色决定主防线是否存在——`xiongbao` 是超级用户，**RLS 不约束超级用户**（`FORCE` 只管表 owner），照 owner 串起服务端就只剩应用层一道，且静默。`.env.example` 现已默认 `xiongbao_app`；`docker-compose.yml` 里只有一次性的 `migrate` 服务用 owner 串（建角色必须它）。服务端启动时会查 `pg_roles`，发现自己是超级用户或 `BYPASSRLS` 就 `console.error` 一条 `rls-not-enforced`，设 `XIONGBAO_RLS_ENFORCE=refuse` 则直接拒绝启动（判定函数与绊线测试在 `src/db/rls-role.ts` / `tests/rls-role.test.ts`）。② `deployment_packages` 被豁免于 FORCE 策略（`0062`：部署包目录是平台发给所有租户的内容，不是租户数据）。
+
+集成测试用**另一个库** `xiongbao_test`：跑测试时 `DATABASE_URL` 与 `TEST_DATABASE_URL` 都指它。`xiongbao` 是开发库，不要拿它当测试库。
 
 ## 2. 迁移
 
+迁移手写，放在 `server/drizzle/000N_<名字>.sql`，`when` 大于前一条，头注释带 `回滚：` 块；规则见 `docs/development.md` 的「Migrations」（drizzle-kit generate 已经没有快照可比，不要用）。应用（两个库各一次，在容器里跑，见 §5）：
+
 ```bash
-cd xiongbao/server
-# 生成（非交互：真正挡住交互提示的是 `< /dev/null`；`--name` 只是给文件起名）
-DATABASE_URL="postgres://openbot:openbot@127.0.0.1:5433/openbot" \
-  ../../tools/bun/bun.exe x drizzle-kit generate --name <slug> < /dev/null
-# 应用：两个库各一次
-for DB in openbot openbot_test; do
-  DATABASE_URL="postgres://openbot:openbot@127.0.0.1:5433/$DB" \
-    ../../tools/bun/bun.exe x drizzle-kit migrate < /dev/null
+cd /app/server
+for DB in xiongbao xiongbao_test; do
+  DATABASE_URL="postgres://xiongbao:xiongbao@host.docker.internal:5433/$DB" bun scripts/migrate.ts
 done
 ```
 
-新生成的迁移只有 DDL。**租户隔离要手工补，形状照 `0072`（不是 `0067`）**：`0067` 及之前那批循环建的是**一条 `FOR ALL` 策略**，读写共用一个表达式——那正是"任何租户可写平台内置行"的来源，别再抄它。`0072` 的循环对每张有 `tenant_id` 的表建**四条**：`FOR SELECT`（本租户 / `system` / `platform`）、`FOR INSERT`（WITH CHECK：本租户或 platform 作用域）、`FOR UPDATE`（USING 与 WITH CHECK 都用写作用域）、`FOR DELETE`（USING 用写作用域）。**没有 `tenant_id` 的子表**（例如 `waker_group_members` 以组为键）循环看不见，必须单独写 `EXISTS (SELECT 1 FROM 父表 …)` 策略并同样分四条，否则它整个在 RLS 之外。末尾给 `xiongbao_app` 授权。
+手写的迁移只有 DDL。**租户隔离要手工补，形状照 `0072`（不是 `0067`）**：`0067` 及之前那批循环建的是**一条 `FOR ALL` 策略**，读写共用一个表达式——那正是"任何租户可写平台内置行"的来源，别再抄它。`0072` 的循环对每张有 `tenant_id` 的表建**四条**：`FOR SELECT`（本租户 / `system` / `platform`）、`FOR INSERT`（WITH CHECK：本租户或 platform 作用域）、`FOR UPDATE`（USING 与 WITH CHECK 都用写作用域）、`FOR DELETE`（USING 用写作用域）。**没有 `tenant_id` 的子表**（例如 `waker_group_members` 以组为键）循环看不见，必须单独写 `EXISTS (SELECT 1 FROM 父表 …)` 策略并同样分四条，否则它整个在 RLS 之外。末尾给 `xiongbao_app` 授权。
 
 补完要登记三件套，否则 `drizzle-kit generate` 与 `tests/migration-journal.test.ts` 会一起骗人：`meta/_journal.json` 条目的 **`tag` 必须带四位数字前缀**（`0072_rls_command_scopes`，只写后半段会同时红"每个迁移有对应条目"和"条目按自己的 idx 命名"两条断言），`meta/0072_snapshot.json` 必须存在——纯策略迁移不动表/列/索引，所以正解是**复制上一号快照、只换 `id` 并把 `prevId` 接到上一号的 `id`**（`.scratch/qoderwake-replica/seed-snapshots.mjs` 与 `register-0072.mjs` 就是这个做法），`when` 用真实当前时间且必须晚于上一条。
 
@@ -108,12 +107,12 @@ app 侧对应 `-v $B/app/src:/app/app/src -v $B/app/tests:/app/app/tests`（凡 
 
 1. **容器里的代码在 `/app`，不是 `/workspace`。** 把仓库挂到 `/workspace` 会同时遮掉镜像的 `node_modules` 并让测试读到镜像里的旧副本——产出的红灯是假的。逐目录挂到 `/app/...`。
 2. **判回归比"失败名字多重集"，不比总数。** 有一族参数化用例每次超时条数会漂（同一批名字，总数 45↔58）。做法：`git worktree add ../tmp-head-check <基线提交>`，两棵树各跑一次，`(fail)` 行 `sed 's/ \[.*//' | sort | uniq -c` 后 `diff`。用完 `git worktree remove ../tmp-head-check --force`。
-3. **清库要两道确认**（库名 + `CONFIRM_TEST_RESET=yes`），它会 TRUNCATE 12 张表及其级联依赖。**它不是真正的"全部清空"**：`users`/`sessions`/`accounts`/`channels`/`work_items`/`registered_devices`/`device_pair_codes` 等被测试写过的表没有外键指向清单里的表，因此留得下来。跨套件复用一个 `openbot_test` 时，把这句话当作前提而不是瑕疵。
+3. **清库要两道确认**（库名 + `CONFIRM_TEST_RESET=yes`），它会 TRUNCATE 12 张表及其级联依赖。**它不是真正的"全部清空"**：`users`/`sessions`/`accounts`/`channels`/`work_items`/`registered_devices`/`device_pair_codes` 等被测试写过的表没有外键指向清单里的表，因此留得下来。跨套件复用一个 `xiongbao_test` 时，把这句话当作前提而不是瑕疵。
 
 ```bash
 docker run --rm -v $B/server/scripts:/app/server/scripts -v $B/server/src:/app/server/src \
   -v $B/shared:/app/shared \
-  -e DATABASE_URL="postgres://openbot:openbot@host.docker.internal:5433/openbot_test" \
+  -e DATABASE_URL="postgres://xiongbao:xiongbao@host.docker.internal:5433/xiongbao_test" \
   xiongbao-dev bash -lc "cd /app/server && CONFIRM_TEST_RESET=yes bun scripts/reset-test-database.ts"
 ```
 

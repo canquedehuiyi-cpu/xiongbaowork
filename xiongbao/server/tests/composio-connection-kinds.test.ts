@@ -1859,8 +1859,9 @@ describe("the vocabularies are covered by name and not by accident", () => {
  * WHAT A ROW OF THE TRAIL IS ALLOWED TO CARRY, asserted against the trail itself rather than
  * against the return value of the method that wrote it.
  *
- * `audit_events` is append-only by trigger — `0000_schema.sql` refuses every UPDATE and DELETE on
- * it, and `0012_truncate_is_not_a_way_around_append_only.sql` closes the one way round that — it is
+ * `audit_events` is append-only by trigger — the schema refuses every UPDATE and DELETE on it, and
+ * refuses TRUNCATE, the one way round that (migrations 0000 and 0012 of the history the baseline
+ * replaced) — it is
  * carried out of the deployment by an export, and it is kept for the whole retention window. So
  * everything below is about the one property those three facts make non-negotiable: whatever a row
  * carries cannot be tidied up afterwards, and a foreign string is exactly the thing nobody here

@@ -5,7 +5,7 @@ import { TEST_POOL } from "./support/database";
 
 test("creates a typed database boundary without opening a query", async () => {
   const database = createDatabase(
-    "postgres://openbot:openbot@localhost:5432/xiongbao",
+    "postgres://xiongbao:xiongbao@localhost:5432/xiongbao",
     TEST_POOL,
   );
 

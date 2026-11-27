@@ -225,13 +225,13 @@ describe.skipIf(!helm)("every database reader waits for the database", () => {
     for (const args of [
       [
         "--set-string",
-        "database.url=postgres://openbot:pw@db.example:5432/openbot?sslmode=require",
+        "database.url=postgres://xiongbao:pw@db.example:5432/xiongbao?sslmode=require",
         // The fork's role writer (migration 0109) has a URL of its own beside the API's.
         "--set-string",
-        "database.roleWriterUrl=postgres://xiongbao_role_writer:pw@db.example:5432/openbot?sslmode=require",
+        "database.roleWriterUrl=postgres://xiongbao_role_writer:pw@db.example:5432/xiongbao?sslmode=require",
         // The migrations Job runs as the owner, never as the API's role (validation.yaml refuses the URL alone).
         "--set-string",
-        "database.migrationUrl=postgres://xiongbao_owner:pw@db.example:5432/openbot?sslmode=require",
+        "database.migrationUrl=postgres://xiongbao_owner:pw@db.example:5432/xiongbao?sslmode=require",
       ],
       ["--set-string", "database.existingSecret=my-database"],
     ]) {
@@ -489,7 +489,7 @@ describe.skipIf(!helm || !databaseUrl)("the wait, against PostgreSQL", () => {
   test("refuses a database that is not there, within its bound", async () => {
     const started = Date.now();
     const { code, output } = await runWait(
-      "postgres://openbot:openbot@127.0.0.1:1/xiongbao",
+      "postgres://xiongbao:xiongbao@127.0.0.1:1/xiongbao",
       3,
     );
     expect(code).toBe(1);

@@ -68,10 +68,10 @@ if [ "$healthy" = true ]; then
   check bun scripts/ci/assert-image.mjs http://127.0.0.1:3772 "$evidence_native"
   check docker exec "$name" sh -c 'test "$(stat -c %a /var/lib/postgresql/pgpassword)" = 600 && test "$(stat -c %a /var/lib/postgresql/pgpassword-app)" = 600'
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'xiongbao_app|f|f'
-  check docker exec "$name" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
+  check docker exec "$name" sh -c 'PGPASSWORD=xiongbao /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
   check docker exec -u apiuser "$name" sh -c 'test ! -r /run/s6/container_environment/MIGRATION_DATABASE_URL'
-  # A new volume migrates under the old superuser (migration 0054 needs it) and is renamed on that same
-  # first boot: the owner URL names the new superuser and database, and so does the cluster.
+  # A new volume is created and migrated under xiongbao (superuser and database alike): the owner URL
+  # names them, and so does the cluster.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, current_database(), (select rolname from pg_roles where oid = 10)"')" = 'xiongbao|xiongbao|xiongbao'
   # /app is root's and read-only to everyone else (see the Dockerfile): neither the API's user nor a
   # Bot's can rewrite the code the API runs or the app it serves.
@@ -100,19 +100,21 @@ if [ "$healthy" = true ]; then
   check wait_health "$name"
   check docker exec "$name" sh -c 'sha256sum -c /var/lib/postgresql/.trackb-hashes >/dev/null'
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "SELECT marker FROM public.track_b_delivery_probe"')" = preserved
-  # The second boot of a renamed volume finds it renamed and keeps it so.
+  # A new volume is created under xiongbao (superuser and database) and keeps the names on the second boot.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, current_database()"')" = 'xiongbao|xiongbao'
-  # All four names are new after the first boot (the application roles by migration 0240, the superuser
-  # and database by the rename step), so the second boot has nothing to rename.
+  # The baseline creates both application roles.
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_roles where rolname in ('"'"'xiongbao_app'"'"', '"'"'xiongbao_role_writer'"'"')"')" = 2
   docker logs "$name" > "$evidence/recreated.log" 2>&1
   check test "$(grep -ac 'rls-not-enforced\|rls-role-check-unavailable' "$evidence/recreated.log" || true)" = 0
   # Credentials are sealed under kid k2 from the first boot, so none is under the kid before v0.2.16 (which
   # the migrator would refuse on the next start).
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from credentials where encrypted_value::jsonb ->> '"'"'kid'"'"' = '"'"'k1'"'"'"')" = 0
-  # The history rewrite (recovery 0241, stamped 1795165000000) ran once, with the first boot's migrations; the
-  # second boot found no migration left to apply, so nothing it rewrites is touched again.
-  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations where created_at = 1795165000000"')" = 1
+  # A new volume runs the folder once: its ledger holds one row per journal entry (the baseline's under
+  # its own stamp, then each migration after it) and the second boot found nothing left to apply.
+  baseline_when=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("server/drizzle/meta/_journal.json", "utf8")).entries[0].when)')
+  journal_entries=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("server/drizzle/meta/_journal.json", "utf8")).entries.length)')
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations where created_at = '"$baseline_when"'"')" = 1
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations"')" = "$journal_entries"
   check docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); test "$(/usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations")" = "$(cat /var/lib/postgresql/.trackb-journal)"'
   # Model the upgrade from an older embedded volume which has only an owner secret.
   docker exec "$name" rm /var/lib/postgresql/pgpassword-app
@@ -128,7 +130,7 @@ if [ "$healthy" = true ]; then
   if wait_health "$auth"; then
     check docker exec "$auth" sh -c 'sha256sum -c /var/lib/postgresql/.trackb-owner-hash >/dev/null && test "$(stat -c %a /var/lib/postgresql/pgpassword-app)" = 600'
     check test "$(docker exec "$auth" sh -c 'url=$(cat /run/s6/container_environment/DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user"')" = 'xiongbao_app|f|f'
-    check docker exec "$auth" sh -c 'PGPASSWORD=openbot /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
+    check docker exec "$auth" sh -c 'PGPASSWORD=xiongbao /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U xiongbao_app -d xiongbao -c "select 1" >/dev/null 2>&1; test "$?" -ne 0'
     check bun scripts/ci/assert-tenants.mjs http://127.0.0.1:3772
   else
     echo 'FAIL upgraded/auth container healthy within 60 seconds'

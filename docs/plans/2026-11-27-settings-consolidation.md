@@ -31,7 +31,7 @@
 - 读不到版本时按团队版（今天的回退，`lib/edition-guard.ts` `editionOf`）。
 - 3.2 表里的外部地址（`/plans`、`/connections*`、`/admin/plugins/$key`、`/settings/connected-accounts*`、`/approvals?id=`、动作推演五个 `/admin/*`、部署清单四个地址）永远接得住，查询参数不丢。
 - 服务器英文文案、服务器发来的地址不改（三处例外和 §12 的四句旧位置字符串除外）。
-- 迁移只进恢复覆盖层 `server/recovery/recovery-20261018-v1/sql/`，`server/drizzle/` 冻结在 0080，不碰。
+- 迁移写在基线之后：`server/drizzle/000N_<名字>.sql`，`meta/_journal.json` 追加一条，`when` 大于前一条，头注释带 `回滚：` 块（R4 Task 26 定的约定，见 `xiongbao/docs/development.md`「Migrations」）。不改 `0000_baseline.sql` 和 `meta/0000_baseline_structure.json`。
 
 ## Review Focus
 
@@ -56,7 +56,7 @@
 | `app/src/components/settings/team/*.tsx` | 从 `routes/_authed/admin/enterprise.tsx` 抽出的各节 | Task 6、10、21、27 |
 | `app/src/lib/settings/status-words.ts` | 有效状态的原因词与下一步（模型、应用共用；发送区也读） | Task 18 |
 | `server/src/agents/readiness.ts` | readiness 判定与只读路由 | Task 17 |
-| `server/recovery/recovery-20261018-v1/sql/<编号>_model_last_test.sql` | 模型最近一次测试结果的四列 | Task 16 |
+| `server/drizzle/<000N>_model_last_test.sql` | 模型最近一次测试结果的四列 | Task 16 |
 
 新话题页与子页的路由文件（每个 Task 的 Files 再列一次）：
 
@@ -771,17 +771,17 @@ test("生成式组件注册表里没有能画「系统审批」标签的组件",
 ### Task 16（服务器例外 2）: 模型最近一次测试结果落库
 
 **Files:**
-- Create: `server/recovery/recovery-20261018-v1/sql/<NNNN>_model_last_test.sql`
-- Modify: `server/recovery/recovery-20261018-v1/meta/_journal.json`（追加一条：`idx` = NNNN，`tag` = 文件名去 `.sql`，`when` 大于上一条且不晚于提交时刻，`version: "7"`，`breakpoints: true`）
+- Create: `server/drizzle/<000N>_model_last_test.sql`
+- Modify: `server/drizzle/meta/_journal.json`（追加一条：`idx` = N，`tag` = 文件名去 `.sql`，`when` 大于上一条且不晚于提交时刻，`version: "7"`，`breakpoints: true`）
 - Modify: `server/src/db/schema/model.ts`（`modelRegistry` 加四列）
 - Modify: `server/src/models/routes.ts`（`probe` 返回加 `status?: number`；`POST /:id/test` 写回四列；`GET /` 的 select 带出四列，响应字段 `lastTest`）
 - Modify: `app/src/lib/models/queries.ts`（`ConnectedModel.lastTest?: ModelLastTest | null`）
 - Test: `server/tests/model-library-routes.test.ts`、`server/tests/model-probe.test.ts`
 
-**编号：** 写本计划时覆盖层最新是 `0241_rebrand_history.sql`，另一个在途 PR 占用 0242。实施时 `ls server/recovery/recovery-20261018-v1/sql | tail -3` 取下一个空号（预计 0243）；合并前 rebase 到最新 main 再查一次，撞号就顺延并同步改日志条目和文件名。
+**编号：** 迁移在 R4 Task 26 合成了基线 `0000_baseline`，基线之后的第一条是 `0001_memory_corrections`（原恢复层 0242）。实施时 `ls server/drizzle/*.sql | tail -3` 取下一个空号（预计 `0002`）；合并前 rebase 到最新 main 再查一次，撞号就顺延，并同步改日志条目（`idx`、`tag`、`when` 仍要大于前一条）和文件名。
 
 **Interfaces:**
-- SQL（文件头照 `0238_learned_skill_fingerprint.sql` 的写法写目的、列、已有数据、授权、回滚）：
+- SQL（文件头照 `server/drizzle/0001_memory_corrections.sql` 的写法写目的、列、已有数据、授权；回滚写成 `回滚：` 一行、下面每条语句缩进两格，`tests/migration-baseline.test.ts` 会倒序执行它们并要求回到基线结构）：
   ```sql
   ALTER TABLE "public"."model_registry" ADD COLUMN "last_test_at" timestamp with time zone;
   ALTER TABLE "public"."model_registry" ADD COLUMN "last_test_ok" boolean;
@@ -820,7 +820,7 @@ test("probe 把 HTTP 状态一起返回", async () => {
 
 - [ ] **Step 2: 失败** — Run: `cd xiongbao/server && bun test tests/model-library-routes.test.ts tests/model-probe.test.ts`
 - [ ] **Step 3: 实现**（迁移、日志、schema、路由）
-- [ ] **Step 4: 通过** — 同上加 `bun test tests/migration-journal.test.ts tests/migration-reach.test.ts tests/new-tables-grants.integration.test.ts`
+- [ ] **Step 4: 通过** — 同上加 `bun test tests/migration-journal.test.ts tests/migration-reach.test.ts tests/migration-baseline.test.ts tests/new-tables-grants.integration.test.ts`
 - [ ] **Step 5: 提交** — `git commit -m "模型库记下每个模型最近一次测试的结果（时间、通过与否、HTTP 状态、一句话原因）"`
 
 ### Task 17（服务器例外 1）: 只读 `GET /api/agents/:agentId/readiness`

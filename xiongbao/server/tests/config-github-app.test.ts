@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { loadConfig } from "../src/config";
 
 const baseEnvironment = {
-  DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
+  DATABASE_URL: "postgres://xiongbao:xiongbao@localhost:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
   GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",

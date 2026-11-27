@@ -49,7 +49,7 @@ application's tenant context alone. The server reads its own role at boot, befor
 
 Where that bites, and who already says `warn`:
 
-- **The desktop app** connects as the compose owner `openbot`, a superuser, on a database published
+- **The desktop app** connects as the compose owner `xiongbao`, a superuser, on a database published
   on loopback only, and sets no `NODE_ENV`. It writes `XIONGBAO_RLS_ENFORCE=warn` into the `.env` it
   owns, next to `DATABASE_URL` (`desktop/src-tauri/src/env.rs`), so it keeps starting and prints
   `rls-not-enforced` on every boot. Moving it to `xiongbao_app` is the real fix; that also moves the
@@ -66,11 +66,12 @@ Where that bites, and who already says `warn`:
   `config.extraEnv: [{name: XIONGBAO_RLS_ENFORCE, value: warn}]` and accept that isolation rests on the
   application.
 
-`0054_app_role.sql` creates the application role with the password `openbot` (migration 0240
-renames it to `xiongbao_app`; a SCRAM password survives the rename, an md5 one is cleared by PostgreSQL
-and must be set again, see docs/deployment-xiongbao.md), which is printed in this repository. Migrations leave it alone, because PostgreSQL cannot tell a migration whether it was
-already changed and resetting it would lock a running deployment out without a word. Instead, under
-`NODE_ENV=production` the server refuses to start when the password in `DATABASE_URL` is `openbot`
+The baseline migration (`server/drizzle/0000_baseline.sql`) creates `xiongbao_app` with the password
+`xiongbao`, which is printed in this repository; a database migrated before v0.2.17 got the product's
+former name as its password instead (migration 0054 of the history the baseline replaced). Migrations
+leave it alone, because PostgreSQL cannot tell a migration whether it was already changed and resetting
+it would lock a running deployment out without a word. Instead, under `NODE_ENV=production` the server
+refuses to start when the password in `DATABASE_URL` is either public default
 (`{"type":"database-password-public-default", …}` on stderr); elsewhere it only warns. Set a real one
 as the owner, then put it in `DATABASE_URL`:
 
@@ -79,8 +80,8 @@ ALTER ROLE xiongbao_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '<random>';
 ```
 
 The one-container image and CI already do this with a generated password. `xiongbao_app` holds row
-rights only: `0112_app_role_hardening.sql` revokes the `CREATE` on schemas `public` and `drizzle`
-that `0054` granted, so the role the server connects as cannot add tables, functions or triggers.
+rights only: the baseline grants it `USAGE` on schemas `public` and `drizzle` and no `CREATE`, so the
+role the server connects as cannot add tables, functions or triggers.
 Migrations run as the owner.
 
 Threads and memory live in the PostgreSQL above, through the runtime's SSE-mode runner, so

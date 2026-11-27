@@ -17,107 +17,53 @@
  * It is now what every path runs — the image, the Helm Job, the compose stack, CI, and `db:migrate`
  * — because the two stopped being interchangeable in the direction that matters: only this one
  * refuses a database holding a stamp newer than a migration it is about to walk past. See
- * `src/db/migration-reach`.
+ * `src/db/migration-reach`. And only this one takes a database that came up through the migration
+ * history v0.2.16 shipped onto the baseline that replaced it (`src/db/baseline-adoption`).
  */
-import {
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres, { type Sql } from "postgres";
 import { applyMigrations } from "../src/db/apply-migrations";
-import { refuseUnrenamedDatabase } from "../src/db/upgrade-gate";
+import {
+  adoptBaseline,
+  readBaselineStructure,
+} from "../src/db/baseline-adoption";
 
 /**
- * What a deployment applies: every pending migration, once the database has been checked to be one this
- * release may migrate (`src/db/upgrade-gate`): new, or already through v0.2.16. A database that has not
- * been through v0.2.16 is refused in the same transaction, before any migration runs, and keeps every
- * row it had.
+ * What a deployment applies: every pending migration, after the release's checks in the same
+ * transaction. A database whose ledger still holds the migration history v0.2.16 shipped is checked to
+ * have been through v0.2.16 (`src/db/upgrade-gate`) and to have the baseline's structure, then taken onto
+ * the baseline (`src/db/baseline-adoption`); either check refuses it, before any migration runs, and it
+ * keeps every row it had. A new database runs the baseline; one already on it runs what follows it.
  */
-export const applyRelease: typeof applyMigrations = (client, folder, journal) =>
-  applyMigrations(client, folder, journal, refuseUnrenamedDatabase);
-
-/*
- * The migrations the Drizzle schema in `src/db/schema` is written against.
- *
- * `drizzle/` stops at 0080. Migrations 0081-0107 were kept in a recovery overlay whose journal is
- * the complete 0000-0107 list, but nothing ever applied it, so the schema referenced columns and
- * tables (`audit_events.subject_tenant_id`, `tasks.trigger_source`, ...) that no database had.
- * `drizzle/` itself stays byte-identical because the overlay tests freeze it; instead the two are
- * merged into one temporary folder for the migrator. The overlay may only append: its journal
- * must repeat the base journal entry for entry, or nothing is applied.
- */
-const serverRoot = join(import.meta.dir, "..");
-const baseFolder = join(serverRoot, "drizzle");
-const overlayFolder = join(serverRoot, "recovery", "recovery-20261018-v1");
-
-interface JournalEntry {
-  idx: number;
-  tag: string;
-}
-interface Journal {
-  entries: JournalEntry[];
-}
-
-async function readJournal(
-  path: string,
-): Promise<{ raw: string; journal: Journal }> {
-  const raw = await readFile(path, "utf8");
-  return { raw, journal: JSON.parse(raw) as Journal };
-}
+export const applyRelease: typeof applyMigrations = (
+  client,
+  migrationsFolder,
+  journal,
+) =>
+  applyMigrations(
+    client,
+    migrationsFolder,
+    journal,
+    async (tx, folder, applied, ledger) => {
+      const outcome = await adoptBaseline(tx, folder, applied, ledger, () =>
+        readBaselineStructure(migrationsFolder),
+      );
+      if (outcome.adopted) {
+        console.info(
+          JSON.stringify({
+            type: "migration-baseline-adopted",
+            replaced: outcome.replaced,
+          }),
+        );
+      }
+    },
+  );
 
 /**
- * The merged folder the migrator is handed: `drizzle/` with the recovery overlay appended.
- *
- * `through` stops the journal at that tag, so a test can stand a database at an earlier release's
- * schema with this same migrator and then carry it forward (`tests/rebrand-migration.test.ts`).
+ * The migrations: the baseline (v0.2.16's structure, which replaced the migration history in v0.2.17)
+ * and whatever is added after it, read from `drizzle/` as the image ships it.
  */
-export async function mergedMigrationsFolder(
-  options: { through?: string } = {},
-): Promise<string> {
-  const base = await readJournal(join(baseFolder, "meta", "_journal.json"));
-  const overlay = await readJournal(
-    join(overlayFolder, "meta", "_journal.json"),
-  );
-  if (options.through !== undefined) {
-    const stop = overlay.journal.entries.findIndex(
-      (entry) => entry.tag === options.through,
-    );
-    if (stop < 0) throw new Error(`no migration tagged ${options.through}`);
-    overlay.journal.entries = overlay.journal.entries.slice(0, stop + 1);
-    overlay.raw = JSON.stringify(overlay.journal);
-  }
-  const prefix = overlay.journal.entries.slice(0, base.journal.entries.length);
-  if (
-    overlay.journal.entries.length < base.journal.entries.length ||
-    JSON.stringify(prefix) !== JSON.stringify(base.journal.entries)
-  ) {
-    throw new Error(
-      "recovery migration journal does not extend drizzle/meta/_journal.json",
-    );
-  }
-  const folder = await mkdtemp(join(tmpdir(), "xiongbao-migrations-"));
-  await mkdir(join(folder, "meta"));
-  await writeFile(join(folder, "meta", "_journal.json"), overlay.raw);
-  const baseSql = new Set(
-    (await readdir(baseFolder)).filter((name) => name.endsWith(".sql")),
-  );
-  const overlaySql = join(overlayFolder, "sql");
-  for (const entry of overlay.journal.entries) {
-    const name = `${entry.tag}.sql`;
-    await copyFile(
-      join(baseSql.has(name) ? baseFolder : overlaySql, name),
-      join(folder, name),
-    );
-  }
-  return folder;
-}
+export const MIGRATIONS_FOLDER = join(import.meta.dir, "..", "drizzle");
 
 /**
  * The whole run against one connection, and the connection released afterwards.
@@ -179,37 +125,6 @@ if (import.meta.main) {
    * Migrations are a single ordered conversation with the database, and a pool would let two
    * statements that must be ordered land on different connections.
    */
-  /*
-   * Tests only (`NODE_ENV=test`): stop at the named migration, so a shell test can lay down a database
-   * the way an earlier release left it (`docker/tests/rebrand-superuser.test.sh` stands a v0.2.15
-   * volume up through 0239). Never honoured outside tests: a deployment always migrates to the end.
-   *
-   * Read through an alias, not `process.env.NODE_ENV` literally: the image bundles this script with
-   * `bun build --minify`, which replaces that exact expression with the build-time value, so the check
-   * would be decided when the image is built and the in-image shell tests could never pass `test`. The
-   * image sets NODE_ENV=production at run time, so deployments still never honour it.
-   */
-  const env = process.env;
-  const through =
-    env.NODE_ENV === "test"
-      ? env.XIONGBAO_TEST_MIGRATE_THROUGH?.trim() || undefined
-      : undefined;
-  const migrationsFolder = await mergedMigrationsFolder(
-    through ? { through } : {},
-  );
   const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
-  try {
-    /*
-     * A database laid down at an earlier release's schema (`through`, tests only) is not checked: it is
-     * being built as that release left it, and that release did not check.
-     */
-    await runMigrations(
-      client,
-      migrationsFolder,
-      through ? applyMigrations : applyRelease,
-    );
-  } finally {
-    // The merged folder is a temporary copy; removing it cannot fail the run (`force`).
-    await rm(migrationsFolder, { recursive: true, force: true });
-  }
+  await runMigrations(client, MIGRATIONS_FOLDER, applyRelease);
 }

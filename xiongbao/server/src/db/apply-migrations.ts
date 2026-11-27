@@ -117,15 +117,18 @@ export async function applyMigrations(
   migrationsFolder: string,
   journal: MigrationsJournal = MIGRATIONS_JOURNAL,
   /**
-   * A check that may refuse this database before anything is migrated, run in the same transaction once
-   * the lock is held, with the folder and what the journal already holds; throwing rolls the transaction
-   * back untouched. `scripts/migrate.ts` passes the check that this database has been through v0.2.16
-   * (`./upgrade-gate`).
+   * Work that may refuse this database, or prepare its journal, before anything is migrated: run in the
+   * same transaction once the lock is held, with the folder and what the journal already holds; throwing
+   * rolls the transaction back untouched. The journal is read again afterwards, so what this writes to it
+   * is what the reach check and the migrator see. `scripts/migrate.ts` passes the release's: the check
+   * that a database has been through v0.2.16 (`./upgrade-gate`) and the adoption of a database that came
+   * up through the migration history onto the baseline (`./baseline-adoption`).
    */
   beforeMigrations?: (
     tx: TransactionSql,
     folder: readonly FolderMigration[],
     applied: readonly AppliedMigration[],
+    journal: MigrationsJournal,
   ) => Promise<void>,
 ): Promise<void> {
   const folder = await readMigrationFolder(migrationsFolder);
@@ -133,8 +136,11 @@ export async function applyMigrations(
   await client.begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(hashtextextended(${MIGRATION_LOCK}, 0))`;
 
-    const applied = await appliedMigrations(tx, journal);
-    await beforeMigrations?.(tx, folder, applied);
+    let applied = await appliedMigrations(tx, journal);
+    if (beforeMigrations) {
+      await beforeMigrations(tx, folder, applied, journal);
+      applied = await appliedMigrations(tx, journal);
+    }
     const outOfReach = migrationsOutOfReach(folder, applied);
     if (outOfReach.length > 0) {
       throw new MigrationsOutOfReachError(

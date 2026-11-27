@@ -315,7 +315,7 @@ fi
 
 for table in agent_profiles agent_preferences; do
   if ! docker compose exec -T postgres \
-       psql -U openbot -d xiongbao -tAc "select to_regclass('public.$table')" 2>/dev/null \
+       psql -U xiongbao -d xiongbao -tAc "select to_regclass('public.$table')" 2>/dev/null \
        | grep -q "^$table$"; then
     red "  $table is missing. Run: bun run --cwd server db:migrate"
     exit 1
@@ -426,7 +426,7 @@ if [ "$worker_running" = false ]; then
   # The application role, as `.env.example` gives the server: the worker runs the server's tenant
   # isolation preflight before its first tick and refuses the owner, a superuser. It decides with the
   # mode the server reads from .env (either spelling) and the same NODE_ENV, so the two agree.
-  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://xiongbao_app:openbot@localhost:5432/xiongbao)"
+  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://xiongbao_app:xiongbao@localhost:5432/xiongbao)"
   WORKER_RLS_ENFORCE="$(setting XIONGBAO_RLS_ENFORCE "")"
   WORKER_NODE_ENV="$(setting NODE_ENV "")"
   (cd "$ROOT" && \

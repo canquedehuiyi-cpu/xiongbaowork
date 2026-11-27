@@ -207,7 +207,7 @@ function attachmentApp(
  * query rejects in about 2ms.
  */
 const unreachableDatabase = createDatabase(
-  "postgres://openbot:openbot@127.0.0.1:1/xiongbao",
+  "postgres://xiongbao:xiongbao@127.0.0.1:1/xiongbao",
   { max: 1 },
 );
 

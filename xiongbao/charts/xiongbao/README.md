@@ -139,9 +139,9 @@ owner (`ALTER ROLE ... PASSWORD`); the ones the migrations leave are public or a
 ```sh
 kubectl create namespace xiongbao
 kubectl -n xiongbao create secret generic xiongbao-database \
-  --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/openbot?sslmode=require' \
-  --from-literal=database-url='postgresql://xiongbao_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
-  --from-literal=role-writer-database-url='postgresql://xiongbao_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
+  --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/xiongbao?sslmode=require' \
+  --from-literal=database-url='postgresql://xiongbao_app:PASSWORD@HOST:5432/xiongbao?sslmode=require' \
+  --from-literal=role-writer-database-url='postgresql://xiongbao_role_writer:OTHER_PASSWORD@HOST:5432/xiongbao?sslmode=require'
 ```
 
 Then `--set database.existingSecret=xiongbao-database`. The keys must be `migration-database-url`,
@@ -156,8 +156,8 @@ the Job checks that the owner's URL and the API's reach the same database (by na
 time) and fails if they do not; on a first install, before `xiongbao_app` has a password, it says it
 could not check and migrates. See
 [Your own database](#your-own-database-which-is-what-a-real-deployment-uses) for `sslmode` and the
-`vector` extension, both of which a managed database will otherwise fail on in a way that names the
-wrong problem.
+migrating role's rights, both of which a managed database will otherwise fail on in a way that names
+the wrong problem.
 
 ### A cluster from nothing, on EKS
 
@@ -374,46 +374,11 @@ needs Bun 1.4 or later, because Bun 1.3 connects whatever certificate it is show
 refuses it on 1.3 rather than appear to check. `verify-ca`, `prefer` and `allow` are refused: Bun
 can neither check the authority without the host name nor fall back between TLS and plain.
 
-**The migrating role has to OWN the `vector` extension, not just be able to see it.** The first
-migration runs `CREATE EXTENSION IF NOT EXISTS vector` and migration `0010` runs
-`DROP EXTENSION IF EXISTS "vector"` once the document index is gone. `DROP EXTENSION` is an ownership
-check, and `IF EXISTS` does not waive it — it only makes a *missing* extension not an error. So a
-role that can see an extension somebody else owns gets through the create and fails the drop, and the
-migrations Job stops with:
-
-```
-must be owner of extension vector
-```
-
-In Postgres an extension's owner is whoever ran `CREATE EXTENSION`, and there is no
-`ALTER EXTENSION ... OWNER TO` to hand it over afterwards. The advice that used to stand here — have
-the administrative role create it once so `CREATE EXTENSION IF NOT EXISTS` passes for an ordinary
-user — is therefore exactly what produces the failure: it makes the admin the owner and the migrating
-role a bystander.
-
-Do one of these instead:
-
-- **Let the migrating role create it.** Simplest, and it needs no extra step: allow that role to run
-  `CREATE EXTENSION` (`GRANT rds_superuser` on RDS, `cloudsqlsuperuser` on Cloud SQL, `azure_pg_admin`
-  on Azure Database, plus whatever extension allow-list the vendor keeps), then leave the extension
-  absent and let migration `0000` create it. The migrating role owns it and `0010` drops it cleanly.
-- **Pre-create it AS the migrating role.** Where that grant is not on offer, the administrative role
-  can still do it on the other role's behalf, which is the whole trick:
-
-  ```sql
-  SET ROLE xiongbao_migrator;      -- the role in DATABASE_URL
-  CREATE EXTENSION IF NOT EXISTS vector;
-  RESET ROLE;
-  ```
-
-  Ownership follows the role that ran the statement, so this is equivalent to the first option.
-
-If you have already installed with the extension owned by somebody else, drop and recreate it under
-the migrating role before upgrading — `DROP EXTENSION vector;` as the owner, then the block above.
-Nothing of yours is in it: `vector` existed for the `embedding` column on `chunks`, which `0010`
-drops in the same transaction. A deployment that added a vector column of its own is the one case
-where that is not true, and `0010` is written to fail rather than take it; that deployment should
-keep the extension and apply only the table drops by hand.
+**The migrating role has to be able to create roles.** The first migration, the baseline, creates the
+two roles the server connects as (`xiongbao_app`, `xiongbao_role_writer`) and grants them their rights:
+`GRANT rds_superuser` on RDS, `cloudsqlsuperuser` on Cloud SQL, `azure_pg_admin` on Azure Database, or
+`CREATEROLE` on your own server. No extension is needed. Migrate with the same role every time: the
+default privileges that give the application its rights on tables created later belong to it.
 
 ## The five targets
 
@@ -798,6 +763,29 @@ policy still decides what a Bot may reach. Turning it on with `networkPolicy.ena
 `computerExtraEgress`, or with no URL where this chart holds the Secret, is refused at install.
 
 ## Upgrades
+
+### Coming from a release before v0.2.17 with the bundled database: keep its name
+
+`postgresql.auth.database` now defaults to `xiongbao`. PostgreSQL reads it once, when the volume is
+empty, and never renames the database afterwards, so a release installed before v0.2.17 still has its
+database under the former default. Keep that name, in your values file, for this and every later
+upgrade:
+
+```sh
+# the name the bundled database was created with
+kubectl -n <namespace> get statefulset <release>-postgresql \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="POSTGRES_DATABASE")].value}'
+
+helm upgrade <release> ... --set postgresql.auth.database=<that name>
+```
+
+`helm upgrade` refuses to render when the value differs from the name the database's StatefulSet was
+created with, and names it. `helm template` cannot look (and neither can a tool that renders with it,
+such as Argo CD), so there the pre-upgrade migrations Job fails instead, connecting to a database that
+does not exist; nothing is changed, and setting the value and syncing again goes through.
+
+The first start of v0.2.17 also checks the database's structure and takes it onto the migration
+baseline (see the CHANGELOG); an external database is checked the same way.
 
 ### Coworkers now act on the tenant's own machine by default (`config.tenantRuntime`)
 

@@ -8,8 +8,6 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { createAuditStore } from "../src/audit";
@@ -420,14 +418,7 @@ describe("the row says what an administrator chose, and only that", () => {
   });
 });
 
-describe("migration 0198 adds the two columns and decides nothing for anybody", () => {
-  const overlay = join(
-    import.meta.dir,
-    "..",
-    "recovery",
-    "recovery-20261018-v1",
-  );
-
+describe("the two recorded-value columns decide nothing for anybody", () => {
   test("both columns are nullable and carry no default", async () => {
     const columns = await asPlatform(() =>
       database.execute<{
@@ -457,33 +448,5 @@ describe("migration 0198 adds the two columns and decides nothing for anybody", 
         column_default: null,
       },
     ]);
-  });
-
-  test("it backfills nothing: no row is marked as an administrator's choice by the upgrade", () => {
-    const text = readFileSync(
-      join(overlay, "sql", "0198_server_row_shapes.sql"),
-      "utf8",
-    )
-      // 去掉注释，只看语句。
-      .replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(text).not.toMatch(/\bUPDATE\b/i);
-    expect(text).not.toMatch(/\bPOLICY\b/i);
-    expect(text.match(/ADD COLUMN/gi)?.length).toBe(2);
-  });
-
-  test("it is journalled right after 0197, a second later", () => {
-    const journal = JSON.parse(
-      readFileSync(join(overlay, "meta", "_journal.json"), "utf8"),
-    ) as { entries: { idx: number; when: number; tag: string }[] };
-    const before = journal.entries.find(
-      (entry) => entry.tag === "0197_owner_app_grants",
-    );
-    const added = journal.entries.find(
-      (entry) => entry.tag === "0198_server_row_shapes",
-    );
-    expect({
-      idx: added?.idx,
-      after: (added?.when ?? 0) - (before?.when ?? 0),
-    }).toEqual({ idx: 198, after: 1000 });
   });
 });

@@ -194,10 +194,6 @@ describe("the tree", () => {
     expect(result.unused.map((e) => `${e.file}: ${e.text}`)).toEqual([]);
   });
 
-  test("every Task 26 exclusion still matches a line", () => {
-    expect(result.unusedPatterns).toEqual([]);
-  });
-
   test("every entry is well formed and names a file that exists", () => {
     expect(ALLOWLIST.flatMap(entryProblems)).toEqual([]);
     expect(

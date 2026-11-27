@@ -6,14 +6,14 @@ describe("TEST_DATABASE_URL", () => {
     expect(() => testDatabaseUrlFrom({})).toThrow(/TEST_DATABASE_URL/);
   });
 
-  test.each(["openbot", "xiongbao"])(
+  test.each(["xiongbao"])(
     "refuses the live development database %s even when DATABASE_URL names a test one",
     (name) => {
       expect(() =>
         testDatabaseUrlFrom({
-          TEST_DATABASE_URL: `postgres://openbot:openbot@localhost:5432/${name}`,
+          TEST_DATABASE_URL: `postgres://xiongbao:xiongbao@localhost:5432/${name}`,
           DATABASE_URL:
-            "postgres://openbot:openbot@localhost:5432/xiongbao_test",
+            "postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test",
         }),
       ).toThrow(`live development database (${name})`);
     },
@@ -22,7 +22,8 @@ describe("TEST_DATABASE_URL", () => {
   test("does not read DATABASE_URL as a fallback", () => {
     expect(() =>
       testDatabaseUrlFrom({
-        DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao_test",
+        DATABASE_URL:
+          "postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test",
       }),
     ).toThrow(/TEST_DATABASE_URL/);
   });
@@ -31,8 +32,8 @@ describe("TEST_DATABASE_URL", () => {
     expect(
       testDatabaseUrlFrom({
         TEST_DATABASE_URL:
-          "postgres://openbot:openbot@localhost:5432/xiongbao_test",
+          "postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test",
       }),
-    ).toBe("postgres://openbot:openbot@localhost:5432/xiongbao_test");
+    ).toBe("postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test");
   });
 });

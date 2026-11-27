@@ -519,21 +519,6 @@ test("mounts the ChatGPT token store directory into the picked harness", () => {
   );
 });
 
-test("enables pgvector before creating vector columns", () => {
-  const migration = readFileSync(
-    join(import.meta.dir, "..", "server", "drizzle", "0000_schema.sql"),
-    "utf8",
-  );
-
-  // The order is the property, not the first line. A `vector` column cannot be created before the
-  // extension that defines the type, and a generated migration has no reason to put them in that
-  // order on its own.
-  const extension = migration.indexOf("CREATE EXTENSION IF NOT EXISTS vector;");
-  const firstVectorColumn = migration.search(/"embedding" vector\(/);
-  expect(extension).toBeGreaterThanOrEqual(0);
-  expect(firstVectorColumn).toBeGreaterThan(extension);
-});
-
 test("runs the server migrator after PostgreSQL becomes healthy", () => {
   const services = composeServices();
   // The migrator, then the role writer's password, as the chart's Job and migrate.sh order them.
@@ -761,7 +746,7 @@ test("gives the server container addresses, not the host's loopback", () => {
   expect(environment).toMatchObject({
     PORT: "3001",
     SERVER_PORT: "3001",
-    DATABASE_URL: "postgres://xiongbao_app:openbot@postgres:5432/xiongbao",
+    DATABASE_URL: "postgres://xiongbao_app:xiongbao@postgres:5432/xiongbao",
     AGENT_COMPUTER_URL: "http://agent-computer:4100",
   });
   for (const [name, value] of Object.entries(environment)) {
@@ -813,8 +798,8 @@ test("puts the server beside the database and the Bots, and the worker beside th
  */
 test("connects the server and the worker as the application role, and only migrate as the owner", () => {
   const services = runComposeConfig({}).services;
-  const owner = "postgres://openbot:openbot@postgres:5432/xiongbao";
-  const application = "postgres://xiongbao_app:openbot@postgres:5432/xiongbao";
+  const owner = "postgres://xiongbao:xiongbao@postgres:5432/xiongbao";
+  const application = "postgres://xiongbao_app:xiongbao@postgres:5432/xiongbao";
 
   expect(services.migrate.environment.DATABASE_URL).toBe(owner);
   expect(services.server.environment.DATABASE_URL).toBe(application);
@@ -822,7 +807,7 @@ test("connects the server and the worker as the application role, and only migra
   const holders = Object.entries(services)
     .filter(([, service]) =>
       Object.values(service.environment ?? {}).some((value) =>
-        String(value).includes("openbot:openbot@"),
+        String(value).includes("xiongbao:xiongbao@"),
       ),
     )
     .map(([name]) => name);
@@ -831,9 +816,9 @@ test("connects the server and the worker as the application role, and only migra
 
 test("gives the server the role writer, with the password migrate installs", () => {
   const unset = runComposeConfig({}).services;
-  expect(unset.migrate.environment.ROLE_WRITER_PASSWORD).toBe("openbot");
+  expect(unset.migrate.environment.ROLE_WRITER_PASSWORD).toBe("xiongbao");
   expect(unset.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
-    "postgres://xiongbao_role_writer:openbot@postgres:5432/xiongbao",
+    "postgres://xiongbao_role_writer:xiongbao@postgres:5432/xiongbao",
   );
   const chosen = runComposeConfig({
     ROLE_WRITER_PASSWORD: "f00dCafe1234",

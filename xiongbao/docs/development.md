@@ -88,19 +88,43 @@ in the composer deletes it outright, so it takes abandoned drafts rather than or
 
 ## Migrations
 
-After changing the Drizzle schema:
+Migrations live in `server/drizzle/`, listed in `server/drizzle/meta/_journal.json`, and run with:
 
 ```sh
-bun run --filter server db:generate
 bun run --filter server db:migrate
 ```
 
-Review generated migration files before sharing them. `start.sh` applies existing migrations when it starts the stack.
+`start.sh` applies them when it starts the stack.
 
-**Do not hand-edit a generated migration.** It leaves a file that no longer matches what the
-generator produced. If the generated SQL will not work — `ADD COLUMN ... NOT NULL` fails on a table
-that already has rows — split it instead: generate the column nullable, add the data step, then
-generate the constraint.
+**The first one is the baseline, and it is never edited.** v0.2.17 replaced the 222 migrations
+v0.2.16 shipped with one file, `0000_baseline.sql`, which creates v0.2.16's structure. A new database
+runs it. A database v0.2.16 left behind is checked at start, item by item, against
+`meta/0000_baseline_structure.json`, and its ledger is rewritten to the baseline's one row
+(`server/src/db/baseline-adoption.ts`). That ledger row is the baseline file's hash, so editing the file
+makes every adopted database look un-adopted and refuse to start; the structure file is what v0.2.16
+databases are compared with, so regenerating it from a database with later migrations applied refuses
+every one of them at its upgrade. A change of structure is a new migration after the baseline.
+
+**A migration after the baseline:**
+
+- is `server/drizzle/000N_<name>.sql`, N the next number (the first is `0001_memory_corrections`),
+  statements separated by `--> statement-breakpoint`;
+- has an entry appended to `meta/_journal.json`: `"idx": N`, `"tag": "000N_<name>"`, `"version": "7"`,
+  `"breakpoints": true`, and `"when"` the current time in milliseconds — later than the entry before it,
+  and so later than the baseline's `1795757510847`. The migrator only runs stamps newer than the newest
+  a database holds; an older one is refused (see below), never run;
+- says how to undo it in its header comment, under a line `回滚：`, one statement per line indented two
+  spaces past the `*` (see `0001_memory_corrections.sql`). Going back to v0.2.16 means undoing every
+  migration after the baseline first — `bun scripts/rollback-after-baseline.ts` in `server/` prints the
+  SQL, newest first — or the next upgrade finds a structure that is not the baseline's and refuses it;
+- is written by hand. `db:generate` (drizzle-kit) has no snapshot to diff against since the recovery
+  overlay, and would emit the whole schema; write the SQL, and change the Drizzle schema in
+  `server/src/db/schema/` to match. `tests/drizzle-schema-baseline.test.ts` holds the two together.
+
+A test that fails after a migration is added is fixed in the test: the tests that stand for "the
+baseline's structure" build their database from the baseline alone (`tests/support/baseline-folder.ts`).
+
+**Do not change a released migration.** Its hash is in every ledger that ran it.
 
 **A constraint that tightens an existing column belongs to a later release**, not to the release that
 adds the column. A rolling deploy runs the migrations and then serves from old and new replicas at
@@ -109,18 +133,8 @@ failing, so the release that added the column breaks for everybody who lands on 
 not been replaced yet. Ship the column nullable, let the fleet turn over, then tighten it. `issuer`
 on `accounts` is the worked example: the column is nullable and no migration tightens it.
 
-**A data step is its own migration**, created with the flag that exists for it:
-
-```sh
-bun run --filter server db:generate -- --custom --name=backfill_something
-```
-
-A generator diffs schema against schema, so a rule like "the rows whose provider is Google get
-Google's issuer" can never come out of one: it is not in the schema. `--custom` writes an empty file
-registered in the journal, and it is the only migration anybody should be writing by hand.
-
-CI enforces two things about this: `drizzle-kit check` for collisions and gaps between migrations,
-and a generate-and-fail-if-dirty probe that refuses a schema change with no migration written for it.
+**A data step is its own migration**, so that a structure change and the rows it rewrites can be
+reasoned about, and undone, one at a time.
 
 **If `db:migrate` refuses with "the migrator only runs migrations stamped after the row it
 reads"**, your database ran a branch's migrations before that branch was merged. Merging renumbers
@@ -130,11 +144,9 @@ success over the tables they should have created. Nothing is applied; the refusa
 and recreate the database, which is almost always the right answer for a development one; see
 [deployment.md](deployment.md) for how to repair one you have to keep.
 
-**If `drizzle-kit migrate` hangs and then exits non-zero with no error**, the journal names a
-migration file that is not there. A rebase does this: `meta/_journal.json` is a checked-in file, so
-restoring it can reinstate entries for migrations that were renamed. `drizzle-kit check` reports
-"Everything's fine" in that state, because it compares schemas rather than checking that the journal
-and the directory agree. Compare `meta/_journal.json` against `ls server/drizzle/*.sql`.
+**If the journal names a migration file that is not there**, a rebase restored entries for migrations
+that were renamed. `tests/migration-journal.test.ts` says which; compare `meta/_journal.json` against
+`ls server/drizzle/*.sql`.
 
 ## Quality checks
 
@@ -148,7 +160,7 @@ bun run test
 bun run build
 ```
 
-Integration tests expect a PostgreSQL database with pgvector. Point `TEST_DATABASE_URL` at a dedicated database such as `postgres://openbot:openbot@localhost:5432/xiongbao_test` before running them.
+Integration tests expect a PostgreSQL database with pgvector. Point `TEST_DATABASE_URL` at a dedicated database such as `postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test` before running them.
 
 They refuse to use the application `xiongbao` database. `DATABASE_URL` is still the application setting, and the database client removes it from the process environment after opening a connection to preserve the Windows Bun connection fix, so tests use `TEST_DATABASE_URL` as their immutable fixture address. Running them against a deployment you are using puts test Bots in its audit trail and its activity reports, so create a separate database and migrate that before running the integration suite.
 

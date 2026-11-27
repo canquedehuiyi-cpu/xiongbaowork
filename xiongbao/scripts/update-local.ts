@@ -523,7 +523,7 @@ function hostOwnerDatabaseUrl(env: NodeJS.ProcessEnv) {
   const owner = env.MIGRATION_DATABASE_URL;
   if (!owner)
     throw new Error(
-      "本机（host）更新要用数据库 owner 账号来备份和迁移，但没有找到它：请设置 MIGRATION_DATABASE_URL，填 owner 账号的连接串（例如 postgres://openbot:openbot@localhost:5432/xiongbao），写进 .env 或在执行更新时作为环境变量传入，然后重新更新。现在还没有停止任何服务。",
+      "本机（host）更新要用数据库 owner 账号来备份和迁移，但没有找到它：请设置 MIGRATION_DATABASE_URL，填 owner 账号的连接串（例如 postgres://xiongbao:xiongbao@localhost:5432/xiongbao），写进 .env 或在执行更新时作为环境变量传入，然后重新更新。现在还没有停止任何服务。",
     );
   const ownerIdentity = databaseIdentity(owner);
   if (env.DATABASE_URL && databaseIdentity(env.DATABASE_URL) !== ownerIdentity)

@@ -1,10 +1,9 @@
 #!/command/with-contenv sh
 # Create the cluster the first time, and make sure its generated passwords are on the volume every time.
-# The connection strings that carry them are written by migrate.sh (database-urls.sh), once the database
-# has said which names it answers to: v0.2.16 renames the superuser and the database.
+# The connection strings that carry them are written by migrate.sh (database-urls.sh) after the migrations.
 #
 # Bound to loopback, but no longer trust-auth. The process beside it is not the only client: the
-# Bot's shell runs in this same container, and under trust it could `psql -h 127.0.0.1 -U openbot`
+# Bot's shell runs in this same container, and under trust it could `psql -h 127.0.0.1 -U xiongbao`
 # with no password and reach the audit trail, the policy store, and the credential vault as the
 # instance owner. A generated password closes that: the shell has no way to learn it (its own
 # environment is an allow-list that does not carry the URL), and scram refuses a connection without
@@ -52,24 +51,23 @@ if [ ! -s "$DATA/PG_VERSION" ]; then
   ( umask 077; printf '%s' "$PW" > "$PW_FILE" )
   chown postgres:postgres "$PW_FILE"
 
-  # The superuser and the database still get the names they had before v0.2.16: a historical migration
-  # (0054) grants default privileges FOR ROLE that superuser, so an empty database can only be migrated
-  # under it. migrate.sh renames both to xiongbao right after this volume's first migrations.
-  # legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，until the migrations are squashed into a baseline
-  # that new volumes start from under the new names (R4 Task 26)
+  # The superuser and the database are both xiongbao. (Until v0.2.17 a new volume was created under the
+  # product's former names, because a migration in the history the baseline replaced granted default
+  # privileges FOR ROLE that superuser, and migrate.sh renamed both after the first migrations.)
   #
   # initdb reads the superuser password from a file (never an argument, which would show in `ps`), and
   # sets scram for both local and TCP connections. The temp file is removed the moment initdb returns.
   PWTMP="$(mktemp)"
   printf '%s' "$PW" > "$PWTMP"
   chown postgres:postgres "$PWTMP"
-  s6-setuidgid postgres "$BIN/initdb" -D "$DATA" -A scram-sha-256 -U openbot --pwfile="$PWTMP" >/dev/null
+  s6-setuidgid postgres "$BIN/initdb" -D "$DATA" -A scram-sha-256 -U xiongbao --pwfile="$PWTMP" >/dev/null
   rm -f "$PWTMP"
 
   s6-setuidgid postgres "$BIN/pg_ctl" -D "$DATA" -o "-c listen_addresses=127.0.0.1" -w start >/dev/null
   # Over TCP with the password now, since the cluster no longer trusts an unauthenticated connection.
-  PGPASSWORD="$PW" s6-setuidgid postgres "$BIN/createdb" -h 127.0.0.1 -U openbot openbot
-  PGPASSWORD="$PW" s6-setuidgid postgres "$BIN/psql" -h 127.0.0.1 -U openbot -d openbot -c 'CREATE EXTENSION IF NOT EXISTS vector' >/dev/null
+  PGPASSWORD="$PW" s6-setuidgid postgres "$BIN/createdb" -h 127.0.0.1 -U xiongbao xiongbao
+  # No extension is created: the schema uses none (the history the baseline replaced dropped pgvector), and
+  # a new volume is exactly what the baseline builds, the structure every other volume is checked against.
   s6-setuidgid postgres "$BIN/pg_ctl" -D "$DATA" -w stop >/dev/null
 fi
 

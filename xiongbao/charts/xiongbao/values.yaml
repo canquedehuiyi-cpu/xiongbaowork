@@ -565,7 +565,7 @@ database:
   # migration fails with `no pg_hba.conf entry for host ... no encryption`, which names the host and
   # the user and not the actual problem.
   #
-  #   postgres://user:password@host:5432/openbot?sslmode=require
+  #   postgres://user:password@host:5432/xiongbao?sslmode=require
   #
   # Keep it in a Secret rather than here: `url` is readable by anybody who can read the release.
   #
@@ -583,8 +583,8 @@ database:
   # only login allowed to write identity roles, and the API role above may only read them. Two URLs,
   # two roles, two passwords, as in the delivery manual's external-database section:
   #
-  #   url:           postgres://xiongbao_app:<password>@host:5432/openbot?sslmode=require
-  #   roleWriterUrl: postgres://xiongbao_role_writer:<other password>@host:5432/openbot?sslmode=require
+  #   url:           postgres://xiongbao_app:<password>@host:5432/xiongbao?sslmode=require
+  #   roleWriterUrl: postgres://xiongbao_role_writer:<other password>@host:5432/xiongbao?sslmode=require
   #
   # Set both roles' passwords yourself after the first migration (the migration's are public).
   # Only the API server reads it; the migrations Job and the sweeps do not get it. With the bundled
@@ -629,9 +629,9 @@ postgresql:
   auth:
     # THE SUPERUSER, DELIBERATELY, AND ONLY FOR THIS BUNDLED DATABASE.
     #
-    # The first migration runs `CREATE EXTENSION vector` and a later one drops it again, and only a
-    # superuser can do either. An ordinary role fails the install at migration one with "permission
-    # denied to create extension", which reads like a broken chart rather than a database privilege.
+    # The baseline migration creates the two application roles and grants them their rights, which
+    # takes a role allowed to create roles. An ordinary role fails the install at the first migration
+    # with "permission denied to create role", which reads like a broken chart rather than a privilege.
     #
     # This is the shape `docker-compose.yml` already ships, where the app user is the cluster
     # superuser, and it is safe for the same reason: this database exists for this release alone and
@@ -641,10 +641,13 @@ postgresql:
     # the chart refuses to render until `config.extraEnv` names XIONGBAO_RLS_ENFORCE. See README.
     #
     # A MANAGED DATABASE IS NOT THIS. On RDS, Cloud SQL or Azure there is no superuser to hand out,
-    # so create the extension once as the administrative role and grant the migrating role ownership
-    # of it. `CREATE EXTENSION IF NOT EXISTS` then passes for an ordinary user.
+    # so migrate as the administrative role the provider gives you (it can create roles).
     username: postgres
-    database: openbot
+    # Read once, when the volume is empty: PostgreSQL creates the database under this name and never
+    # renames it. A release installed before v0.2.17 has the database under the former default, and
+    # must keep that name here on every upgrade (the chart refuses an upgrade that changes it; README,
+    # Upgrades). `xiongbao` is for new installs.
+    database: xiongbao
     # OPTIONAL. Left empty, this chart generates one into the Secret below, once, reads it back on
     # every upgrade and keeps it on uninstall, because PostgreSQL takes its password at first boot
     # only and the volume outlives the release. Set it to choose the password yourself.

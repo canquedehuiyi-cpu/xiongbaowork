@@ -1,9 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import postgres from "postgres";
-import { applyRelease, mergedMigrationsFolder } from "../scripts/migrate";
-import { applyMigrations } from "../src/db/apply-migrations";
+import { applyRelease, MIGRATIONS_FOLDER } from "../scripts/migrate";
 import { readMigrationFolder } from "../src/db/migration-reach";
 import {
   PRE_RENAME_CREDENTIAL_KID,
@@ -14,6 +13,14 @@ import {
   UpgradeRefusedError,
   upgradeRefusal,
 } from "../src/db/upgrade-gate";
+import {
+  dropHistoryOwner,
+  ensureHistoryOwner,
+  LAST_V0215_MIGRATION,
+  migrateThroughHistory,
+  removeExtractedHistory,
+  V0216_COMMIT,
+} from "./support/v0216-history";
 
 /**
  * This release is reached only from v0.2.16. A database that has not been through v0.2.16's rename is
@@ -21,8 +28,13 @@ import {
  * migrates straight through.
  *
  * The decision is a function of four facts and is tested on its own; the database half stands real
- * databases at the shapes in question with the real migrator. Creating a database takes the owner
+ * databases at the shapes in question with the real migrator, v0.2.15's and v0.2.16's built by the
+ * history they shipped (`tests/support/v0216-history`). Creating a database takes the owner
  * (`TEST_DATABASE_ADMIN_URL`); without it that half is skipped.
+ *
+ * Since v0.2.17 replaced the history with a baseline, the check runs on a ledger that still holds the
+ * history, before the baseline is adopted (`src/db/baseline-adoption.ts`): a new database and one
+ * already on the baseline are never asked.
  */
 const renamed: UpgradeFacts = {
   applied: 242,
@@ -31,13 +43,17 @@ const renamed: UpgradeFacts = {
   oldCredentials: 0,
 };
 
+/** Stand-ins for the roles' names before v0.2.16: the decision only repeats what the database said. */
+const OLD_APP_ROLE = "legacy_app";
+const OLD_WRITER_ROLE = "legacy_role_writer";
+
 describe("the decision", () => {
   test("a database the migrator has never touched is never refused", () => {
     expect(
       upgradeRefusal({
         applied: 0,
-        missingMigrations: [...RENAME_MIGRATIONS],
-        oldRoles: ["openbot_app"],
+        missingMigrations: RENAME_MIGRATIONS.map(([tag]) => tag),
+        oldRoles: [OLD_APP_ROLE],
         oldCredentials: 3,
       }),
     ).toBeUndefined();
@@ -54,8 +70,8 @@ describe("the decision", () => {
         "迁移记录里没有 v0.2.16 的改名迁移（0240_rebrand_names）",
       ],
       [
-        { ...renamed, oldRoles: ["openbot_role_writer"] },
-        "应用角色仍是改名前的名字（openbot_role_writer）",
+        { ...renamed, oldRoles: [OLD_WRITER_ROLE] },
+        `应用角色仍是改名前的名字（${OLD_WRITER_ROLE}）`,
       ],
       [
         { ...renamed, oldCredentials: 2 },
@@ -73,18 +89,51 @@ describe("the decision", () => {
   test("a v0.2.15 database is refused for every reason at once", () => {
     const refusal = upgradeRefusal({
       applied: 240,
-      missingMigrations: [...RENAME_MIGRATIONS],
-      oldRoles: RENAMED_ROLES.map(([old]) => old),
+      missingMigrations: RENAME_MIGRATIONS.map(([tag]) => tag),
+      oldRoles: [OLD_APP_ROLE, OLD_WRITER_ROLE],
       oldCredentials: 5,
     });
     expect(refusal).toContain("0240_rebrand_names、0241_rebrand_history");
-    expect(refusal).toContain("openbot_app、openbot_role_writer");
+    expect(refusal).toContain(`${OLD_APP_ROLE}、${OLD_WRITER_ROLE}`);
     expect(refusal).toContain("5 条");
   });
 });
 
+test("the old application roles are recognised by the digests of the names v0.2.16's history created", () => {
+  // 0054 created the application role, 0109 the role writer, under the names before v0.2.16's rename.
+  const created = [
+    "xiongbao/server/drizzle/0054_app_role.sql",
+    "xiongbao/server/recovery/recovery-20261018-v1/sql/0109_role_writer_authority.sql",
+  ].map((path) => {
+    const file = spawnSync("git", ["show", `${V0216_COMMIT}:${path}`], {
+      cwd: import.meta.dir,
+      encoding: "utf8",
+    });
+    expect(file.status).toBe(0);
+    const name = /\bCREATE ROLE ([a-z_]+)/.exec(file.stdout)?.[1];
+    if (!name) throw new Error(`${path} creates no role`);
+    return createHash("sha256").update(name).digest("hex");
+  });
+  expect(RENAMED_ROLES.map(([digest]) => digest)).toEqual(created);
+});
+
+test("the rename migrations are recognised by the hashes v0.2.16 recorded for them", () => {
+  // The files as v0.2.16 shipped them, read from the commit it was released from.
+  for (const [tag, hash] of RENAME_MIGRATIONS) {
+    const file = spawnSync(
+      "git",
+      [
+        "show",
+        `${V0216_COMMIT}:xiongbao/server/recovery/recovery-20261018-v1/sql/${tag}.sql`,
+      ],
+      { cwd: import.meta.dir, maxBuffer: 16 * 1024 * 1024 },
+    );
+    expect(file.status).toBe(0);
+    expect(createHash("sha256").update(file.stdout).digest("hex")).toBe(hash);
+  }
+});
+
 const owner = process.env.TEST_DATABASE_ADMIN_URL?.trim();
-const LAST_V0215_MIGRATION = "0239_aihub_provider_template";
 const created: string[] = [];
 
 function databaseUrl(name: string) {
@@ -112,17 +161,12 @@ async function newDatabase(label: string) {
   return postgres(databaseUrl(name), { max: 1, onnotice: () => {} });
 }
 
-async function migrate(
-  client: postgres.Sql,
-  apply: typeof applyMigrations,
-  through?: string,
-) {
-  const folder = await mergedMigrationsFolder(through ? { through } : {});
-  try {
-    await apply(client, folder);
-  } finally {
-    await rm(folder, { recursive: true, force: true });
-  }
+/** A database the history built, through `through` when given (v0.2.15), else to the end (v0.2.16). */
+async function historyDatabase(label: string, through?: string) {
+  const client = await newDatabase(label);
+  await onAdmin((admin) => ensureHistoryOwner(admin));
+  await migrateThroughHistory(client, through ? { through } : {});
+  return client;
 }
 
 async function journalSize(client: postgres.Sql) {
@@ -131,7 +175,30 @@ async function journalSize(client: postgres.Sql) {
   return row?.n ?? 0;
 }
 
+/** The ledger's hashes in order: the baseline's first, then every migration after it. */
+async function appliedHashes(client: postgres.Sql) {
+  return (
+    await client<{ hash: string }[]>`
+      select hash from drizzle.__drizzle_migrations order by id`
+  ).map(({ hash }) => hash);
+}
+
+async function folderHashes() {
+  return (await readMigrationFolder(MIGRATIONS_FOLDER)).map(({ hash }) => hash);
+}
+
+async function appliedRows(client: postgres.Sql) {
+  return (
+    await client<{ hash: string; created_at: string | null }[]>`
+      select hash, created_at from drizzle.__drizzle_migrations`
+  ).map((entry) => ({
+    hash: entry.hash,
+    createdAt: entry.created_at === null ? null : Number(entry.created_at),
+  }));
+}
+
 afterAll(async () => {
+  await removeExtractedHistory();
   if (!owner) return;
   await onAdmin(async (admin) => {
     for (const name of created)
@@ -141,7 +208,11 @@ afterAll(async () => {
      * recreates the old roles (0054, 0109). Nothing references them once these databases are gone; drop
      * them so a known-password login does not outlive the suite. Ones another database still uses stay.
      */
-    for (const [role] of RENAMED_ROLES) {
+    const digests = RENAMED_ROLES.map(([digest]) => digest);
+    const old = await admin<{ rolname: string }[]>`
+      select rolname from pg_roles
+       where encode(sha256(convert_to(rolname, 'UTF8')), 'hex') in ${admin(digests)}`;
+    for (const { rolname: role } of old) {
       const [held] = await admin<{ refs: number }[]>`
         select count(*)::int as refs from pg_shdepend d join pg_roles r on r.oid = d.refobjid
          where r.rolname = ${role}`;
@@ -150,29 +221,29 @@ afterAll(async () => {
       if (exists?.n && held?.refs === 0)
         await admin.unsafe(`DROP ROLE IF EXISTS "${role}"`);
     }
+    await dropHistoryOwner(admin);
   });
 }, 120_000);
 
 describe.skipIf(!owner)("migrating with the check", () => {
-  test("a new database migrates straight through, and again changes nothing", async () => {
+  test("a new database migrates straight from the baseline, and again changes nothing", async () => {
     const client = await newDatabase("new");
     try {
-      await migrate(client, applyRelease);
-      const size = await journalSize(client);
-      expect(size).toBeGreaterThan(200);
-      await migrate(client, applyRelease);
-      expect(await journalSize(client)).toBe(size);
+      await applyRelease(client, MIGRATIONS_FOLDER);
+      const migrated = await appliedHashes(client);
+      expect(migrated).toEqual(await folderHashes());
+      await applyRelease(client, MIGRATIONS_FOLDER);
+      expect(await appliedHashes(client)).toEqual(migrated);
     } finally {
       await client.end({ timeout: 5 });
     }
   }, 300_000);
 
   test("a database at v0.2.15's schema is refused before any migration, and keeps its journal", async () => {
-    const client = await newDatabase("v0215");
+    const client = await historyDatabase("v0215", LAST_V0215_MIGRATION);
     try {
-      await migrate(client, applyMigrations, LAST_V0215_MIGRATION);
       const before = await journalSize(client);
-      const refused = await migrate(client, applyRelease).then(
+      const refused = await applyRelease(client, MIGRATIONS_FOLDER).then(
         () => undefined,
         (error: unknown) => error,
       );
@@ -188,9 +259,8 @@ describe.skipIf(!owner)("migrating with the check", () => {
   }, 300_000);
 
   test("a credential still sealed under the pre-v0.2.16 kid is refused, and the row stays as it was", async () => {
-    const client = await newDatabase("k1");
+    const client = await historyDatabase("k1");
     try {
-      await migrate(client, applyRelease);
       const envelope = JSON.stringify({
         version: 2,
         alg: "A256GCM",
@@ -206,7 +276,7 @@ describe.skipIf(!owner)("migrating with the check", () => {
           values (${id}, 'connector', 'gate-test', ${envelope}, 'k', '{}'::jsonb, 'gate-tenant')`;
       });
       const before = await journalSize(client);
-      const refused = await migrate(client, applyRelease).then(
+      const refused = await applyRelease(client, MIGRATIONS_FOLDER).then(
         () => undefined,
         (error: unknown) => error,
       );
@@ -224,28 +294,30 @@ describe.skipIf(!owner)("migrating with the check", () => {
       expect(row?.value).toBe(envelope);
 
       // The check counts in the platform frame and leaves the caller's frame exactly as it found it.
-      const folder = await mergedMigrationsFolder();
-      try {
-        const migrations = await readMigrationFolder(folder);
-        const applied = (
-          await client<{ hash: string; created_at: string | null }[]>`
-            select hash, created_at from drizzle.__drizzle_migrations`
-        ).map((entry) => ({
-          hash: entry.hash,
-          createdAt:
-            entry.created_at === null ? null : Number(entry.created_at),
-        }));
-        const [after] = await client.begin(async (tx) => {
-          await tx`select set_config('app.tenant_id', 'caller-frame', true)`;
-          const facts = await readUpgradeFacts(tx, migrations, applied);
-          expect(facts.oldCredentials).toBe(1);
-          return tx<{ frame: string | null }[]>`
-            select current_setting('app.tenant_id', true) as frame`;
-        });
-        expect(after?.frame).toBe("caller-frame");
-      } finally {
-        await rm(folder, { recursive: true, force: true });
-      }
+      const applied = await appliedRows(client);
+      const [after] = await client.begin(async (tx) => {
+        await tx`select set_config('app.tenant_id', 'caller-frame', true)`;
+        const facts = await readUpgradeFacts(tx, applied);
+        expect(facts.oldCredentials).toBe(1);
+        expect(facts.missingMigrations).toEqual([]);
+        return tx<{ frame: string | null }[]>`
+          select current_setting('app.tenant_id', true) as frame`;
+      });
+      expect(after?.frame).toBe("caller-frame");
+    } finally {
+      await client.end({ timeout: 5 });
+    }
+  }, 300_000);
+
+  test("a database already on the baseline is not asked again", async () => {
+    const client = await historyDatabase("adopted");
+    try {
+      await applyRelease(client, MIGRATIONS_FOLDER);
+      const adopted = await appliedHashes(client);
+      expect(adopted).toEqual(await folderHashes());
+      // The rename migrations are no longer in the ledger; the baseline is, so the check does not run.
+      await applyRelease(client, MIGRATIONS_FOLDER);
+      expect(await appliedHashes(client)).toEqual(adopted);
     } finally {
       await client.end({ timeout: 5 });
     }

@@ -248,7 +248,7 @@ jobs:
               --set-string database.existingSecret= \
               --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao \
               --set-string database.roleWriterUrl=postgres://xiongbao_role_writer:y@db.internal:5432/xiongbao \
-              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao \
+              --set-string database.migrationUrl=postgres://xiongbao:o@db.internal:5432/xiongbao \
               | grep -A1 'name: ROLE_WRITER_DATABASE_URL' | grep -q 'xiongbao_role_writer:y@db.internal' || {
               echo "::error::An inline database.roleWriterUrl did not reach the API."
               exit 1
@@ -337,7 +337,7 @@ jobs:
             refuses "an external database URL with no role-writer URL" \
               --set-string database.existingSecret= \
               --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao \
-              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao
+              --set-string database.migrationUrl=postgres://xiongbao:o@db.internal:5432/xiongbao
             refuses "an external database URL with no owner URL for migrations" \
               --set-string database.existingSecret= \
               --set-string database.url=postgres://xiongbao_app:x@db.internal:5432/xiongbao \
@@ -404,19 +404,19 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_DB: openbot_test
-          POSTGRES_USER: openbot
-          POSTGRES_PASSWORD: openbot
+          POSTGRES_DB: xiongbao_test
+          POSTGRES_USER: xiongbao
+          POSTGRES_PASSWORD: xiongbao
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d openbot_test"
+          --health-cmd "pg_isready -U xiongbao -d xiongbao_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://openbot:openbot@localhost:5432/openbot_test
-      TEST_DATABASE_URL: postgres://openbot:openbot@localhost:5432/openbot_test
+      DATABASE_URL: postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test
+      TEST_DATABASE_URL: postgres://xiongbao:xiongbao@localhost:5432/xiongbao_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -650,7 +650,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # drizzle.config.ts refuses to load without it. Nothing here connects.
-      DATABASE_URL: postgres://openbot:openbot@localhost:5432/xiongbao
+      DATABASE_URL: postgres://xiongbao:xiongbao@localhost:5432/xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
