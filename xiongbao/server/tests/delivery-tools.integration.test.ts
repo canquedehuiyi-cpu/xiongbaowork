@@ -14,6 +14,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Observable, of } from "rxjs";
 import { z } from "zod";
+import { createAcpDelivery } from "../src/agents/acp/delivery";
 import { toolDisabled } from "../src/approvals/policy";
 import {
   createApprovalQuestions,
@@ -61,6 +62,7 @@ import {
   createTaskProjector,
   type TaskProjector,
 } from "../src/tasks/projector";
+import { rerunBouncesOf } from "../src/tasks/rerun-gate";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
@@ -2323,6 +2325,265 @@ describe("deliver_task and the file really being there", () => {
     expect(
       (await cardRow(device.tenantId, device.cardId))?.deliverableRef,
     ).toMatchObject({ unverifiedFiles: ["reports/对比.xlsx"] });
+  });
+});
+
+describe("deliver_task re-runs the checks it names (borrowed improvements PR 5)", () => {
+  /** A command the coworker ran in a round: its call and its stored answer, as a built-in Bot's stream has them. */
+  const ranCommand = (
+    toolCallId: string,
+    command: string,
+    exitCode: number,
+    stdout: string,
+  ): BaseEvent[] =>
+    [
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId,
+        toolCallName: "computer_run_command",
+      },
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId,
+        delta: JSON.stringify({ command }),
+      },
+      { type: EventType.TOOL_CALL_END, toolCallId },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId,
+        messageId: `m-${toolCallId}`,
+        role: "tool",
+        content: JSON.stringify({
+          ok: true,
+          command,
+          exitCode,
+          stdout,
+          stderr: "",
+          truncated: false,
+          timedOut: false,
+          elapsedMs: 5,
+        }),
+      },
+    ] as unknown as BaseEvent[];
+
+  /** The coworker's tools with re-running wired to a stub computer that answers `stdout`. */
+  const rerunTools = (
+    card: { tenantId: string; agentId: string },
+    stdout: string,
+    ran: string[],
+  ) =>
+    deliveryTools({
+      delivery,
+      gate,
+      board: projector,
+      ownerUserId: card.tenantId,
+      agentId: card.agentId,
+      timeZone: () => ZONE,
+      rerun: {
+        cardRounds: (tenantId, taskId) => gate.cardRounds(tenantId, taskId),
+        rerunBounces: (tenantId, taskId) =>
+          rerunBouncesOf(database, tenantId, taskId),
+        canExecute: async () => true,
+        wouldAllow: async () => true,
+        run: async (command) => {
+          ran.push(command);
+          return {
+            command,
+            exitCode: 0,
+            stdout,
+            stderr: "",
+            truncated: false,
+            timedOut: false,
+            elapsedMs: 5,
+          };
+        },
+      },
+    });
+
+  const handIn = (
+    card: {
+      tenantId: string;
+      agentId: string;
+      threadId: string;
+      cardId: string;
+    },
+    tools: GrantedTool[],
+    args: unknown,
+  ) =>
+    turn({
+      tenantId: card.tenantId,
+      agentId: card.agentId,
+      threadId: card.threadId,
+      ask: "交了吗？",
+      reply: "交了。",
+      tools,
+      work: async (run) => {
+        await run.call("deliver_task", args);
+      },
+    }).then(async (round) => {
+      await roundLogged(card.tenantId, card.cardId, round.runId);
+      return parsed(round.results.at(-1) ?? "");
+    });
+
+  const counted = {
+    items: [{ kind: "note", ref: "data.csv 共 100 行，已去重。" }],
+    checks: ["数过行数：100 行"],
+    rerun: ["wc -l data.csv"],
+  };
+
+  test("a re-run that does not match is bounced twice; the third hand-in goes through, marked 复核不一致", async () => {
+    const card = await acceptedCard(
+      "rerun-mismatch",
+      undefined,
+      async (run) => {
+        for (const event of ranCommand(
+          "c1",
+          "wc -l data.csv",
+          0,
+          "100 data.csv",
+        ))
+          run.draw(event);
+      },
+    );
+    const ran: string[] = [];
+    const tools = rerunTools(card, "150 data.csv", ran);
+
+    for (const attempt of [1, 2]) {
+      const answer = await handIn(card, tools, counted);
+      expect({ attempt, bounced: answer.bounced }).toEqual({
+        attempt,
+        bounced: true,
+      });
+      expect(answer.rerunBounce).toBe(true);
+      expect(String(answer.reason)).toContain("wc -l data.csv");
+      expect(String(answer.reason)).toContain("150 data.csv");
+      expect((await cardRow(card.tenantId, card.cardId))?.deliverableRef).toBe(
+        null,
+      );
+    }
+    const third = await handIn(card, tools, counted);
+    expect(third.delivered).toBe(true);
+    expect(ran).toEqual(["wc -l data.csv", "wc -l data.csv", "wc -l data.csv"]);
+
+    const row = await cardRow(card.tenantId, card.cardId);
+    expect(row?.status).toBe("awaiting_review");
+    expect(row?.deliverableRef).toMatchObject({
+      reruns: [{ command: "wc -l data.csv", result: "mismatch" }],
+    });
+    const bounces = (await eventsOf(card.tenantId, card.cardId)).filter(
+      (event) => event.kind === "bounced",
+    );
+    expect(bounces.map((event) => event.detail.gate)).toEqual([
+      "rerunBounce",
+      "rerunBounce",
+    ]);
+  });
+
+  test("a re-run that matches is recorded as passed", async () => {
+    const card = await acceptedCard("rerun-passed", undefined, async (run) => {
+      for (const event of ranCommand("c1", "wc -l data.csv", 0, "100 data.csv"))
+        run.draw(event);
+    });
+    const answer = await handIn(
+      card,
+      rerunTools(card, "100 data.csv", []),
+      counted,
+    );
+    expect(answer.delivered).toBe(true);
+    expect(
+      (await cardRow(card.tenantId, card.cardId))?.deliverableRef,
+    ).toMatchObject({
+      reruns: [{ command: "wc -l data.csv", result: "passed" }],
+    });
+  });
+
+  test("XIONGBAO_DELIVERY_RERUN=off: nothing is re-run and nothing is recorded", async () => {
+    const card = await acceptedCard("rerun-off", undefined, async (run) => {
+      for (const event of ranCommand("c1", "wc -l data.csv", 0, "100 data.csv"))
+        run.draw(event);
+    });
+    const ran: string[] = [];
+    const saved = process.env.XIONGBAO_DELIVERY_RERUN;
+    process.env.XIONGBAO_DELIVERY_RERUN = "off";
+    try {
+      const answer = await handIn(
+        card,
+        rerunTools(card, "150 data.csv", ran),
+        counted,
+      );
+      expect(answer.delivered).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.XIONGBAO_DELIVERY_RERUN;
+      else process.env.XIONGBAO_DELIVERY_RERUN = saved;
+    }
+    expect(ran).toEqual([]);
+    expect((await cardRow(card.tenantId, card.cardId))?.deliverableRef).toEqual(
+      {
+        kind: "deliverable",
+        notes: ["data.csv 共 100 行，已去重。"],
+        checks: ["数过行数：100 行"],
+      },
+    );
+  });
+
+  test("claiming it was tested without naming a re-run is bounced once in the turn", async () => {
+    const card = await acceptedCard("rerun-claim");
+    const claim = {
+      items: [{ kind: "note", ref: "三家发票都核对完了。" }],
+      checks: ["跑过 bun test，全部通过"],
+    };
+    const answer = await handIn(
+      card,
+      toolsFor(card.tenantId, card.agentId),
+      claim,
+    );
+    expect(answer.bounced).toBe(true);
+    expect(answer.rerunClaimBounce).toBe(true);
+    expect(String(answer.reason)).toContain("无法复跑：");
+    const [bounce] = (await eventsOf(card.tenantId, card.cardId)).filter(
+      (event) => event.kind === "bounced",
+    );
+    expect(bounce?.detail.gate).toBe("rerunClaimBounce");
+  });
+
+  test("an external employee's hand-in goes through neither gate", async () => {
+    const card = await acceptedCard("rerun-external");
+    // In a round on the card's thread, as an external employee's own turn ends: the server hands it in.
+    const round = await turn({
+      tenantId: card.tenantId,
+      agentId: card.agentId,
+      threadId: card.threadId,
+      ask: "做完了吗？",
+      work: async (run) => {
+        await createAcpDelivery({ delivery, gate, emit: () => {} }).ended(
+          {
+            tenantId: card.tenantId,
+            agentId: card.agentId,
+            threadId: card.threadId,
+            runId: run.runId,
+          },
+          {
+            events: [],
+            reply:
+              "结论：三家发票都核对完了。\n自查：跑过 bun test，全部通过。",
+            name: "外部员工",
+          },
+        );
+      },
+    });
+    await roundLogged(card.tenantId, card.cardId, round.runId);
+    const row = await cardRow(card.tenantId, card.cardId);
+    expect(row?.status).toBe("awaiting_review");
+    expect(Object.keys(row?.deliverableRef ?? {}).sort()).toEqual([
+      "checks",
+      "kind",
+      "notes",
+    ]);
+    expect(
+      (await eventsOf(card.tenantId, card.cardId)).filter(
+        (event) => event.kind === "bounced",
+      ),
+    ).toEqual([]);
   });
 });
 

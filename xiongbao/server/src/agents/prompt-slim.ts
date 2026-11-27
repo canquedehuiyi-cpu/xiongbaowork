@@ -230,7 +230,8 @@ export const TOOL_BRIEFS: Readonly<
   deliver_task: {
     description:
       "交付，kind：attachment（附件）、component（组件）、link（网址）、workspace_file（路径）、app（port、path 默认 /、title）、note（ref 写结论）。checks：查法。「必需：…」每项写进 title 或 checks。" +
-      FILE_DELIVERY_HINT,
+      FILE_DELIVERY_HINT +
+      "rerun：原样写这张卡里跑过、能证明结果的核对命令，服务器会复跑；没有就在 checks 写「无法复跑：原因」。",
   },
   accept_task: {
     description:
