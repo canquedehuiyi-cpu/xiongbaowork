@@ -12,9 +12,11 @@
 #      the database), and a row written the way the service writes one.
 #   2. This tree's image on the same volume: the migrator finds the history in the ledger, checks the
 #      database has been through v0.2.16 and has the baseline's structure, and rewrites the ledger to the
-#      baseline's one row, keeping the replaced rows beside it. It serves, and the row is there.
+#      baseline's row, keeping the replaced rows beside it, then runs every migration after the baseline
+#      (0001 adds the memory correction columns). It serves, and the row is there.
 #   3. A second start: nothing is adopted again, the ledger is as the first start left it.
-#   4. The way back: the kept rows put back, v0.2.16's image starts on the same volume again.
+#   4. The way back: the migrations after the baseline undone (scripts/rollback-after-baseline.ts), the kept
+#      rows put back, v0.2.16's image starts on the same volume again, and this tree's adopts it again.
 #   5. A v0.2.16 volume whose structure was changed by hand (one more index): this tree's image refuses to
 #      start, prints the difference, and changes nothing, so v0.2.16 still starts on it.
 set -euo pipefail
@@ -92,7 +94,16 @@ ledger() { echo "SELECT count(*) || ' ' || coalesce(string_agg(hash, ',' ORDER B
 
 BASELINE_HASH=$(sha256sum server/drizzle/0000_baseline.sql | cut -d' ' -f1)
 BASELINE_WHEN=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("server/drizzle/meta/_journal.json", "utf8")).entries[0].when)')
-printf 'old_image=%s\nnew_image=%s\nbaseline=%s %s\n' "$OLD_IMAGE" "$NEW_IMAGE" "$BASELINE_HASH" "$BASELINE_WHEN" | tee "$EVIDENCE/images.txt"
+# The ledger this tree's folder leaves: the baseline's row, then one per migration after it, as ledger() prints it.
+FOLDER_LEDGER=$(bun -e '
+  const { readFileSync } = require("fs");
+  const { createHash } = require("crypto");
+  const entries = JSON.parse(readFileSync("server/drizzle/meta/_journal.json", "utf8")).entries;
+  const hashes = entries.map((e) => createHash("sha256").update(readFileSync(`server/drizzle/${e.tag}.sql`)).digest("hex"));
+  console.log(`${hashes.length} ${hashes.join(",")}`);')
+# Undoing every migration after the baseline: the first step of the way back to v0.2.16.
+ROLLBACK_SQL=$(cd server && bun scripts/rollback-after-baseline.ts)
+printf 'old_image=%s\nnew_image=%s\nbaseline=%s %s\nfolder_ledger=%s\n' "$OLD_IMAGE" "$NEW_IMAGE" "$BASELINE_HASH" "$BASELINE_WHEN" "$FOLDER_LEDGER" | tee "$EVIDENCE/images.txt"
 
 # ---------------------------------------------------------------------------------------------------
 # 1. v0.2.16 on a new volume, and a row the way the service writes one.
@@ -119,9 +130,11 @@ log=$(docker logs "$NAME" 2>&1)
 printf '%s\n' "$log" | grep -q "\"type\":\"migration-baseline-adopted\",\"replaced\":$HISTORY_ROWS" &&
   pass "the start says it took the ledger onto the baseline, replacing $HISTORY_ROWS rows" ||
   fail "no migration-baseline-adopted line for $HISTORY_ROWS rows"
-expect "the ledger is the baseline's one row" "1 $BASELINE_HASH" "$(ledger "$NAME")"
-expect "under the baseline's journal stamp" "$BASELINE_WHEN" \
-  "$(echo 'SELECT created_at FROM drizzle.__drizzle_migrations;' | owner_sql "$NAME")"
+expect "the ledger is the baseline's row, then every migration after it" "$FOLDER_LEDGER" "$(ledger "$NAME")"
+expect "the baseline's row carries its journal stamp" "$BASELINE_HASH $BASELINE_WHEN" \
+  "$(echo "SELECT hash || ' ' || created_at FROM drizzle.__drizzle_migrations ORDER BY id LIMIT 1;" | owner_sql "$NAME")"
+expect "the memory correction columns (0001, after the baseline) are there" "correction_count,from_correction,replaces_id" \
+  "$(echo "SELECT string_agg(column_name, ',' ORDER BY column_name) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'personal_memories' AND column_name IN ('from_correction', 'correction_count', 'replaces_id');" | owner_sql "$NAME")"
 expect "the replaced rows are kept beside it" "$HISTORY" \
   "$(echo "SELECT count(*) || ' ' || string_agg(hash, ',' ORDER BY id) FROM drizzle.__drizzle_migrations_before_baseline;" | owner_sql "$NAME")"
 expect "the row written under v0.2.16 is there for the app role" "rehearsal-person@example.test" \
@@ -139,10 +152,12 @@ wait_healthy "$NAME" "this tree's image starts a second time"
 since_restart=$(docker logs --since "$(docker inspect -f '{{.State.StartedAt}}' "$NAME")" "$NAME" 2>&1)
 printf '%s\n' "$since_restart" | grep -q 'migration-baseline-adopted' &&
   fail "the second start adopted the baseline again" || pass "the second start does not adopt again"
-expect "the ledger is as the first start left it" "1 $BASELINE_HASH" "$(ledger "$NAME")"
+expect "the ledger is as the first start left it" "$FOLDER_LEDGER" "$(ledger "$NAME")"
 
 # ---------------------------------------------------------------------------------------------------
-# 4. The way back: the kept rows put back, and v0.2.16 starts on the volume again.
+# 4. The way back: every migration after the baseline undone, the kept rows put back, and v0.2.16 starts on
+#    the volume again; then this tree's image adopts it again.
+printf '%s\n' "$ROLLBACK_SQL" | owner_sql "$NAME" >/dev/null
 owner_sql "$NAME" <<'SQL' >/dev/null
 BEGIN;
 DELETE FROM drizzle.__drizzle_migrations;
@@ -155,6 +170,10 @@ start "$NAME" "$NAME-db" "$OLD_IMAGE"
 wait_healthy "$NAME" "with the kept rows put back, v0.2.16 starts on the volume again"
 expect "and its ledger is the history again" "$HISTORY" "$(ledger "$NAME")"
 stop "$NAME" v0216-back
+start "$NAME" "$NAME-db" "$NEW_IMAGE"
+wait_healthy "$NAME" "after the way back, this tree's image adopts the volume again"
+expect "with the same ledger as the first time" "$FOLDER_LEDGER" "$(ledger "$NAME")"
+stop "$NAME" new-again
 
 # ---------------------------------------------------------------------------------------------------
 # 5. A structure changed by hand is refused, with the difference printed, and nothing changes.

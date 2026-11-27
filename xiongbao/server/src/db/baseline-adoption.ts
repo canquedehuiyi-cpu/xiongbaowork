@@ -22,6 +22,23 @@
  *     the way back if v0.2.17 has to be rolled back.
  *
  * A second start finds the baseline in the ledger and does nothing.
+ *
+ * MIGRATIONS AFTER THE BASELINE. The adoption happens before any of them runs, so the structure it
+ * compares with is the BASELINE's, never the folder's, and stays so for as long as v0.2.16 databases may
+ * still arrive. A new migration therefore:
+ *
+ *  - goes in `drizzle/` itself, as `000N_<name>.sql` with the next number (`0001_memory_corrections` is
+ *    the first), and its entry at the end of `meta/_journal.json` with `idx` N;
+ *  - is stamped (`when`) after the entry before it, and so after the baseline's 1795757510847: a stamp
+ *    older than the newest in a ledger is never run on that database (`./migration-reach` refuses it);
+ *  - says how to undo it, in a `回滚：` block of its header comment (`scripts/rollback-after-baseline.ts`
+ *    reads them): a database put back onto v0.2.16 must lose what came after the baseline first, or the
+ *    next upgrade finds a structure that is not the baseline's and refuses it;
+ *  - never edits `0000_baseline.sql` (its hash is what an adopted database's ledger records) nor
+ *    `meta/0000_baseline_structure.json` (what v0.2.16 databases are compared with). A test that fails
+ *    after adding a migration is fixed in the test, not by regenerating either.
+ *
+ * Written out for people in docs/development.md, "Migrations"; held by `tests/migration-baseline.test.ts`.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -87,6 +104,22 @@ export async function readBaselineStructure(
   ) as StructureItem[];
 }
 
+/**
+ * An empty ledger over a schema that already has tables: somebody emptied `drizzle.__drizzle_migrations`,
+ * or migrated with another tool. Run as a new database, the baseline would stop at its first CREATE with
+ * "already exists", which says nothing about why; refused here instead, before anything runs.
+ */
+async function refuseUnrecordedSchema(tx: TransactionSql): Promise<void> {
+  const [row] = await tx<{ tables: number }[]>`
+    select count(*)::int as tables from pg_catalog.pg_class
+     where relnamespace = 'public'::regnamespace and relkind in ('r', 'p')`;
+  if (row && row.tables > 0)
+    throw new BaselineMismatchError(
+      `迁移记录（drizzle.__drizzle_migrations）是空的，但 public 下已经有 ${row.tables} 张表：不知道这个库是怎么建的，不迁移、不启动（数据库没有任何改动）。` +
+        "迁移记录被清空过的，从备份里把它恢复回来再启动；新部署请用一个空库。",
+    );
+}
+
 /** Thrown instead of adopting a database whose structure is not the baseline's. */
 export class BaselineMismatchError extends Error {
   constructor(message: string) {
@@ -113,14 +146,18 @@ export async function adoptBaseline(
   expected: () => Promise<readonly StructureItem[]>,
 ): Promise<AdoptionOutcome> {
   const state = ledgerState(folder, applied);
+  if (state === "new") await refuseUnrecordedSchema(tx);
   if (state !== "history") return { adopted: false, state };
 
   await refuseUnrenamedDatabase(tx, applied);
 
   const differences = diffStructure(await expected(), await readStructure(tx));
   if (differences.length > 0) {
+    const [server] = await tx<{ version: string }[]>`
+      select current_setting('server_version') as version`;
     throw new BaselineMismatchError(
       `这个数据库的结构和 v0.2.17 的基线不一致（共 ${differences.length} 处），不改写迁移记录、不迁移、不启动（数据库没有任何改动）。\n` +
+        `这个库的 PostgreSQL 版本：${server?.version ?? "未知"}。基线的结构按 PostgreSQL 16 与 17 的输出记录；更新的大版本记录结构的方式不同（例如 18 把 NOT NULL 记成约束），差异若成片出现在每张表上，原因是版本，不是库被改过，请交给维护者。\n` +
         "差异如下（- 是基线里的样子，+ 是这个库里的样子）：\n" +
         `${formatStructureDifferences(differences)}\n` +
         "处理办法：这个库原样还能由 v0.2.16 的镜像启动，先换回 v0.2.16 保持服务。差异若是手工改过库（加过索引、改过列或授权），" +

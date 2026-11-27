@@ -5,6 +5,7 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import postgres from "postgres";
 import { applyRelease, MIGRATIONS_FOLDER } from "../scripts/migrate";
+import { rollbackAfterBaseline } from "../scripts/rollback-after-baseline";
 import {
   applyMigrations,
   MIGRATIONS_JOURNAL,
@@ -23,6 +24,7 @@ import {
   readStructure,
 } from "../src/db/schema-structure";
 import { UpgradeRefusedError } from "../src/db/upgrade-gate";
+import { baselineOnlyFolder } from "./support/baseline-folder";
 import {
   dumpDifference,
   normalizeSchemaDump,
@@ -52,6 +54,12 @@ import {
  *
  * Databases are created through the owner (`TEST_DATABASE_ADMIN_URL`, a superuser); without it the
  * database half is skipped. The history comes from git (`tests/support/v0216-history`).
+ *
+ * THE BASELINE, NOT THE FOLDER. What stands for "the baseline's structure" (the committed expected
+ * structure, production's dump, v0.2.16's history) is compared with a database built by the baseline
+ * alone (`tests/support/baseline-folder`), because the start-up check adopts a database before any later
+ * migration runs. Migrations after the baseline are tested for what they must do instead: run right after
+ * the adoption, and come undone back to the baseline's structure (`scripts/rollback-after-baseline`).
  */
 const FIXTURE = join(
   import.meta.dir,
@@ -158,6 +166,34 @@ const baselineHash = async () => {
   return baseline;
 };
 
+/** The ledger a database holds once the whole folder has run: one row per migration, in order. */
+async function folderLedger(folder = MIGRATIONS_FOLDER) {
+  return (await readMigrationFolder(folder)).map(({ hash, when }) => [
+    hash,
+    String(when),
+  ]);
+}
+
+/** The columns `0001_memory_corrections` adds, as the database has them. */
+async function memoryCorrectionColumns(client: postgres.Sql) {
+  return (
+    await client<{ name: string }[]>`
+      select column_name as name from information_schema.columns
+       where table_schema = 'public' and table_name = 'personal_memories'
+         and column_name in ('from_correction', 'correction_count', 'replaces_id')
+       order by column_name`
+  ).map(({ name }) => name);
+}
+
+/** Every statement of every migration after the baseline undone, newest first. */
+async function undoAfterBaseline(client: postgres.Sql) {
+  const undo = await rollbackAfterBaseline(MIGRATIONS_FOLDER);
+  await client.begin(async (tx) => {
+    for (const { statements } of undo)
+      for (const statement of statements) await tx.unsafe(statement);
+  });
+}
+
 afterAll(async () => {
   await removeExtractedHistory();
   if (!owner) return;
@@ -169,9 +205,31 @@ afterAll(async () => {
 }, 120_000);
 
 describe("the baseline", () => {
-  test("is the only migration, and the folder's first entry", async () => {
+  test("is the folder's first entry, and every migration after it is stamped after it", async () => {
+    // A migration after the baseline stamped before it is never run on a database already on the
+    // baseline (the migrator only runs stamps newer than the newest it holds); `migration-reach`
+    // would refuse that database instead. Numbering and stamps: docs/development.md, "Migrations".
     const folder = await readMigrationFolder(MIGRATIONS_FOLDER);
-    expect(folder.map((entry) => entry.tag)).toEqual([BASELINE_TAG]);
+    const [baseline, ...after] = folder;
+    expect(baseline?.tag).toBe(BASELINE_TAG);
+    for (const migration of after) {
+      expect(migration.tag).not.toStartWith("0000_");
+      expect(migration.when).toBeGreaterThan(baseline?.when ?? Infinity);
+    }
+  });
+
+  test("every migration after it says how to undo it", async () => {
+    // Throws, naming the migration, when one has no 回滚： block in its header comment.
+    const undo = await rollbackAfterBaseline(MIGRATIONS_FOLDER);
+    const folder = await readMigrationFolder(MIGRATIONS_FOLDER);
+    expect(undo.map(({ tag }) => tag)).toEqual(
+      folder
+        .slice(1)
+        .map(({ tag }) => tag)
+        .reverse(),
+    );
+    for (const { statements } of undo)
+      expect(statements.length).toBeGreaterThan(0);
   });
 
   test("is never edited once released: every adopted or new database records exactly this hash", async () => {
@@ -199,8 +257,9 @@ describe.skipIf(!owner)("against v0.2.16's history", () => {
   test("fresh database from baseline equals database migrated from v0.2.16 history", async () => {
     const fresh = await newDatabase("fresh");
     const history = await v0216Database("history");
+    const onlyBaseline = await baselineOnlyFolder();
     try {
-      await applyRelease(fresh.client, MIGRATIONS_FOLDER);
+      await applyRelease(fresh.client, onlyBaseline);
 
       const built = await fresh.client.begin((tx) => readStructure(tx));
       const migrated = await history.client.begin((tx) => readStructure(tx));
@@ -220,7 +279,47 @@ describe.skipIf(!owner)("against v0.2.16's history", () => {
       expect(await rows(fresh.client)).toEqual(await rows(history.client));
       expect(Object.keys(await rows(fresh.client)).length).toBeGreaterThan(0);
     } finally {
+      await rm(onlyBaseline, { recursive: true, force: true });
       await finish(fresh);
+      await finish(history);
+    }
+  }, 600_000);
+
+  test("a migration after the baseline does not change what the adoption compares", async () => {
+    // A folder with one more migration after the baseline than this tree has: a database v0.2.16 left
+    // behind is still adopted (the comparison is with the baseline's structure, not the folder's), and
+    // the extra migration runs right after the adoption, in the same start.
+    const folder = await readMigrationFolder(MIGRATIONS_FOLDER);
+    const last = folder.at(-1);
+    if (!last) throw new Error("no migrations");
+    const extended = await baselineOnlyFolder(MIGRATIONS_FOLDER, [
+      ...(await Promise.all(
+        folder.slice(1).map(async ({ tag, when }) => ({
+          tag,
+          when,
+          sql: await readFile(join(MIGRATIONS_FOLDER, `${tag}.sql`), "utf8"),
+        })),
+      )),
+      {
+        tag: `${String(folder.length).padStart(4, "0")}_after_baseline_probe`,
+        when: last.when + 1000,
+        sql: "CREATE TABLE public.after_baseline_probe (id integer);",
+      },
+    ]);
+    const history = await v0216Database("extended");
+    try {
+      await applyRelease(history.client, extended);
+      expect(
+        (await ledger(history.client)).map(({ hash, created_at }) => [
+          hash,
+          created_at,
+        ]),
+      ).toEqual(await folderLedger(extended));
+      const [probe] = await history.client<{ present: string | null }[]>`
+        select to_regclass('public.after_baseline_probe')::text as present`;
+      expect(probe?.present).toBe("after_baseline_probe");
+    } finally {
+      await rm(extended, { recursive: true, force: true });
       await finish(history);
     }
   }, 600_000);
@@ -300,14 +399,16 @@ describe("production's schema dump", () => {
     "production schema dump matches the baseline",
     async () => {
       const fresh = await newDatabase("production");
+      const onlyBaseline = await baselineOnlyFolder();
       try {
-        await applyRelease(fresh.client, MIGRATIONS_FOLDER);
+        await applyRelease(fresh.client, onlyBaseline);
         const difference = dumpDifference(
           normalizeSchemaDump(await readFile(FIXTURE, "utf8")),
           normalizeSchemaDump(pgDumpSchema(databaseUrl(fresh.name))),
         );
         expect(difference).toEqual({ missing: [], unexpected: [] });
       } finally {
+        await rm(onlyBaseline, { recursive: true, force: true });
         await finish(fresh);
       }
     },
@@ -339,11 +440,20 @@ describe("production's schema dump", () => {
         expect(await restored.client.begin((tx) => readStructure(tx))).toEqual(
           await readBaselineStructure(MIGRATIONS_FOLDER),
         );
+        expect(await memoryCorrectionColumns(restored.client)).toEqual([]);
         await applyRelease(restored.client, MIGRATIONS_FOLDER);
-        const baseline = await baselineHash();
-        expect((await ledger(restored.client)).map(({ hash }) => hash)).toEqual(
-          [baseline.hash],
-        );
+        // Adopted, and every migration after the baseline run in the same start.
+        expect(
+          (await ledger(restored.client)).map(({ hash, created_at }) => [
+            hash,
+            created_at,
+          ]),
+        ).toEqual(await folderLedger());
+        expect(await memoryCorrectionColumns(restored.client)).toEqual([
+          "correction_count",
+          "from_correction",
+          "replaces_id",
+        ]);
       } finally {
         await rm(history, { recursive: true, force: true });
         await finish(restored);
@@ -405,12 +515,31 @@ describe.skipIf(!owner)("starting on a database v0.2.16 left behind", () => {
         await tx`insert into public.users (id, email, name) values ('baseline-person', 'baseline@example.test', 'Baseline')`;
       });
 
+      expect(await memoryCorrectionColumns(client)).toEqual([]);
       await applyRelease(client, MIGRATIONS_FOLDER);
       const baseline = await baselineHash();
       const after = await ledger(client);
-      expect(after.map(({ hash, created_at }) => [hash, created_at])).toEqual([
-        [baseline.hash, String(baseline.when)],
+      // The baseline's row in place of the history, then every migration after the baseline, run right
+      // after the adoption: v0.2.16 had none of their columns.
+      expect(after.map(({ hash, created_at }) => [hash, created_at])).toEqual(
+        await folderLedger(),
+      );
+      expect(after[0]?.hash).toBe(baseline.hash);
+      expect(await memoryCorrectionColumns(client)).toEqual([
+        "correction_count",
+        "from_correction",
+        "replaces_id",
       ]);
+      // Built from the whole folder or adopted and migrated, a database ends up the same.
+      const built = await newDatabase("built");
+      try {
+        await applyRelease(built.client, MIGRATIONS_FOLDER);
+        expect(await client.begin((tx) => readStructure(tx))).toEqual(
+          await built.client.begin((tx) => readStructure(tx)),
+        );
+      } finally {
+        await finish(built);
+      }
       const kept = await client<
         { id: number; hash: string; created_at: string | null }[]
       >`
@@ -433,7 +562,13 @@ describe.skipIf(!owner)("starting on a database v0.2.16 left behind", () => {
       });
       expect(person?.email).toBe("baseline@example.test");
 
-      // The way back: with the kept rows put back, v0.2.16's own migrator finds nothing to do here.
+      // The way back: every migration after the baseline undone (their 回滚： blocks), which leaves the
+      // baseline's structure, the one a later upgrade adopts again; then the kept rows put back, and
+      // v0.2.16's own migrator finds nothing to do here.
+      await undoAfterBaseline(client);
+      expect(await client.begin((tx) => readStructure(tx))).toEqual(
+        await readBaselineStructure(MIGRATIONS_FOLDER),
+      );
       await client.begin(async (tx) => {
         await tx`delete from drizzle.__drizzle_migrations`;
         await tx.unsafe(
@@ -473,6 +608,8 @@ describe.skipIf(!owner)("starting on a database v0.2.16 left behind", () => {
       expect(message).toContain("index public.baseline_test_extra");
       expect(message).toContain("policy public.credentials.tenant_isolation");
       expect(message).toContain("数据库没有任何改动");
+      // Says which PostgreSQL it read, for a difference that comes from a newer major version.
+      expect(message).toMatch(/这个库的 PostgreSQL 版本：\d+/);
       expect(await ledger(client)).toEqual(before);
       expect(await archiveExists(client)).toBe(false);
 
@@ -502,6 +639,32 @@ describe.skipIf(!owner)("starting on a database v0.2.16 left behind", () => {
       await finish(database);
     }
   }, 600_000);
+
+  test("an empty ledger over existing tables is refused, not run as a new database", async () => {
+    const database = await newDatabase("unrecorded");
+    const { client } = database;
+    try {
+      await client.unsafe("CREATE TABLE public.users (id text PRIMARY KEY)");
+      const refused = await applyRelease(client, MIGRATIONS_FOLDER).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(BaselineMismatchError);
+      expect((refused as Error).message).toContain(
+        "迁移记录（drizzle.__drizzle_migrations）是空的，但 public 下已经有 1 张表",
+      );
+      // Nothing ran: no ledger was made, and the table is as it was.
+      const [made] = await client<{ ledger: string | null }[]>`
+        select to_regclass('drizzle.__drizzle_migrations')::text as ledger`;
+      expect(made?.ledger ?? null).toBeNull();
+      const [columns] = await client<{ n: number }[]>`
+        select count(*)::int as n from information_schema.columns
+         where table_schema = 'public' and table_name = 'users'`;
+      expect(columns?.n).toBe(1);
+    } finally {
+      await finish(database);
+    }
+  }, 300_000);
 
   test("a database v0.2.15 left behind is refused by the upgrade gate before any structure is compared", async () => {
     const database = await newDatabase("v0215");

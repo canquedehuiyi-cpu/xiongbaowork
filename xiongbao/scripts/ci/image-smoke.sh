@@ -109,10 +109,12 @@ if [ "$healthy" = true ]; then
   # Credentials are sealed under kid k2 from the first boot, so none is under the kid before v0.2.16 (which
   # the migrator would refuse on the next start).
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from credentials where encrypted_value::jsonb ->> '"'"'kid'"'"' = '"'"'k1'"'"'"')" = 0
-  # A new volume runs the baseline, once: its ledger holds the baseline's one row, under the baseline's own
-  # journal stamp, and the second boot found nothing left to apply.
+  # A new volume runs the folder once: its ledger holds one row per journal entry (the baseline's under
+  # its own stamp, then each migration after it) and the second boot found nothing left to apply.
   baseline_when=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("server/drizzle/meta/_journal.json", "utf8")).entries[0].when)')
+  journal_entries=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("server/drizzle/meta/_journal.json", "utf8")).entries.length)')
   check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations where created_at = '"$baseline_when"'"')" = 1
+  check test "$(docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); /usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations"')" = "$journal_entries"
   check docker exec "$name" sh -c 'url=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL); test "$(/usr/lib/postgresql/16/bin/psql "$url" -At -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations")" = "$(cat /var/lib/postgresql/.trackb-journal)"'
   # Model the upgrade from an older embedded volume which has only an owner secret.
   docker exec "$name" rm /var/lib/postgresql/pgpassword-app

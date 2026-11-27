@@ -429,3 +429,31 @@ This template renders nothing.
 {{- fail (printf "config.model.provider is %q, and the server reads only openai or anthropic: anything else silently falls back to the tenant package's provider. Set openai or anthropic, or leave it empty to keep the tenant package's." .) }}
 {{- end }}
 {{- end }}
+
+{{- /*
+  The bundled database's name, on a release that already has one.
+
+  PostgreSQL creates the database once, when the volume is empty, under `postgresql.auth.database`;
+  changing the value afterwards renames nothing. Before v0.2.17 the default was the product's former
+  name, and v0.2.17's default is `xiongbao`, so a release installed before it and upgraded with the new
+  default would hand the migrations Job and the API a database that does not exist: the pre-upgrade Job
+  fails and the upgrade stops. Refused here instead, naming the value to keep, read from the database's
+  own StatefulSet (its POSTGRES_DATABASE is the name it was created with, as long as the value is kept).
+
+  `lookup` sees nothing under `helm template` (and so under tools that render with it): there the
+  check cannot run, and the chart README's Upgrades section says how to read the name by hand.
+*/}}
+{{- if and .Values.postgresql.enabled .Release.IsUpgrade }}
+{{- $primary := lookup "apps/v1" "StatefulSet" .Release.Namespace (printf "%s-postgresql" .Release.Name) }}
+{{- if $primary }}
+{{- $created := "" }}
+{{- range ($primary.spec.template.spec.containers | default list) }}
+{{- range (.env | default list) }}
+{{- if and (has .name (list "POSTGRES_DATABASE" "POSTGRES_DB")) .value }}{{- $created = toString .value }}{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $created (ne $created (toString .Values.postgresql.auth.database)) }}
+{{- fail (printf "The bundled database of this release was created as %q, and postgresql.auth.database is %q: PostgreSQL does not rename a database when the value changes, so the migrations Job would connect to one that does not exist. Keep the name it has: set postgresql.auth.database=%s (in your values file, for every upgrade from now on). v0.2.17 changed the default to xiongbao; a release installed before it keeps its own." $created (toString .Values.postgresql.auth.database) $created) }}
+{{- end }}
+{{- end }}
+{{- end }}

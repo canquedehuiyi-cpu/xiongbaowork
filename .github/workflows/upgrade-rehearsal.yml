@@ -18,6 +18,7 @@ on:
       - xiongbao/scripts/ci/upgrade-rehearsal.sh
       - xiongbao/server/drizzle/**
       - xiongbao/server/scripts/migrate.ts
+      - xiongbao/server/scripts/rollback-after-baseline.ts
       - xiongbao/server/src/db/apply-migrations.ts
       - xiongbao/server/src/db/baseline-adoption.ts
       - xiongbao/server/src/db/migration-reach.ts

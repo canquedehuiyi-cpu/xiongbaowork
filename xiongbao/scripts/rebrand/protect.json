@@ -506,11 +506,5 @@
     "pattern": "OPENBOT_[A-Z0-9_]*",
     "until": "R5",
     "reason": "测试证明容器拒绝 v0.2.16 之前旧前缀的配置名、点名不报值，含京东云 .env.delivery 改名前形状的夹具（旧名就是被测输入）；随拒绝代码在 R5 导出新仓库前删除"
-  },
-  {
-    "file": "xiongbao/docker/tests/upgrade-gate.test.sh",
-    "pattern": "OLD_USER=openbot OLD_DB=openbot",
-    "until": "R5",
-    "reason": "测试用 initdb 造出改名前超级用户与库名的集群，证明 upgrade-gate.sh 拒绝 v0.2.15 形状的卷、放行新卷（旧名就是被测输入）；随拒绝代码在 R5 导出新仓库前删除"
   }
 ]

@@ -27,8 +27,9 @@ import type { AppliedMigration } from "./migration-reach";
 
 /**
  * The v0.2.16 rename migrations: journal tag, and the hash v0.2.16's migrator recorded for each (sha256
- * of the whole file as v0.2.16 shipped it, commit e9a669825). docker/s6/scripts/upgrade-gate.sh carries
- * the same two hashes; tests/upgrade-gate.test.ts holds them equal to the files in that commit.
+ * of the whole file as v0.2.16 shipped it, commit e9a669825). Only this check reads them (the image's
+ * docker/s6/scripts/upgrade-gate.sh checks names and v0.2.16's rename record, not the ledger);
+ * tests/upgrade-gate.test.ts holds them equal to the files in that commit.
  */
 export const RENAME_MIGRATIONS: ReadonlyArray<
   readonly [tag: string, hash: string]

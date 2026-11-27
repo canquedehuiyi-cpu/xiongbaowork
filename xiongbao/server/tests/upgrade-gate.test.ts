@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { applyRelease, MIGRATIONS_FOLDER } from "../scripts/migrate";
+import { readMigrationFolder } from "../src/db/migration-reach";
 import {
   PRE_RENAME_CREDENTIAL_KID,
   RENAME_MIGRATIONS,
@@ -152,6 +153,18 @@ async function journalSize(client: postgres.Sql) {
   return row?.n ?? 0;
 }
 
+/** The ledger's hashes in order: the baseline's first, then every migration after it. */
+async function appliedHashes(client: postgres.Sql) {
+  return (
+    await client<{ hash: string }[]>`
+      select hash from drizzle.__drizzle_migrations order by id`
+  ).map(({ hash }) => hash);
+}
+
+async function folderHashes() {
+  return (await readMigrationFolder(MIGRATIONS_FOLDER)).map(({ hash }) => hash);
+}
+
 async function appliedRows(client: postgres.Sql) {
   return (
     await client<{ hash: string; created_at: string | null }[]>`
@@ -191,9 +204,10 @@ describe.skipIf(!owner)("migrating with the check", () => {
     const client = await newDatabase("new");
     try {
       await applyRelease(client, MIGRATIONS_FOLDER);
-      expect(await journalSize(client)).toBe(1);
+      const migrated = await appliedHashes(client);
+      expect(migrated).toEqual(await folderHashes());
       await applyRelease(client, MIGRATIONS_FOLDER);
-      expect(await journalSize(client)).toBe(1);
+      expect(await appliedHashes(client)).toEqual(migrated);
     } finally {
       await client.end({ timeout: 5 });
     }
@@ -273,10 +287,11 @@ describe.skipIf(!owner)("migrating with the check", () => {
     const client = await historyDatabase("adopted");
     try {
       await applyRelease(client, MIGRATIONS_FOLDER);
-      expect(await journalSize(client)).toBe(1);
+      const adopted = await appliedHashes(client);
+      expect(adopted).toEqual(await folderHashes());
       // The rename migrations are no longer in the ledger; the baseline is, so the check does not run.
       await applyRelease(client, MIGRATIONS_FOLDER);
-      expect(await journalSize(client)).toBe(1);
+      expect(await appliedHashes(client)).toEqual(adopted);
     } finally {
       await client.end({ timeout: 5 });
     }
