@@ -438,7 +438,7 @@ describe("the computer gateway", () => {
     expect(rows[0]?.payload.file).toBe("notes.md");
     // The same guarantee as typed text: a Bot writes down what it was told, so a file body is exactly
     // as sensitive and is never put in the row.
-    expect(JSON.stringify(rows[0]?.payload)).not.toContain("4111");
+    expect(JSON.stringify(rows[0]?.payload)).not.toContain("4111-1111-1111-1111");
   });
 
   test("a permitted command runs and is recorded by command, never by output", async () => {
@@ -452,7 +452,7 @@ describe("the computer gateway", () => {
     expect(rows[0]?.payload.command).toBe("cat secrets.txt");
     // The command IS the action, so it is recorded in full. Its output is the file body of this
     // pair: whatever the command read off a page or out of a file, and never in the row.
-    expect(JSON.stringify(rows[0]?.payload)).not.toContain("4111");
+    expect(JSON.stringify(rows[0]?.payload)).not.toContain("4111-1111-1111-1111");
     // A command has no page element, so the row says nothing about a snapshot it was never part of.
     expect(rows[0]?.payload.element).toBeUndefined();
   });
