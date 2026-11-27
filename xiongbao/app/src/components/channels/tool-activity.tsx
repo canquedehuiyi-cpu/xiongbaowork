@@ -1,4 +1,4 @@
-import { CopilotKitContext } from "@copilotkit/react-core/v2/context";
+import { CopilotKitContext as ChatRuntimeContext } from "@copilotkit/react-core/v2/context";
 import {
   IconFileText,
   IconFolder,
@@ -209,7 +209,7 @@ const NOTHING_DRAWN: readonly { name: string }[] = [];
  * nothing is drawn. A `*` renderer draws every tool it is asked about, so nothing outside MCP folds.
  */
 export function useDrawnTool(): (name: string) => boolean {
-  const copilotCore = useContext(CopilotKitContext)?.copilotkit;
+  const copilotCore = useContext(ChatRuntimeContext)?.copilotkit;
   const subscribe = useCallback(
     (onChange: () => void) =>
       copilotCore

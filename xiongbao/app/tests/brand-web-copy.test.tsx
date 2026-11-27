@@ -9,6 +9,12 @@ import type {
   PluginServer,
   PluginsPage,
 } from "@/lib/plugins/queries";
+import {
+  LIBRARY_LOWER,
+  OLD_NAME,
+  OLD_PRODUCT,
+  OLD_PRODUCT_LOWER,
+} from "../../scripts/brand/guard/words";
 
 const appSource = join(import.meta.dir, "../src");
 const read = (path: string) => readFileSync(join(appSource, path), "utf8");
@@ -21,19 +27,23 @@ test("the generated-interface prompt names this delivery's product, not the upst
   expect(GENERATIVE_UI_DESIGN_SKILL).toContain(
     "PALETTE. XiongBao Work is neutral",
   );
-  expect(GENERATIVE_UI_DESIGN_SKILL).not.toContain("OpenBot");
+  expect(GENERATIVE_UI_DESIGN_SKILL).not.toMatch(OLD_NAME);
 });
 
 test("the old orb logo is gone", () => {
-  expect(existsSync(join(appSource, "assets/openbot-logo.png"))).toBe(false);
   expect(
-    existsSync(join(appSource, "components/edition/openbot-logo.tsx")),
+    existsSync(join(appSource, `assets/${OLD_PRODUCT_LOWER}-logo.png`)),
+  ).toBe(false);
+  expect(
+    existsSync(
+      join(appSource, `components/edition/${OLD_PRODUCT_LOWER}-logo.tsx`),
+    ),
   ).toBe(false);
 });
 
 test("the banner no longer links to the upstream vendor", () => {
   const banner = read("components/layout/self-host-banner.tsx");
-  expect(banner).not.toContain("copilotkit.ai");
+  expect(banner).not.toContain(`${LIBRARY_LOWER}.ai`);
   expect(banner).toContain("appConfig.brand.supportUrl");
 });
 
@@ -77,12 +87,12 @@ test("a built-in plugin installed before the rename shows the catalogue's vendor
     }) as unknown as PluginsPage;
 
   const [installed] = installedCards(
-    page(stored("first-party", "OpenBot")),
+    page(stored("first-party", OLD_PRODUCT)),
     undefined,
   );
   expect(installed?.vendor).toBe("熊宝");
   const [market] = marketCards(
-    page(stored("first-party", "OpenBot")),
+    page(stored("first-party", OLD_PRODUCT)),
     undefined,
   );
   expect(market?.vendor).toBe("熊宝");

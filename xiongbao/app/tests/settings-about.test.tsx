@@ -7,13 +7,14 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render } from "@testing-library/react";
+import { LICENCE_HOLDER } from "@xiongbao/shared/licence-paragraph";
 import { SETTINGS_SIDEBAR_ITEMS } from "@/components/settings/settings-sidebar";
 import { appConfig } from "@/lib/generated/application-config";
 import { AboutPage, ThirdPartyNotices } from "@/routes/_authed/settings/about";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * 关于页：产品名、版本、公司名，以及第三方依赖清单（清单里有一行随仓库附带的 MIT 许可）。真实清单有 1.8 MB，
+ * 关于页：产品名、版本、公司名，以及第三方依赖清单（清单里有一行产品最初所基于代码的 MIT 许可）。真实清单有 1.8 MB，
  * 这里换成小夹具，既快也不依赖生成步骤的输出。
  */
 mock.module("@/lib/generated/third-party-notices.json", () => ({
@@ -35,6 +36,8 @@ afterAll(async () => {
 });
 afterEach(cleanup);
 
+const holder = new RegExp(LICENCE_HOLDER);
+
 function open() {
   const router = createRouter({
     routeTree: createRootRoute({ component: AboutPage }),
@@ -51,12 +54,12 @@ test("关于页写明公司名，不带上游仓库链接，也没有单独的�
   );
   expect(view.container.textContent).toContain(appConfig.brand.productName);
   expect(view.container.textContent).not.toContain("基础代码");
-  expect(view.container.innerHTML).not.toContain("github.com/CopilotKit");
+  expect(view.container.innerHTML).not.toContain("github.com/");
 });
 
-test("依赖清单里有 CopilotKit 一行（版本写「—」、许可 MIT），搜索 copilot 能找到，展开后是版权行与 MIT 全文", async () => {
+test("依赖清单里有基础代码的 MIT 许可一行（版本写「—」、许可 MIT），按权利人名搜索能找到，展开后是版权行与 MIT 全文", async () => {
   const view = open();
-  const row = await view.findByRole("button", { name: /CopilotKit/ });
+  const row = await view.findByRole("button", { name: holder });
   expect(row.textContent).toContain("—");
   expect(row.textContent).toContain("MIT");
   expect(view.container.textContent).not.toContain(
@@ -64,12 +67,14 @@ test("依赖清单里有 CopilotKit 一行（版本写「—」、许可 MIT）�
   );
 
   fireEvent.change(view.getByRole("searchbox"), {
-    target: { value: "copilot" },
+    target: { value: LICENCE_HOLDER.slice(0, 7).toLowerCase() },
   });
   expect(view.queryByText("left-pad")).toBeNull();
 
-  fireEvent.click(view.getByRole("button", { name: /CopilotKit/ }));
-  expect(view.container.textContent).toContain("Copyright (c) 2026 CopilotKit");
+  fireEvent.click(view.getByRole("button", { name: holder }));
+  expect(view.container.textContent).toContain(
+    `Copyright (c) 2026 ${LICENCE_HOLDER}`,
+  );
   expect(view.container.textContent).toContain("Permission is hereby granted");
   expect(view.container.textContent).toContain("THE SOFTWARE IS PROVIDED");
 });
@@ -99,8 +104,10 @@ test("依赖清单加载失败时，随仓库附带的许可行仍可展开，�
     <ThirdPartyNotices load={() => Promise.reject(new Error("清单缺失"))} />,
   );
   expect(await view.findByText("第三方依赖清单加载失败。")).not.toBeNull();
-  fireEvent.click(view.getByRole("button", { name: /CopilotKit/ }));
-  expect(view.container.textContent).toContain("Copyright (c) 2026 CopilotKit");
+  fireEvent.click(view.getByRole("button", { name: holder }));
+  expect(view.container.textContent).toContain(
+    `Copyright (c) 2026 ${LICENCE_HOLDER}`,
+  );
   expect(view.container.textContent).toContain("Permission is hereby granted");
 });
 

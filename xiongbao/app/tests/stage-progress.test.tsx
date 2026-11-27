@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { EventType, type Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
@@ -11,9 +11,9 @@ import {
   type ToolGroup,
 } from "@/components/channels/tool-activity";
 import {
+  createRunStageTracker,
   type RunStage,
   type RunStageTracker,
-  createRunStageTracker,
   stageWords,
 } from "@/lib/channels/run-stage";
 import { queryClient } from "@/query-client";
@@ -355,14 +355,14 @@ function run(lastAnswered: boolean): Message[] {
 function transcript(messages: Message[], busy: boolean, stage?: RunStage) {
   return (
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <ChatTranscript
           busy={busy}
           messages={messages}
           restoring={false}
           stage={stage}
         />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>
   );
 }

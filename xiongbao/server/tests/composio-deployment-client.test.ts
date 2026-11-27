@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { OLD_PRODUCT } from "../../scripts/brand/guard/words";
 import { BrokerRefusalError } from "../src/plugins/broker";
 import {
   buildComposioClient,
@@ -271,7 +272,11 @@ describe("a refused server-to-server config keeps nothing of the request (review
 });
 
 describe("connecting a server-to-server app", () => {
-  const OURS = { id: "ac_ours", name: "Shopify (OpenBot)", status: "ENABLED" };
+  const OURS = {
+    id: "ac_ours",
+    name: `Shopify (${OLD_PRODUCT})`,
+    status: "ENABLED",
+  };
 
   async function sentState(authScheme: "S2S_OAUTH2" | "API_KEY") {
     const asked: { connection: { state: unknown } }[] = [];

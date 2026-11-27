@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/core";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { CopilotKitProvider as ChatRuntimeProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
@@ -84,10 +84,10 @@ function turn(calls: Call[], results: (string | undefined)[]): Message[] {
 function draw(messages: Message[], busy = false) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider>
+      <ChatRuntimeProvider>
         <CodingTools />
         <ChatTranscript busy={busy} messages={messages} restoring={false} />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }

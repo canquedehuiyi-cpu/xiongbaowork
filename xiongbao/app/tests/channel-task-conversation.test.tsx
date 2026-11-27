@@ -1,7 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { CopilotKitProvider, useFrontendTool } from "@copilotkit/react-core/v2";
+import {
+  CopilotKitProvider as ChatRuntimeProvider,
+  useFrontendTool,
+} from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
@@ -211,10 +214,10 @@ function mounting() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CopilotKitProvider runtimeUrl="http://localhost/api/runtime">
+      <ChatRuntimeProvider runtimeUrl="http://localhost/api/runtime">
         <PickDate />
         <ChannelChat channel={channel} runtimeAgentId="waiting-bot" />
-      </CopilotKitProvider>
+      </ChatRuntimeProvider>
     </QueryClientProvider>,
   );
 }

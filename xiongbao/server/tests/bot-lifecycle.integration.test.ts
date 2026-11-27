@@ -556,7 +556,7 @@ describe("Activity and attention", () => {
     async () => {
       // Seen on the Bot page: "...releases) and post one l", the instruction cut at 120 characters.
       const instruction =
-        "Check the latest release of CopilotKit/OpenBot on GitHub (https://github.com/CopilotKit/OpenBot/releases) and post one line in this conversation with its version number (tag) and release date.";
+        "Check the latest release of example/app on GitHub (https://github.com/example/app/releases) and post one line in this conversation with its version number (tag) and release date.";
       const id = `${prefix}-routine-long`;
       await database.insert(routines).values({
         id,

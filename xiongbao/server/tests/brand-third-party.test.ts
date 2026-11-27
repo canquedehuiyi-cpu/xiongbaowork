@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { CopilotRuntime, InMemoryAgentRunner } from "@copilotkit/runtime/v2";
+import { OLD_PRODUCT } from "../../scripts/brand/guard/words";
 import { frameworkLabel } from "../src/agents/framework";
 import { resetBrand, setBrand } from "../src/brand";
 import { CATALOGUE } from "../src/plugins/catalogue";
@@ -112,7 +113,7 @@ describe("Composio auth config provenance", () => {
   // Provenance is read from the NAME, so a config made before the rename must still be found or
   // enabling the app again would create the split this suffix exists to prevent.
   test.each([
-    ["written before the rename", "Linear (OpenBot)"],
+    ["written before the rename", `Linear (${OLD_PRODUCT})`],
     ["written under the current brand", "Linear (Example Work)"],
   ])(
     "a config %s is found and no second one is created",

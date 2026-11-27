@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /*
- * Scan one delivered artifact for the upstream's names (spec 5.1-C).
+ * Scan one delivered artifact for old names (spec 5.1-C).
  *
  *   bun scripts/brand/scan-artifact.ts --kind <web|extension|runner|image-files|image-config|deb>
  *     --input <path> --allowlist <json> [--summary <md file>]
@@ -29,7 +29,7 @@ import {
   segmentWords,
   wordsIn,
 } from "./guard/artifact-words";
-import { PRODUCT_DIRS } from "./guard/scan";
+import { PRODUCT_DIR } from "./guard/scan";
 
 export const KINDS = [
   "web",
@@ -62,11 +62,9 @@ export function dirText(dir: string): string {
     .join("\n");
 }
 
-/** The repository root as the build sees it: `xiongbao/` (formerly `openbot/`) is one level under it. */
+/** The repository root as the build sees it: `xiongbao/` is one level under it. */
 export function repoRoot(cwd = process.cwd()): string {
-  return (PRODUCT_DIRS as readonly string[]).includes(basename(cwd))
-    ? dirname(cwd)
-    : cwd;
+  return basename(cwd) === PRODUCT_DIR ? dirname(cwd) : cwd;
 }
 
 export type Scan = {
@@ -177,7 +175,7 @@ export function scanDeb(file: string, cwd = process.cwd()): Scan {
 }
 
 /**
- * A minifier renames locals, so `fromOpenBot:n` becomes `fromOpenBot:t` on the next build. Whole-word
+ * A minifier renames locals, so `from<Old>:n` becomes `from<Old>:t` on the next build. Whole-word
  * comparison would then flag every rebuild; a one-letter (or short mixed-case/digit) identifier that
  * follows `:` or `.`, or opens a word before a `.`, is written `_` instead (`ai.` is a real name). Word lists hold the canonical form.
  */

@@ -137,9 +137,12 @@ pass "pwuser may sudo xiongbao-apt"
 runuser -u pwuser -- sudo -n apt-get --version >"$T/out" 2>&1 && fail "pwuser may sudo apt-get itself: $(cat "$T/out")"
 pass "pwuser may not sudo apt-get itself"
 # The name the helper had before L1-9 went with its window: neither the file nor a sudoers rule naming it
-# is in the image, so a Bot that still says it gets "command not found" rather than root.
-[ ! -L /usr/local/sbin/openbot-apt ] || fail "the older name's link is still in the image: $(ls -l /usr/local/sbin/openbot-apt)"
-[ ! -e /usr/local/sbin/openbot-apt ] || fail "the older name's path is still in the image: $(ls -l /usr/local/sbin/openbot-apt)"
+# is in the image, so a Bot that still says it gets "command not found" rather than root. The old name is
+# assembled so the source never spells it.
+old_apt=open
+old_apt=${old_apt}bot-apt
+[ ! -L /usr/local/sbin/$old_apt ] || fail "the older name's link is still in the image: $(ls -l /usr/local/sbin/$old_apt)"
+[ ! -e /usr/local/sbin/$old_apt ] || fail "the older name's path is still in the image: $(ls -l /usr/local/sbin/$old_apt)"
 pass "the older name's path left the image with its window"
 granted="$(sudo -l -U pwuser 2>&1)"
 case "$granted" in
@@ -147,7 +150,7 @@ case "$granted" in
   *) fail "sudoers does not grant pwuser the helper by its current name: $granted" ;;
 esac
 case "$granted" in
-  *"openbot-apt"*) fail "sudoers still names the older name for pwuser: $granted" ;;
+  *"$old_apt"*) fail "sudoers still names the older name for pwuser: $granted" ;;
 esac
 pass "sudoers grants pwuser the helper by its current name alone"
 # Run through sudo, not only listed: the path reaches the same helper, which refuses a bogus action

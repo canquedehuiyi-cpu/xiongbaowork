@@ -1,77 +1,210 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse } from "yaml";
 import {
-  BRAND,
+  type AllowEntry,
   COPYRIGHT,
   codeLines,
-  EXEMPT_PATHS,
+  entryProblems,
   escapeRegExp,
   type Finding,
-  findings,
-  masked,
+  LICENCE_FILE,
   NEVER_CHANGE,
   REPO,
+  readAllowlist,
   repoPath,
   SIGNING_DOMAINS,
+  scanSources,
+  scanTree,
   tenant,
   WIRE_HEADERS,
   walk,
 } from "../../scripts/brand/guard/scan";
+import { OLD_NAME } from "../../scripts/brand/guard/words";
 
-const CATEGORIES = [
-  "internal-log", // server/runner/device logs read by operators, never by customers
-  "internal-error", // error text that stays in logs or is replaced before reaching a person
-  "admin-only", // helper prompts and screens whose output only an admin sees
-  "parsed-exact-text", // text matched verbatim elsewhere (old data, parsers); rewording breaks behaviour
-  "persisted-identifier", // stored keys, ids, file names, protocol values
-  "developer-only", // test fixtures and dev tooling that ship to nobody
-  "external-name", // a real third party the reader must recognise, or the MIT attribution the licence requires
-  "upstream-shell-only", // drawn only inside upstream OpenBot Desktop, which this fork does not ship
-] as const;
+const ALLOWLIST: AllowEntry[] = readAllowlist();
 
-type AllowEntry = { file: string; text: string; reason: string };
-const ALLOWLIST: AllowEntry[] = JSON.parse(
-  readFileSync(new URL("./brand-leak-allowlist.json", import.meta.url), "utf8"),
-);
+const LICENCE_LINE = "Copyright (c) 2026 CopilotKit";
+const licence: AllowEntry = {
+  file: LICENCE_FILE,
+  text: LICENCE_LINE,
+  category: "licence",
+  reason: "the MIT copyright line the licence requires",
+};
+const fixture = (files: Record<string, string>, allow: AllowEntry[] = []) =>
+  scanSources(
+    Object.entries(files).map(([path, text]) => ({
+      path,
+      source: () => text,
+    })),
+    allow,
+  );
+const where = (found: Finding[]) => found.map((f) => `${f.file}:${f.number}`);
 
-describe("brand leak guard", () => {
-  const all = findings();
-
-  test("every allowlist entry's text itself carries a brand word, so it names the hit", () => {
-    expect(ALLOWLIST.filter((entry) => !BRAND.test(entry.text))).toEqual([]);
+describe("one rule: an old name anywhere fails", () => {
+  test("old word anywhere outside the licence paragraph fails", () => {
+    const { findings } = fixture(
+      {
+        "app/src/a.ts": "// written for openbot\nexport const a = 1;\n",
+        "server/tests/b.test.ts": 'const handle = "copilotkit";\n',
+        "docs/c.md": "Plain text.\n",
+        [LICENCE_FILE]: `${LICENCE_LINE}\n`,
+      },
+      [licence],
+    );
+    expect(where(findings)).toEqual([
+      "app/src/a.ts:1",
+      "server/tests/b.test.ts:1",
+    ]);
   });
 
-  test("allowlist entries name a known category and a note", () => {
-    const bad = ALLOWLIST.filter((entry) => {
-      const [category, note] = entry.reason.split(/:\s*/, 2);
-      return (
-        !CATEGORIES.includes(category as (typeof CATEGORIES)[number]) ||
-        !note?.trim()
-      );
+  test("licence paragraph is the only exception", () => {
+    // The same line in any other file, or another old word beside it in its own file, is reported.
+    const { findings } = fixture(
+      {
+        [LICENCE_FILE]: `${LICENCE_LINE}\nportions from OpenBot\n`,
+        LICENSE: `${LICENCE_LINE}\n`,
+        "app/src/about.ts": `const line = "${LICENCE_LINE}";\n`,
+      },
+      [licence],
+    );
+    expect(where(findings)).toEqual([
+      `${LICENCE_FILE}:2`,
+      "LICENSE:1",
+      "app/src/about.ts:1",
+    ]);
+    // An entry cannot carry the licence line anywhere else.
+    expect(entryProblems({ ...licence, file: "LICENSE" })).not.toEqual([]);
+    // The tree has exactly one licence entry: the copyright line, in its file.
+    expect(
+      ALLOWLIST.filter((entry) => entry.category === "licence").map(
+        (entry) => `${entry.file}: ${entry.text}`,
+      ),
+    ).toEqual([`${LICENCE_FILE}: ${LICENCE_LINE}`]);
+  });
+
+  test("a package specifier is a dependency declaration and passes; the bare name does not", () => {
+    const { findings } = fixture({
+      "app/src/x.tsx": [
+        'import { thing } from "@copilotkit/react-core/v2";',
+        'mock.module("@copilotkit/runtime", () => ({}));',
+        "const c = CopilotKit;",
+        '"/repo/node_modules/.bun/@copilotkit+react-core@1.70.1/node_modules/x.js",',
+      ].join("\n"),
     });
-    expect(bad).toEqual([]);
+    expect(where(findings)).toEqual(["app/src/x.tsx:3"]);
   });
 
-  test("no upstream brand name in scanned source outside the rules and the allowlist", () => {
-    const unexplained = all
-      .filter(
-        (f) =>
-          !ALLOWLIST.some(
-            (entry) => entry.file === f.file && f.line.includes(entry.text),
-          ),
-      )
-      .map((f) => `${f.file}:${f.number}: ${f.line}`);
-    expect(unexplained).toEqual([]);
+  test("a name inside an import statement from the library passes, one line or many; anywhere else it fails", () => {
+    const { findings } = fixture({
+      "app/src/x.tsx": [
+        "import {",
+        "  CopilotKitProvider as ChatRuntimeProvider,",
+        "  useFrontendTool,",
+        '} from "@copilotkit/react-core/v2";',
+        'import { useCopilotKit as useChatRuntime } from "@copilotkit/react-core/v2";',
+        'import type { CopilotKitProviderProps as ChatRuntimeProviderProps } from "@copilotkit/react-core/v2";',
+        'export { CopilotKitContext as ChatRuntimeContext } from "@copilotkit/react-core/v2";',
+        "const provider = CopilotKitProvider;",
+        "// the hook is useCopilotKit",
+        "import {",
+        "  CopilotKitProvider,",
+        '} from "./not-the-library";',
+      ].join("\n"),
+    });
+    expect(where(findings)).toEqual([
+      "app/src/x.tsx:8",
+      "app/src/x.tsx:9",
+      "app/src/x.tsx:11",
+    ]);
   });
 
-  test("every allowlist entry still matches a finding, so the list only shrinks", () => {
-    const stale = ALLOWLIST.filter(
-      (entry) =>
-        !all.some((f) => f.file === entry.file && f.line.includes(entry.text)),
-    ).map((entry) => `${entry.file}: ${entry.text}`);
-    expect(stale).toEqual([]);
+  test("only a whole import statement from the library passes: nothing it is glued to, nothing it swallows", () => {
+    const { findings } = fixture({
+      // A statement with no module, then a line that only mentions the library in a string.
+      "app/src/a.ts": [
+        "export { a };",
+        "const openbot = 1",
+        "const s = \"from '@copilotkit/x'\"",
+      ].join("\n"),
+      // Code after the statement on the same line.
+      "app/src/b.ts":
+        'import { useCopilotKit as useChatRuntime } from "@copilotkit/react-core/v2"; const openbot = 1;',
+      // An import written inside a template literal is text, not a statement.
+      "app/src/c.ts": [
+        "const prompt = `",
+        'import { CopilotKitProvider } from "@copilotkit/react-core/v2";',
+        "`;",
+      ].join("\n"),
+      // A path that merely contains the scope is some other module.
+      "app/src/d.ts":
+        'import { CopilotKitProvider as P } from "./vendor/@copilotkit/react-core";',
+      // A line in the middle that is no member of the list gives the whole statement up.
+      "app/src/e.ts": [
+        "import {",
+        "  CopilotKitProvider as P,",
+        "  openbot = 1,",
+        '} from "@copilotkit/react-core/v2";',
+      ].join("\n"),
+    });
+    expect(where(findings)).toEqual([
+      "app/src/a.ts:2",
+      "app/src/b.ts:1",
+      "app/src/c.ts:2",
+      "app/src/d.ts:1",
+      "app/src/e.ts:2",
+      "app/src/e.ts:3",
+    ]);
+  });
+
+  test("an entry passes its exact text in its own file only, and an entry nothing needs is reported", () => {
+    const entry: AllowEntry = {
+      file: "app/src/x.ts",
+      text: "useCopilotKit",
+      category: "dependency",
+      reason: "the library's hook",
+    };
+    const stale: AllowEntry = { ...entry, file: "app/src/gone.ts" };
+    const result = fixture(
+      {
+        "app/src/x.ts":
+          "const c = useCopilotKit();\nconst d = useCopilotKitChat();\n",
+        "app/src/y.ts": "const c = useCopilotKit();\n",
+      },
+      [entry, stale],
+    );
+    // `useCopilotKitChat` contains the entry's text, so its line passes too: the text is matched as
+    // written, and an entry is only as narrow as its text.
+    expect(where(result.findings)).toEqual(["app/src/y.ts:1"]);
+    expect(result.unused).toEqual([stale]);
+  });
+});
+
+describe("the tree", () => {
+  const result = scanTree(ALLOWLIST);
+
+  test("no old name anywhere in the source outside the allowlist", () => {
+    expect(
+      result.findings.map((f) => `${f.file}:${f.number}: ${f.line}`),
+    ).toEqual([]);
+  });
+
+  test("every allowlist entry still matches a line, so the list only shrinks", () => {
+    expect(result.unused.map((e) => `${e.file}: ${e.text}`)).toEqual([]);
+  });
+
+  test("every Task 26 exclusion still matches a line", () => {
+    expect(result.unusedPatterns).toEqual([]);
+  });
+
+  test("every entry is well formed and names a file that exists", () => {
+    expect(ALLOWLIST.flatMap(entryProblems)).toEqual([]);
+    expect(
+      ALLOWLIST.filter((entry) => !existsSync(join(REPO, entry.file))).map(
+        (entry) => entry.file,
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -96,74 +229,13 @@ describe("never-change strings survive", () => {
       expect(corpus.includes(value)).toBe(true);
     });
   }
-});
 
-/*
- * Since v0.2.16 the guarded spellings are the renamed ones, so what the guard holds still is the new
- * spelling: a change back, or to anything else, fails "is still spelled verbatim" above.
- */
-describe("never-change strings carry the renamed spelling", () => {
   test("no never-change string or signing domain names the upstream product", () => {
     expect(
       [...NEVER_CHANGE, ...SIGNING_DOMAINS].filter((value) =>
-        BRAND.test(value),
+        OLD_NAME.test(value),
       ),
     ).toEqual([]);
-  });
-});
-
-/*
- * The rules must not swallow names. Each line below is something a person could read; if a rule
- * ever masks it, the guard has gone blind to that shape.
- */
-const MUST_REPORT = [
-  'title: "Welcome to QoderWake",',
-  'body: "Your OpenBots are ready",',
-  "label: \"Imported from 'OpenBot Desktop'\",",
-  'href: "https://www.copilotkit.com/pricing",',
-  'cta: "Try OpenBot2",',
-  'site: "openbotcloud.com",',
-  '#label = "OpenBot browser";',
-  'note: "Use OpenBot to do it",',
-  'note: "let OpenBot do it",',
-];
-
-// …and must not report plain code.
-const MUST_ALLOW = [
-  "const { copilotkit } = useCopilotKit();",
-  "<OpenBotVersion />",
-  'import { OpenBotVersion } from "@/components/layout/openbot-version";',
-  "if (status.openbotRunning) return openbot_app;",
-  "const value = props.copilotkit;",
-  "OPENBOT_PUBLIC_URL",
-];
-
-describe("the rules do not hide names", () => {
-  for (const line of MUST_REPORT) {
-    test(`reports ${line}`, () => {
-      expect(codeLines(line).length).toBe(1);
-      expect(BRAND.test(masked(line))).toBe(true);
-    });
-  }
-  for (const line of MUST_ALLOW) {
-    test(`allows ${line}`, () => {
-      expect(BRAND.test(masked(line))).toBe(false);
-    });
-  }
-  test("a prompt's Markdown bullets inside a template literal are scanned", () => {
-    const source = [
-      "const PROMPT = `",
-      "# Rules",
-      "* Always say OpenBot",
-      "`;",
-      "* a JSDoc line about OpenBot",
-    ].join("\n");
-    expect(codeLines(source).map((l) => l.line)).toEqual([
-      "const PROMPT = `",
-      "# Rules",
-      "* Always say OpenBot",
-      "`;",
-    ]);
   });
 });
 
@@ -187,12 +259,33 @@ const CURRENT_NAME = new RegExp(CURRENT_NAMES.map(escapeRegExp).join("|"), "i");
 
 const NAME_EXEMPT_PATHS: { test: (path: string) => boolean; reason: string }[] =
   [
-    ...EXEMPT_PATHS,
+    { test: (p) => p.includes("/generated/"), reason: "generated code" },
+    {
+      test: (p) => /\.test\.tsx?$/.test(p),
+      reason:
+        "tests beside the source say the delivered package's names on purpose",
+    },
+    {
+      test: (p) => p === "server/src/brand.ts",
+      reason: "the brand exit itself",
+    },
     {
       test: (p) => p === "app/src/lib/brand.ts",
       reason: "the web brand exit itself",
     },
   ];
+
+// Why a product name stays literal: the same categories the old guard recorded.
+const NAME_CATEGORIES = [
+  "internal-log",
+  "internal-error",
+  "admin-only",
+  "parsed-exact-text",
+  "persisted-identifier",
+  "developer-only",
+  "external-name",
+] as const;
+type NameEntry = { file: string; text: string; reason: string };
 
 // Takes sources rather than reading the tree, so a fixture goes through the same exemptions,
 // comment handling and match as the real scan.
@@ -224,7 +317,7 @@ function nameFindings(): Finding[] {
   );
 }
 
-const NAME_ALLOWLIST: AllowEntry[] = JSON.parse(
+const NAME_ALLOWLIST: NameEntry[] = JSON.parse(
   readFileSync(
     new URL("./product-name-allowlist.json", import.meta.url),
     "utf8",
@@ -270,8 +363,9 @@ describe("the current product name comes from the brand exit", () => {
     const bad = NAME_ALLOWLIST.filter((entry) => {
       const [category, note] = entry.reason.split(/:\s*/, 2);
       return (
-        !CATEGORIES.includes(category as (typeof CATEGORIES)[number]) ||
-        !note?.trim()
+        !NAME_CATEGORIES.includes(
+          category as (typeof NAME_CATEGORIES)[number],
+        ) || !note?.trim()
       );
     });
     expect(bad).toEqual([]);
@@ -341,7 +435,7 @@ describe("desktop-device does not borrow the upstream desktop app", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("bundle copyright keeps the MIT attribution", () => {
+  test("bundle copyright is the product's own line", () => {
     const conf = JSON.parse(
       readFileSync(join(tauriDir, "tauri.conf.json"), "utf8"),
     );

@@ -15,6 +15,7 @@ import {
 import { agentKeys } from "@/lib/agents/queries";
 import { XIONGBAO_WORKING_EVENT_TYPES } from "@/lib/audit/outcome";
 import { deploymentKeys } from "@/lib/deployment/queries";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -74,7 +75,7 @@ const ROWS = [
     targetId: "routines",
     initiatorKind: "deployment",
     payload: {
-      actor: "openbot:always-on",
+      actor: `${OLD_PRODUCT_LOWER}:always-on`,
       change: "plugin_granted",
       kind: "mcp",
       app: "routines",
@@ -88,7 +89,7 @@ const ROWS = [
     targetId: "routines/complete_goal",
     initiatorKind: "person",
     payload: {
-      actor: "openbot:always-on",
+      actor: `${OLD_PRODUCT_LOWER}:always-on`,
       change: "plugin_granted",
       kind: "mcp",
       ref: "routines/complete_goal",

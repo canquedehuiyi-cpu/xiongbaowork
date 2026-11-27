@@ -3,9 +3,6 @@
 本手册面向交付部署。客户部署拉取发布镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork`，
 不需要源码、Git 或本机构建；只有[附录：从源码构建](#附录从源码构建)需要进入 `xiongbao/`。
 本机历史端口、迁移研发与测试经验在[开发环境笔记](development-environment-xiongbao.md)。
-对外发布仍需 DoD-1/2/3/8 的证据，当前记录见[B 线交付验证](track-b-delivery-evidence.md)。
-全新 WSL、Windows PowerShell 与独立 Compose 的实际命令和耗时见
-[部署验收记录](delivery-acceptance-2026-10-09.md)。
 
 ## 1. 单容器：Linux / Windows Docker Desktop
 

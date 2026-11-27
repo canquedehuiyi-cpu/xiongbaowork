@@ -845,7 +845,7 @@ async function inspect(
     ).trim();
     if (head !== current.source.commit)
       throw new Error(
-        "Checkout differs from accepted distribution baseline; run scripts/integrate-upstream.ts in an isolated candidate before applying",
+        "Checkout differs from accepted distribution baseline; check out the accepted commit before applying",
       );
     if (
       (

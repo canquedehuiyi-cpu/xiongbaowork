@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import {
   type CompatStorage,
   compatSuffixes,
@@ -58,10 +59,12 @@ class ThrowingStorage implements CompatStorage {
 
 test("a value under the old name is not read, and nothing is copied from it", () => {
   const storage = new FakeStorage();
-  storage.data.set("openbot.bot-thread.a", "t-1");
+  storage.data.set(`${OLD_PRODUCT_LOWER}.bot-thread.a`, "t-1");
   expect(readCompat("xiongbao.bot-thread.a", storage)).toBeNull();
   // Not read, not carried across: the store holds only what it held, and nothing was written.
-  expect([...storage.data]).toEqual([["openbot.bot-thread.a", "t-1"]]);
+  expect([...storage.data]).toEqual([
+    [`${OLD_PRODUCT_LOWER}.bot-thread.a`, "t-1"],
+  ]);
   expect(storage.writes).toEqual([]);
 });
 
@@ -76,13 +79,13 @@ test("readCompat reads its key and writeCompat writes it alone", () => {
 
 test("removeCompat clears the new key and leaves the old name's alone", () => {
   const storage = new FakeStorage();
-  storage.data.set("openbot.reachability.pendingSms", "c-1");
+  storage.data.set(`${OLD_PRODUCT_LOWER}.reachability.pendingSms`, "c-1");
   storage.data.set("xiongbao.reachability.pendingSms", "c-1");
   storage.data.set("unrelated", "x");
   removeCompat("xiongbao.reachability.pendingSms", storage);
   // What the person cleared is gone from the key this version reads; the other is nobody's to clear.
   expect([...storage.data]).toEqual([
-    ["openbot.reachability.pendingSms", "c-1"],
+    [`${OLD_PRODUCT_LOWER}.reachability.pendingSms`, "c-1"],
     ["unrelated", "x"],
   ]);
 });
@@ -90,8 +93,8 @@ test("removeCompat clears the new key and leaves the old name's alone", () => {
 test("compatSuffixes lists the suffixes of one prefix, each once", () => {
   const storage = new FakeStorage();
   storage.data.set("xiongbao:voice-outbox:alice:c:1", "{}");
-  storage.data.set("openbot:voice-outbox:alice:c:1", "{}");
-  storage.data.set("openbot:voice-outbox:alice:c:2", "{}");
+  storage.data.set(`${OLD_PRODUCT_LOWER}:voice-outbox:alice:c:1`, "{}");
+  storage.data.set(`${OLD_PRODUCT_LOWER}:voice-outbox:alice:c:2`, "{}");
   storage.data.set("xiongbao:voice-outbox:bob:c:3", "{}");
   storage.data.set("xiongbao:carried-on:x", "1");
   expect(compatSuffixes("xiongbao:voice-outbox:", storage).sort()).toEqual([
@@ -125,7 +128,7 @@ async function openPage(): Promise<ActivityModule> {
 }
 const BOT = "compat-bot";
 const NEW_KEY = `xiongbao:computer-activity-wiped:${BOT}`;
-const OLD_KEY = `openbot:computer-activity-wiped:${BOT}`;
+const OLD_KEY = `${OLD_PRODUCT_LOWER}:computer-activity-wiped:${BOT}`;
 const calls = (...ids: string[]) =>
   ids.map((id) => ({
     id,

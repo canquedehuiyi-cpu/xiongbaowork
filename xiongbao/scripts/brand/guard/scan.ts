@@ -1,28 +1,31 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
+import { OLD_NAME } from "./words";
 
 /*
- * This fork ships as 熊宝. The upstream names (OpenBot, CopilotKit, Qoder) must not reach a
- * customer or a third party: product copy comes from server/src/brand.ts or appConfig.brand.
- * They are still everywhere as identifiers, env var names, persisted markers and signing
- * domains — renaming those would break data — so a plain grep is useless. This scan masks the
- * shapes that are allowed by rule, then every remaining hit has to be named, with a reason, in
- * brand-leak-allowlist.json. An entry that stops matching fails too, so the list only shrinks.
+ * The brand guard, one rule: an old name (words.ts) anywhere in the source fails, comments, tests,
+ * docs, scripts and CI included. The only lines let through are
+ *
+ *   - a third-party package specifier (`@copilotkit/react-core/v2` in an import, a mock, a config), and
+ *     every line of an import or re-export statement from such a package: a name the library exports
+ *     stands there only to be renamed with `as` (`useCopilotKit as useChatRuntime`);
+ *   - a line holding an entry of brand-leak-allowlist.json, matched by file path and exact text:
+ *     `dependency` (what the library itself defines and no import can rename: a wire field or protocol
+ *     string, an environment variable it reads, a property of an object it returns, a CSS class it draws), `licence` (the MIT
+ *     copyright line THIRD-PARTY-NOTICES.md opens with, and only there) and `kept` (an old value written
+ *     into data or registered in a system this release cannot rewrite, kept by an explicit ruling);
+ *   - until Task 26, the old migration history and the database superuser (UNTIL_TASK_26 below).
+ *
+ * An entry that stops matching fails too, so the list only shrinks.
  */
 
 // xiongbao/ (this file lives in xiongbao/scripts/brand/guard/).
 export const REPO = fileURLToPath(new URL("../../..", import.meta.url));
-/**
- * The name of that directory under the repository root, newest first, for reading it at a git ref. It
- * was renamed from openbot/ to xiongbao/: a ref from before that (the base of the rename's own pull
- * request, an older branch) still has it under the former name.
- */
-export const PRODUCT_DIRS = ["xiongbao", "openbot"] as const;
-export const BRAND = /OpenBot|CopilotKit|copilotkit\.ai|qoder/i;
-export const TEXT_FILE = /\.(ts|tsx|js|mjs|cjs|jsx|rs|json|html|css|svg|cs)$/;
+/** The name of that directory under the repository root, for reading it at a git ref. */
+export const PRODUCT_DIR = "xiongbao";
 
 // Global Constraints「绝对不改」: changing any of these corrupts stored data or breaks a peer. Renamed once,
 // in v0.2.16, with a migration or a check that nothing depended on the old spelling; these spellings are
@@ -66,205 +69,158 @@ export const { tenant } = parse(
     company_name?: string;
   };
 };
-export const COPYRIGHT = `Copyright (c) 2026 ${tenant.company_name ?? tenant.product_name}; portions Copyright (c) 2026 CopilotKit (MIT)`;
+/** The product's own copyright line (server/src/brand.ts, the desktop bundle): the product's company alone. */
+export const COPYRIGHT = `Copyright (c) 2026 ${tenant.company_name ?? tenant.product_name}`;
 
 export const escapeRegExp = (s: string) =>
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-// Case-sensitive on purpose: `OpenBotVersion` is code, `OpenBots` and `QoderWake` are names.
-const OPENBOT =
-  "(?:OpenBot|Openbot|openBot|openbot|OPENBOT|CopilotKit|Copilotkit|copilotKit|copilotkit|COPILOTKIT)";
-const QODER = "(?:Qoder|qoder|QODER)";
 
-// Each rule erases what it allows; whatever brand text survives the masking is a finding.
-// `erase` may veto one match, given the string literal it sits in (if any): the match then stays in the line.
-export type Literal = { start: number; end: number; text: string };
-export type Rule = {
-  id: string;
-  pattern: RegExp;
+/**
+ * A third-party package specifier: what a dependency declaration and an import of it spell, and the
+ * directory bun installs that package version into (`@copilotkit+react-core@1.70.1`).
+ */
+export const PACKAGE_SPECIFIER =
+  /@copilotkit(?:\/[\w./-]*|\+[\w.-]+@[\w.+-]*)/gi;
+
+/** Where the licence paragraph's text lives: THIRD-PARTY-NOTICES.md is generated from it at build time. */
+export const LICENCE_FILE = "shared/licence-paragraph.ts";
+
+export const CATEGORIES = ["dependency", "licence", "kept"] as const;
+export type Category = (typeof CATEGORIES)[number];
+export type AllowEntry = {
+  file: string;
+  text: string;
+  category: Category;
   reason: string;
-  erase?: (match: string, literal: Literal | undefined) => boolean;
 };
 
-// The string literals of one line, as the ranges between their quotes. A quote that never closes on the
-// line is no literal (an apostrophe in prose); an unclosed backtick opens a template that runs on, so the
-// rest of the line counts. `${…}` inside a template is code and punches a hole in the literal.
-export function literals(line: string): Literal[] {
-  const out: Literal[] = [];
-  let i = 0;
-  while (i < line.length) {
-    const quote = line[i];
-    if (quote !== '"' && quote !== "'" && quote !== "`") {
-      i++;
-      continue;
-    }
-    let j = i + 1;
-    let hole = 0;
-    let segment = j;
-    const parts: Literal[] = [];
-    let closed = false;
-    for (; j < line.length; j++) {
-      const ch = line[j];
-      if (ch === "\\") {
-        j++;
-        continue;
-      }
-      if (quote === "`" && hole === 0 && ch === "$" && line[j + 1] === "{") {
-        parts.push({ start: segment, end: j, text: "" });
-        hole = 1;
-        j++;
-        continue;
-      }
-      if (hole > 0) {
-        if (ch === "{") hole++;
-        else if (ch === "}" && --hole === 0) segment = j + 1;
-        continue;
-      }
-      if (ch === quote) {
-        closed = true;
-        break;
-      }
-    }
-    if (!closed && quote !== "`") {
-      i++;
-      continue;
-    }
-    if (hole === 0) parts.push({ start: segment, end: j, text: "" });
-    const whole = line.slice(i + 1, j);
-    for (const part of parts) out.push({ ...part, text: whole });
-    i = j + 1;
-  }
-  return out;
+/*
+ * TEMPORARY, expires with Task 26 (the migrations squashed into one baseline). Until that baseline the old
+ * migration history keeps its old names byte for byte, and so does the database superuser: historical
+ * migration 0054 grants to that role by name, so a database migrated from empty needs it, and the CI, the
+ * development Compose file, the image's first boot and the test helpers all still create it. Task 26
+ * replaces server/drizzle/ and the recovery overlays' sql/ and meta/ with the baseline, renames the superuser and
+ * its default database, deletes the tests that freeze the old history, and deletes this whole block.
+ * brand-leak.test.ts fails on a pattern here that no longer matches anything.
+ */
+export const UNTIL_TASK_26: {
+  paths: { prefix: string; reason: string }[];
+  patterns: { file?: string; pattern: RegExp; reason: string }[];
+} = {
+  paths: [
+    { prefix: "server/drizzle/", reason: "the migration history" },
+    {
+      prefix: "server/recovery/",
+      reason: "the recovery overlay's migration history and its snapshots",
+    },
+    {
+      prefix: "server/tests/rebrand-history.test.ts",
+      reason: "test of migration 0241, deleted with it",
+    },
+    {
+      prefix: "server/tests/rebrand-migration.test.ts",
+      reason: "test of migration 0240, deleted with it",
+    },
+    {
+      prefix: "server/tests/support/renamed-by-0240.ts",
+      reason: "replays historical migration text under the names 0240 gave",
+    },
+    {
+      prefix: "server/tests/recovery-",
+      reason: "tests that freeze the recovery migrations byte for byte",
+    },
+    {
+      prefix: "server/tests/helpers/recovery-lint-source.ts",
+      reason: "restores frozen recovery test text",
+    },
+    {
+      prefix: "docker/tests/rebrand-superuser.test.sh",
+      reason: "test of the first-boot superuser rename",
+    },
+  ],
+  patterns: [
+    {
+      pattern:
+        /\b(?:postgres(?:ql)?|mysql):\/\/openbot(?::[^@\s'"`]*)?@|(?<=[\w.%-]:)openbot(?=@)|(?<![\w.-])openbot:openbot@/g,
+      reason:
+        "the superuser and its public default password in connection strings",
+    },
+    {
+      pattern:
+        /(?:-U|--username[= ]|PGUSER=|POSTGRES_USER(?::|=|:-)|POSTGRES_PASSWORD(?::|=|:-)|PASSWORD(?::-|=)|OWNER(?: TO)?|FOR ROLE|IN ROLE)\s*["']?openbot\b/g,
+      reason: "the superuser named on a command line or in a setting",
+    },
+    {
+      pattern:
+        /(?:-d|createdb[^\n]*?)\s+openbot\b|(?<=:543[23]\/)openbot(?:_test)?\b|database: openbot\b|POSTGRES_DB: openbot_test|openbot_test\b/g,
+      reason: "the superuser's default database and the old test database",
+    },
+    {
+      pattern:
+        /\bopenbot_(?:app|role_writer|team_person_leaves_groups|grant_stamp_admissible)\b/g,
+      reason:
+        "role and function names as historical migrations and the frozen CI baseline still spell them",
+    },
+    // Files where every remaining mention is the superuser, its public default password or its database.
+    ...[
+      ".env.example",
+      "docs/configuration.md",
+      "docs/deployment.md",
+      "docs/deployment-xiongbao.md",
+      "docs/development-environment-xiongbao.md",
+      "server/tests/server-readiness-gates.test.ts",
+      "server/tests/support/database.ts",
+      "server/tests/support/database.test.ts",
+      "server/tests/test-database-url.integration.test.ts",
+      "tests/compose.test.ts",
+      "tests/update-local.test.ts",
+      "worker/tests/readiness.test.ts",
+    ].map((file) => ({
+      file,
+      pattern: /\bopenbot\d?\b/g,
+      reason: "the superuser, its public default password and its database",
+    })),
+    {
+      file: "server/src/db/schema/threads.ts",
+      pattern: /instead of against CopilotKit Intelligence\./g,
+      reason:
+        "a recovery test freezes this file's bytes and sha256; the baseline unfreezes it",
+    },
+    {
+      file: "server/src/auth/role-writer-lifecycle.ts",
+      pattern: /PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot"|`openbot`/g,
+      reason: "the public default password historical migration 0054 sets",
+    },
+  ],
+};
+
+/** Whether a whole file waits for Task 26. */
+export function untilTask26Excluded(file: string): boolean {
+  return UNTIL_TASK_26.paths.some(({ prefix }) => file.startsWith(prefix));
 }
 
-const UPPER_NAME = /^[A-Z][A-Z0-9_$]*$/;
-export const RULES: Rule[] = [
-  {
-    id: "copilotkit-package",
-    pattern: /@copilotkit\/[\w./-]*/gi,
-    reason: "upstream npm package imports and stylesheets",
-  },
-  {
-    id: "openbot-package",
-    pattern: /@openbot\/[\w./-]*/gi,
-    reason: "@openbot/* workspace package names (Global Constraints)",
-  },
-  {
-    id: "runtime-path",
-    pattern: /\/api\/copilotkit\b/gi,
-    reason: "runtime endpoint path shared with the upstream client",
-  },
-  {
-    id: "env-name",
-    pattern: /\b(?:OPENBOT|COPILOTKIT)_\w*/g,
-    // In a string, a bare name is an env var read; a sentence that mentions one is operator-visible text.
-    erase: (match, literal) =>
-      isKnownEnvName(match) && (!literal || !/\s/.test(literal.text)),
-    reason: "known env var names stay valid for existing deployments",
-  },
-  {
-    id: "crypto-name",
-    pattern: new RegExp(`\\b(?:${CRYPTO_NAMES.join("|")})\\b`, "g"),
-    reason: "approval crypto version names are written into stored data",
-  },
-  {
-    id: "wire-dom",
-    pattern: /\b(?:x|data)-openbot-[\w-]*/gi,
-    reason: "wire headers and DOM attributes peers depend on",
-  },
-  {
-    id: "never-change",
-    pattern: new RegExp(
-      [...NEVER_CHANGE, ...SIGNING_DOMAINS].map(escapeRegExp).join("|"),
-      "g",
-    ),
-    reason:
-      "Global Constraints「绝对不改」: persisted markers and signing domains",
-  },
-  {
-    id: "mit-attribution",
-    pattern: new RegExp(escapeRegExp(COPYRIGHT), "g"),
-    reason: "MIT attribution the licence requires",
-  },
-  {
-    id: "identifier",
-    // Part of a longer identifier: the brand word after a lower-case letter, `_` or `$`
-    // (useCopilotKit, my_openbot), or before an upper-case letter or `_` (OpenBotVersion,
-    // openbotRunning, OPENBOT_X). A digit after it does not count, so "OpenBot2" is still a name;
-    // Qoder only joins with `_`, since no code identifier starts with it and QoderWake is a name.
-    pattern: new RegExp(
-      `[\\w$]*[a-z_$](?:${OPENBOT}|${QODER})[\\w$]*|${OPENBOT}(?=[A-Z_])[\\w$]*|${QODER}(?=_)[\\w$]*`,
-      "g",
-    ),
-    // An upper-case name inside a string is an env var or an error code: only env-name and crypto-name
-    // may erase it there.
-    erase: (match, literal) =>
-      !(literal && UPPER_NAME.test(match) && /OPENBOT|COPILOTKIT/.test(match)),
-    reason: "code identifiers are not renamed (Global Constraints)",
-  },
-  {
-    id: "copilotkit-handle",
-    // `copilotkit` alone, or after a `.` as a property, but never a host name such as
-    // www.copilotkit.com or api.intelligence.copilotkit.ai.
-    pattern:
-      /(?<![\w@/:-])copilotkit(?![\w$/@-]|\.(?:com|ai|dev|io|net|org|cn)\b)/g,
-    reason:
-      "the upstream SDK's lowercase `copilotkit` handle is a JS identifier, never prose",
-  },
-  {
-    id: "openbot-camel",
-    pattern: /\bopenBot\b/g,
-    reason:
-      "camelCase `openBot` (the Bot that is open) is a variable, not the brand",
-  },
-  {
-    id: "import-close",
-    // The closing line of a multi-line import or re-export.
-    pattern: /^\s*\}\s*from\s+["'][^"']*["']/,
-    reason: "module paths follow file names, which are identifiers",
-  },
-  {
-    id: "import-path",
-    // Only a real import or re-export statement, never `from '…'` inside a sentence.
-    pattern:
-      /^(\s*(?:import|export)\b[^"'`]*?(?:\bfrom\s+|\bimport\s+|import\s*\(\s*))["'][^"']*["']/,
-    reason: "module paths follow file names, which are identifiers",
-  },
-  {
-    id: "declaration",
-    // Lower-case keyword and a declaration's own punctuation after the name, so prose such as
-    // "let OpenBot do it" is not mistaken for code.
-    pattern:
-      /\b(?:import|type|interface|class|const|let|var|function|enum)\s+(?:openbot|OpenBot|copilotkit|CopilotKit)\b(?=\s*(?:[=:<({,]|from\b|extends\b|implements\b))/g,
-    reason: "declaration of an identifier",
-  },
+/*
+ * The guard's own dictionary and the fixtures that prove it finds those words: they have to spell them.
+ * The allowlist and the artifact word lists are themselves lists of what may still be said.
+ */
+export const GUARD_SELF = [
+  "scripts/brand/guard/words.ts",
+  "scripts/brand/guard/scan.ts",
+  "app/tests/brand-leak.test.ts",
 ];
+const isGuardSelf = (file: string) =>
+  GUARD_SELF.includes(file) ||
+  file === "app/tests/brand-leak-allowlist.json" ||
+  file.startsWith("app/tests/brand-artifacts/");
 
-export const EXEMPT_PATHS: {
-  test: (path: string) => boolean;
-  reason: string;
-}[] = [
-  {
-    test: (p) => p.startsWith("server/drizzle/"),
-    reason: "migrations are history",
-  },
-  { test: (p) => p.includes("/generated/"), reason: "generated code" },
-  {
-    // Tests are exempt beyond the brief: they must spell old values (dev@openbot.local, legacy
-    // markers) to prove those still work, and nothing in them ships.
-    test: (p) =>
-      /(^|\/)(tests|__tests__|fixtures)\//.test(p) || /\.test\.tsx?$/.test(p),
-    reason: "tests and their fixtures",
-  },
-  { test: (p) => p === "server/src/brand.ts", reason: "the brand exit itself" },
-];
-
-// Every path this module reports is also a key somewhere else: the allowlist's `file`, EXEMPT_PATHS'
-// and the walkAll skip's literals. Those are all written with "/", so a Windows checkout — where
-// `relative()` returns `app\src\…` — would match none of them: every exempted test/fixture file comes
-// back as a leak, every allowlist entry reads as stale. Spelled once, here.
+// Every path this module reports is also a key in the allowlist, written with "/". A Windows checkout,
+// where `relative()` returns `app\src\…`, would otherwise match none of them.
 export const repoPath = (path: string) =>
   relative(REPO, path).replaceAll("\\", "/");
 
+const TEXT_FILE = /\.(ts|tsx|js|mjs|cjs|jsx|rs|json|html|css|svg|cs)$/;
+
+/** Source files under `dir` by extension (the product-name rule and the never-change corpus use it). */
 export function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules") continue;
@@ -274,53 +230,207 @@ export function* walk(dir: string): Generator<string> {
   }
 }
 
-// Every file under `dir` whatever its name: image scripts have no extension. TEXT_FILE stays as it was; the
-// files of the new scopes are reached by listing their directories here.
-function* walkAll(
-  dir: string,
-  skip: (path: string) => boolean = () => false,
-): Generator<string> {
-  for (const name of readdirSync(dir)) {
-    if (name === "node_modules") continue;
-    const path = join(dir, name);
-    if (skip(repoPath(path))) continue;
-    if (statSync(path).isDirectory()) yield* walkAll(path, skip);
-    else yield path;
-  }
-}
-
-export function scannedFiles(): string[] {
+/**
+ * Every file the guard reads: what git tracks or would track under xiongbao/, plus the repository's own
+ * `.github/` (reported as `../.github/…`). `.gitignore` keeps node_modules and build output out. bun.lock
+ * is the dependency declaration in full and is regenerated, never written by hand.
+ */
+export function scannedFiles(repo = REPO): string[] {
+  const list = (cwd: string, path: string) =>
+    execFileSync(
+      "git",
+      ["ls-files", "-z", "--cached", "--others", "--exclude-standard", path],
+      { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    )
+      .split("\0")
+      .filter(Boolean);
+  const top = join(repo, "..");
   const files = [
-    ...walk(join(REPO, "app/src")),
-    ...walk(join(REPO, "server/src")),
-    ...walk(join(REPO, "runner/src")),
-    ...walk(join(REPO, "shared")),
-    ...walk(join(REPO, "toolkit/src")),
-    ...walk(join(REPO, "agent-computer/src")),
-    ...walk(join(REPO, "supervisor/src")),
-    ...walk(join(REPO, "worker/src")),
-    ...walkAll(join(REPO, "docker"), (path) => path === "docker/tests"),
-    join(REPO, "Dockerfile"),
-    ...walk(join(REPO, "desktop-device/src-tauri/src")),
-    ...readdirSync(join(REPO, "desktop-device/src-tauri"))
-      .filter((name) => name.endsWith(".json"))
-      .map((name) => join(REPO, "desktop-device/src-tauri", name)),
-    join(REPO, "app/index.html"),
+    ...list(repo, "."),
+    ...(existsSync(join(top, ".github"))
+      ? list(top, ".github").map((path) => `../${path}`)
+      : []),
   ];
-  if (existsSync(join(REPO, "mobile")))
-    files.push(...walk(join(REPO, "mobile")));
-  return files
-    .map(repoPath)
-    .filter((path) => !EXEMPT_PATHS.some((exempt) => exempt.test(path)));
+  return files.filter((path) => {
+    if (path === "bun.lock" || path.endsWith("/bun.lock")) return false;
+    if (isGuardSelf(path) || untilTask26Excluded(path)) return false;
+    const full = join(repo, path);
+    return existsSync(full) && statSync(full).isFile();
+  });
 }
 
-// Whole-line comments only: a trailing comment after code still counts, which is the cautious side.
-// `#` is not a comment in any scanned language (TS private fields, CSS ids). Inside a multi-line
-// template literal nothing is a comment: a prompt's Markdown bullets start with `*` too.
+export type Finding = { file: string; number: number; line: string };
+
+/** What survives of one line once the package specifiers, the file's entries and the Task 26 names are erased. */
+function erased(
+  file: string,
+  line: string,
+  entries: AllowEntry[],
+  used: Set<AllowEntry>,
+  usedPatterns: Set<object>,
+): string {
+  let rest = line.replace(PACKAGE_SPECIFIER, " ");
+  for (const entry of entries)
+    if (rest.includes(entry.text)) {
+      used.add(entry);
+      rest = rest.split(entry.text).join(" ");
+    }
+  for (const exclusion of UNTIL_TASK_26.patterns) {
+    if (exclusion.file !== undefined && exclusion.file !== file) continue;
+    const next = rest.replace(exclusion.pattern, " ");
+    if (next !== rest) usedPatterns.add(exclusion);
+    rest = next;
+  }
+  return rest;
+}
+
+// What an import or re-export statement may hold, and nothing else: member names, `type`, `as`, commas,
+// braces, `* as name`, and the module in quotes. A line that holds anything more is no part of one.
+const MODULE = String.raw`["']([^"'\s]+)["']`;
+const MEMBER = String.raw`(?:type\s+)?[\w$]+(?:\s+as\s+[\w$]+)?`;
+const MEMBERS = String.raw`(?:${MEMBER}(?:\s*,\s*${MEMBER})*\s*,?)?`;
+const CLAUSE = String.raw`(?:\{\s*${MEMBERS}\s*\}|\*(?:\s+as\s+[\w$]+)?|[\w$]+(?:\s*,\s*\{\s*${MEMBERS}\s*\})?)`;
+const KEYWORD = String.raw`^\s*(?:import|export)\s+(?:type\s+)?`;
+const ONE_LINE = new RegExp(
+  String.raw`${KEYWORD}${CLAUSE}\s+from\s+${MODULE}\s*;?\s*$`,
+);
+const OPENING = new RegExp(
+  String.raw`${KEYWORD}(?:[\w$]+\s*,\s*)?\{\s*${MEMBERS}\s*$`,
+);
+const MEMBER_LINE = new RegExp(String.raw`^\s*${MEMBERS}\s*$`);
+const CLOSING = new RegExp(
+  String.raw`^\s*${MEMBERS}\s*\}\s*from\s+${MODULE}\s*;?\s*$`,
+);
+/** Only code has import statements; a document's example of one is text. */
+const CODE_FILE = /\.(?:ts|tsx|js|mjs|cjs|jsx)$/;
+/** The library's own modules, by the start of the specifier. */
+const LIBRARY_MODULE = /^@copilotkit\//;
+
+/** Whether each line starts inside a template literal (backticks counted outside quotes and regex classes). */
+function templateStarts(lines: string[]): boolean[] {
+  let open = false;
+  return lines.map((line) => {
+    const starts = open;
+    const bare = line.replace(/\\./g, "");
+    const ticks = (
+      (open
+        ? bare
+        : bare.replace(/"[^"]*"|'[^']*'|(?<=[/|(])\[[^\]]*\]/g, "")
+      ).match(/`/g) ?? []
+    ).length;
+    if (ticks % 2 === 1) open = !open;
+    return starts;
+  });
+}
+
+/**
+ * The lines of every import or re-export statement whose module is the library's (`… from "@copilotkit/…"`),
+ * one line or many. A name the library exports may stand there, to be given this code's own name with
+ * `as`; anywhere else in the file only that own name is written. Only a whole statement counts: a line
+ * that holds anything besides the statement, a line inside a template literal, a statement whose module
+ * merely contains the scope, or a multi-line list with a line that is no member gives the exemption up.
+ */
+export function libraryStatementLines(lines: string[]): Set<number> {
+  const inside = new Set<number>();
+  const inTemplate = templateStarts(lines);
+  for (let i = 0; i < lines.length; i++) {
+    if (inTemplate[i]) continue;
+    const line = lines[i] as string;
+    const single = ONE_LINE.exec(line);
+    if (single) {
+      if (LIBRARY_MODULE.test(single[1] as string)) inside.add(i);
+      continue;
+    }
+    if (!OPENING.test(line)) continue;
+    let end = i + 1;
+    while (end < lines.length && MEMBER_LINE.test(lines[end] as string)) end++;
+    const closing = CLOSING.exec(lines[end] ?? "");
+    if (closing === null) continue;
+    if (LIBRARY_MODULE.test(closing[1] as string))
+      for (let k = i; k <= end; k++) inside.add(k);
+    i = end;
+  }
+  return inside;
+}
+
+export type ScanResult = {
+  findings: Finding[];
+  /** Allowlist entries no line needed: the allowlist must shrink with the source. */
+  unused: AllowEntry[];
+  /** Task 26 patterns that erased nothing, as `<file or *> <pattern>`. */
+  unusedPatterns: string[];
+};
+
+/** The rule over any set of sources, so a fixture goes through exactly what the tree does. */
+export function scanSources(
+  sources: Iterable<{ path: string; source: () => string }>,
+  allow: AllowEntry[],
+): ScanResult {
+  const findings: Finding[] = [];
+  const used = new Set<AllowEntry>();
+  const usedPatterns = new Set<object>();
+  for (const { path, source } of sources) {
+    const text = source();
+    if (!OLD_NAME.test(text)) continue;
+    const entries = allow.filter((entry) => entry.file === path);
+    const lines = text.split("\n");
+    const library = CODE_FILE.test(path)
+      ? libraryStatementLines(lines)
+      : new Set<number>();
+    lines.forEach((line, index) => {
+      if (!OLD_NAME.test(line) || library.has(index)) return;
+      if (OLD_NAME.test(erased(path, line, entries, used, usedPatterns)))
+        findings.push({ file: path, number: index + 1, line: line.trim() });
+    });
+  }
+  return {
+    findings,
+    unused: allow.filter((entry) => !used.has(entry)),
+    unusedPatterns: UNTIL_TASK_26.patterns
+      .filter((exclusion) => !usedPatterns.has(exclusion))
+      .map(({ file, pattern }) => `${file ?? "*"} ${pattern}`),
+  };
+}
+
+/** Binary files (a NUL byte) say nothing the guard can read. */
+function textOf(file: string): string {
+  const bytes = readFileSync(join(REPO, file));
+  return bytes.includes(0) ? "" : bytes.toString("utf8");
+}
+
+export const ALLOWLIST_FILE = join(REPO, "app/tests/brand-leak-allowlist.json");
+export const readAllowlist = (): AllowEntry[] =>
+  JSON.parse(readFileSync(ALLOWLIST_FILE, "utf8"));
+
+export function scanTree(allow: AllowEntry[] = readAllowlist()): ScanResult {
+  return scanSources(
+    scannedFiles().map((path) => ({ path, source: () => textOf(path) })),
+    allow,
+  );
+}
+
+/** What is wrong with one entry by itself, as messages; empty when nothing is. */
+export function entryProblems(entry: AllowEntry): string[] {
+  const where = `${entry.file}: ${entry.text}`;
+  const problems: string[] = [];
+  if (!CATEGORIES.includes(entry.category))
+    problems.push(
+      `${where}: category "${entry.category}" 不是 ${CATEGORIES.join(" | ")} 之一`,
+    );
+  if (!OLD_NAME.test(entry.text))
+    problems.push(`${where}: text 本身要带旧名，才说得清放行的是哪一处`);
+  if (!entry.reason?.trim()) problems.push(`${where}: 缺 reason`);
+  if (entry.category === "licence" && entry.file !== LICENCE_FILE)
+    problems.push(`${where}: 许可证段只在 ${LICENCE_FILE}`);
+  return problems;
+}
+
+// Whole-line comments only: a trailing comment after code still counts. Inside a multi-line template
+// literal nothing is a comment: a prompt's Markdown bullets start with `*` too. (The product-name rule
+// skips comments; the old-name rule above reads every line.)
 export function codeLines(
   source: string,
   templates = true,
-  hash = false,
 ): { line: string; number: number }[] {
   const out: { line: string; number: number }[] = [];
   let inBlock = false;
@@ -350,52 +460,9 @@ export function codeLines(
       if (!trimmed.includes("*/") && !trimmed.includes("-->")) inBlock = true;
       return;
     }
-    if (/^(\/\/|\*)/.test(trimmed) || (hash && trimmed.startsWith("#"))) return;
+    if (/^(\/\/|\*)/.test(trimmed)) return;
     out.push({ line, number: index + 1 });
     if (ticks % 2 === 1) inTemplate = true;
   });
   return out;
-}
-
-// The rule's erasing of one line, same length so literal ranges stay valid; `rule.erase` can veto a match.
-export function applyRule(rule: Rule, line: string): string {
-  const spans = rule.erase ? literals(line) : [];
-  return line.replace(rule.pattern, (match: string, ...rest: unknown[]) => {
-    const offset = rest.find((x) => typeof x === "number") as number;
-    const literal = spans.find((l) => offset >= l.start && offset < l.end);
-    if (rule.erase && !rule.erase(match, literal)) return match;
-    return " ".repeat(match.length);
-  });
-}
-
-export const masked = (line: string) =>
-  RULES.reduce((text, rule) => applyRule(rule, text), line);
-
-// `#` is a comment in image scripts, Dockerfile and YAML only.
-export const hashComments = (path: string) =>
-  path === "Dockerfile" ||
-  /\.(sh|yml)$/.test(path) ||
-  (path.startsWith("docker/s6/") && !/\.[^/]+$/.test(path));
-
-export const linesOf = (path: string, source: string) =>
-  codeLines(
-    source,
-    /\.(ts|tsx|js|mjs|cjs|jsx)$/.test(path),
-    hashComments(path),
-  );
-
-export type Finding = { file: string; number: number; line: string };
-
-export function findings(): Finding[] {
-  const found: Finding[] = [];
-  for (const file of scannedFiles()) {
-    for (const { line, number } of linesOf(
-      file,
-      readFileSync(join(REPO, file), "utf8"),
-    )) {
-      if (BRAND.test(masked(line)))
-        found.push({ file, number, line: line.trim() });
-    }
-  }
-  return found;
 }

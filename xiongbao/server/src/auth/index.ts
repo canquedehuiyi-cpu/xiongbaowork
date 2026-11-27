@@ -41,8 +41,8 @@ export const LINK_REFUSAL_MESSAGE =
 /**
  * The native app's custom scheme (mobile/app.config.ts), plus the one builds from before the rename registered
  * with the phone. Such a build is installed on somebody's phone and cannot be changed from here, so its
- * sign-in return stays accepted for good rather than until a release (kept forever in
- * scripts/rebrand/protect.json, with the reason).
+ * sign-in return stays accepted for good rather than until a release (a `kept` entry of
+ * app/tests/brand-leak-allowlist.json, with the reason).
  */
 const NATIVE_APP_ORIGINS = ["xiongbao://", "openbotmobile://"];
 

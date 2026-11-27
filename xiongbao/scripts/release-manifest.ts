@@ -545,32 +545,18 @@ export function readReleaseConfiguration(
 ): ReleaseConfiguration {
   if (!env.GITHUB_REPOSITORY || !env.GITHUB_SHA || !env.VERSION)
     throw new Error("GITHUB_REPOSITORY, GITHUB_SHA and VERSION are required");
-  let baseline: unknown;
-  const baselineFile = resolve(repositoryRoot, ".openbot-upstream.json");
-  if (existsSync(baselineFile))
-    baseline = JSON.parse(readFileSync(baselineFile, "utf8"));
+  // The release is built from this repository's own history: unless the publisher names another source
+  // the release was cut from, the source is this repository at this commit.
   const upstreamRepository =
-    env.OPENBOT_UPSTREAM_REPOSITORY || "CopilotKit/openbot";
-  const recordedCommit =
-    typeof baseline === "object" &&
-    baseline !== null &&
-    "upstreamCommit" in baseline &&
-    typeof baseline.upstreamCommit === "string" &&
-    "upstreamRepository" in baseline &&
-    (baseline.upstreamRepository === upstreamRepository ||
-      baseline.upstreamRepository ===
-        `https://github.com/${upstreamRepository}.git`)
-      ? baseline.upstreamCommit
-      : undefined;
+    env.XIONGBAO_UPSTREAM_REPOSITORY || env.GITHUB_REPOSITORY;
   const upstreamCommit =
-    env.OPENBOT_UPSTREAM_COMMIT ||
-    recordedCommit ||
+    env.XIONGBAO_UPSTREAM_COMMIT ||
     (env.GITHUB_REPOSITORY.toLowerCase() === upstreamRepository.toLowerCase()
       ? env.GITHUB_SHA
       : undefined);
   if (!upstreamCommit)
     throw new Error(
-      "Fork publication requires OPENBOT_UPSTREAM_COMMIT or a matching .openbot-upstream.json baseline",
+      "XIONGBAO_UPSTREAM_REPOSITORY names another repository, so XIONGBAO_UPSTREAM_COMMIT is required",
     );
   const configuration: ReleaseConfiguration = {
     repositoryRoot: resolve(repositoryRoot),

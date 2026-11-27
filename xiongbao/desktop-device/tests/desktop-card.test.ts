@@ -263,7 +263,7 @@ test("opening a notice reads its files once into its <pre>", async () => {
   const pre = { textContent: "" };
   const details = {
     open: false,
-    dataset: { notice: "NOTICE" },
+    dataset: { notice: "LICENSE" },
     querySelector: (selector: string) => (selector === "pre" ? pre : null),
     addEventListener: (type: string, listener: () => unknown) => {
       if (type === "toggle") onToggle = listener;
@@ -280,15 +280,15 @@ test("opening a notice reads its files once into its <pre>", async () => {
   await onToggle();
   details.open = true;
   await onToggle();
-  expect(reads.calls).toEqual([["read_bundled_text", { name: "NOTICE" }]]);
+  expect(reads.calls).toEqual([["read_bundled_text", { name: "LICENSE" }]]);
 
-  const refused = fakeInvoke(() => new Error("找不到 NOTICE"));
-  expect(await readNotice(["NOTICE"], refused.invoke)).toEqual({
-    error: "找不到 NOTICE",
+  const refused = fakeInvoke(() => new Error("找不到 LICENSE"));
+  expect(await readNotice(["LICENSE"], refused.invoke)).toEqual({
+    error: "找不到 LICENSE",
   });
 });
 
-test("the 关于 section has the five notices, each one the bundle ships", () => {
+test("the 关于 section has the four notices, each one the bundle ships", () => {
   const html = readFileSync(join(root, "ui", "index.html"), "utf8");
   const about = /<section id="about"[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
   const notices = [
@@ -298,7 +298,6 @@ test("the 关于 section has the five notices, each one the bundle ships", () =>
   ].map((m) => [m[2], noticeNames(m[1])]);
   expect(notices).toEqual([
     ["本软件许可", ["LICENSE"]],
-    ["NOTICE", ["NOTICE"]],
     ["第三方许可", ["THIRD-PARTY-NOTICES.md"]],
     [
       "agent-desktop 许可",

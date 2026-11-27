@@ -22,6 +22,7 @@ import { AuditPage } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import * as gallery from "@/lib/copilot/gallery-registry";
 import { deploymentKeys } from "@/lib/deployment/queries";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
@@ -169,7 +170,7 @@ const KEPT = [
     targetId: "find-a-document",
     initiatorKind: "deployment",
     payload: {
-      actor: "openbot:personal-defaults",
+      actor: `${OLD_PRODUCT_LOWER}:personal-defaults`,
       change: "plugin_granted",
       kind: "skill",
       ref: "find-a-document",

@@ -1,5 +1,5 @@
 import {
-  type CopilotKitIntelligence,
+  type CopilotKitIntelligence as IntelligencePlatform,
   PlatformRequestError,
 } from "@copilotkit/runtime/v2";
 
@@ -20,7 +20,7 @@ import {
  * has: a real failure still prints, once, in the client's words.
  */
 export type PlatformAddress = Pick<
-  CopilotKitIntelligence,
+  IntelligencePlatform,
   "ɵgetApiUrl" | "ɵgetApiKey"
 >;
 

@@ -385,9 +385,7 @@ jobs:
   # still run one at a time because they share that one database. The `tests` job below is the
   # result people read.
   #
-  # The id stays `test` for the upstream upgrade, which runs this job's `run` steps as CI's own
-  # checks (scripts/integrate-upstream.ts); the shard reaches those steps through
-  # .github/actions/test-shard, which says why.
+  # The shard reaches those steps through .github/actions/test-shard, which says why.
   test:
     name: tests (shard ${{ matrix.shard }} of ${{ strategy.job-total }})
     # Five shards take about three and a half minutes each on the free standard runner, so a

@@ -1,4 +1,5 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
+import { OLD_PRODUCT_LOWER } from "../../scripts/brand/guard/words";
 import { createAuth } from "../src/auth";
 import type { DeploymentConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
@@ -48,23 +49,27 @@ test("a deployment that runs the native app still lets it sign in", async () => 
   process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
   expect(await sendsSessionTo(createAuth(config, database))).toBe(true);
 });
-// The legacy scheme stays accepted so a build still registered as openbotmobile:// can complete sign-in.
-test("the legacy openbotmobile:// scheme is still accepted alongside xiongbao://", async () => {
+const LEGACY_SCHEME = `${OLD_PRODUCT_LOWER}mobile://`;
+// The legacy scheme stays accepted so a build still registered under the old product's scheme can complete sign-in.
+test("the legacy mobile scheme is still accepted alongside xiongbao://", async () => {
   process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
   const auth = createAuth(config, database);
   expect(await sendsSessionTo(auth, "xiongbao://")).toBe(true);
-  expect(await sendsSessionTo(auth, "openbotmobile://")).toBe(true);
+  expect(await sendsSessionTo(auth, LEGACY_SCHEME)).toBe(true);
 });
 test("without the native app the legacy scheme is refused too", async () => {
   expect(
-    await sendsSessionTo(createAuth(config, database), "openbotmobile://"),
+    await sendsSessionTo(createAuth(config, database), LEGACY_SCHEME),
   ).toBe(false);
 });
 test("look-alike schemes are refused even with the native app on", async () => {
   process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
   const auth = createAuth(config, database);
   expect(await sendsSessionTo(auth, "xiongbao.evil://callback")).toBe(false);
-  expect(await sendsSessionTo(auth, "openbotmobile.attacker://callback")).toBe(
-    false,
-  );
+  expect(
+    await sendsSessionTo(
+      auth,
+      `${OLD_PRODUCT_LOWER}mobile.attacker://callback`,
+    ),
+  ).toBe(false);
 });

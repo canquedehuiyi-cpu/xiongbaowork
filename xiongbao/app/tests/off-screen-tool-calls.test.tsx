@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { useCopilotKit } from "@copilotkit/react-core/v2";
+import { useCopilotKit as useChatRuntime } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
@@ -486,9 +486,9 @@ function app(place: Place) {
 }
 
 /** The agent SDK core the app runs, to reach a conversation's agent from outside the screen. */
-let core: ReturnType<typeof useCopilotKit>["copilotkit"] | undefined;
+let core: ReturnType<typeof useChatRuntime>["copilotkit"] | undefined;
 function Capture() {
-  core = useCopilotKit().copilotkit;
+  core = useChatRuntime().copilotkit;
   return null;
 }
 

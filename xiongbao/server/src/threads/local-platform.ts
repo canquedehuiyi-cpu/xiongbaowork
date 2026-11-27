@@ -1,12 +1,12 @@
 import type { Message } from "@ag-ui/client";
 import type {
-  CopilotKitIntelligence,
+  CopilotKitIntelligence as IntelligencePlatform,
   ThreadSummary,
 } from "@copilotkit/runtime/v2";
 import { eq } from "drizzle-orm";
+import type { ThreadReader } from "../channels/thread-routes";
 import type { Database } from "../db/client";
 import { threads } from "../db/schema";
-import type { ThreadReader } from "../channels/thread-routes";
 import type { PostgresAgentRunner } from "./postgres-runner";
 
 /**
@@ -15,12 +15,12 @@ import type { PostgresAgentRunner } from "./postgres-runner";
  *
  * `routines/run-turn.ts` restates these shapes by hand (they are not exported by the package), and a
  * restatement is a second authority: a field renamed upstream still typechecks against it and is
- * silently dropped on the wire. Deriving the type from `CopilotKitIntelligence` here means the local
+ * silently dropped on the wire. Deriving the type from `IntelligencePlatform` here means the local
  * stand-in below is checked against the vendor's real signature, so the two cannot disagree about
  * what a thread's history looks like.
  */
 export type ThreadPlatform = Pick<
-  CopilotKitIntelligence,
+  IntelligencePlatform,
   | "getOrCreateThread"
   | "getThreadMessages"
   | "ɵacquireThreadLock"
@@ -29,7 +29,7 @@ export type ThreadPlatform = Pick<
 >;
 
 type PlatformMessageRow = Awaited<
-  ReturnType<CopilotKitIntelligence["getThreadMessages"]>
+  ReturnType<IntelligencePlatform["getThreadMessages"]>
 >["messages"][number];
 
 /**
@@ -110,13 +110,13 @@ export function createLocalThreadPlatform(
         messages: runner.getThreadMessages(threadId).map(toPlatformRow),
       };
     },
-    "ɵacquireThreadLock": async ({ threadId, runId }) => ({
+    ɵacquireThreadLock: async ({ threadId, runId }) => ({
       threadId,
       runId,
       joinToken: "",
     }),
-    "ɵrenewThreadLock": async ({ ttlSeconds }) => ({ ttlSeconds }),
-    "ɵcleanupThreadLock": async () => {},
+    ɵrenewThreadLock: async ({ ttlSeconds }) => ({ ttlSeconds }),
+    ɵcleanupThreadLock: async () => {},
   };
 }
 

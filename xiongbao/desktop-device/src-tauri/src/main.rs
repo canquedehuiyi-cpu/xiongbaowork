@@ -609,9 +609,8 @@ async fn enable_candidate(app: AppHandle, candidate: String) -> Result<serde_jso
 // --- end app discovery ---
 
 /// The notices bundled as resources (tauri.bundle.conf.json) that the 「关于」 section may show.
-const BUNDLED_NOTICES: [&str; 6] = [
+const BUNDLED_NOTICES: [&str; 5] = [
     "LICENSE",
-    "NOTICE",
     "THIRD-PARTY-NOTICES.md",
     "licenses/agent-desktop/LICENSE",
     "licenses/agent-desktop/THIRD-PARTY.md",
@@ -991,6 +990,8 @@ mod tests {
             "license",
             "licenses\\agent-desktop\\LICENSE",
             "C:\\Windows\\win.ini",
+            // No longer bundled: the MIT notice it carried opens THIRD-PARTY-NOTICES.md.
+            "NOTICE",
             "",
         ] {
             assert!(super::bundled_notice(name).is_err(), "{name}");

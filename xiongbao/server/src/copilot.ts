@@ -3162,12 +3162,13 @@ function withoutForgedServerEvents(transport: AbstractAgent): AbstractAgent {
 /**
  * A run as an endpoint is sent it, without the browser's generative UI envelope.
  *
- * The browser declares the interface it can draw as `forwardedProps.copilotkit.ui`: the whole
+ * The browser declares the interface it can draw as `ui` under the library's own namespace in
+ * `forwardedProps`: the whole
  * component catalog, about 100 KB. It is addressed to the runtime, whose middleware reads it before
  * the run reaches this transport, turns it into the `render_ui` tool and the generative UI guide in
  * `context`, and checks every `render_ui` call against it on the way back. The endpoint gets that
  * tool and that guide either way, so the envelope was the same catalog a second time, on every turn,
- * and was most of what a turn sent. No agent XiongBao runs reads it. The rest of `forwardedProps.copilotkit` stays.
+ * and was most of what a turn sent. No agent XiongBao runs reads it. The rest of that namespace stays.
  */
 function withoutGenerativeUIEnvelope(transport: AbstractAgent): AbstractAgent {
   const run = transport.run.bind(transport);

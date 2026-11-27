@@ -48,25 +48,22 @@ test("the tray icon is the device's own 64x64", () => {
   expect(read("src/main.rs")).toContain('"icons/64x64.png"');
 });
 
-test("copyright credits the company and keeps the upstream MIT notice", () => {
+test("copyright credits the company; the MIT notice travels in THIRD-PARTY-NOTICES.md", () => {
   const { copyright } = JSON.parse(read("tauri.conf.json")).bundle;
-  expect(copyright).toBe(
-    "Copyright (c) 2026 熊宝; portions Copyright (c) 2026 CopilotKit (MIT)",
-  );
+  expect(copyright).toBe("Copyright (c) 2026 熊宝");
 });
 
-test("LICENSE, NOTICE and the third-party notices are bundled from where they are kept or written", () => {
+test("LICENSE and the third-party notices are bundled from where they are kept or written", () => {
   const { resources } = JSON.parse(read("tauri.bundle.conf.json")).bundle;
   expect(resources).toEqual({
     "../../LICENSE": "LICENSE",
-    "../../NOTICE": "NOTICE",
     "../../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md",
     "../licenses/agent-desktop/LICENSE": "licenses/agent-desktop/LICENSE",
     "../licenses/agent-desktop/THIRD-PARTY.md":
       "licenses/agent-desktop/THIRD-PARTY.md",
     "../licenses/agent-desktop/COPYRIGHT": "licenses/agent-desktop/COPYRIGHT",
   });
-  for (const src of ["../../LICENSE", "../../NOTICE"])
+  for (const src of ["../../LICENSE"])
     expect(existsSync(join(tauri, src))).toBe(true);
   // Generated, not committed: the bundle reads the file the generator writes at the project root.
   expect(
