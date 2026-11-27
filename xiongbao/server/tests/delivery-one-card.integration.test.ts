@@ -9,6 +9,7 @@ import {
   type RunAgentParameters,
   type RunAgentResult,
 } from "@ag-ui/client";
+import { SEGMENT_LIMIT_MESSAGE } from "@xiongbao/toolkit/headless-tools";
 import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, asc, eq, inArray, like } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
@@ -529,11 +530,12 @@ describe("one tracked piece of work, one card", () => {
       failed: true,
       error: "again",
     });
+    // Its end, and the hand-over to the next round written with it (spec 2026-11-25 5.4).
     expect(
-      (await eventsOf(tenantId, card.id)).filter(
-        (line) => line.detail.runId === broken,
-      ),
-    ).toHaveLength(1);
+      (await eventsOf(tenantId, card.id))
+        .filter((line) => line.detail.runId === broken)
+        .map((line) => line.kind),
+    ).toEqual(["run_failed", "failure_handoff"]);
 
     // The next round that works clears it.
     const mended = await turn({
@@ -1293,6 +1295,137 @@ test("reviewing a tracked awaiting_review card logs reviewed", async () => {
   ).toEqual([["reviewed", `user:${tenantId}`, { via: "review" }]]);
   expect((await review()).status).toBe(409);
   expect(await eventsOf(tenantId, id)).toHaveLength(1);
+});
+
+/**
+ * 失败交接（设计稿 2026-11-25-borrowed-improvements 5.4）：看板卡一轮在 `runEnded` 里按失败结束时，同一事务里
+ * 写 `run_failed` 和一份 `failure_handoff`；被接替的一轮不写。下一轮开头取最近一份还没带过的，带过就不再给。
+ */
+describe("failure handoff", () => {
+  const OK = JSON.stringify({ ok: true });
+  const call = (id: string, tool: string, args: object, answer = OK) =>
+    [
+      { type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: tool },
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: id,
+        delta: JSON.stringify(args),
+      },
+      { type: EventType.TOOL_CALL_END, toolCallId: id },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId: id,
+        messageId: `result-${id}`,
+        content: answer,
+      },
+    ] as unknown as BaseEvent[];
+  const NEXT_STEP = "先看上面的进度和文件，从断点接着做，别从头再来";
+
+  test("a failed round writes run_failed and a failure_handoff together, from its own events", async () => {
+    const { tenantId, agentId, threadId, cardId } =
+      await trackedThread("handoff");
+    const key = `sk-${"Q9w8E7r6".repeat(4)}`;
+    const broken = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "继续做表",
+      events: [
+        { type: EventType.RUN_STARTED, threadId: "t", runId: "r" },
+        ...call("h1", "computer_read_file", { path: "data.csv" }),
+        ...call("h2", "computer_write_file", {
+          path: "table.md",
+          contents: "| a |",
+        }),
+        ...call(
+          "h3",
+          "computer_run_command",
+          { command: `curl -H "x-api-key: ${key}" https://api.example.test` },
+          JSON.stringify({ ok: false, error: "exit 1" }),
+        ),
+        { type: EventType.RUN_ERROR, message: SEGMENT_LIMIT_MESSAGE },
+      ] as unknown as BaseEvent[],
+    });
+    await roundLogged(tenantId, cardId, broken);
+    const lines = (await eventsOf(tenantId, cardId)).filter(
+      (line) => line.detail.runId === broken,
+    );
+    expect(lines.map((line) => line.kind)).toEqual([
+      "run_failed",
+      "failure_handoff",
+    ]);
+    const handoff = lines[1];
+    expect(handoff?.actor).toBe("system");
+    expect(handoff?.detail.stoppedAt).toBe("被停下了：步数到顶");
+    const text = String(handoff?.detail.text);
+    expect(text).toContain("被停下了：步数到顶");
+    // 做到哪：卡上最近的进度（第一轮的「已接下。」）。
+    expect(text).toContain("已接下。");
+    expect(text).toContain("computer_write_file");
+    expect(text).toContain("table.md");
+    expect(text).toContain(NEXT_STEP);
+    expect(text.length).toBeLessThanOrEqual(1500);
+    // Review Focus 5：工具参数里的密钥不进卡片历史。
+    expect(JSON.stringify(handoff?.detail)).not.toContain(key);
+
+    // 下一轮开头取它一次：第一次是那段话，第二次没有了。
+    expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBe(text);
+    expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBeNull();
+    const carried = (await eventsOf(tenantId, cardId)).filter(
+      (line) => line.kind === "failure_handoff_carried",
+    );
+    expect(carried.map((line) => line.detail)).toEqual([
+      { handoffId: handoff?.id },
+    ]);
+  });
+
+  test("a superseded round writes no handoff, and its late end writes nothing", async () => {
+    const { tenantId, cardId } = await trackedThread("handoff-superseded");
+    const replaced = `run-${suite}-replaced`;
+    const newer = `run-${suite}-newer`;
+    expect(await delivery.attachRun(tenantId, cardId, replaced)).toBe(true);
+    expect(await delivery.attachRun(tenantId, cardId, newer)).toBe(true);
+    await delivery.runEnded(tenantId, cardId, {
+      runId: replaced,
+      failed: true,
+      error: SEGMENT_LIMIT_MESSAGE,
+      events: call("s1", "computer_read_file", { path: "a.md" }),
+    });
+    const lines = await eventsOf(tenantId, cardId);
+    expect(
+      lines
+        .filter((line) => line.detail.runId === replaced)
+        .map((line) => [line.kind, line.detail.reason]),
+    ).toEqual([["run_failed", "superseded"]]);
+    expect(lines.some((line) => line.kind === "failure_handoff")).toBe(false);
+    expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBeNull();
+  });
+
+  test("only the newest handoff is handed on, and none once a later round has ended well", async () => {
+    const { tenantId, cardId } = await trackedThread("handoff-newest");
+    const fail = (runId: string, error: string) =>
+      delivery.runEnded(tenantId, cardId, {
+        runId,
+        failed: true,
+        error,
+        events: [],
+      });
+    await fail(`run-${suite}-older`, "第一次出错。");
+    await fail(`run-${suite}-newest`, "第二次出错。");
+    const taken = await delivery.takeFailureHandoff(tenantId, cardId);
+    expect(taken).toContain("出错了：第二次出错。");
+    // 更早那份不再补带。
+    expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBeNull();
+
+    await fail(`run-${suite}-third`, "第三次出错。");
+    await delivery.runEnded(tenantId, cardId, {
+      runId: `run-${suite}-mended`,
+      failed: false,
+      firstSentence: "这次做完了。",
+    });
+    // 之后那一轮做成了：从断点接着做的话已经过时，不带。
+    expect(await delivery.takeFailureHandoff(tenantId, cardId)).toBeNull();
+  });
 });
 
 describe("first sentence of a reply", () => {

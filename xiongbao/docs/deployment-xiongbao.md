@@ -622,6 +622,10 @@ docker image inspect "$XIONGBAO_IMAGE" --format '{{json .RepoDigests}}'
    | secret | `XB_JDCLOUD_ACCESS_KEY_ID` | 子账号 AccessKey ID |
    | secret | `XB_JDCLOUD_SECRET_ACCESS_KEY` | 子账号 AccessKey Secret |
 
+   这些变量放 `release` Environment 级即可，发布流程不需要任何仓库级变量（流程只在声明了该 Environment 的 job 里读它们）；
+   自有下载页的 `XB_DOWNLOAD_BUCKET`、`XB_DOWNLOAD_BASE_URL`、`XB_DOWNLOAD_ENDPOINT`、`XB_DOWNLOAD_REGION` 也一样。
+   成对的变量只设一半时发布在打标签之前报错并写明缺哪个。详见 `docs/releasing.md` 的「变量放在哪一级」。
+
    此后每次发布自动同步。京东云的登录令牌只有几小时有效，所以仓库里不存固定密码，发布时用 AccessKey 换一个 6 小时的临时令牌（拷贝 1GB 多的镜像跨境可能超过 1 小时）（用完不吊销，到期自动失效）。
    `release` Environment 的部署规则要放行 `main`（补同步从 `main` 运行），并建议设必需审批人。配好后先用下一步的补同步对一个已发布版本（如 `v0.2.15`）实跑一次，再打下一个发布标签。
 3. 补同步已发布的旧版本：在 GitHub 的 Actions 里从 `main` 运行「补同步镜像到自有仓库」，填版本标签（如 `v0.2.15`）。步骤摘要里写着目标引用和平台清单 digest。
@@ -648,7 +652,7 @@ docker logs xiongbao-local
 `bash scripts/ci/image-smoke.sh <镜像>` 只使用自己的临时容器/卷及 3772，结束自动清理。
 发布流程先对推送的 digest 执行上述检查（Gate 1），再打标签；随后 `clean-deploy.yml` 在全新 Linux
 runner 上、不登录 GHCR，原样执行 README 的 Linux 命令块，核对运行的镜像 digest 与 `container-images.json`
-一致，并运行同一组接口断言（Gate 7 Linux）。同一任务另有外接库一半：独立的 pgvector/pg17 容器，
+里的 `ghcr` 一致（始终是公开的 GHCR 镜像，不测需要登录的 JCR 那份），并运行同一组接口断言（Gate 7 Linux）。同一任务另有外接库一半：独立的 pgvector/pg17 容器，
 原样执行第 4 节的迁移与角色命令，再用同一 README 命令启动 `EMBEDDED_POSTGRES=off` 的 API，
 确认内嵌库未初始化、API 以 `xiongbao_app` 连接外接库。也可以在 Actions 中手动运行该 workflow 并填写标签。
 

@@ -56,7 +56,7 @@ jobs:
       - run: bun run typecheck
       # app-shards and server-shards are here because app-test/server-test trust their manifests: a
       # stale list would drop test files from every run, and neither suite would notice.
-      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs mirror-release-workflow.test.mjs app-shards.test.mjs server-shards.test.mjs
+      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs mirror-release-workflow.test.mjs release-workflow.test.mjs app-shards.test.mjs server-shards.test.mjs
         working-directory: xiongbao/scripts/ci
 
   # The tests sit outside `server/tsconfig.json`, so `bun run typecheck` above says nothing about them:

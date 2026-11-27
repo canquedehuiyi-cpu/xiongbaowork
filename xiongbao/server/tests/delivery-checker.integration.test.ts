@@ -11,6 +11,7 @@ import {
   type RunAgentParameters,
   type RunAgentResult,
 } from "@ag-ui/client";
+import { SEGMENT_LIMIT_MESSAGE } from "@xiongbao/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { Observable } from "rxjs";
@@ -2234,4 +2235,188 @@ test("the 退回 line is dated when the 退回 was claimed, ahead of the round i
   expect(returned?.returns).toBe(1);
   const kinds = (await history(tenantId, taskId)).map((line) => line.kind);
   expect(kinds.indexOf("returned")).toBeLessThan(kinds.indexOf("progress"));
+});
+
+/**
+ * 失败交接带入下一轮（设计稿 2026-11-25-borrowed-improvements 5.4）：一轮失败后，这张卡下一次开新一轮——催办、
+ * 本人再催、本人在卡片线程说话、换人——给员工的开头消息最前面是最近一份还没带过的失败交接，空一行再是原话。
+ * 带过一次就不再带。
+ */
+async function failedRound(tenantId: string, taskId: string) {
+  await delivery.runEnded(tenantId, taskId, {
+    runId: `run-failed-${randomUUID().slice(0, 8)}`,
+    failed: true,
+    error: SEGMENT_LIMIT_MESSAGE,
+    events: [
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "f1",
+        toolCallName: "computer_write_file",
+      },
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "f1",
+        delta: JSON.stringify({ path: "invoices/a.md", contents: "A 家" }),
+      },
+      { type: EventType.TOOL_CALL_END, toolCallId: "f1" },
+      {
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId: "f1",
+        messageId: "r-f1",
+        content: JSON.stringify({ ok: true }),
+      },
+    ] as unknown as BaseEvent[],
+  });
+  const lines = await history(tenantId, taskId);
+  const handoff = lines.findLast((line) => line.kind === "failure_handoff");
+  if (!handoff) throw new Error("no failure handoff was written");
+  return String(handoff.detail.text);
+}
+
+test("after a failed round, the nudge's opening message starts with the failure hand-over, once", async () => {
+  const due = new Date(Date.now() - HOUR);
+  const { tenantId, agentId, taskId } = await acceptedCard("handoff-nudge", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const handoff = await failedRound(tenantId, taskId);
+  expect(handoff).toContain("被停下了：步数到顶");
+  expect(handoff).toContain("invoices/a.md");
+
+  const recorder = new Recorder(agentId, "接着做。");
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurn(() => recorder),
+    runner: runner(),
+  });
+  const text = "【系统催办】『核对发票』预计已过，先交做完的部分。";
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, text)).toBe("started");
+  await until(
+    async () => recorder.seen.length,
+    (count) => count > 0,
+  );
+  const said = String(recorder.seen[0]?.messages.at(-1)?.content ?? "");
+  expect(said.startsWith(handoff)).toBe(true);
+  expect(said).toBe(`${handoff}\n\n${text}`);
+  // That round ends before the next one starts.
+  await until(
+    () => history(tenantId, taskId),
+    (rows) => rows.some((event) => event.kind === "run_ended"),
+  );
+
+  // Handed on once: the next round hears the nudge alone.
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, text)).toBe("started");
+  await until(
+    async () => recorder.seen.length,
+    (count) => count > 1,
+  );
+  expect(recorder.seen[1]?.messages.at(-1)?.content).toBe(text);
+});
+
+test("the person's words on the card's thread start with the failure hand-over", async () => {
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "handoff-person",
+    { acceptedAt: new Date(Date.now() - HOUR), dueAt: null },
+  );
+  const handoff = await failedRound(tenantId, taskId);
+  const recorder = new Recorder(agentId, "好的。");
+  const runTurn = unattendedTurn(() => recorder);
+  const turns = createCardTurns({
+    database,
+    runTurn,
+    runner: runner(),
+    failureHandoffs: delivery,
+  });
+  await turns.sendAsUser(tenantId, { threadId, agentId }, "退回：B 家没核", {
+    taskId,
+  });
+  await until(
+    async () => recorder.seen.length,
+    (count) => count > 0,
+  );
+  expect(recorder.seen[0]?.messages.at(-1)?.content).toBe(
+    `${handoff}\n\n退回：B 家没核`,
+  );
+});
+
+test("a hand-over to a new coworker after a failed round carries the failure hand-over", async () => {
+  const { tenantId, taskId } = await acceptedCard("handoff-reassign", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: new Date(Date.now() + HOUR),
+  });
+  const handoff = await failedRound(tenantId, taskId);
+  const newAgent = `agent-${suite}-handoff-newcomer`;
+  const newThread = `thread-${suite}-handoff-newcomer`;
+  const newcomer = new Recorder(newAgent, "我接着做。");
+  const runTurn = unattendedTurn(() => newcomer);
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn,
+    runner: runner(),
+    turns: createCardTurns({ database, runTurn, runner: runner() }),
+    coworkerThread: async (_tenantId, coworker) =>
+      coworker === newAgent ? newThread : null,
+  });
+  const moved = await nudgeRuns.reassignTask(
+    tenantId,
+    taskId,
+    newAgent,
+    `user:${tenantId}`,
+  );
+  expect(moved).toMatchObject({ ok: true, started: true });
+  await until(
+    async () => newcomer.seen.length,
+    (count) => count > 0,
+  );
+  const said = String(newcomer.seen[0]?.messages.at(-1)?.content ?? "");
+  expect(said.startsWith(`${handoff}\n\n【系统转交】`)).toBe(true);
+  expect(said).toContain("核对发票");
+});
+
+test("a round that did not start leaves the failure hand-over for the next one", async () => {
+  const due = new Date(Date.now() - HOUR);
+  const { tenantId, agentId, taskId } = await acceptedCard("handoff-refused", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const handoff = await failedRound(tenantId, taskId);
+  const recorder = new Recorder(agentId, "接着做。");
+  const working = unattendedTurn(() => recorder);
+  // The first try is turned away before it starts, as a paused coworker's is; the next one runs.
+  let tries = 0;
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: async (input) => {
+      tries++;
+      if (tries === 1) {
+        const paused = new Error("paused");
+        paused.name = "BotPausedError";
+        throw paused;
+      }
+      return working(input);
+    },
+    runner: runner(),
+  });
+  const text = "【系统催办】『核对发票』预计已过，先交做完的部分。";
+  await expect(nudgeRuns.startNudgeRun(tenantId, taskId, text)).rejects.toThrow(
+    CardTurnRefused,
+  );
+  // Not handed on: no round ran with it.
+  expect(await kinds(tenantId, taskId)).not.toContain(
+    "failure_handoff_carried",
+  );
+
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, text)).toBe("started");
+  await until(
+    async () => recorder.seen.length,
+    (count) => count > 0,
+  );
+  expect(recorder.seen[0]?.messages.at(-1)?.content).toBe(
+    `${handoff}\n\n${text}`,
+  );
+  // Handed on now, once.
+  const marks = (await history(tenantId, taskId)).filter(
+    (event) => event.kind === "failure_handoff_carried",
+  );
+  expect(marks).toHaveLength(1);
 });
