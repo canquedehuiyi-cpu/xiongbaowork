@@ -9,7 +9,7 @@
  * 决定了 Base UI 和 React DOM 在模块求值时就定下来的那些分支（见 `app/tests/preload.ts` 的注释）——只有
  * `bun test` 的 preload 能把这件事做对，`app/src/lib/marks.ts` 里的 `import.meta.glob` 也只有在那条路径上
  * 才是被替身接住的。所以：**规则在本文件，渲染在 `app/tests/i18n-dom-scan.test.tsx`**，数出来的账记在
- * `app/tests/i18n-dom-budget.json`，和 `scripts/brand/guard/budget.ts` 与 `brand-budget.json` 是同一套做法。
+ * `app/tests/i18n-dom-budget.json`。
  *
  * 一条判据，两处取舍：
  *

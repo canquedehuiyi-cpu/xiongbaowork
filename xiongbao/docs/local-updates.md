@@ -2,7 +2,7 @@
 
 `bun scripts/update.ts local check|plan|apply` updates a known source checkout at an explicit maintenance boundary. It preserves the checkout root, customer files, Compose project and volume identities. Regular startup does not discover or install a newer release.
 
-The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.xiongbao-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Use `scripts/integrate-upstream.ts` to create a separate integration candidate; review/build that distribution's release first. The updater never merges arbitrary upstream changes into production.
+The first supported layout is a clean Git checkout whose exact HEAD matches its accepted `.xiongbao-release.json`. Fetch and accept the candidate source commit before applying it. An unknown/non-Git installation, dirty tracked source, committed divergence from the accepted distribution, non-fast-forward target, or target changes to customer paths is refused. Build and review a new release of the distribution first. The updater never merges arbitrary upstream changes into production.
 
 **Only from v0.2.16.** This release no longer renames anything an installation kept under the product's
 earlier name. An installation still on v0.2.15 or earlier updates to v0.2.16 first, as the v0.2.16 tag of this
