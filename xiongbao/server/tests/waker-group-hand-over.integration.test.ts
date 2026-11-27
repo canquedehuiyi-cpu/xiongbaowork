@@ -1,6 +1,5 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { SQL } from "bun";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
@@ -49,8 +48,6 @@ import { createWakerGroupRoutes } from "../src/waker-groups/routes";
 import { createWakerGroupStore } from "../src/waker-groups/store";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { filledLater } from "./support/filled-later";
-import { renamedBy0240 } from "./support/renamed-by-0240";
 
 /**
  * A shared group whose creator leaves, or is deactivated, goes to its earliest member (spec
@@ -547,20 +544,6 @@ const deactivate = {
 };
 
 describe("hand-over function (0207)", () => {
-  test("the journal registers 0207 after 0206", async () => {
-    const journal = (await Bun.file(
-      new URL(
-        "../recovery/recovery-20261018-v1/meta/_journal.json",
-        import.meta.url,
-      ),
-    ).json()) as {
-      entries: { idx: number; tag: string; when: number }[];
-    };
-    const entry = journal.entries.find((item) => item.idx === 207);
-    expect(entry?.tag).toBe("0207_team_channel_hand_over");
-    expect(entry?.when ?? 0).toBeGreaterThan(1794537806196);
-  });
-
   test("a creator who leaves hands the group to the earliest member still in it", async () => {
     const alice = await person("alice");
     const bob = await person("bob");
@@ -1510,144 +1493,6 @@ describe("deactivation (0207 trigger)", () => {
     );
     expect(rows).toEqual([{ email: nobody }]);
   });
-
-  test("0207 hands over for people deactivated before it", async () => {
-    const made = await threeWithAFlow();
-    const migration = await Bun.file(
-      new URL(
-        "../recovery/recovery-20261018-v1/sql/0207_team_channel_hand_over.sql",
-        import.meta.url,
-      ),
-    ).text();
-    const backfill = migration.split("--> statement-breakpoint").at(-1) ?? "";
-    expect(backfill).toContain("openbot_team_person_leaves_groups(uid)");
-    const owner = ownerConnection();
-    class Rollback extends Error {}
-    const read = async (tx: SQL) => ({
-      creator: (
-        await tx`select created_by from channels where id = ${made.channelId}`
-      )[0]?.created_by,
-      members: (
-        await tx`select user_id from channel_memberships where channel_id = ${made.channelId} order by created_at`
-      ).map((row: { user_id: string }) => row.user_id),
-    });
-    // 交接前后各读一次；两次都在事务回调里，所以用 `filledLater` 而不是 `= null` 的 `let`。
-    const before = filledLater<Awaited<ReturnType<typeof read>>>();
-    const after = filledLater<Awaited<ReturnType<typeof read>>>();
-    try {
-      await owner.begin(async (tx) => {
-        // As a deployment that deny-listed her before 0207 existed.
-        await tx`alter table revoked_access disable trigger xiongbao_team_revoked_leaves`;
-        await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
-        await tx`alter table revoked_access enable trigger xiongbao_team_revoked_leaves`;
-        before.set(await read(tx as unknown as SQL));
-        // 0207 as written calls the helpers by their names before 0240 renamed them.
-        await tx.unsafe(renamedBy0240(backfill));
-        after.set(await read(tx as unknown as SQL));
-        throw new Rollback();
-      });
-    } catch (error) {
-      if (!(error instanceof Rollback)) throw error;
-    } finally {
-      await owner.close();
-    }
-
-    expect(before.get()).toEqual({
-      creator: made.alice.id,
-      members: [made.alice.id, made.bob.id, made.carol.id],
-    });
-    expect(after.get()).toEqual({
-      creator: made.bob.id,
-      members: [made.bob.id, made.carol.id],
-    });
-    // Rolled back: the shared database is as it was.
-    expect((await channelRow(made.channelId)).created_by).toBe(made.alice.id);
-  });
-
-  test("0207's backfill run a second time changes nothing", async () => {
-    // One group handed over, one put off by a running flow: the two states a first run leaves.
-    const made = await threeWithAFlow();
-    const later = await linkedGroup(made.alice, [made.bob]);
-    const going = await runWithCards(made.alice, later.groupId, "running");
-    const channelIds = [made.channelId, later.channelId];
-    const groupIds = [made.groupId, later.groupId];
-    const cardIds = [...made.flow.cardIds, ...going.cardIds];
-    const migration = await Bun.file(
-      new URL(
-        "../recovery/recovery-20261018-v1/sql/0207_team_channel_hand_over.sql",
-        import.meta.url,
-      ),
-    ).text();
-    const backfill = migration.split("--> statement-breakpoint").at(-1) ?? "";
-    expect(backfill).toContain("openbot_team_person_leaves_groups(uid)");
-    const owner = ownerConnection();
-    class Rollback extends Error {}
-    /*
-     * The rows come back untyped (`object[]`), so the copy is what gives them readable fields. Without
-     * it `{ ...row }` widens to `{}` and every `row.id` below is an error.
-     */
-    const plain = (rows: object[]) =>
-      [...rows].map((row) => ({ ...(row as Record<string, unknown>) }));
-    // Every row a run could touch, with its physical place: any update, even a no-op one, moves it.
-    const read = async (tx: SQL) => ({
-      channels: plain(
-        await tx`select id, ctid::text as at, created_by, deleted_at from channels
-                  where id in ${tx(channelIds)} order by id`,
-      ),
-      members: plain(
-        await tx`select channel_id, user_id, ctid::text as at from channel_memberships
-                  where channel_id in ${tx(channelIds)} order by channel_id, user_id`,
-      ),
-      crews: plain(
-        await tx`select id::text, tenant_id, name, ctid::text as at from waker_groups
-                  where id::text in ${tx(groupIds)} order by id`,
-      ),
-      runs: plain(
-        await tx`select id::text, tenant_id, ctid::text as at from group_task_runs
-                  where group_id::text in ${tx(groupIds)} order by id`,
-      ),
-      cards: plain(
-        await tx`select id::text, tenant_id, ctid::text as at from tasks
-                  where id::text in ${tx(cardIds)} order by id`,
-      ),
-    });
-    // 第一次跑完读一次、再跑一次读一次；两次都在事务回调里（见 `filledLater`）。
-    const once = filledLater<Awaited<ReturnType<typeof read>>>();
-    const twice = filledLater<Awaited<ReturnType<typeof read>>>();
-    try {
-      await owner.begin(async (tx) => {
-        await tx`alter table revoked_access disable trigger xiongbao_team_revoked_leaves`;
-        await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
-        await tx`alter table revoked_access enable trigger xiongbao_team_revoked_leaves`;
-        await tx.unsafe(renamedBy0240(backfill));
-        once.set(await read(tx as unknown as SQL));
-        await tx.unsafe(renamedBy0240(backfill));
-        twice.set(await read(tx as unknown as SQL));
-        throw new Rollback();
-      });
-    } catch (error) {
-      if (!(error instanceof Rollback)) throw error;
-    } finally {
-      await owner.close();
-    }
-
-    const first = once.get();
-    const second = twice.get();
-    if (!first || !second) throw new Error("the backfill did not run");
-    // The first run did its work: one group handed to Bob, the other left to a heal.
-    expect(
-      first.channels.map((row) => [row.id, row.created_by, row.deleted_at]),
-    ).toEqual(
-      [
-        [made.channelId, made.bob.id, null],
-        [later.channelId, made.alice.id, null],
-      ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
-    );
-    expect(first.members.map((row) => row.user_id)).not.toContain(
-      made.alice.id,
-    );
-    expect(second).toEqual(first);
-  });
 });
 
 /** The deny-list rows of these people. */
@@ -1659,30 +1504,6 @@ async function deniedEmails(who: AgentActor[]) {
       .where(inArray(revokedAccess.email, who.map(emailOf))),
   );
   return rows.map((row) => row.email);
-}
-
-/** The database owner, for the one test that runs a migration statement: only it may. */
-function ownerConnection(): SQL {
-  const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
-  if (!raw)
-    throw new Error(
-      "TEST_DATABASE_ADMIN_URL must name the database owner: only the owner runs 0207's statements.",
-    );
-  const admin = new URL(raw);
-  const target = new URL(testDatabaseUrl());
-  if (admin.hostname !== target.hostname || admin.port !== target.port)
-    throw new Error(
-      "TEST_DATABASE_ADMIN_URL must reach the same server as TEST_DATABASE_URL.",
-    );
-  return new SQL({
-    adapter: "postgres",
-    hostname: admin.hostname,
-    port: admin.port ? Number(admin.port) : 5432,
-    username: decodeURIComponent(admin.username),
-    password: decodeURIComponent(admin.password),
-    database: decodeURIComponent(target.pathname.replace(/^\//, "")),
-    max: 1,
-  });
 }
 
 /** `/api/waker-groups` as index.ts mounts it, signed in as whoever asks. */

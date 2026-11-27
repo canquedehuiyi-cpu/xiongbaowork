@@ -41,20 +41,6 @@
     "tests",
     "../app/src/vite-env.d.ts"
   ],
-  // ONE FILE IS EXCLUDED, deliberately, and it is the only one.
-  //
-  // `tests/recovery-knowledge-foundations.test.ts` is recovered evidence rather than a test this
-  // repository writes: `recovery-plugin-assembly-foundations.test.ts` pins its bytes (95182, sha256
-  // 8246be12…) and fails if they move. Unlike its siblings it has no entry in either inverse ledger
-  // — `helpers/recovery-lint-source.ts` and `APPROVED_K106_PRIOR_TEST_INVERSES` — so there is no
-  // sanctioned way to record a repair, and one is not something to invent while clearing type debt:
-  // the ledger's whole point is that someone decided the change was allowed.
-  //
-  // Its single error was a `readonly` tuple compared with `toEqual`, which wants `string[]`. The
-  // repair is a one-word edit, and that one word is what the byte pin exists to catch. Excluded
-  // instead: checking a file that cannot be edited buys nothing, and its integrity is guarded one
-  // file over, harder than this gate could.
-  //
   // `node_modules` stays: setting `exclude` replaces the default rather than adding to it.
-  "exclude": ["node_modules", "tests/recovery-knowledge-foundations.test.ts"]
+  "exclude": ["node_modules"]
 }

@@ -43,13 +43,13 @@ afterEach(() => {
 });
 // As docker-compose.yml resolves them: the server and the worker log in as the app role, the server
 // also holds the role writer, and only migration logs in as the owner. One database throughout.
-const OWNER_URL = "postgres://openbot:openbot@postgres:5432/xiongbao";
-const APP_URL = "postgres://xiongbao_app:openbot@postgres:5432/xiongbao";
+const OWNER_URL = "postgres://xiongbao:xiongbao@postgres:5432/xiongbao";
+const APP_URL = "postgres://xiongbao_app:xiongbao@postgres:5432/xiongbao";
 const ROLE_WRITER_URL =
-  "postgres://xiongbao_role_writer:openbot@postgres:5432/xiongbao";
+  "postgres://xiongbao_role_writer:xiongbao@postgres:5432/xiongbao";
 // A host install's .env since the role split: the app role for the server, the owner for the update.
-const HOST_APP_URL = "postgres://xiongbao_app:openbot@localhost:5432/xiongbao";
-const HOST_OWNER_URL = "postgres://openbot:openbot@localhost:5432/xiongbao";
+const HOST_APP_URL = "postgres://xiongbao_app:xiongbao@localhost:5432/xiongbao";
+const HOST_OWNER_URL = "postgres://xiongbao:xiongbao@localhost:5432/xiongbao";
 // The updater lets the process environment outrank .env; these fixtures speak through .env alone.
 const inheritedDatabaseUrls = {
   DATABASE_URL: process.env.DATABASE_URL,
@@ -115,7 +115,7 @@ function fixture(topology: "host" | "image" = "image") {
         name: "original-project",
         services: {
           postgres: {
-            environment: { POSTGRES_USER: "openbot", POSTGRES_DB: "xiongbao" },
+            environment: { POSTGRES_USER: "xiongbao", POSTGRES_DB: "xiongbao" },
           },
           server: {
             image:
@@ -277,7 +277,7 @@ test("host apply backs up and migrates as the owner and hands it to start.sh, no
     "accepted",
   );
   const dump = seen.find(({ command }) => command.startsWith("pg_dump"));
-  expect(dump?.env?.PGUSER).toBe("openbot");
+  expect(dump?.env?.PGUSER).toBe("xiongbao");
   expect(dump?.env?.PGDATABASE).toBe("xiongbao");
   const migrate = seen.find(({ command }) =>
     command.includes("scripts/migrate.ts"),
@@ -298,12 +298,12 @@ test.each([
   ["no owner URL", "", "MIGRATION_DATABASE_URL"],
   [
     "an owner URL for another database",
-    "MIGRATION_DATABASE_URL=postgres://openbot:openbot@localhost:5432/elsewhere\n",
+    "MIGRATION_DATABASE_URL=postgres://xiongbao:xiongbao@localhost:5432/elsewhere\n",
     "同一个数据库",
   ],
   [
     "an owner URL on another host",
-    "MIGRATION_DATABASE_URL=postgres://openbot:openbot@db.example.test:5432/xiongbao\n",
+    "MIGRATION_DATABASE_URL=postgres://xiongbao:xiongbao@db.example.test:5432/xiongbao\n",
     "同一个数据库",
   ],
 ])(
@@ -476,11 +476,11 @@ test("database identity is where libpq connects and which database it opens, not
   ])
     expect([same, databaseIdentity(same)]).toEqual([same, owner]);
   for (const different of [
-    "postgres://xiongbao_app:openbot@db.example.test:5432/xiongbao",
-    "postgres://xiongbao_app:openbot@postgres:5433/xiongbao",
-    "postgres://xiongbao_app:openbot@postgres:5432/customer_db",
+    "postgres://xiongbao_app:xiongbao@db.example.test:5432/xiongbao",
+    "postgres://xiongbao_app:xiongbao@postgres:5433/xiongbao",
+    "postgres://xiongbao_app:xiongbao@postgres:5432/customer_db",
     // No database in the URL: libpq opens the one named after the user.
-    "postgres://xiongbao_app:openbot@postgres:5432",
+    "postgres://xiongbao_app:xiongbao@postgres:5432",
   ])
     expect([different, databaseIdentity(different)]).not.toEqual([
       different,
@@ -491,20 +491,20 @@ test("database identity is where libpq connects and which database it opens, not
     undefined,
     "",
     "not a url",
-    "mysql://openbot:openbot@postgres:5432/xiongbao",
+    "mysql://xiongbao:xiongbao@postgres:5432/xiongbao",
     // Compose left a variable unresolved.
-    `postgres://openbot:${"$"}{PASSWORD}@postgres:5432/xiongbao`,
+    `postgres://xiongbao:${"$"}{PASSWORD}@postgres:5432/xiongbao`,
   ])
     expect(databaseIdentity(unusable)).toBeUndefined();
 });
 
 test("a connection option given twice is refused rather than read two ways", () => {
   for (const url of [
-    "postgres://openbot:openbot@postgres:5432/xiongbao?dbname=xiongbao&dbname=other",
-    "postgres://openbot:openbot@db.example.test:5432/xiongbao?host=db.example.test&host=elsewhere",
-    "postgres://openbot:openbot@db.example.test:5432/xiongbao?port=5432&port=6543",
-    "postgres://openbot:openbot@db.example.test:5432/xiongbao?user=a&user=b",
-    "postgres://openbot:openbot@db.example.test:5432/xiongbao?sslmode=disable&sslmode=require",
+    "postgres://xiongbao:xiongbao@postgres:5432/xiongbao?dbname=xiongbao&dbname=other",
+    "postgres://xiongbao:xiongbao@db.example.test:5432/xiongbao?host=db.example.test&host=elsewhere",
+    "postgres://xiongbao:xiongbao@db.example.test:5432/xiongbao?port=5432&port=6543",
+    "postgres://xiongbao:xiongbao@db.example.test:5432/xiongbao?user=a&user=b",
+    "postgres://xiongbao:xiongbao@db.example.test:5432/xiongbao?sslmode=disable&sslmode=require",
   ]) {
     expect(() => databaseIdentity(url)).toThrow("出现了不止一次");
     expect(() => libpqEnvironment(url, {})).toThrow("出现了不止一次");
@@ -548,12 +548,12 @@ test.each(["host", "hostaddr", "port", "dbname", "user", "service"])(
   "a query option that reroutes the connection is refused: %s",
   (key) => {
     // libpq would follow it; postgres.js, which migrates, reads only the authority and the path.
-    const url = `postgres://openbot:openbot@db-a.example.test:5432/xiongbao?${key}=elsewhere`;
+    const url = `postgres://xiongbao:xiongbao@db-a.example.test:5432/xiongbao?${key}=elsewhere`;
     expect(() => databaseIdentity(url)).toThrow(`查询参数「${key}」`);
     expect(() => libpqEnvironment(url, {})).toThrow(`查询参数「${key}」`);
     expect(
       databaseIdentity(
-        "postgres://openbot:openbot@db-a.example.test:5432/xiongbao?sslmode=require",
+        "postgres://xiongbao:xiongbao@db-a.example.test:5432/xiongbao?sslmode=require",
       ),
     ).toBeDefined();
   },
@@ -608,7 +608,7 @@ test("image migration keeps an owner URL handed to the update and referenced by 
   const f = fixture();
   // As `migrate: { environment: { DATABASE_URL: ${MIGRATION_DATABASE_URL} } }` in an override
   // resolves: Compose interpolates it from the environment of the command it runs.
-  const owner = "postgres://openbot:override-owner@postgres:5432/xiongbao";
+  const owner = "postgres://xiongbao:override-owner@postgres:5432/xiongbao";
   const migrations: (string | undefined)[] = [];
   const run: CommandRunner = async (command, options) => {
     const output = await f.run(command, options);
@@ -659,7 +659,7 @@ test("an external database is backed up through migration's owner URL, not the a
     "accepted",
   );
   expect(env).toHaveLength(1);
-  expect(env[0]?.PGUSER).toBe("openbot");
+  expect(env[0]?.PGUSER).toBe("xiongbao");
   expect(env[0]?.PGHOST).toBe("db.example.test");
   expect(env[0]?.PGPORT).toBe("6543");
   expect(env[0]?.PGDATABASE).toBe("xiongbao");
@@ -669,7 +669,7 @@ test("a candidate that changes only the accounts keeps the same database and is 
   const f = fixture();
   const run = rewriteDatabaseUrls(
     f,
-    (url) => url.replace("xiongbao_app:openbot@", "customer_app:secret@"),
+    (url) => url.replace("xiongbao_app:xiongbao@", "customer_app:secret@"),
     "after",
   );
   const plan = await planLocalUpdate({ ...f.options, run });
@@ -729,9 +729,9 @@ test.each([
 );
 
 test.each([
-  "postgres://openbot:openbot@postgres:5432/customer_db",
-  "postgres://customer_user:openbot@postgres:5432/xiongbao",
-  "postgres://openbot:openbot@postgres:5432/xiongbao?sslmode=disable",
+  "postgres://xiongbao:xiongbao@postgres:5432/customer_db",
+  "postgres://customer_user:xiongbao@postgres:5432/xiongbao",
+  "postgres://xiongbao:xiongbao@postgres:5432/xiongbao?sslmode=disable",
 ])(
   "bundled backup target mismatch refuses before stopping services: %s",
   async (databaseUrl) => {

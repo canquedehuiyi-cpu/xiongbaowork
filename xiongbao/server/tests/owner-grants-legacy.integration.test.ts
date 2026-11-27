@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { setRole } from "../src/auth/roles";
@@ -51,18 +50,6 @@ const plugins = createPluginStore({
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });
-
-const grantedAs = async (botId: string, ref: string) =>
-  (
-    await asPlatform(() =>
-      database
-        .select({ grantedAs: pluginGrants.grantedAs })
-        .from(pluginGrants)
-        .where(
-          sql`${pluginGrants.agentId} = ${botId} and ${pluginGrants.ref} = ${ref}`,
-        ),
-    )
-  )[0]?.grantedAs;
 
 beforeAll(async () => {
   releaseRoleWriter = await bindTestRoleWriter(database);
@@ -164,57 +151,6 @@ afterAll(async () => {
   });
   await releaseRoleWriter?.();
   await database.$client.close();
-});
-
-/** 0197 里给 `plugin_grants` 回填 `owner` 的那一条语句。 */
-function backfillStatement(): string {
-  const migration = readFileSync(
-    new URL(
-      "../recovery/recovery-20261018-v1/sql/0197_owner_app_grants.sql",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-  const statement = migration
-    .split("--> statement-breakpoint")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith('UPDATE "public"."plugin_grants"'));
-  if (!statement) throw new Error("0197 has no plugin_grants backfill");
-  return statement;
-}
-
-describe("0197 backfills an owner's grants written before the column", () => {
-  test("an owner's own install becomes the owner's; an admin's grant, and an admin owner's own, stay as they were", async () => {
-    const rollback = new Error("rollback");
-    let seen: Record<string, string | null> = {};
-    await expect(
-      asPlatform(() =>
-        database.transaction(async (tx) => {
-          await tx.execute(sql.raw(backfillStatement()));
-          const rows = await tx
-            .select({
-              agentId: pluginGrants.agentId,
-              ref: pluginGrants.ref,
-              grantedAs: pluginGrants.grantedAs,
-            })
-            .from(pluginGrants)
-            .where(inArray(pluginGrants.agentId, bots));
-          seen = Object.fromEntries(
-            rows.map((row) => [`${row.agentId} ${row.ref}`, row.grantedAs]),
-          );
-          // 回滚：只看这条语句做了什么，不改别的测试的行。
-          throw rollback;
-        }),
-      ),
-    ).rejects.toBe(rollback);
-    expect(seen).toEqual({
-      [`${TEAM_BOT} ${REF}`]: "owner",
-      [`${TEAM_BOT} ${OTHER_REF}`]: null,
-      [`${ADMINS_BOT} ${REF}`]: null,
-    });
-    // 回滚之后行是升级前的样子，下面的运行时兜底照样有东西可测。
-    expect(await grantedAs(TEAM_BOT, REF)).toBeNull();
-  });
 });
 
 describe("at run time, a grant with no mark whose granter is the Bot's owner is the owner's", () => {

@@ -1,5 +1,4 @@
 import { expect } from "bun:test";
-import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
@@ -15,6 +14,7 @@ import {
   recorderTrajectoryBindings,
 } from "../src/db/schema/recorder";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const prefix = `recorder-${randomUUID()}`;
@@ -60,21 +60,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await database.delete(users).where(inArray(users.id, [alice, bob]));
   await database.$client.close();
-});
-
-test("no name in the migration is longer than PostgreSQL keeps", async () => {
-  const migration = await Bun.file(
-    // M3: the fork ships upstream's 0066 as its recovery migration 0162.
-    new URL(
-      "../recovery/recovery-20261018-v1/sql/0162_recorder_extension.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const quoted = [...migration.matchAll(/"([a-z0-9_]+)"/g)].map(
-    (match) => match[1] as string,
-  );
-  expect(quoted.length).toBeGreaterThan(0);
-  for (const name of quoted) expect(name.length).toBeLessThanOrEqual(63);
 });
 
 test("a connection token hash is unique", async () => {
@@ -242,28 +227,4 @@ test("one Learning space per person, and no two people share one", async () => {
   await database
     .delete(learningPersonSpaces)
     .where(eq(learningPersonSpaces.userId, alice));
-});
-
-test("the migration holds only the Recorder's connections and trajectory bindings, and each person's Learning space and sharing", async () => {
-  const migration = await Bun.file(
-    // M3: the fork ships upstream's 0066 as its recovery migration 0162.
-    new URL(
-      "../recovery/recovery-20261018-v1/sql/0162_recorder_extension.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const created = [...migration.matchAll(/CREATE TABLE "([a-z0-9_]+)"/g)].map(
-    (match) => match[1],
-  );
-  expect(created.sort()).toEqual([
-    "learning_open_skills",
-    "learning_person_spaces",
-    "learning_skill_sharing",
-    "recorder_connect_codes",
-    "recorder_connections",
-    "recorder_trajectory_bindings",
-  ]);
-  expect(migration).not.toMatch(/ALTER TABLE "demonstrations"|DROP /);
-  // A recording is the person's: no Bot column, and no reference to the agents table.
-  expect(migration).not.toMatch(/bot_id|"agents"/);
 });

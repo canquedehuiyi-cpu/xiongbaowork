@@ -9,19 +9,38 @@
  * the way out: upgrade to v0.2.16 first, let it finish, then come back to this release.
  *
  * A database the migrator has never touched is new and has nothing to rename: it migrates straight
- * through, 0240 and 0241 included, and is never refused.
+ * from the baseline and is never refused. Nor is one whose ledger already holds the baseline: it was
+ * adopted by this release (or a later one), which means it passed this check then.
+ *
+ * WHAT IT READS SINCE THE BASELINE. v0.2.17 replaced the migration history with one baseline, so the
+ * rename migrations are no longer files this release carries. A database that has not been adopted yet
+ * still holds the history in its ledger, under the hashes v0.2.16's migrator recorded; the two rename
+ * migrations are recognised by those hashes, written below. The check runs on that ledger before the
+ * adoption rewrites it (`./baseline-adoption`), in the same transaction.
  *
  * The old names below are what the check looks for, and they are only ever read here, never written.
  * The embedded database's superuser and database names are checked by the delivery image's own boot
  * (docker/s6/scripts/upgrade-gate.sh), since an external database's are the operator's to choose.
  */
 import type { TransactionSql } from "postgres";
-import type { AppliedMigration, FolderMigration } from "./migration-reach";
+import type { AppliedMigration } from "./migration-reach";
 
-/** The v0.2.16 rename migrations, by journal tag. */
-export const RENAME_MIGRATIONS: readonly string[] = [
-  "0240_rebrand_names",
-  "0241_rebrand_history",
+/**
+ * The v0.2.16 rename migrations: journal tag, and the hash v0.2.16's migrator recorded for each (sha256
+ * of the whole file as v0.2.16 shipped it, commit e9a669825). docker/s6/scripts/upgrade-gate.sh carries
+ * the same two hashes; tests/upgrade-gate.test.ts holds them equal to the files in that commit.
+ */
+export const RENAME_MIGRATIONS: ReadonlyArray<
+  readonly [tag: string, hash: string]
+> = [
+  [
+    "0240_rebrand_names",
+    "b58372c5267789fbd30ae8cc0c3c997df9e9e100bb95e0331f4241be3b0f5018",
+  ],
+  [
+    "0241_rebrand_history",
+    "524f42fe9c4e6115e478ce41ddb39e3add950a002379bffef6acea43780a5ad5",
+  ],
 ];
 
 /** Each application role as it was named before v0.2.16, and the name 0240 gave it. */
@@ -82,14 +101,12 @@ export function upgradeRefusal(facts: UpgradeFacts): string | undefined {
  */
 export async function readUpgradeFacts(
   tx: TransactionSql,
-  folder: readonly FolderMigration[],
   applied: readonly AppliedMigration[],
 ): Promise<UpgradeFacts> {
   const appliedHashes = new Set(applied.map((row) => row.hash));
-  const missingMigrations = RENAME_MIGRATIONS.filter((tag) => {
-    const migration = folder.find((entry) => entry.tag === tag);
-    return !migration || !appliedHashes.has(migration.hash);
-  });
+  const missingMigrations = RENAME_MIGRATIONS.filter(
+    ([, hash]) => !appliedHashes.has(hash),
+  ).map(([tag]) => tag);
   const roles = await tx<{ rolname: string }[]>`
     select rolname from pg_roles where rolname in ${tx(RENAMED_ROLES.flat())}`;
   const present = new Set(roles.map((row) => row.rolname));
@@ -149,13 +166,15 @@ export class UpgradeRefusedError extends Error {
   }
 }
 
-/** The check as `applyMigrations` runs it before migrating: throws {@link UpgradeRefusedError}. */
+/**
+ * The check as the release runs it on a ledger that still holds the history, before the adoption:
+ * throws {@link UpgradeRefusedError}. `./baseline-adoption` decides which ledgers those are.
+ */
 export async function refuseUnrenamedDatabase(
   tx: TransactionSql,
-  folder: readonly FolderMigration[],
   applied: readonly AppliedMigration[],
 ): Promise<void> {
   if (applied.length === 0) return;
-  const refusal = upgradeRefusal(await readUpgradeFacts(tx, folder, applied));
+  const refusal = upgradeRefusal(await readUpgradeFacts(tx, applied));
   if (refusal) throw new UpgradeRefusedError(refusal);
 }

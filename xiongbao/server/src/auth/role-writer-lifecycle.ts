@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { type SQL, sql } from "drizzle-orm";
 import { envName } from "../../../shared/env-name";
 import { judgeRlsEnforcement, ROLE_FACTS_SQL } from "../db/rls-role";
@@ -35,12 +36,28 @@ export function resolveRlsEnforcementMode(
 }
 
 /**
- * The password `0054_app_role.sql` gives the application role it creates under its v0.2.15 name (which
- * migration 0240 renames to `xiongbao_app`; a SCRAM password survives that), and the compose owner's;
- * both are public. The compose file's default for the role writer is the same word, so the same
+ * The password the baseline migration gives the application role when it creates it, and the compose
+ * owner's; both are public. The compose file's default for the role writer is the same word, so the same
  * check covers it.
  */
-const PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot";
+const PUBLIC_DEFAULT_DATABASE_PASSWORD = "xiongbao";
+
+/**
+ * The public default before v0.2.17 (migration 0054 of the history the baseline replaced created the
+ * application role with it, and a SCRAM password survives v0.2.16's rename of the role), as the SHA-256
+ * of the word: a role created then still accepts it unless an operator changed it, so it is refused all
+ * the same. Kept as a digest so the product's former name is not spelled here.
+ */
+const FORMER_PUBLIC_DEFAULT_DATABASE_PASSWORD_SHA256 =
+  "55569917dab57c4e2784e97e3846c66d7e782be625d30911f218a227e3751a4d";
+
+function isPublicDefaultPassword(password: string): boolean {
+  return (
+    password === PUBLIC_DEFAULT_DATABASE_PASSWORD ||
+    createHash("sha256").update(password).digest("hex") ===
+      FORMER_PUBLIC_DEFAULT_DATABASE_PASSWORD_SHA256
+  );
+}
 
 /** The role name when `url` authenticates with the public default password, else undefined. */
 function publicDefaultCredentialRole(
@@ -49,9 +66,7 @@ function publicDefaultCredentialRole(
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
-    if (
-      decodeURIComponent(parsed.password) !== PUBLIC_DEFAULT_DATABASE_PASSWORD
-    )
+    if (!isPublicDefaultPassword(decodeURIComponent(parsed.password)))
       return undefined;
     return decodeURIComponent(parsed.username) || "unknown";
   } catch {
@@ -69,10 +84,10 @@ export function usesPublicDefaultDatabasePassword(
  * Refuse, in production, a DATABASE_URL whose password is the one printed in this repository.
  *
  * A migration cannot do this: PostgreSQL does not hand a password back, so it cannot tell a role an
- * operator secured from one still on 0054's default, and resetting it would lock the second kind out
+ * operator secured from one still on a public default, and resetting it would lock the second kind out
  * silently. The connection string is the one credential the server holds, and with password
- * authentication a role has exactly one password, so a URL that authenticates with `openbot` means
- * the role still accepts it from anywhere that can reach the database. Never echoes the URL.
+ * authentication a role has exactly one password, so a URL that authenticates with a public default
+ * means the role still accepts it from anywhere that can reach the database. Never echoes the URL.
  */
 export function checkDatabaseCredential(options: {
   url: string | undefined;

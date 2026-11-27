@@ -127,13 +127,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: openbot
+          POSTGRES_USER: xiongbao
           POSTGRES_PASSWORD: e2e-owner
           POSTGRES_DB: xiongbao_model_e2e
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d xiongbao_model_e2e"
+          --health-cmd "pg_isready -U xiongbao -d xiongbao_model_e2e"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       NODE_ENV: test
@@ -149,8 +149,8 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Migrate the job's own database (ci.yml recipe)
         run: |
-          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_model_e2e bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          DATABASE_URL=postgres://xiongbao:e2e-owner@127.0.0.1:5432/xiongbao_model_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
       - name: One bound-model call, reconciled against model_token_calls
         env:
           MODEL_E2E: "1"
@@ -174,13 +174,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: openbot
+          POSTGRES_USER: xiongbao
           POSTGRES_PASSWORD: e2e-owner
           POSTGRES_DB: xiongbao_g4_real
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d xiongbao_g4_real"
+          --health-cmd "pg_isready -U xiongbao -d xiongbao_g4_real"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: e2e-owner
@@ -195,9 +195,9 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
-          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_g4_real bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
+          DATABASE_URL=postgres://xiongbao:e2e-owner@127.0.0.1:5432/xiongbao_g4_real bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
       # No app build: the harness drives the API only, and the server serves no APP_DIST_DIR. The
       # server log stays on the runner (it is neither printed nor uploaded).
       - name: G4 WakerFlow lifecycle with a real model
@@ -228,13 +228,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: openbot
+          POSTGRES_USER: xiongbao
           POSTGRES_PASSWORD: e2e-owner
           POSTGRES_DB: xiongbao_employee_eval
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d xiongbao_employee_eval"
+          --health-cmd "pg_isready -U xiongbao -d xiongbao_employee_eval"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: e2e-owner
@@ -289,9 +289,9 @@ jobs:
           done
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
-          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_employee_eval bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
+          DATABASE_URL=postgres://xiongbao:e2e-owner@127.0.0.1:5432/xiongbao_employee_eval bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
       # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（360 分钟）早的截止时间，评测脚本在开始每一对（交付题是每一题）之前
       # 看还剩多少时间，来不及做完一对就不做，已完成的各对照常记录。留出十五分钟给装依赖、出报告和上传。
       - name: Record the wall-clock deadline for repeat pairs
@@ -441,13 +441,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: openbot
+          POSTGRES_USER: xiongbao
           POSTGRES_PASSWORD: e2e-owner
           POSTGRES_DB: xiongbao_capability_smoke
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openbot -d xiongbao_capability_smoke"
+          --health-cmd "pg_isready -U xiongbao -d xiongbao_capability_smoke"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       PGPASSWORD: e2e-owner
@@ -485,9 +485,9 @@ jobs:
           done
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
-          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/xiongbao_capability_smoke bun run --cwd server scripts/migrate.ts
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
-          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
+          DATABASE_URL=postgres://xiongbao:e2e-owner@127.0.0.1:5432/xiongbao_capability_smoke bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U xiongbao -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE xiongbao_role_writer WITH PASSWORD 'e2e-role-writer'"
       - name: One minimal scenario per capability
         env:
           MODEL_E2E: "1"

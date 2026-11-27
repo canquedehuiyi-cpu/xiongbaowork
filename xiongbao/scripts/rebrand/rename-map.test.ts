@@ -9,7 +9,6 @@ import {
   isGuardPath,
   isSkipped,
   loadProtect,
-  type Phase,
   type ProtectEntry,
   readProtectEntries,
   renamePath,
@@ -100,191 +99,13 @@ describe("renameText", () => {
     expect(renameText(text, p)).toBe(
       "postgres://xiongbao_fixture:x@h/db -U xiongbao_fixture",
     );
-    // 超级用户 openbot 全仓保护到 R4：用户名保留，以它为前缀的别的名字照改。
-    expect(renameText("postgres://openbot:x@h/db -U openbot -d x", p)).toBe(
-      "postgres://openbot:x@h/db -U openbot -d x",
-    );
+    // 超级用户与公开默认口令随迁移基线化（R4 Task 26）不再保护：连接串里的用户名、口令、库名一起改。
     expect(
-      renameText(
-        "postgres://openbot:x@h/db -U openbot -d x",
-        loadProtect("R4"),
-      ),
-    ).toBe("postgres://xiongbao:x@h/db -U xiongbao -d x");
-    // 应用角色名由 v0.2.16 的迁移 0240 改成新名（Task 20），不再保护；口令随 0054 迁移不动。
-    expect(renameText("postgres://openbot_app:openbot@h/openbot_b", p)).toBe(
-      "postgres://xiongbao_app:openbot@h/xiongbao_b",
-    );
-    // 没有用户名的写法（openbot 是主机名）不算超级用户；不带协议头的 <用户>:<口令>@ 片段同样保护。
-    expect(renameText("postgres://openbot/x", p)).toBe("postgres://xiongbao/x");
-    expect(renameText('includes("openbot:openbot@")', p)).toBe(
-      'includes("openbot:openbot@")',
-    );
+      renameText("postgres://openbot:openbot@h/openbot_b -U openbot", p),
+    ).toBe("postgres://xiongbao:xiongbao@h/xiongbao_b -U xiongbao");
     expect(renameText("ROLE_WRITER_PASSWORD:-openbot-dev", p)).toBe(
       "ROLE_WRITER_PASSWORD:-xiongbao-dev",
     );
-  });
-
-  describe("真实文件：超级用户角色 openbot 到 R4 才改，库名按文件区分", () => {
-    const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
-      cwd: import.meta.dir,
-    })
-      .stdout.toString()
-      .trim();
-    const read = (path: string) => readFileSync(join(root, path), "utf8");
-    const at = (phase: Phase, path: string) =>
-      renameText(read(path), loadProtect(phase, path));
-    const R1 = (path: string) => ({ source: read(path), out: at("R1", path) });
-    const count = (text: string, pattern: RegExp) =>
-      (text.match(pattern) ?? []).length;
-    // 超级用户出现的各种写法：R1 前后条数必须一样（全部保留旧名），也不能冒出以新名为用户的写法。
-    const SUPERUSER = [
-      /POSTGRES_USER(?:\s*:\s*|=|:-)["']?openbot\b/g,
-      /-U ?["']?openbot\b/g,
-      /postgres(?:ql)?:\/\/openbot(?=[:@])/g,
-      /OWNER(?: TO)? ["']?openbot\b/g,
-    ];
-    const NEW_SUPERUSER =
-      /POSTGRES_USER(?:\s*:\s*|=|:-)["']?xiongbao\b|-U ?["']?xiongbao\b|postgres(?:ql)?:\/\/xiongbao[:@]|OWNER(?: TO)? ["']?xiongbao\b/;
-    // 库名：旧名不再出现在 -d、POSTGRES_DB、连接串尾部。
-    const OLD_DATABASE =
-      /-d openbot\b|POSTGRES_DB(?:\s*:\s*|=)["']?openbot\b|:5432\/openbot(?![\w-])/;
-
-    for (const path of [
-      ".github/workflows/ci.yml",
-      "xiongbao/docker-compose.yml",
-      "xiongbao/scripts/start.sh",
-    ]) {
-      test(`${path}：超级用户处处仍是 openbot，库名处处一致改成 xiongbao`, () => {
-        const { source, out } = R1(path);
-        for (const pattern of SUPERUSER) {
-          expect(count(out, pattern)).toBe(count(source, pattern));
-        }
-        expect(out).not.toMatch(NEW_SUPERUSER);
-        expect(out).not.toMatch(OLD_DATABASE);
-        // 应用角色的口令写在 0054 迁移里，连接串里要保持一致。
-        expect(count(out, /openbot_app:openbot(?![\w-])/g)).toBe(
-          count(source, /openbot_app:openbot(?![\w-])/g),
-        );
-        expect(out).not.toMatch(/openbot_app:xiongbao/);
-      });
-    }
-
-    test("开发 compose 与 start.sh 的库名互相一致，超级用户与 0054 的 FOR ROLE openbot 对得上", () => {
-      const compose = R1("xiongbao/docker-compose.yml").out;
-      const start = R1("xiongbao/scripts/start.sh").out;
-      expect(compose).toMatch(/POSTGRES_DB: xiongbao\b/);
-      expect(compose).toMatch(/POSTGRES_USER: openbot\b/);
-      expect(start).toMatch(/psql -U openbot -d xiongbao\b/);
-      // 依赖 R4 之前的迁移原文：迁移基线化（R4）时随超级用户的保护条目一起删除这一断言。
-      const migration = read("xiongbao/server/drizzle/0054_app_role.sql");
-      expect(migration).toContain("FOR ROLE openbot IN SCHEMA public");
-    });
-
-    for (const name of ["postgres-init.sh", "migrate.sh"]) {
-      test(`s6/${name}：R1 后与原文逐字相同；库名由 v0.2.16 的数据迁移改，脚本里的旧库名与超级用户一起到 R4 才改`, () => {
-        const path = `xiongbao/docker/s6/scripts/${name}`;
-        const { source, out } = R1(path);
-        expect(out).toBe(source);
-        // R3 不机械改库名：交付容器里的库由 v0.2.16 启动时改名（rebrand-superuser.sh）。脚本里剩下的旧库名
-        // 都是改名前的卷上的名字（新装卷初次建库、查名字与改名时传的旧名），跟超级用户一样要到 R4 基线化。
-        const r3 = renameText(source, loadProtect("R3", path));
-        const oldDatabase = /-d openbot\b/g;
-        expect(count(source, oldDatabase)).toBeGreaterThan(0);
-        expect(count(r3, oldDatabase)).toBe(count(source, oldDatabase));
-        // 超级用户到 R4 才改：迁移基线化（R4）时随保护条目一起删除这一断言。
-        expect(r3).toMatch(/-U openbot\b/);
-        const r4 = renameText(source, loadProtect("R4", path));
-        expect(r4).not.toMatch(OLD_DATABASE);
-        expect(r4).not.toMatch(/-U openbot\b/);
-        expect(r4).toMatch(/-U xiongbao\b/);
-      });
-    }
-
-    test("image-smoke.sh：检查交付镜像里改名后的库，应用角色口令不动", () => {
-      const { source, out } = R1("xiongbao/scripts/ci/image-smoke.sh");
-      // 新装卷首启就改了名：默认口令的反例要连改名后的库，失败才只说明口令不对。
-      expect(source).not.toMatch(/-d openbot\b/);
-      // 应用角色已由迁移 0240 改名（Task 20），反例用新名登录。
-      expect(count(out, /-U xiongbao_app -d xiongbao\b/g)).toBe(2);
-      expect(out).toContain("PGPASSWORD=openbot ");
-    });
-
-    // 下面两组依赖 R4 之前的状态（超级用户与公开默认口令仍是旧名）：迁移基线化（R4）时随保护条目一起删除。
-    test("超级用户的引用：update-local 测试的 PGUSER 期望与讲超级用户的文档句子在 R1 不变", () => {
-      const tests = R1("xiongbao/tests/update-local.test.ts");
-      const expectation = /PGUSER\)\.toBe\("openbot"\)/g;
-      expect(count(tests.source, expectation)).toBe(2);
-      expect(count(tests.out, expectation)).toBe(2);
-      expect(tests.out).not.toMatch(/PGUSER\)\.toBe\("xiongbao"\)/);
-      // PGUSER 从连接串用户名解析：被测的连接串里超级用户也仍是 openbot。
-      expect(tests.out).toContain(
-        'const HOST_OWNER_URL = "postgres://openbot:openbot@localhost:5432/xiongbao";',
-      );
-
-      const sentences: Array<[string, string[]]> = [
-        [
-          "xiongbao/docs/deployment-xiongbao.md",
-          ["名为 `openbot` 的迁移 owner", "指定 owner 名 `openbot`"],
-        ],
-        ["xiongbao/docs/configuration.md", ["compose owner `openbot`"]],
-      ];
-      for (const [path, phrases] of sentences) {
-        const { source, out } = R1(path);
-        const lines = source
-          .split("\n")
-          .filter((line) => phrases.some((phrase) => line.includes(phrase)));
-        expect(lines).toHaveLength(phrases.length);
-        for (const line of lines) expect(out.split("\n")).toContain(line);
-      }
-    });
-
-    test("公开默认口令：常量、compose 默认口令、readiness 测试输入在 R1–R3 都是 openbot，R4 才一起改", () => {
-      const CONSTANT = "xiongbao/server/src/auth/role-writer-lifecycle.ts";
-      const COMPOSE = "xiongbao/docker-compose.yml";
-      const READINESS = "xiongbao/server/tests/server-readiness-gates.test.ts";
-      const ENV = "xiongbao/.env.example";
-      const all = (text: string, pattern: RegExp) =>
-        [...text.matchAll(pattern)].map((match) => match[1]);
-
-      for (const phase of ["R1", "R2", "R3", "R4"] as const) {
-        const expected = phase === "R4" ? "xiongbao" : "openbot";
-        const constant = at(phase, CONSTANT);
-        expect(
-          all(constant, /PUBLIC_DEFAULT_DATABASE_PASSWORD = "(\w+)"/g),
-        ).toEqual([expected]);
-        expect(constant).toContain(`authenticates with \`${expected}\``);
-
-        // compose：超级用户口令、role writer 默认口令、各连接串里的口令都等于常量。
-        const compose = at(phase, COMPOSE);
-        const composeSecrets = [
-          ...all(compose, /POSTGRES_PASSWORD: (\w+)/g),
-          ...all(compose, /ROLE_WRITER_PASSWORD:-(\w+)\}/g),
-          ...all(compose, /postgres:\/\/\w+:(\w+)@/g),
-        ];
-        expect(composeSecrets.length).toBe(6);
-        expect(new Set(composeSecrets)).toEqual(new Set([expected]));
-
-        const env = at(phase, ENV);
-        const envSecrets = all(env, /postgres:\/\/\w+:(\w+)@/g);
-        expect(envSecrets.length).toBeGreaterThanOrEqual(4);
-        expect(new Set(envSecrets)).toEqual(new Set([expected]));
-        expect(env).toContain(`The \`${expected}\` password above is public`);
-
-        // readiness 测试：口令输入与说明 0054 口令的注释都跟着常量走，近似反例仍差一个字符。
-        const readiness = at(phase, READINESS);
-        expect(new Set(all(readiness, /appUrl\("(\w+)"\)/g))).toEqual(
-          new Set([expected, `${expected}2`]),
-        );
-        // 只看这两组用例里的连接串（db.example.com 与 compose 的 postgres:5432），别处的 unit:unit 不相干。
-        const readinessSecrets = all(
-          readiness,
-          /postgres:\/\/\w+:(\w+)@(?:db\.example\.com|postgres:5432)/g,
-        );
-        expect(readinessSecrets.length).toBe(2);
-        expect(new Set(readinessSecrets)).toEqual(new Set([expected]));
-        expect(readiness).toContain(`with the password \`${expected}\``);
-      }
-    });
   });
 
   test("作用域条目只在自己的文件里生效", () => {

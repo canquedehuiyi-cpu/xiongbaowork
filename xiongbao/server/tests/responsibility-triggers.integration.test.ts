@@ -11,8 +11,6 @@
  */
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createHmac, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
@@ -641,107 +639,5 @@ test("the legacy GitHub binding ingests in the binding's tenant, and a binding n
   } finally {
     await stampBinding(ownerId);
     await asOwner(() => bindings.remove(ownerId, created.id));
-  }
-});
-
-/*
- * Migration 0121 (G01-C): the legacy GitHub webhook now refuses a binding whose stamp is not its
- * owner, and 0115 did not restamp `responsibility_source_bindings`, so bindings registered before the
- * routes ran in the owner's frame would stop delivering. Their signing secrets (and those of triggers
- * 0115 restamped) stayed `system`, which the owner's frame cannot revoke or rotate. The file runs as this NOBYPASSRLS role from
- * the empty frame a migrator arrives with, inside a transaction that is rolled back.
- */
-test("migration 0121 restamps GitHub source bindings of nobody's, and the secrets of bindings and triggers, to their owner, and only those", async () => {
-  const migration = readFileSync(
-    join(
-      import.meta.dir,
-      "..",
-      "recovery",
-      "recovery-20261018-v1",
-      "sql",
-      "0121_source_binding_owner_tenant.sql",
-    ),
-    "utf8",
-  );
-  const stamps = ["system", "platform", "", strangerId];
-  const created = [];
-  for (const [index] of stamps.entries())
-    created.push(
-      await asOwner(() =>
-        bindings.create(ownerId, {
-          repository: `xiongbao/restamp-${index}`,
-          secret: "fixture-only-restamp-secret",
-        }),
-      ),
-    );
-  const ids = created.map((binding) => binding.id);
-  // A legacy trigger whose row 0115 already gave its owner, but whose signing secret it left behind.
-  const responsibility = await goal();
-  const trigger = await asOwner(() =>
-    triggers.create(ownerId, responsibility.id, {
-      config: { kind: "webhook" },
-    }),
-  );
-  const rollback = new Error("rollback the migration fixture");
-  let seen:
-    | {
-        frame: unknown;
-        rows: unknown[];
-        secrets: unknown[];
-        triggerSecret: unknown;
-      }
-    | undefined;
-  try {
-    await expect(
-      database.$client.begin(async (tx) => {
-        await tx`select set_config('app.tenant_id', 'platform', true)`;
-        for (const [index, stamp] of stamps.entries())
-          await tx`update responsibility_source_bindings set tenant_id = ${stamp} where id = ${ids[index] ?? ""}`;
-        // Every secret written unframed, as the legacy routes wrote them.
-        for (const id of ids)
-          await tx`update credentials set tenant_id = 'system' where id = (select credential_id from responsibility_source_bindings where id = ${id})`;
-        await tx`update credentials set tenant_id = 'system' where id = (select credential_id from responsibility_triggers where id = ${trigger.trigger.id})`;
-        await tx`select set_config('app.tenant_id', '', true)`;
-        await tx.unsafe(migration);
-        const [frame] =
-          await tx`select current_setting('app.tenant_id', true) as tenant`;
-        await tx`select set_config('app.tenant_id', 'platform', true)`;
-        const rows =
-          await tx`select id, tenant_id from responsibility_source_bindings where owner_user_id = ${ownerId}`;
-        const byId = new Map(
-          Array.from(rows as ArrayLike<{ id: string; tenant_id: string }>).map(
-            (row) => [row.id, row.tenant_id],
-          ),
-        );
-        const secretById = new Map<string, unknown>();
-        for (const id of ids) {
-          const [secret] =
-            await tx`select credential.tenant_id from responsibility_source_bindings binding join credentials credential on credential.id = binding.credential_id where binding.id = ${id}`;
-          secretById.set(
-            id,
-            (secret as { tenant_id: unknown } | undefined)?.tenant_id,
-          );
-        }
-        const [triggerSecret] =
-          await tx`select credential.tenant_id from responsibility_triggers t join credentials credential on credential.id = t.credential_id where t.id = ${trigger.trigger.id}`;
-        seen = {
-          frame: (frame as { tenant: unknown }).tenant,
-          rows: ids.map((id) => byId.get(id)),
-          secrets: ids.map((id) => secretById.get(id)),
-          triggerSecret: (triggerSecret as { tenant_id: unknown } | undefined)
-            ?.tenant_id,
-        };
-        throw rollback;
-      }),
-    ).rejects.toBe(rollback);
-    expect(seen?.frame).toBe("");
-    // Nobody's three ways go to their owner; a stamp naming another person is a conflict and stays.
-    expect(seen?.rows).toEqual([ownerId, ownerId, ownerId, strangerId]);
-    // Each secret follows its row to the owner, so the owner can revoke and rotate it; the
-    // conflicting binding's secret is not moved.
-    expect(seen?.secrets).toEqual([ownerId, ownerId, ownerId, "system"]);
-    expect(seen?.triggerSecret).toBe(ownerId);
-  } finally {
-    for (const id of ids) await asOwner(() => bindings.remove(ownerId, id));
   }
 });

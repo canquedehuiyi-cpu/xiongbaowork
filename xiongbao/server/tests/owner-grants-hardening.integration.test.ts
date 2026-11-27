@@ -7,7 +7,6 @@ import {
   test,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createDatabase } from "../src/db/client";
@@ -240,21 +239,6 @@ describe("an owner's self-service install is the owner's grant", () => {
         teamBots.credentialActorFor(TEAMMATE, TEAM_BOT)(ref),
       ),
     ).toBe(TEAMMATE);
-  });
-});
-
-describe("upgrading keeps who may give an app what it was", () => {
-  test("0197 sets every app already added to admin-only", () => {
-    const migration = readFileSync(
-      new URL(
-        "../recovery/recovery-20261018-v1/sql/0197_owner_app_grants.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    expect(migration).toMatch(
-      /UPDATE "public"\."mcp_servers" SET "owner_grants" = 'admin' WHERE "owner_grants" IS NULL/,
-    );
   });
 });
 

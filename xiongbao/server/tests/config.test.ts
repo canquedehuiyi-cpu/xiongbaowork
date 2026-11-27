@@ -5,7 +5,7 @@ import { configuredAuthProviders, loadConfig } from "../src/config";
 // The base environment is what a deployment of this shape needs to boot: its own database, a key
 // vault, and somebody to sign in. No platform address appears here, because nothing reads one.
 const baseEnvironment = {
-  DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
+  DATABASE_URL: "postgres://xiongbao:xiongbao@localhost:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
   GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",

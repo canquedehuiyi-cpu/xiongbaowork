@@ -1,6 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { SQL } from "bun";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { WakerFlowPlan } from "../../shared/wakerflows";
@@ -25,7 +24,6 @@ import {
   WakerFlowVersionNotFoundError,
 } from "../src/wakerflows/store";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { renamedBy0240 } from "./support/renamed-by-0240";
 
 /**
  * WF8-3 (spec 2026-11-04-wf8 §3.6, V-A): every Save keeps the whole plan as a version, and a rollback
@@ -343,129 +341,5 @@ describe("whose versions they are", () => {
       revision: 3,
     });
     expect(stale.status).toBe(409);
-  });
-});
-
-/*
- * Migration 0134 on a database that already has Flows: read from the file and run verbatim inside a
- * transaction that is rolled back (the pattern of the 0129 and 0131 tests). The shared test
- * database is already past 0134, so the transaction first drops the table, then writes a compiled
- * Flow and a draft as the rows 0134 would have found, then runs every statement.
- */
-describe("migration 0134 on Flows saved before it", () => {
-  const MIGRATION_URL = new URL(
-    "../recovery/recovery-20261018-v1/sql/0134_waker_flow_versions.sql",
-    import.meta.url,
-  );
-
-  function ownerConnection(): SQL {
-    const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
-    if (!raw)
-      throw new Error(
-        "TEST_DATABASE_ADMIN_URL must name the database owner: only the owner can put 0134's table back.",
-      );
-    const admin = new URL(raw);
-    const target = new URL(testDatabaseUrl());
-    if (admin.hostname !== target.hostname || admin.port !== target.port)
-      throw new Error(
-        "TEST_DATABASE_ADMIN_URL must reach the same server as TEST_DATABASE_URL.",
-      );
-    return new SQL({
-      adapter: "postgres",
-      hostname: admin.hostname,
-      port: admin.port ? Number(admin.port) : 5432,
-      username: decodeURIComponent(admin.username),
-      password: decodeURIComponent(admin.password),
-      database: decodeURIComponent(target.pathname.replace(/^\//, "")),
-      max: 1,
-    });
-  }
-
-  class Rollback extends Error {}
-
-  test("a compiled Flow gets exactly one version, its current one; a draft gets none", async () => {
-    const statements = (await Bun.file(MIGRATION_URL).text())
-      .split("--> statement-breakpoint")
-      .map((statement) => statement.trim())
-      .filter(Boolean);
-    const owner = ownerConnection();
-    const tenantId = `flowver-mig-${randomUUID()}`;
-    const compiled = randomUUID();
-    const draft = randomUUID();
-    const template = randomUUID();
-    const plan = planFor(`${tenantId}-agent`, "旧流程", "写");
-    let seen:
-      | {
-          rows: {
-            flow_id: string;
-            revision: number;
-            plan: unknown;
-            template_id: string;
-            created_by: string | null;
-          }[];
-          forced: boolean;
-          grants: string[];
-        }
-      | undefined;
-    try {
-      await owner.begin(async (tx) => {
-        await tx.unsafe('DROP TABLE "public"."waker_flow_versions"');
-        await tx`
-          insert into public.waker_flows (id, tenant_id, name, plan, revision, group_id, template_id)
-          values (${compiled}, ${tenantId}, '旧流程', ${plan}::jsonb, 5, ${randomUUID()}, ${template})
-        `;
-        await tx`
-          insert into public.waker_flows (id, tenant_id, name, revision)
-          values (${draft}, ${tenantId}, '草稿', 2)
-        `;
-        // 0134 as written grants to the role 0240 later renamed.
-        for (const statement of statements)
-          await tx.unsafe(renamedBy0240(statement));
-        const rows = await tx`
-          select flow_id, revision, plan, template_id, created_by
-            from public.waker_flow_versions
-           where tenant_id = ${tenantId}
-        `;
-        const [table] = await tx`
-          select relforcerowsecurity as forced from pg_class where relname = 'waker_flow_versions'
-        `;
-        const grants = await tx`
-          select privilege_type from information_schema.role_table_grants
-           where table_name = 'waker_flow_versions' and grantee = 'xiongbao_app'
-           order by privilege_type
-        `;
-        seen = {
-          rows: [...rows],
-          forced: table.forced,
-          grants: grants.map(
-            (row: { privilege_type: string }) => row.privilege_type,
-          ),
-        };
-        throw new Rollback();
-      });
-    } catch (error) {
-      if (!(error instanceof Rollback)) throw error;
-    } finally {
-      await owner.close();
-    }
-    expect(seen?.rows).toEqual([
-      {
-        flow_id: compiled,
-        revision: 5,
-        plan,
-        template_id: template,
-        created_by: null,
-      },
-    ]);
-    expect(seen?.forced).toBe(true);
-    expect(seen?.grants).toEqual(["INSERT", "SELECT"]);
-    // The rollback left the shared database's table as it was.
-    const left = await runAsTenant(tenantId, () =>
-      database
-        .select({ revision: wakerFlowVersions.revision })
-        .from(wakerFlowVersions)
-        .where(eq(wakerFlowVersions.tenantId, tenantId)),
-    );
-    expect(left).toEqual([]);
   });
 });

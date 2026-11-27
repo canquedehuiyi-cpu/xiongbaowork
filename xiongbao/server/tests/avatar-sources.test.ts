@@ -1,8 +1,7 @@
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { LLMock } from "@copilotkit/aimock";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
 import { createAgentProfileStore } from "../src/agents/profile-store";
@@ -65,9 +64,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
 const personA = `avs-${suite}-a`;
 const personB = `avs-${suite}-b`;
-const personC = `avs-${suite}-c`;
-const personD = `avs-${suite}-d`;
-const everyone = [personA, personB, personC, personD];
+const everyone = [personA, personB];
 const store = createAvatarSourceStore(database);
 
 function requireUserFor(
@@ -685,80 +682,5 @@ describe("what the router is told the 分身 is for", () => {
       `- id: ${avatarAgentId(personB)}\n  name: 我的分身\n  for: ${AVATAR_ROLE_DESCRIPTION}`,
     );
     expect(prompt).not.toContain(PLACEHOLDER);
-  });
-
-  test("migration 0130 rewrites the placeholder where it is still there, and nothing else", async () => {
-    const seed = async (person: string, roleDescription: string) =>
-      runAsTenant(person, async () => {
-        await database
-          .insert(users)
-          .values({ id: person, email: `${person}@f1.test`, name: person })
-          .onConflictDoNothing();
-        await database.insert(agents).values({
-          id: avatarAgentId(person),
-          tenantId: person,
-          name: "我的分身",
-          type: "built_in",
-          configuration: { systemPrompt: "原来的提示词。" },
-        });
-        await database.insert(agentProfiles).values({
-          agentId: avatarAgentId(person),
-          tenantId: person,
-          ownerUserId: person,
-          title: "个人分身",
-          roleDescription,
-          avatarSeed: person,
-          visibility: "private",
-        });
-      });
-    // Provisioned before 0130, untouched since; and one whose owner wrote their own.
-    await seed(personC, PLACEHOLDER);
-    await seed(personD, "我自己写的职责。");
-
-    // The statement exactly as the migration runs it, in the frame the migration sets.
-    const migration = readFileSync(
-      new URL(
-        "../recovery/recovery-20261018-v1/sql/0130_avatar_sources.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    const statement = migration
-      .split("--> statement-breakpoint")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("UPDATE public.agent_profiles"));
-    if (!statement) throw new Error("0130 has no role description rewrite.");
-    expect(statement).toContain(`'${AVATAR_ROLE_DESCRIPTION}'`);
-    expect(statement).toContain(`'${PLACEHOLDER}'`);
-    await runAsTenant("platform", () => database.execute(sql.raw(statement)));
-
-    const read = (person: string) =>
-      runAsTenant(person, async () => ({
-        role: (
-          await database
-            .select({ roleDescription: agentProfiles.roleDescription })
-            .from(agentProfiles)
-            .where(eq(agentProfiles.agentId, avatarAgentId(person)))
-        )[0]?.roleDescription,
-        configuration: (
-          await database
-            .select({ configuration: agents.configuration })
-            .from(agents)
-            .where(
-              and(
-                eq(agents.id, avatarAgentId(person)),
-                eq(agents.tenantId, person),
-              ),
-            )
-        )[0]?.configuration,
-      }));
-    expect(await read(personC)).toEqual({
-      role: AVATAR_ROLE_DESCRIPTION,
-      configuration: { systemPrompt: "原来的提示词。" },
-    });
-    expect(await read(personD)).toEqual({
-      role: "我自己写的职责。",
-      configuration: { systemPrompt: "原来的提示词。" },
-    });
   });
 });

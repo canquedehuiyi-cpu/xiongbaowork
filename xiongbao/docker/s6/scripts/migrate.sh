@@ -13,29 +13,34 @@ cd /app/server
 export HOME=/home/apiuser
 
 # s6 starting a long-running service does not mean PostgreSQL has finished crash recovery, so wait for an
-# authenticated query before running migrations. That query is also how this boot learns which names the
-# superuser and the database carry: xiongbao on every volume v0.2.16 or later finished with, and the names
-# before v0.2.16 on a new volume until its first boot renames them below (postgres-init.sh says why).
-# rebrand-superuser.sh asks; the old names are only ever passed to it, as -U and -d.
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，until the migrations are squashed into a baseline
-# that new volumes start from under the new names (R4 Task 26)
+# authenticated query before running migrations: up to 30 seconds for a login as the superuser, xiongbao on
+# every volume (new volumes are created under it, and v0.2.16 renamed the older ones).
 OWNER_PW="$(cat /var/lib/postgresql/pgpassword)"
-SUPERUSER="$(dirname "$0")/rebrand-superuser.sh"
-# Up to 30 seconds for a login; a refusal for a reason that waiting does not change (exit 3: both databases
-# there, or neither) stops at once, and only that reason is printed.
-rc=0
-NAMES="$(PGPASSWORD="$OWNER_PW" PGCONNECT_TIMEOUT=2 "$SUPERUSER" names --wait 30 -h 127.0.0.1 -U openbot -d openbot)" || rc=$?
-case $rc in
-  0) ;;
-  3) exit 1 ;;
-  *) echo 'migrate: embedded PostgreSQL was not ready within 30 seconds' >&2; exit 1 ;;
-esac
-DB_USER="${NAMES% *}"
-DB_NAME="${NAMES#* }"
+DB_USER=xiongbao
+DB_NAME=xiongbao
+PSQL=/usr/lib/postgresql/16/bin/psql
+LOGIN_ERR="$(mktemp)"
+waited=0
+until PGPASSWORD="$OWNER_PW" PGCONNECT_TIMEOUT=2 "$PSQL" -X -q -A -t -w -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" \
+  -c 'SELECT 1' >/dev/null 2>"$LOGIN_ERR"; do
+  if [ "$waited" -ge 30 ]; then
+    echo 'migrate: could not log in to the embedded PostgreSQL as xiongbao within 30 seconds. The database said:' >&2
+    cat "$LOGIN_ERR" >&2
+    echo 'migrate: 数据库没有就绪，或者这个卷的超级用户与库还不叫 xiongbao（v0.2.16 之前建的卷，或 v0.2.16 首次启动没有做完改名）。这个版本只能从 v0.2.16 升级上来：先换回 v0.2.16 镜像启动一次，等它完成改名升级，再换成这个版本。不迁移、不启动（这一步没有改动任何数据）。' >&2
+    rm -f "$LOGIN_ERR"
+    exit 1
+  fi
+  waited=$((waited + 1))
+  sleep 1
+done
+rm -f "$LOGIN_ERR"
 echo 'migrate: embedded PostgreSQL is ready'
-# This release is reached only from v0.2.16: a volume that has not been through v0.2.16's rename is
-# refused here, before any migration, with the way out (upgrade-gate.sh says which volumes). The migrator
-# checks the database again, the way every deployment's does (server/src/db/upgrade-gate.ts).
+# This release is reached only from v0.2.16: a volume v0.2.16 began renaming and did not finish is refused
+# here, before any migration, with the way out (upgrade-gate.sh). The migrator checks the database again,
+# the way every deployment's does (server/src/db/upgrade-gate.ts), and takes a database v0.2.16 left
+# behind onto the baseline the migration history was squashed into, after checking its structure
+# (server/src/db/baseline-adoption.ts): a structure that differs stops the start with every difference
+# printed, and nothing changes.
 PGPASSWORD="$OWNER_PW" "$(dirname "$0")/upgrade-gate.sh" -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME"
 # `scripts/migrate.ts`, not `drizzle-kit`. The CLI is a development dependency and needs esbuild to
 # read its TypeScript config, which `bun install --production` leaves out of this image: asked to
@@ -60,13 +65,5 @@ printf "ALTER ROLE xiongbao_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPAS
   PGPASSWORD="$OWNER_PW" s6-setuidgid apiuser /usr/lib/postgresql/16/bin/psql \
     -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 >/dev/null
 echo 'migrate: xiongbao_role_writer password installed'
-# Last, after every migration and before any service starts (no other session may be connected to a
-# database being renamed): on a new volume's first boot the superuser and the database take the new name,
-# in one transaction on the `postgres` database. Nothing to do on a volume already renamed, and nothing is
-# printed then.
-# legacy-compat：introducedIn 0.2.16，removeIn 0.2.18，until the migrations are squashed into a baseline
-# that new volumes start from under the new names (R4 Task 26)
-PGPASSWORD="$OWNER_PW" "$SUPERUSER" rename -h 127.0.0.1 -U openbot -d openbot
-# The services' connection strings, under the names the database answers to now, replaced whole.
-NAMES="$(PGPASSWORD="$OWNER_PW" "$SUPERUSER" names -h 127.0.0.1 -U openbot -d openbot)"
-"$(dirname "$0")/database-urls.sh" "${NAMES% *}" "${NAMES#* }"
+# The services' connection strings, replaced whole.
+"$(dirname "$0")/database-urls.sh" "$DB_USER" "$DB_NAME"

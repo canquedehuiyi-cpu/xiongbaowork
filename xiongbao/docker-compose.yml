@@ -19,8 +19,8 @@ services:
     # on the host instead and connect through the published port below.
     environment:
       POSTGRES_DB: xiongbao
-      POSTGRES_USER: openbot
-      POSTGRES_PASSWORD: openbot
+      POSTGRES_USER: xiongbao
+      POSTGRES_PASSWORD: xiongbao
     ports:
       # Loopback, like every other port in this file, and for the reason the network split above
       # exists. Published on every interface, this is reachable from the Bot's computer at the
@@ -41,7 +41,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openbot -d xiongbao"]
+      test: ["CMD-SHELL", "pg_isready -U xiongbao -d xiongbao"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -91,11 +91,11 @@ services:
       # The server and the worker connect as `xiongbao_app` instead (below, and `.env.example`),
       # because a superuser is not bound by row-level security and tenant isolation would silently
       # collapse to the application layer alone.
-      DATABASE_URL: postgres://openbot:openbot@postgres:5432/xiongbao
+      DATABASE_URL: postgres://xiongbao:xiongbao@postgres:5432/xiongbao
       # Letters and digits only, since it goes into a SQL literal. The default is public, like every
       # password in this file, and the server refuses it under NODE_ENV=production; set your own and
       # the server's `ROLE_WRITER_DATABASE_URL` below follows it.
-      ROLE_WRITER_PASSWORD: ${ROLE_WRITER_PASSWORD:-openbot}
+      ROLE_WRITER_PASSWORD: ${ROLE_WRITER_PASSWORD:-xiongbao}
       # The server's own key, the same one as below: the v0.2.16 migration rekeys the credentials an
       # earlier release sealed (kid k1) with it, in the migration's own transaction. Read only when
       # there is such a credential; a database without one migrates without it.
@@ -157,10 +157,10 @@ services:
       # The application role, not the owner: the server refuses a connection row-level security
       # does not bind (its tenant isolation preflight), and the owner is a superuser. The password
       # is 0054's public default, as in `.env.example`; with a changed one, override this.
-      DATABASE_URL: postgres://xiongbao_app:openbot@postgres:5432/xiongbao
+      DATABASE_URL: postgres://xiongbao_app:xiongbao@postgres:5432/xiongbao
       # The one login allowed to write identity roles (migration 0109); the server refuses to start
       # without it. Its password is the one `migrate` installs above.
-      ROLE_WRITER_DATABASE_URL: postgres://xiongbao_role_writer:${ROLE_WRITER_PASSWORD:-openbot}@postgres:5432/xiongbao
+      ROLE_WRITER_DATABASE_URL: postgres://xiongbao_role_writer:${ROLE_WRITER_PASSWORD:-xiongbao}@postgres:5432/xiongbao
       AGENT_COMPUTER_URL: http://agent-computer:4100
       # Per-Bot computers too, which is not automatic: the supervisor publishes each on a loopback
       # port unless `COMPUTER_NETWORK` names this project's `default` network, and a loopback port on
@@ -299,7 +299,7 @@ services:
       # The application role, as the server's. The worker writes run rows, the queue and the
       # routines' clocks through this pool, and runs the server's tenant isolation preflight before
       # its first tick: the image says NODE_ENV=production, so a superuser here is refused.
-      DATABASE_URL: postgres://xiongbao_app:openbot@postgres:5432/xiongbao
+      DATABASE_URL: postgres://xiongbao_app:xiongbao@postgres:5432/xiongbao
       SERVER_INTERNAL_URL: http://server:3001
       # REQUIRED, AND NO DEFAULT. The value `scripts/start.sh` falls back to is printed in this
       # repository, and whoever holds it can hand the server a routine run to fire. Generate one

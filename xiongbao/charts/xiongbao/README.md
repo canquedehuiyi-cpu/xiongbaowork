@@ -139,9 +139,9 @@ owner (`ALTER ROLE ... PASSWORD`); the ones the migrations leave are public or a
 ```sh
 kubectl create namespace xiongbao
 kubectl -n xiongbao create secret generic xiongbao-database \
-  --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/openbot?sslmode=require' \
-  --from-literal=database-url='postgresql://xiongbao_app:PASSWORD@HOST:5432/openbot?sslmode=require' \
-  --from-literal=role-writer-database-url='postgresql://xiongbao_role_writer:OTHER_PASSWORD@HOST:5432/openbot?sslmode=require'
+  --from-literal=migration-database-url='postgresql://OWNER:OWNER_PASSWORD@HOST:5432/xiongbao?sslmode=require' \
+  --from-literal=database-url='postgresql://xiongbao_app:PASSWORD@HOST:5432/xiongbao?sslmode=require' \
+  --from-literal=role-writer-database-url='postgresql://xiongbao_role_writer:OTHER_PASSWORD@HOST:5432/xiongbao?sslmode=require'
 ```
 
 Then `--set database.existingSecret=xiongbao-database`. The keys must be `migration-database-url`,

@@ -1,6 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { SQL } from "bun";
 import { eq } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
@@ -24,8 +23,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * 工作手册 and the role template it was taken from, on the real database under row-level security.
  *
  * The routes are the server's own, signed in through a stub that opens the person's frame the way the
- * session middleware does. The migration's persona-template copy is read from the file and run
- * verbatim, as the application role, inside a transaction that is rolled back.
+ * session middleware does.
  */
 const url = testDatabaseUrl();
 const database = createDatabase(url, TEST_POOL);
@@ -35,37 +33,6 @@ const unmanaged = createAgentProfileStore(database, undefined);
 const run = randomUUID().slice(0, 8);
 const people: string[] = [];
 const agentIds: string[] = [];
-
-const MIGRATION = await Bun.file(
-  new URL(
-    "../recovery/recovery-20261018-v1/sql/0133_role_profiles.sql",
-    import.meta.url,
-  ),
-).text();
-const STATEMENTS = MIGRATION.split("--> statement-breakpoint")
-  .map((statement) => statement.trim())
-  .filter(Boolean);
-
-function ownerConnection(): SQL {
-  const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
-  if (!raw) {
-    throw new Error(
-      "TEST_DATABASE_ADMIN_URL must name the database owner, who runs the migration's copy.",
-    );
-  }
-  const admin = new URL(raw);
-  const target = new URL(url);
-  return new SQL({
-    adapter: "postgres",
-    hostname: admin.hostname,
-    port: admin.port ? Number(admin.port) : 5432,
-    username: decodeURIComponent(admin.username),
-    password: decodeURIComponent(admin.password),
-    database: decodeURIComponent(target.pathname.replace(/^\//, "")),
-    max: 1,
-  });
-}
-const owner = ownerConnection();
 
 afterAll(async () => {
   await runAsTenant("platform", async () => {
@@ -87,7 +54,6 @@ afterAll(async () => {
     );
   }
   await database.$client.close();
-  await owner.close();
 });
 
 async function person(label: string): Promise<AgentActor> {
@@ -564,107 +530,5 @@ describe("ROLE1-1: applying a role to a coworker in the store", () => {
       ),
     ).rejects.toThrow();
     expect((await storedRow(actor, agent.id))?.roleTemplateId).toBeNull();
-  });
-});
-
-/** Thrown to unwind the transaction, so the copy never touches the shared database's rows. */
-class Rollback extends Error {}
-
-describe("ROLE1-1: migration 0133 copies the old persona templates", () => {
-  test("it adds the three columns and their checks, and leaves the dormant tables' structure alone", () => {
-    expect(MIGRATION).toContain(
-      'ALTER TABLE "public"."agent_profiles" ADD COLUMN "bible" text;',
-    );
-    expect(MIGRATION).toContain('ADD COLUMN "role_template_id" uuid;');
-    expect(MIGRATION).toContain('ADD COLUMN "role_template_version" integer;');
-    // Only data goes into role_templates: no ALTER, policy, grant or FORCE change on any 0082 table.
-    const code = MIGRATION.replace(/\/\*[\s\S]*?\*\//g, "");
-    for (const table of [
-      "role_templates",
-      "employee_role_snapshots",
-      "role_generation_requests",
-      "role_write_receipts",
-    ]) {
-      expect(code).not.toMatch(
-        new RegExp(`(ALTER|DROP|GRANT|REVOKE)[^;]*"?${table}"?`, "i"),
-      );
-      expect(code).not.toMatch(new RegExp(`POLICY[^;]*ON[^;]*${table}`, "i"));
-    }
-  });
-
-  test("a tenant's two persona templates become two role templates of the same names, once", async () => {
-    const copy = STATEMENTS.find((statement) => statement.startsWith("DO $$"));
-    if (!copy) throw new Error("0133 has no persona-template copy.");
-    const tenant = `role1-${run}-mig-${randomUUID().slice(0, 6)}`;
-    const other = `role1-${run}-mig2-${randomUUID().slice(0, 6)}`;
-    let seen:
-      | { first: string[]; second: string[]; other: string[] }
-      | undefined;
-    try {
-      await owner.begin(async (tx) => {
-        await tx`insert into users (id, email, name) values
-          (${tenant}, ${`${tenant}@role1.test`}, 'm'),
-          (${other}, ${`${other}@role1.test`}, 'o')`;
-        // Bound by row security like the application, which FORCE also does to a non-superuser owner.
-        await tx`set local role xiongbao_app`;
-        for (const [owning, name, tone] of [
-          [tenant, "细心的审核员", "直接"],
-          [tenant, "耐心的导师", "温和"],
-          [other, "别人的人设", "冷静"],
-        ] as const) {
-          await tx`select set_config('app.tenant_id', ${owning}, true)`;
-          await tx`insert into persona_templates (tenant_id, name, persona)
-            values (${owning}, ${name}, ${JSON.stringify({ tone, principles: "先读代码", habits: "" })}::text::jsonb)`;
-        }
-        // A `team` row is never a person's template, so it is skipped.
-        await tx`select set_config('app.tenant_id', 'platform', true)`;
-        await tx`insert into persona_templates (tenant_id, name, persona)
-          values ('team', ${`team-${run}`}, '{"tone":"","principles":"","habits":""}'::jsonb)`;
-
-        const names = async (owning: string) => {
-          await tx`select set_config('app.tenant_id', ${owning}, true)`;
-          const rows = await tx`select name, profile, version, owner_user_id
-            from role_templates where tenant_id = ${owning} order by name`;
-          return rows as {
-            name: string;
-            profile: unknown;
-            version: number;
-            owner_user_id: string;
-          }[];
-        };
-
-        await tx.unsafe(copy);
-        const first = await names(tenant);
-        expect(first.map((row) => row.version)).toEqual([1, 1]);
-        expect(first.every((row) => row.owner_user_id === tenant)).toBe(true);
-        expect(
-          first.find((row) => row.name === "细心的审核员")?.profile,
-        ).toEqual({
-          identity: { title: "", roleDescription: "" },
-          persona: { tone: "直接", principles: "先读代码", habits: "" },
-          bible: "",
-        });
-        // The copy statement again: nothing new.
-        await tx.unsafe(copy);
-        const second = await names(tenant);
-        await tx`select set_config('app.tenant_id', 'platform', true)`;
-        const team =
-          await tx`select count(*)::int as n from role_templates where tenant_id = 'team'`;
-        expect(team[0]?.n).toBe(0);
-        seen = {
-          first: first.map((row) => row.name).sort(),
-          second: second.map((row) => row.name).sort(),
-          other: (await names(other)).map((row) => row.name),
-        };
-        throw new Rollback();
-      });
-    } catch (error) {
-      if (!(error instanceof Rollback)) throw error;
-    }
-    expect(seen).toEqual({
-      first: ["细心的审核员", "耐心的导师"].sort(),
-      second: ["细心的审核员", "耐心的导师"].sort(),
-      other: ["别人的人设"],
-    });
   });
 });

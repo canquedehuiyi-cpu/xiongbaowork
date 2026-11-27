@@ -31,8 +31,6 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  *    current frame's row security, so a crew of another tenant or a WakerFlow's internal crew is
  *    refused even though the foreign key alone would admit it.
  */
-const MIGRATION_TAG = "0206_waker_group_channel_link";
-const PREVIOUS_WHEN = 1794527335046; // 0205_skill_assets
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const profileStore = createAgentProfileStore(
@@ -201,18 +199,6 @@ async function linkOf(channelId: string) {
 }
 
 describe("migration 0206: a conversation links to a crew", () => {
-  test("the journal registers 0206 after 0205", async () => {
-    const journal = (await Bun.file(
-      new URL(
-        "../recovery/recovery-20261018-v1/meta/_journal.json",
-        import.meta.url,
-      ),
-    ).json()) as { entries: { idx: number; tag: string; when: number }[] };
-    const entry = journal.entries.find((item) => item.idx === 206);
-    expect(entry?.tag).toBe(MIGRATION_TAG);
-    expect(entry?.when ?? 0).toBeGreaterThan(PREVIOUS_WHEN);
-  });
-
   test("the creator links an unlinked shared group to a crew of their own", async () => {
     const alice = await person("alice");
     const channelId = await sharedGroup(alice);

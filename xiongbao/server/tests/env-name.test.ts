@@ -18,7 +18,7 @@ import { loadConfig } from "../src/config";
 const OLD = "OPENBOT_";
 
 const environment = {
-  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
+  DATABASE_URL: "postgres://xiongbao:xiongbao@127.0.0.1:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "b3BlbmJvdC1wcm9kdWN0aW9uLXRlc3Qta2V5LTMyMzI=",
   XIONGBAO_SINGLE_USER: "true",
 };

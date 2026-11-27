@@ -68,7 +68,7 @@ async function runStartWithStaleServerProbe(
     "AGENT_TOOL_TOKEN=agent-tool-token",
     "MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui",
     "XIONGBAO_ONE_COMPUTER_EACH=true",
-    "DATABASE_URL=postgres://openbot:openbot@localhost:5432/xiongbao",
+    "DATABASE_URL=postgres://xiongbao:xiongbao@localhost:5432/xiongbao",
   ].filter(
     (line) =>
       ![...omitFromEnv, ...Object.keys(settings)].some((key) =>
@@ -462,7 +462,7 @@ describe("start.sh owner URL", () => {
    * script starts run as the app role and must not inherit the owner.
    */
   test("only the Compose migration is handed the owner URL", async () => {
-    const owner = "postgres://openbot:owner-secret@localhost:5432/xiongbao";
+    const owner = "postgres://xiongbao:owner-secret@localhost:5432/xiongbao";
     const result = await runStartWithStaleServerProbe(401, {
       processEnvironment: { MIGRATION_DATABASE_URL: owner },
     });

@@ -11,7 +11,7 @@ export function testEnvironment(
   overrides: Record<string, string | undefined> = {},
 ): Record<string, string | undefined> {
   return {
-    DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
+    DATABASE_URL: "postgres://xiongbao:xiongbao@localhost:5432/xiongbao",
     KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
     GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",

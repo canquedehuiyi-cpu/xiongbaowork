@@ -208,7 +208,7 @@ most recent release and a version tag such as `:v0.0.9` pins one.
 
 Leave `EMBEDDED_POSTGRES` off and set `DATABASE_URL` to point at a database you already run. Name a
 role that is not a superuser: row-level security does not bind a superuser or a `BYPASSRLS` role, so
-tenant isolation would fall back to the application alone — see `docs/deployment.md` and `0054_app_role.sql`.
+tenant isolation would fall back to the application alone — see `docs/deployment.md` and `server/drizzle/0000_baseline.sql`.
 [docs/deployment.md](docs/deployment.md) has the minimum sizes, the platform notes, and how it behaves behind more than one replica. For the multi-tenant delivery, where every user is a tenant and the two database roles are not interchangeable, [`docs/deployment-xiongbao.md`](docs/deployment-xiongbao.md) is the one to follow: it covers the owner-versus-app-role split and why running as the superuser leaves row-level security unenforced, the migration tail a generated file cannot write for a tenant child table, the runner pairing flow, and how to tell a regression from noise in a suite where one parameterized family's timeout count drifts.
 
 ## Try it
