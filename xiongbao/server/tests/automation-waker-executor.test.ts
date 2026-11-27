@@ -265,6 +265,23 @@ describe("a firing that runs (AUT3, C2)", () => {
     expect(firingOfInitiator({ kind: "person" })).toBeNull();
   });
 
+  test("a waiting firing whose carried-on turn started and failed is settled as failed, with the error", async () => {
+    const { automation, trigger } = await newAutomation();
+    const firing = await begin(automation.id, trigger.id);
+    turnOutcome = async () => {
+      throw new HeadlessToolSuspension("等你批准", { kind: "approval" });
+    };
+    await fire(firing);
+    expect(
+      await as(() =>
+        store.settleWaitingFiring(firing.id, "The model provider is down."),
+      ),
+    ).toBe(true);
+    const row = await firingRow(firing.id);
+    expect(row?.status).toBe("failed");
+    expect(row?.error).toBe("The model provider is down.");
+  });
+
   test("another person cannot settle this owner's waiting firing", async () => {
     const { automation, trigger } = await newAutomation();
     const firing = await begin(automation.id, trigger.id);

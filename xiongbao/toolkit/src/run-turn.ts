@@ -590,24 +590,39 @@ export type TurnEvidence = {
    * Absent, no tool result is.
    */
   handedIn?: (toolName: string, result: string) => boolean;
+  /**
+   * The whole conversation as the agent holds it once the run is over, history and what a continuation
+   * carried in included. The hand-in is looked for in the turn: everything after the person's latest
+   * message. Absent, only `added` is looked at.
+   */
+  conversation?: Message[];
 };
 
 /**
- * Whether this run made a hand-in the host accepts: a tool call it added whose result, also added,
- * `handedIn` says yes to. Only this run's own messages count, so a hand-in from an earlier turn in the
- * history never makes this one's silence an answer.
+ * Whether this turn made a hand-in the host accepts: a tool call whose result `handedIn` says yes to,
+ * after the person's latest message.
+ *
+ * The same boundary as the agent's own "delivery ends the turn" (`stepsSinceHandIn` in
+ * `runtime/last-step.ts`), which counts from the person's latest message so a turn the host cut into
+ * several runs counts the same. A turn that handed its card in, was let one more step for a reminder,
+ * stopped in it for an approval and was carried on after the decision ends at once, with nothing
+ * added by this run: its hand-in is in what the continuation carried in, and it still answered. A
+ * hand-in from before the person's latest message is an earlier turn's and makes nothing an answer.
  */
 function handedInDuring(
-  added: readonly Message[],
+  turn: readonly Message[],
   handedIn: ((toolName: string, result: string) => boolean) | undefined,
 ): boolean {
   if (!handedIn) return false;
+  const since = turn.slice(
+    turn.map((message) => message.role).lastIndexOf("user") + 1,
+  );
   const names = new Map<string, string>();
-  for (const message of added)
+  for (const message of since)
     if (message.role === "assistant")
       for (const call of message.toolCalls ?? [])
         names.set(call.id, call.function.name);
-  return added.some(
+  return since.some(
     (message) =>
       message.role === "tool" &&
       typeof message.content === "string" &&
@@ -667,7 +682,7 @@ export function settle(evidence: TurnEvidence): TurnOutcome {
    */
   if (
     replyText.length === 0 &&
-    !handedInDuring(evidence.added, evidence.handedIn)
+    !handedInDuring(evidence.conversation ?? evidence.added, evidence.handedIn)
   )
     return { kind: "empty" };
   return {
@@ -1224,7 +1239,7 @@ export function createTurnRunner(options: {
       chunks,
       pendingInterrupts: agent.pendingInterrupts,
       componentNames: components?.names ?? new Set(),
-      ...(handedIn ? { handedIn } : {}),
+      ...(handedIn ? { handedIn, conversation: [...agent.messages] } : {}),
     });
     const reply = await conclude(outcome, stopPromise, turnTimeoutMs);
     /*

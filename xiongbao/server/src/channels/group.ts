@@ -1857,6 +1857,14 @@ export function createGroupConversations(deps: {
     }
   }
 
+  /** 告诉群里每个人「转录变了，重读一下」：不带内容，不改会话列表的预览（`groupTranscriptEvent`）。 */
+  async function announceTranscript(channelId: string) {
+    if (!deps.announce) return;
+    await deps.announce(
+      groupTranscriptEvent(channelId, await deps.store.members(channelId)),
+    );
+  }
+
   /**
    * Close the card this turn opened.
    *
@@ -2895,8 +2903,14 @@ export function createGroupConversations(deps: {
           text: outcome.replyText,
           ...chainFrom(row.details),
         };
-        // 以交付收尾、没再说话的续跑（`handedIn`）：行上记着交付标记，没有一句话可预览、可转给别的员工。
-        if (!outcome.replyText) return outcome;
+        /*
+         * 以交付收尾、没再说话的续跑（`handedIn`）：行上记着交付标记，没有一句话可预览、可转给别的员工。
+         * 但行从等待变成了完成，开着的群页面不轮询等审批的行：告诉群里每个人重读一下，不改会话列表的预览。
+         */
+        if (!outcome.replyText) {
+          await announceTranscript(row.channelId);
+          return outcome;
+        }
         await deps.activity?.(
           turn,
           row.agentId,
@@ -2937,6 +2951,8 @@ export function createGroupConversations(deps: {
             runIdFor(row.id),
             true,
           );
+          // 行变成失败了：开着的群页面同样要重读，才看得到这一轮没做完。
+          await announceTranscript(row.channelId).catch(() => undefined);
         }
         throw error;
       }

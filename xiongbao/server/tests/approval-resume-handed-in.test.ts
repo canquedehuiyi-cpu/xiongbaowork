@@ -1,19 +1,26 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Message } from "@ag-ui/client";
 import {
   EmptyTurnError,
   settle,
   type TurnRunner,
 } from "@xiongbao/toolkit/run-turn";
-import { createApprovalResumeTick } from "../src/approvals/resume-sweep";
+import {
+  CONTINUATION_FAILED,
+  createApprovalResumeTick,
+} from "../src/approvals/resume-sweep";
 import { createApprovalService } from "../src/approvals/service";
 import {
   type ApprovalRecord,
   type ApprovalStore,
   approvalAction,
 } from "../src/approvals/types";
+import { automationFiringInitiator } from "../src/automations/waker-executor";
 import type { ChannelStore } from "../src/channels/routes";
 import type { Database } from "../src/db/client";
+import { intelligenceChannelMappings, routineRuns } from "../src/db/schema";
 import type { ResponsibilityStore } from "../src/responsibilities/types";
 import { acceptedDelivery } from "../src/tasks/delivery-end";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../src/work/queue";
@@ -29,6 +36,8 @@ import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../src/work/queue";
 
 const OWNER = "owner-handed-in";
 const APPROVAL = "approval-handed-in";
+/** The automation firing the turn was started by, as the snapshot's initiator names it. */
+const FIRING_ID = "7f1d1c2e-9b7a-4c55-8a40-2a4f3c9e0b11";
 
 const action = approvalAction({
   actorId: OWNER,
@@ -47,6 +56,8 @@ const action = approvalAction({
     state: {},
     context: [],
     forwardedProps: {},
+    // A turn an automation fired: the decision settles that firing as well.
+    initiator: automationFiringInitiator(FIRING_ID),
   },
 });
 
@@ -129,16 +140,43 @@ function approvalQueue() {
   return { queue, calls };
 }
 
-/** Every query reads nothing back: no goal run, no group row and no channel are waiting on this. */
-const nothingWaiting: Database = (() => {
-  const chain: unknown = new Proxy(() => undefined, {
-    get: (_target, property) =>
-      property === "then"
-        ? (resolve: (rows: unknown[]) => void) => resolve([])
-        : () => chain,
-  });
-  return chain as Database;
-})();
+/**
+ * The database as the loop reads it: no goal run waits on this, and the thread is a one-to-one
+ * conversation's (`channel-1`) only when `conversation` says so. Every update is kept, by table.
+ */
+function fakeDatabase(conversation: boolean) {
+  const updates: { table: unknown; values: Record<string, unknown> }[] = [];
+  const query = (rows: unknown[]): unknown => {
+    const chain: unknown = new Proxy(() => undefined, {
+      get: (_target, property) =>
+        property === "then"
+          ? (resolve: (value: unknown[]) => void) => resolve(rows)
+          : () => chain,
+    });
+    return chain;
+  };
+  const database = {
+    select: () => ({
+      from: (table: unknown) =>
+        query(
+          table === intelligenceChannelMappings && conversation
+            ? [{ channelId: "channel-1" }]
+            : [],
+        ),
+    }),
+    update: (table: unknown) => ({
+      set: (values: Record<string, unknown>) => {
+        updates.push({ table, values });
+        return query([]);
+      },
+    }),
+  } as unknown as Database;
+  const routineUpdates = () =>
+    updates
+      .filter((update) => update.table === routineRuns)
+      .map((update) => update.values);
+  return { database, routineUpdates };
+}
 
 /** The rest of the turn after the approval: read, then `deliver_task`, accepted. */
 const handedIn: Message[] = [
@@ -190,9 +228,24 @@ function continuation(input: {
   return { runner, ran };
 }
 
-function resumeLoop(runner: TurnRunner) {
+function resumeLoop(
+  runner: TurnRunner,
+  options: {
+    /** The thread is a one-to-one conversation's, which has a line to write. */
+    conversation?: boolean;
+    /** Writing a line into the conversation fails, as for a Bot taken out of it. */
+    lineFails?: boolean;
+  } = {},
+) {
   const { row, store } = approvalRow();
   const { queue, calls } = approvalQueue();
+  const { database, routineUpdates } = fakeDatabase(
+    options.conversation ?? false,
+  );
+  const lines: { text: string; id: string | undefined }[] = [];
+  const notified: { id: string; text: string }[] = [];
+  const crew: unknown[] = [];
+  const firings: unknown[][] = [];
   const tick = createApprovalResumeTick({
     approvalQueue: queue,
     approvalOwner: "approval-owner",
@@ -202,21 +255,55 @@ function resumeLoop(runner: TurnRunner) {
     executeApprovedAction: async () => {
       throw new Error("the approved action already ran");
     },
-    database: nothingWaiting,
+    database,
     responsibilityStore: {} as ResponsibilityStore,
     groupConversations: { continueWaiting: (_approvalId, run) => run() },
     approvalContinuationRunner: runner,
-    channelStore: {} as ChannelStore,
-    actorFor: async () => {
-      throw new Error("no channel to write to");
+    channelStore: {
+      recordActivity: async (
+        _actor: unknown,
+        _channelId: string,
+        activity: { text: string },
+        source?: { id: string },
+      ) => {
+        if (options.lineFails) throw new Error("Agent not found");
+        lines.push({ text: activity.text, id: source?.id });
+      },
+    } as unknown as ChannelStore,
+    actorFor: async (id) => ({ id, role: "user" }),
+    notify: async (_scope, input) => {
+      notified.push({ id: input.id, text: input.text });
     },
-    notify: async () => undefined,
+    pipeline: {
+      actionHoldingApproval: async () => null,
+      resumeAction: async () => undefined,
+      runHoldingApproval: async () => ({ runId: "crew-run", tenantId: OWNER }),
+      resume: async (input) => {
+        crew.push(input);
+      },
+    },
+    automations: {
+      settleWaitingFiring: async (...args: unknown[]) => {
+        firings.push(args);
+        return true;
+      },
+    },
   });
   /** Ticks as the server's loop would, for every try the queue would hand out. */
   const runOut = async () => {
     for (let i = 0; i <= DEFAULT_MAX_ATTEMPTS; i++) await tick();
   };
-  return { row, calls, tick, runOut };
+  return {
+    row,
+    calls,
+    tick,
+    runOut,
+    lines,
+    notified,
+    crew,
+    firings,
+    routineUpdates,
+  };
 }
 
 let logged: ReturnType<typeof spyOn>;
@@ -243,6 +330,14 @@ test("续跑以被接受的交付结束、没说话：只跑一次，队列项�
   expect(loop.row.status).toBe("completed");
   expect(loggedTypes()).not.toContain("approval-resume-error");
   expect(loggedTypes()).not.toContain("approval-continuation-ended");
+  // What waited on the decision is settled as a turn that answered.
+  expect(loop.routineUpdates()).toMatchObject([
+    { status: "succeeded", error: null },
+  ]);
+  expect(loop.firings).toEqual([[FIRING_ID]]);
+  expect(loop.crew).toEqual([
+    { tenantId: OWNER, runId: "crew-run", output: "" },
+  ]);
 });
 
 test("被挡回的交付不算交付；续跑已经开始，空轮也不再从同一处重跑", async () => {
@@ -270,19 +365,65 @@ test("被挡回的交付不算交付；续跑已经开始，空轮也不再从�
   expect(loggedTypes()).not.toContain("approval-resume-error");
 });
 
-test("开始之后才失败的续跑不重跑：它的工具已经执行过了", async () => {
+test("开始之后才失败的续跑不重跑：单聊里写一条失败说明并通知，例行任务、自动任务和团队步骤都以失败收尾", async () => {
   const ran: unknown[] = [];
   const runner: TurnRunner = async (turn) => {
     ran.push(turn.continuation);
     turn.onStarted?.();
     throw new Error("The model provider is having problems right now.");
   };
-  const loop = resumeLoop(runner);
+  const loop = resumeLoop(runner, { conversation: true });
   await loop.runOut();
 
   expect(ran).toHaveLength(1);
   expect(loop.calls).toEqual({ finish: 1, release: 0 });
   expect(loop.row.status).toBe("completed");
+  // The person reads that the turn did not finish, in the conversation and where they decided.
+  const failedLine = `approval:${APPROVAL}:failed`;
+  expect(loop.lines).toEqual([{ text: CONTINUATION_FAILED, id: failedLine }]);
+  expect(loop.notified).toEqual([
+    { id: failedLine, text: CONTINUATION_FAILED },
+  ]);
+  // Everything that waited ends as the failure it was, with the error.
+  const error = "The model provider is having problems right now.";
+  expect(loop.routineUpdates()).toMatchObject([{ status: "failed", error }]);
+  expect(loop.firings).toEqual([[FIRING_ID, error]]);
+  expect(loop.crew).toEqual([{ tenantId: OWNER, runId: "crew-run", error }]);
+  expect(loggedTypes()).toContain("approval-continuation-ended");
+});
+
+test("续跑答完之后写会话出错：照样收尾，例行任务、自动任务、团队步骤照样结束，外部通知照样发", async () => {
+  const ran: unknown[] = [];
+  const runner: TurnRunner = async (turn) => {
+    ran.push(turn.continuation);
+    turn.onStarted?.();
+    return { replyText: "I ran the check and handed the card in." };
+  };
+  const loop = resumeLoop(runner, { conversation: true, lineFails: true });
+  await loop.runOut();
+
+  expect(ran).toHaveLength(1);
+  expect(loop.calls).toEqual({ finish: 1, release: 0 });
+  expect(loop.row.status).toBe("completed");
+  expect(loop.notified).toEqual([
+    {
+      id: `approval:${APPROVAL}`,
+      text: "I ran the check and handed the card in.",
+    },
+  ]);
+  expect(loop.routineUpdates()).toMatchObject([
+    { status: "succeeded", error: null },
+  ]);
+  expect(loop.firings).toEqual([[FIRING_ID]]);
+  expect(loop.crew).toEqual([
+    {
+      tenantId: OWNER,
+      runId: "crew-run",
+      output: "I ran the check and handed the card in.",
+    },
+  ]);
+  expect(loggedTypes()).toContain("approval-continuation-step-failed");
+  expect(loggedTypes()).not.toContain("approval-resume-error");
 });
 
 test("还没开始就失败的续跑照旧放回队列重试：什么都没执行", async () => {
@@ -298,4 +439,23 @@ test("还没开始就失败的续跑照旧放回队列重试：什么都没执�
   expect(loop.calls).toEqual({ finish: 0, release: 1 });
   expect(loop.row.status).toBe("consumed");
   expect(loggedTypes()).toContain("approval-resume-error");
+});
+
+/*
+ * The server builds its approval continuation runner in index.ts, which cannot be imported without
+ * starting the server, so the wiring is read as source (as `restart-recovery-sweep.test.ts` does).
+ * Without `handedIn`, run-turn reports the hand-in above as an empty turn again.
+ */
+test("index.ts 给审批续跑用的 runner 选项传了 handedIn: acceptedDelivery", () => {
+  const source = readFileSync(
+    join(import.meta.dir, "..", "src", "index.ts"),
+    "utf8",
+  );
+  const start = source.indexOf("const approvalContinuationOptions");
+  expect(start).toBeGreaterThan(-1);
+  const options = source.slice(start, source.indexOf("\n  };\n", start));
+  expect(options).toContain("handedIn: acceptedDelivery");
+  expect(source).toContain(
+    'import { acceptedDelivery } from "./tasks/delivery-end";',
+  );
 });

@@ -118,12 +118,62 @@ describe("settle", () => {
       ).toEqual({ kind: "empty" });
     });
 
-    test("a hand-in in an earlier turn's history does not count", () => {
-      const result = handIn(JSON.stringify({ delivered: true }))[1] as Message;
-      // Only the tool result is this run's own; the call that named it was not added by it.
-      expect(settle(evidence({ added: [result], handedIn }))).toEqual({
-        kind: "empty",
-      });
+    /*
+     * The boundary is the turn, as the agent's own "delivery ends the turn" counts it: everything
+     * after the person's latest message, however many runs the host cut it into.
+     */
+    const asked: Message = { id: "user_1", role: "user", content: "Fix it." };
+    const approved: Message = {
+      id: "approval:1",
+      role: "tool",
+      toolCallId: "call_check",
+      content: "checked",
+    };
+
+    test("a hand-in earlier in this turn counts when the carried-on run ends at once", () => {
+      // Handed in, let one more step for a reminder, stopped there on an approval; carried on after
+      // the decision, the agent ends the turn without asking the model, so this run adds nothing.
+      expect(
+        settle(
+          evidence({
+            added: [],
+            handedIn,
+            conversation: [
+              asked,
+              ...handIn(JSON.stringify({ delivered: true })),
+              {
+                id: "assistant_check",
+                role: "assistant",
+                content: "",
+                toolCalls: [
+                  {
+                    id: "call_check",
+                    type: "function",
+                    function: { name: "computer_run_command", arguments: "{}" },
+                  },
+                ],
+              },
+              approved,
+            ],
+          }),
+        ),
+      ).toEqual({ kind: "completed", replyText: "", components: [] });
+    });
+
+    test("a hand-in from before the person's latest message is an earlier turn's: still empty", () => {
+      expect(
+        settle(
+          evidence({
+            added: [],
+            handedIn,
+            conversation: [
+              { id: "user_0", role: "user", content: "Do the first card." },
+              ...handIn(JSON.stringify({ delivered: true })),
+              asked,
+            ],
+          }),
+        ),
+      ).toEqual({ kind: "empty" });
     });
 
     test("an interrupt still outranks it", () => {
