@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -92,6 +93,15 @@ export const personalMemories = pgTable(
     intelligenceMemoryId: text("intelligence_memory_id"),
     /** sha256 of the content last written to Intelligence, so an edit is mirrored exactly once. */
     intelligenceDigest: text("intelligence_digest"),
+    /** 这条是本人纠正员工时抽出来的（0242）。 */
+    fromCorrection: boolean("from_correction").notNull().default(false),
+    /** 本人就这件事纠正过几次；不是纠正的为 0。 */
+    correctionCount: integer("correction_count").notNull().default(0),
+    /**
+     * 本人确认后要取代的那条记忆（同一本人的）。没有外键：旧条退役走删除路径（留墓碑），删除时由代码把
+     * 别的行里指向它的引用清空。
+     */
+    replacesId: text("replaces_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

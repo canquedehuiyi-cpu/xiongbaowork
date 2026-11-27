@@ -19,6 +19,7 @@ import {
   suppressRunnerCard,
   turnForCard,
 } from "../threads/unattended-card";
+import type { Delivery } from "./delivery";
 
 /**
  * What the person's decisions on a followed card do in its conversation (spec 2026-11-15-delivery-loop
@@ -147,6 +148,16 @@ export type CardTurnsDeps = {
     tenantId: string,
     turn: { threadId: string; agentId: string },
   ) => Promise<void>;
+  /**
+   * The failure hand-over a new round of a card starts with (spec 2026-11-25-borrowed-improvements
+   * 5.4; `Delivery`): read once the thread is found idle, and marked handed on only once the round has
+   * started, so a round that did not start leaves it for the next one. Absent: a round starts with its
+   * own words only.
+   */
+  failureHandoffs?: Pick<
+    Delivery,
+    "peekFailureHandoff" | "failureHandoffCarried"
+  >;
 };
 
 const BUSY = "员工这会儿正忙，稍后再试。";
@@ -213,7 +224,10 @@ export type ThreadTurnOrigin = {
  * (`tasks/nudge-run.ts`): the same start, timeout and refusals, with a different voice.
  */
 export async function startThreadTurn(
-  deps: Pick<CardTurnsDeps, "runTurn" | "runner" | "startTimeoutMs">,
+  deps: Pick<
+    CardTurnsDeps,
+    "runTurn" | "runner" | "startTimeoutMs" | "failureHandoffs"
+  >,
   tenantId: string,
   to: { threadId: string; agentId: string },
   text: string,
@@ -225,13 +239,33 @@ export async function startThreadTurn(
     return deps.runner.isRunning({ threadId: to.threadId });
   });
   if (busy) throw new ThreadBusy();
+  /*
+   * A round of a card whose last round failed starts with that round's hand-over, then a blank line,
+   * then its own words: where it stopped, what it had done and the files it left, so the coworker goes
+   * on from there instead of from the start. Read here and marked handed on below, once the round has
+   * started: a round refused or given up before it started (a busy thread, a paused coworker, a lock
+   * that never came) has not used it up, and the next round is given it.
+   */
+  const taskId = origin.taskId;
+  const handoffs = deps.failureHandoffs;
+  const handoff =
+    taskId && handoffs
+      ? await handoffs.peekFailureHandoff(tenantId, taskId).catch((error) => {
+          log("task-failure-handoff-unread", {
+            taskId,
+            reason: reasonOf(error),
+          });
+          return null;
+        })
+      : null;
+  const said = handoff ? `${handoff.text}\n\n${text}` : text;
 
   // A uuid, because the thread lock wants one.
   const runId = randomUUID();
   const userMessage: Message = {
     id: `${origin.messagePrefix}:${runId}`,
     role: "user",
-    content: text,
+    content: said,
   };
   let began = false;
   // A turn that has not started in time (a lock that never comes) is given up, and stopped.
@@ -247,7 +281,6 @@ export async function startThreadTurn(
       ).catch(() => undefined);
     }, deps.startTimeoutMs ?? START_TIMEOUT_MS);
     // A round of the card named, not of whichever card the thread's coworker took on last.
-    const taskId = origin.taskId;
     const forCard = <T>(body: () => T): T =>
       taskId ? turnForCard(taskId, body) : body();
     runAsTenant(tenantId, () =>
@@ -260,7 +293,7 @@ export async function startThreadTurn(
             routineId: origin.source,
             agentId: to.agentId,
             threadId: to.threadId,
-            instruction: text,
+            instruction: said,
             userMessage,
             runId,
             tenantId,
@@ -289,6 +322,16 @@ export async function startThreadTurn(
       throw refusalOf(error);
     })
     .finally(() => clearTimeout(timer));
+  // Started with it: handed on. A mark that cannot be written is logged; the round runs all the same.
+  if (taskId && handoff && handoffs)
+    await handoffs
+      .failureHandoffCarried(tenantId, taskId, handoff.id)
+      .catch((error) =>
+        log("task-failure-handoff-unmarked", {
+          taskId,
+          reason: reasonOf(error),
+        }),
+      );
   return runId;
 }
 

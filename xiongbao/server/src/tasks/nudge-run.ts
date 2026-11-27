@@ -91,7 +91,7 @@ export type NudgeRuns = {
 
 export type NudgeRunsDeps = Pick<
   CardTurnsDeps,
-  "runTurn" | "runner" | "startTimeoutMs"
+  "runTurn" | "runner" | "startTimeoutMs" | "failureHandoffs"
 > & {
   database: Database;
   delivery?: Delivery;
@@ -131,6 +131,14 @@ const reasonOf = (error: unknown) =>
 
 export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
   const delivery = deps.delivery ?? createDelivery(deps.database);
+  /*
+   * Every round started here -- a nudge, a 再催, a hand-over -- opens with the card's failure hand-over
+   * when its last round failed (`startThreadTurn`).
+   */
+  const turnDeps = {
+    ...deps,
+    failureHandoffs: deps.failureHandoffs ?? delivery,
+  };
   const isExternal = async (tenantId: string, agentId: string) =>
     (await deps.isExternal?.(tenantId, agentId).catch(() => false)) ?? false;
 
@@ -158,7 +166,7 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
     if (!card?.threadRef || !card.agentId) throw new NotNudgeable();
     try {
       await startThreadTurn(
-        deps,
+        turnDeps,
         tenantId,
         { threadId: card.threadRef, agentId: card.agentId },
         text,

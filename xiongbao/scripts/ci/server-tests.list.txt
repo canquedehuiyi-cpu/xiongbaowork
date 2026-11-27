@@ -439,6 +439,7 @@ tests/env-name-dockerfiles.test.ts
 tests/env-name.test.ts
 tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
+tests/failure-handoff.test.ts
 tests/fastpath-gate.test.ts
 tests/file-evidence.test.ts
 tests/form-check-guidance.test.ts
@@ -855,6 +856,7 @@ tests/step-hints.test.ts
 tests/stream-keep-alive.test.ts
 tests/subagent-folding.test.ts
 tests/subagent-model.test.ts
+tests/subagent-progress.test.ts
 tests/subagent-result.test.ts
 tests/subagent-tools.test.ts
 tests/subagent.integration.test.ts

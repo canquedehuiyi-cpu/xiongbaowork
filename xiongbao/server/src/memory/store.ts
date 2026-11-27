@@ -30,6 +30,68 @@ import {
  * memory came from, whether it is reviewed or paused, which Bot formed it and which source it was
  * imported from, and those decide which Bot may see it.
  */
+/** 一个连接，或一个事务：删除路径两处都用。 */
+type Executor = Pick<Database, "update" | "select">;
+
+/**
+ * 删除一条记忆：留墓碑（清空内容、停用），导入的不会在下次同步时复活；别的行里指向它的 `replacesId` 一并清空。
+ * 本人「忘掉」和确认纠正后旧条退役走的都是这一条路。没有这条（或不是本人的）返回 false。
+ */
+async function retire(
+  executor: Executor,
+  ownerUserId: string,
+  id: string,
+): Promise<boolean> {
+  const [row] = await executor
+    .update(personalMemories)
+    .set({
+      deletedAt: new Date(),
+      enabled: false,
+      content: "",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(personalMemories.id, id),
+        eq(personalMemories.ownerUserId, ownerUserId),
+        isNull(personalMemories.deletedAt),
+      ),
+    )
+    .returning({ id: personalMemories.id });
+  if (!row) return false;
+  await executor
+    .update(personalMemories)
+    .set({ replacesId: null })
+    .where(
+      and(
+        eq(personalMemories.ownerUserId, ownerUserId),
+        eq(personalMemories.replacesId, id),
+      ),
+    );
+  return true;
+}
+
+/** 新条的来源一栏最多多少字（与表单校验一致）。 */
+const PROVENANCE_MAX_CHARS = 500;
+
+/**
+ * 确认纠正后，被取代的旧条内容写进新条的来源一栏（这个表没有单独的变更记录）：原来源之后接一句「取代了：…」，
+ * 合计不超过 {@link PROVENANCE_MAX_CHARS} 字，旧条太长的截短。
+ */
+export function provenanceWithReplaced(
+  provenance: string,
+  oldContent: string,
+): string {
+  const head = `${provenance}；取代了：「`;
+  const room = Math.max(0, PROVENANCE_MAX_CHARS - head.length - 1);
+  const old = [...oldContent.replace(/\s+/g, " ").trim()];
+  const quoted =
+    old.length > room
+      ? `${old.slice(0, Math.max(0, room - 1)).join("")}…`
+      : old.join("");
+  return `${head}${quoted}」`.slice(0, PROVENANCE_MAX_CHARS);
+}
+
 export function createMemoryStore(database: Database) {
   const getSource = async (ownerUserId: string, id: string) => {
     const [row] = await database
@@ -197,6 +259,9 @@ export function createMemoryStore(database: Database) {
           sourceLink: parsed.data.sourceLink ?? null,
           observedAt,
           importDigest: digest,
+          fromCorrection: input.fromCorrection ?? false,
+          correctionCount: Math.max(0, Math.trunc(input.correctionCount ?? 0)),
+          replacesId: input.replacesId ?? null,
         })
         .onConflictDoNothing({
           target: [
@@ -227,49 +292,84 @@ export function createMemoryStore(database: Database) {
       if (!raced) throw new Error("Memory insert returned no row.");
       return { id: raced.id, duplicate: true, forgotten: !!raced.deletedAt };
     },
+    /** 本人又一次就这件事纠正了员工：次数加一，更新时间。只改本人的。 */
+    async bumpCorrection(ownerUserId: string, id: string): Promise<void> {
+      await database
+        .update(personalMemories)
+        .set({
+          correctionCount: sql`${personalMemories.correctionCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(personalMemories.id, id),
+            eq(personalMemories.ownerUserId, ownerUserId),
+            isNull(personalMemories.deletedAt),
+          ),
+        );
+    },
     async update(
       ownerUserId: string,
       id: string,
       input: unknown,
     ): Promise<MemoryRecord> {
       const patch = parseMemoryPatch(input);
-      const [row] = await database
-        .update(personalMemories)
-        .set({
-          ...patch,
-          ...(patch.content ? { reviewState: "edited" as const } : {}),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(personalMemories.id, id),
-            eq(personalMemories.ownerUserId, ownerUserId),
-            isNull(personalMemories.deletedAt),
-          ),
-        )
-        .returning();
-      if (!row) throw new MemoryNotFoundError();
-      return row;
+      return database.transaction(async (transaction) => {
+        const [row] = await transaction
+          .update(personalMemories)
+          .set({
+            ...patch,
+            ...(patch.content ? { reviewState: "edited" as const } : {}),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(personalMemories.id, id),
+              eq(personalMemories.ownerUserId, ownerUserId),
+              isNull(personalMemories.deletedAt),
+            ),
+          )
+          .returning();
+        if (!row) throw new MemoryNotFoundError();
+        /*
+         * 本人确认（或改过即确认）了一条要取代旧条的纠正：旧条这才退役，走和「忘掉」同一条删除路径；退役前把旧条
+         * 内容记进新条的来源一栏。确认之前旧条一直不动。旧条已经不在了，只清掉指向它的引用。
+         */
+        if (!row.replacesId || row.reviewState === "unreviewed") return row;
+        const [old] = await transaction
+          .select({ content: personalMemories.content })
+          .from(personalMemories)
+          .where(
+            and(
+              eq(personalMemories.id, row.replacesId),
+              eq(personalMemories.ownerUserId, ownerUserId),
+              isNull(personalMemories.deletedAt),
+            ),
+          );
+        if (old) await retire(transaction, ownerUserId, row.replacesId);
+        const [settled] = await transaction
+          .update(personalMemories)
+          .set({
+            replacesId: null,
+            ...(old
+              ? {
+                  provenance: provenanceWithReplaced(
+                    row.provenance,
+                    old.content,
+                  ),
+                }
+              : {}),
+          })
+          .where(eq(personalMemories.id, row.id))
+          .returning();
+        if (!settled) throw new MemoryNotFoundError();
+        return settled;
+      });
     },
     async remove(ownerUserId: string, id: string) {
       // Imported tombstones prevent the next sync from resurrecting a fact the person deleted.
-      const [row] = await database
-        .update(personalMemories)
-        .set({
-          deletedAt: new Date(),
-          enabled: false,
-          content: "",
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(personalMemories.id, id),
-            eq(personalMemories.ownerUserId, ownerUserId),
-            isNull(personalMemories.deletedAt),
-          ),
-        )
-        .returning({ id: personalMemories.id });
-      if (!row) throw new MemoryNotFoundError();
+      if (!(await retire(database, ownerUserId, id)))
+        throw new MemoryNotFoundError();
     },
     async sources(ownerUserId: string) {
       return database

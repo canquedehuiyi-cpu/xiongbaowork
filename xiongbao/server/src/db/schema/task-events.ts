@@ -17,6 +17,10 @@ export const TASK_EVENT_KINDS = [
   "delivered",
   "run_ended",
   "run_failed",
+  /** A failed round's hand-over to the next one (`tasks/failure-handoff.ts`): what it got to, and where it stopped. */
+  "failure_handoff",
+  /** The next round was given that hand-over (`Delivery.takeFailureHandoff`): it is not given again. */
+  "failure_handoff_carried",
   "nudged",
   "nudge_skipped",
   "overdue",

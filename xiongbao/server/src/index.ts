@@ -4677,6 +4677,8 @@ await startupLifecycle.run(async (startup) => {
   });
   const extractTurnMemories = createMemoryExtractor({
     store: personalMemoryStore,
+    relatedCandidates: (ownerUserId, agentId) =>
+      memoryIngestion.visibleTo(ownerUserId, agentId),
     modelFor: agentModelFor,
     enabled: async (ownerUserId, agentId) =>
       editionHasMemory(config.edition) &&
@@ -5203,6 +5205,8 @@ await startupLifecycle.run(async (startup) => {
     database,
     runTurn: unattendedTurnRunner,
     runner: localThreadRunner,
+    // The person's words in a card's thread open with its failure hand-over, as the server's rounds do.
+    failureHandoffs: deliveryLoop,
     // A group card's words go to the group, through the group's own send, as the person.
     groupSend: (ownerUserId, channelId, input, options) =>
       groupConversations.send(ownerUserId, channelId, input, options),

@@ -18,10 +18,12 @@ import {
   intelligenceChannelMappings,
   taskEvents,
   tasks,
+  threadRunEvents,
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { type DueRefusal, readDueTime } from "./due-time";
 import { appendTaskEvent, type TaskEventActor } from "./events";
+import { failureHandoffOf, renderFailureHandoff } from "./failure-handoff";
 import { type DeliverableRef, isDeliverableRef } from "./projector";
 
 /**
@@ -113,6 +115,12 @@ export type Delivery = {
    * sentence, one `progress` line goes before it. Once per run: a second call for the same run writes
    * nothing. A card that is not followed, or has ended, is not touched. `active_run_ref` is cleared
    * when it still names this run.
+   *
+   * A failure also leaves the next round a `failure_handoff` line (spec 2026-11-25-borrowed-improvements
+   * 5.4), in the same transaction: where it stopped, the card's latest progress, the round's last tool
+   * calls and the files it wrote, masked (`tasks/failure-handoff.ts`). Read from `events`, the round's
+   * own when the caller holds them, else from what the thread stored for the run. A round superseded
+   * before it ended was closed by `attachRun`, so it writes none.
    */
   runEnded(
     tenantId: string,
@@ -122,7 +130,30 @@ export type Delivery = {
       failed: boolean;
       error?: string;
       firstSentence?: string;
+      /** The round's events, when the caller has them: the last of them may not be stored yet. */
+      events?: readonly BaseEvent[];
     },
+  ): Promise<void>;
+  /**
+   * The failure hand-over the card's next round starts with: the newest `failure_handoff` line's text,
+   * unless it was already handed on or a round of the card has ended well since. Taking it marks it
+   * (`failure_handoff_carried`), under the card's lock, so it is given once. Null when there is none.
+   */
+  takeFailureHandoff(tenantId: string, taskId: string): Promise<string | null>;
+  /**
+   * {@link Delivery.takeFailureHandoff} in two steps, for a round that may yet fail to start: the
+   * hand-over it would take, with its line's id, and nothing marked. A round that did not start has not
+   * used it up; the next one is given it again.
+   */
+  peekFailureHandoff(
+    tenantId: string,
+    taskId: string,
+  ): Promise<{ id: string; text: string } | null>;
+  /** The round that started with the hand-over `handoffId` is running: it is handed on, once. */
+  failureHandoffCarried(
+    tenantId: string,
+    taskId: string,
+    handoffId: string,
   ): Promise<void>;
   /**
    * Start following a card: `tracked = true`, its thread recorded, and a `dispatched` line. A card
@@ -939,6 +970,62 @@ export function createDelivery(database: Database): Delivery {
                 ? { runId: round.runId }
                 : { runId: round.runId, error },
           });
+          if (error === null) return;
+          // What the next round is told about this one: the round's events, read without a model.
+          const handoff = failureHandoffOf({
+            error: round.error?.trim() || error,
+            events:
+              round.events ??
+              (await storedRunEvents(transaction, tenantId, round.runId)),
+            progress: await latestProgress(transaction, tenantId, taskId),
+          });
+          await appendTaskEvent(transaction, {
+            tenantId,
+            taskId,
+            kind: "failure_handoff",
+            actor: "system",
+            detail: {
+              runId: round.runId,
+              stoppedAt: handoff.stoppedAt,
+              text: renderFailureHandoff(handoff),
+            },
+          });
+        }),
+      ),
+
+    takeFailureHandoff: (tenantId, taskId) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          // The card's lock: two rounds starting at once do not both take the same hand-over.
+          if (!(await lockCard(transaction, tenantId, taskId))) return null;
+          const pending = await pendingHandoff(transaction, tenantId, taskId);
+          if (!pending) return null;
+          await carried(transaction, tenantId, taskId, pending.id);
+          return pending.text;
+        }),
+      ),
+
+    peekFailureHandoff: (tenantId, taskId) =>
+      runAsTenant(tenantId, () => pendingHandoff(database, tenantId, taskId)),
+
+    failureHandoffCarried: (tenantId, taskId, handoffId) =>
+      runAsTenant(tenantId, () =>
+        database.transaction(async (transaction) => {
+          if (!(await lockCard(transaction, tenantId, taskId))) return;
+          // Once per hand-over, however many rounds report having started with it.
+          const [already] = await transaction
+            .select({ id: taskEvents.id })
+            .from(taskEvents)
+            .where(
+              and(
+                eq(taskEvents.tenantId, tenantId),
+                eq(taskEvents.taskId, taskId),
+                eq(taskEvents.kind, "failure_handoff_carried"),
+                sql`${taskEvents.detail}->>'handoffId' = ${handoffId}`,
+              ),
+            )
+            .limit(1);
+          if (!already) await carried(transaction, tenantId, taskId, handoffId);
         }),
       ),
 
@@ -1677,6 +1764,107 @@ function personSetDue(tenantId: string) {
           and handed.kind = 'reassigned'
       ), '-infinity'::timestamptz)
   )`;
+}
+
+/** The card's row, locked for the rest of the transaction; false when there is no such card. */
+async function lockCard(
+  transaction: Pick<Database, "select">,
+  tenantId: string,
+  taskId: string,
+): Promise<boolean> {
+  const [card] = await transaction
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
+    .for("update");
+  return Boolean(card);
+}
+
+/**
+ * The failure hand-over the card's next round would start with: its newest `failure_handoff` line,
+ * unless that one was handed on already or a round of the card has ended well since (「从断点接着做」
+ * no longer holds). Null when there is none.
+ */
+async function pendingHandoff(
+  database: Pick<Database, "select">,
+  tenantId: string,
+  taskId: string,
+): Promise<{ id: string; text: string } | null> {
+  const [latest] = await database
+    .select({ id: taskEvents.id, detail: taskEvents.detail })
+    .from(taskEvents)
+    .where(
+      and(
+        eq(taskEvents.tenantId, tenantId),
+        eq(taskEvents.taskId, taskId),
+        eq(taskEvents.kind, "failure_handoff"),
+      ),
+    )
+    .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
+    .limit(1);
+  const text = latest?.detail.text;
+  if (!latest || typeof text !== "string" || !text.trim()) return null;
+  const [since] = await database
+    .select({ id: taskEvents.id })
+    .from(taskEvents)
+    .where(
+      and(
+        eq(taskEvents.tenantId, tenantId),
+        eq(taskEvents.taskId, taskId),
+        or(
+          and(
+            eq(taskEvents.kind, "failure_handoff_carried"),
+            sql`${taskEvents.detail}->>'handoffId' = ${latest.id}`,
+          ),
+          and(
+            eq(taskEvents.kind, "run_ended"),
+            // Compared in the database: the stamp is finer than a JavaScript date.
+            sql`${taskEvents.createdAt} > (select handoff.created_at from task_events handoff where handoff.id = ${latest.id})`,
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  return since ? null : { id: latest.id, text };
+}
+
+/** The hand-over `handoffId` was given to a round that started: it is not given again. */
+function carried(
+  transaction: Pick<Database, "insert">,
+  tenantId: string,
+  taskId: string,
+  handoffId: string,
+) {
+  return appendTaskEvent(transaction, {
+    tenantId,
+    taskId,
+    kind: "failure_handoff_carried",
+    actor: "system",
+    detail: { handoffId },
+  });
+}
+
+/** What the thread stored of one run, in order: its events as the run streamed them. */
+async function storedRunEvents(
+  database: Pick<Database, "select">,
+  tenantId: string,
+  runId: string,
+): Promise<BaseEvent[]> {
+  const rows = await database
+    .select({ event: threadRunEvents.event })
+    .from(threadRunEvents)
+    .where(
+      and(
+        eq(threadRunEvents.tenantId, tenantId),
+        eq(threadRunEvents.runId, runId),
+      ),
+    )
+    .orderBy(threadRunEvents.seq);
+  return rows.map((row) =>
+    typeof row.event === "string"
+      ? (JSON.parse(row.event) as BaseEvent)
+      : (row.event as BaseEvent),
+  );
 }
 
 /** The card's latest progress line (at or before `until`, when given): its words, or null. */

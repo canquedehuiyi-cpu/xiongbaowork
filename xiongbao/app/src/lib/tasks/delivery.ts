@@ -508,6 +508,8 @@ export type EventLine = {
   rest?: string;
   /** 说不成人话的出错原文：不放在句子里，折叠在「技术细节」下。 */
   technical?: string;
+  /** 失败交接的全文（服务器已脱敏）：折叠在「失败交接」下，点开看。 */
+  handoff?: string;
 };
 
 /**
@@ -622,6 +624,15 @@ export function eventLine(
           ...(raw && !plain ? { technical: raw } : {}),
         };
       }
+    case "failure_handoff": {
+      // 这一轮没做完，服务器替下一轮记下停在哪、做到哪、留下了什么；下一轮开头会带上它。
+      const stoppedAt = text("stoppedAt");
+      const handoff = text("text");
+      return {
+        text: `给下一轮留了交接${stoppedAt ? `（${stoppedAt}）` : ""}`,
+        ...(handoff ? { handoff } : {}),
+      };
+    }
     case "nudged":
       return {
         text: byUser ? `你催了${agent}一次` : `叫醒${agent}，问进度`,

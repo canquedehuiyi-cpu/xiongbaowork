@@ -860,6 +860,16 @@ function TaskDetail({ taskId }: { taskId: string }) {
                   {line.technical ? (
                     <TechnicalError raw={line.technical} />
                   ) : null}
+                  {line.handoff ? (
+                    <details className="text-(--wb-muted) leading-[1.5]">
+                      <summary className="cursor-pointer outline-none hover:text-(--wb-fg2) focus-visible:text-(--wb-fg)">
+                        失败交接
+                      </summary>
+                      <p className="m-0 mt-1 whitespace-pre-wrap text-(--wb-fg2) text-[12px]">
+                        {line.handoff}
+                      </p>
+                    </details>
+                  ) : null}
                 </span>
               </li>
             ))}
