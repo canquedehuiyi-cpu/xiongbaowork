@@ -22,11 +22,17 @@
  * `message_bot` nor `ask_person`, and its thread is no conversation a coordination callback accepts.
  */
 
-import type { AbstractAgent, Message } from "@ag-ui/client";
+import {
+  type AbstractAgent,
+  type BaseEvent,
+  EventType,
+  type Message,
+} from "@ag-ui/client";
 import {
   SUBAGENT_MODEL_DESCRIPTION,
   SUBAGENT_TOOL,
   SUBAGENTS_PER_ANSWER,
+  type SubagentProgress,
   type SubagentResult,
   subagentThreadId,
 } from "@xiongbao/shared/subagent";
@@ -41,6 +47,13 @@ import { z } from "zod";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
+import {
+  FAILURE_HANDOFF_CHARS,
+  FAILURE_HANDOFF_FILES,
+  FAILURE_HANDOFF_STEPS,
+  lastStepsOf,
+  writtenFilesOf,
+} from "../tasks/failure-handoff";
 import { type OutputSink, spill } from "../tool-output";
 import { resolveSubagentModel } from "./subagent-model";
 
@@ -124,6 +137,62 @@ function stepsIn(messages: readonly Message[]): number {
       (message.role === "assistant" ? (message.toolCalls?.length ?? 0) : 0),
     0,
   );
+}
+
+/**
+ * The subagent's thread as the events its run streamed, for reading its tool calls: each call the
+ * assistant made (start and arguments), and each tool's answer.
+ */
+function eventsOf(messages: readonly Message[]): BaseEvent[] {
+  return messages.flatMap((message): BaseEvent[] => {
+    if (message.role === "assistant")
+      return (message.toolCalls ?? []).flatMap(
+        (call) =>
+          [
+            {
+              type: EventType.TOOL_CALL_START,
+              toolCallId: call.id,
+              toolCallName: call.function.name,
+            },
+            {
+              type: EventType.TOOL_CALL_ARGS,
+              toolCallId: call.id,
+              delta: call.function.arguments,
+            },
+            { type: EventType.TOOL_CALL_END, toolCallId: call.id },
+          ] as BaseEvent[],
+      );
+    if (message.role === "tool")
+      return [
+        {
+          type: EventType.TOOL_CALL_RESULT,
+          toolCallId: message.toolCallId,
+          messageId: message.id,
+          content: message.content,
+        } as BaseEvent,
+      ];
+    return [];
+  });
+}
+
+/**
+ * How far a subagent that did not finish got (spec 2026-11-25-borrowed-improvements 5.4): its last
+ * {@link FAILURE_HANDOFF_STEPS} tool calls and the files it wrote, masked as a card's failure hand-over
+ * is. Kept within {@link FAILURE_HANDOFF_CHARS} once serialised: the files go first, then the oldest
+ * steps. Undefined when it made no call.
+ */
+function progressIn(
+  messages: readonly Message[],
+): SubagentProgress | undefined {
+  const events = eventsOf(messages);
+  let steps = lastStepsOf(events, FAILURE_HANDOFF_STEPS);
+  let files = writtenFilesOf(events, FAILURE_HANDOFF_FILES);
+  if (steps.length === 0 && files.length === 0) return undefined;
+  const fits = () =>
+    JSON.stringify({ steps, files }).length <= FAILURE_HANDOFF_CHARS;
+  if (!fits()) files = [];
+  while (!fits() && steps.length > 0) steps = steps.slice(1);
+  return { steps, files };
 }
 
 /** What it had said before it stopped, which is its own account of why. */
@@ -331,13 +400,16 @@ export function createSubagents(options: {
             });
           } catch (error) {
             if (execution?.signal?.aborted) throw error;
-            if (!(error instanceof HeadlessToolSuspension))
+            if (!(error instanceof HeadlessToolSuspension)) {
+              const progress = progressIn(messages());
               return answer({
                 error: `The subagent did not finish: ${error instanceof Error ? error.message : String(error)}`,
+                ...(progress ? { progress } : {}),
                 threadId,
                 steps: stepsIn(messages()),
                 ms: elapsed(),
               });
+            }
             const waited = error.waiting.continuation as
               | { toolName?: unknown; args?: unknown }
               | undefined;
