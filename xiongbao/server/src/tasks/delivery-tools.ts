@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
+import type { ToolExecution } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
+import { RERUN_MAX } from "../../../shared/rerun";
 import {
   ACCEPT_HINT,
   acceptWithReadsOn,
@@ -34,6 +36,20 @@ import {
   uncheckedPhysical,
 } from "./physical-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
+import {
+  bouncedThisTurn,
+  CLAIM_BOUNCE_KEY,
+  cardRoundRuns,
+  claimBounce,
+  deliveryRerunOn,
+  RERUN_BOUNCE_KEY,
+  RERUN_BOUNCES_BEFORE_ACCEPT,
+  type RerunDeps,
+  type RerunOutcome,
+  rerunChecks,
+  rerunClaimGateOn,
+  unverifiedReruns,
+} from "./rerun-gate";
 import { entryCardRefOf, roundOnCard } from "./turn-cards";
 
 /**
@@ -165,6 +181,7 @@ const deliverSchema = z.object({
     .max(30)
     .default([]),
   checks: z.array(z.string().max(500)).max(20).default([]),
+  rerun: z.array(z.string().max(500)).max(RERUN_MAX).default([]),
 });
 const extensionSchema = z.object({
   due_at: z.string().trim().min(1).max(100),
@@ -213,6 +230,11 @@ export function deliveryTools(options: {
    * the hand-in goes through as before.
    */
   seatOf?: () => Promise<string | undefined>;
+  /**
+   * 交付时复跑员工声明的核对命令要的（`rerun-gate.ts`）：这张卡的运行事件、因复跑挡回过几次、员工的电脑能不能
+   * 由服务器执行、规则放不放行、真去执行。没有时声明的命令都记「未复核」，不挡回。
+   */
+  rerun?: RerunDeps;
 }): GrantedTool[] {
   const { delivery, gate, board, ownerUserId: tenantId, agentId } = options;
   const now = options.now ?? (() => new Date());
@@ -264,7 +286,7 @@ export function deliveryTools(options: {
     name: string,
     description: string,
     parameters: z.ZodType<T>,
-    execute: (value: T) => Promise<string>,
+    execute: (value: T, execution?: ToolExecution) => Promise<string>,
   ): GrantedTool {
     return {
       name,
@@ -278,12 +300,12 @@ export function deliveryTools(options: {
         ? { concurrent: true as const }
         : {}),
       parameters,
-      async execute(args) {
+      async execute(args, execution) {
         const value = parameters.safeParse(args ?? {});
         if (!value.success)
           return `${REFUSAL_MARKER} ${value.error.issues[0]?.message ?? "参数不对。"}`;
         try {
-          return await execute(value.data);
+          return await execute(value.data, execution);
         } catch (error) {
           if (error instanceof TenantContextError)
             return `${REFUSAL_MARKER} 只能替这一轮对话的人接活和交付。`;
@@ -324,6 +346,40 @@ export function deliveryTools(options: {
       criteria: accepted.criteria,
     });
     return { accepted, line };
+  }
+
+  /**
+   * 说法门、复跑挡回一次：写一条带标记的 `bounced` 事件（复跑的累计次数数的是它），聊天里画挡回那一行，返回值和
+   * 证据门挡回同形，带上标记（每轮只挡一次、累计 2 次的判断读它）。卡片没动。
+   */
+  async function rerunBounce(
+    runId: string,
+    taskId: string,
+    reason: string,
+    key: typeof CLAIM_BOUNCE_KEY | typeof RERUN_BOUNCE_KEY,
+  ): Promise<string> {
+    const bouncedLine = randomUUID();
+    await delivery.bounced(tenantId, taskId, {
+      eventId: bouncedLine,
+      runId,
+      actor,
+      reason,
+      gate: key,
+    });
+    said(runId, DELIVERY_EVENTS.bounced, {
+      taskId,
+      eventId: bouncedLine,
+      reason,
+    });
+    return JSON.stringify({
+      bounced: true,
+      [key]: true,
+      reason,
+      note:
+        key === CLAIM_BOUNCE_KEY
+          ? "没交上：卡片没动。在 rerun 里写上能复跑的核对命令，或在 checks 里写明无法复跑的原因，再调用 deliver_task。"
+          : "没交上：卡片没动。查清复跑对不上的原因、修好后再调用 deliver_task。",
+    });
   }
 
   return [
@@ -417,9 +473,10 @@ export function deliveryTools(options: {
     tool(
       DELIVER_TASK,
       "交付（规约第 2 条）：做完接下的活时调用。items 列出交付物：attachment（这个对话里的附件 id）、component（这件活里画过的组件，ref 写组件名或它那次调用的 id）、link（http(s) 地址）、workspace_file（写在你自己工作区里的文件，ref 写工作区内的相对路径，如 reports/对比.xlsx，任务卡会把它念成一行产物）、app（运行中的程序：port、path 默认 /、title，ref 可省；服务器会请求一次首页）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写你怎么查过的，每条一句。验收标准写了「必需：…」时，每个必需项都要在 title 或 checks 里提到。服务器会核对，不过会被挡回并告诉你缺什么；补齐再交。交了以后等对方验收，没被验收前不要说「做完了」。" +
-        FILE_DELIVERY_HINT,
+        FILE_DELIVERY_HINT +
+        "rerun 原样写你这张卡里跑过、能证明结果的核对命令（测试、校验脚本、统计数），服务器会在你的电脑上再跑一次核对；没有能复跑的，在 checks 里写一条『无法复跑：原因』。",
       deliverSchema,
-      async (value) => {
+      async (value, execution) => {
         // An app item has no ref of its own: its port and path say what it is.
         const handedIn = value.items.map((item) => ({
           ...item,
@@ -529,11 +586,76 @@ export function deliveryTools(options: {
           });
         }
         /*
+         * 说法门（`rerun-gate.ts`）：checks 或 note 里说测过，却没写 rerun、也没写「无法复跑：原因」，这一轮第一次
+         * 交付挡回。只看交付里写的，不看对话；每轮只挡一次。
+         */
+        const notes = handedIn
+          .filter((item) => item.kind === "note")
+          .flatMap((item) => [item.ref, item.title ?? ""]);
+        const claimed = rerunClaimGateOn()
+          ? claimBounce({
+              rerun: value.rerun,
+              checks: value.checks,
+              notes,
+              alreadyBounced: bouncedThisTurn(
+                currentApprovalContext()?.messages ?? [],
+                CLAIM_BOUNCE_KEY,
+              ),
+            })
+          : null;
+        if (claimed)
+          return await rerunBounce(
+            run.runId,
+            card.id,
+            claimed,
+            CLAIM_BOUNCE_KEY,
+          );
+        /*
+         * 复跑（`rerun-gate.ts`）：员工声明的核对命令在它自己的电脑上再跑一次，和这张卡里最近一次比。对不上的挡回；
+         * 同一张卡因此挡回满 2 次后第 3 次照收，结果（含「复核不一致」）写进交付记录。从不创建审批请求。
+         */
+        let reruns: RerunOutcome[] | undefined;
+        if (
+          deliveryRerunOn() &&
+          value.rerun.some((command) => command.trim())
+        ) {
+          const deps = options.rerun;
+          if (!deps) reruns = unverifiedReruns(value.rerun);
+          else {
+            const checked = await rerunChecks({
+              commands: value.rerun,
+              runs: await deps
+                .cardHistory(tenantId, card.id)
+                .then((history) =>
+                  cardRoundRuns(history.rounds, history.approved),
+                ),
+              canExecute: await deps.canExecute(),
+              wouldAllow: (command) => deps.wouldAllow(command),
+              run: (command) => deps.run(command, execution?.signal),
+            });
+            if (
+              checked.bounce &&
+              (await deps.rerunBounces(tenantId, card.id)) <
+                RERUN_BOUNCES_BEFORE_ACCEPT
+            )
+              return await rerunBounce(
+                run.runId,
+                card.id,
+                checked.bounce,
+                RERUN_BOUNCE_KEY,
+              );
+            reruns = checked.outcomes;
+          }
+        }
+        const deliverable = reruns?.length
+          ? { ...verdict.ref, reruns }
+          : verdict.ref;
+        /*
          * 交付卡上的文件和程序在哪台电脑上：记下服务器这时给这位员工和这个人算出的座位。卡片预览按它找电脑，
          * 不再靠这张卡的某一轮发过 `computer.turn_artifacts`：经过审批的写入在所有轮之外执行，没有那条事件。
          */
         const seat =
-          verdict.ref.workspaceFiles?.length || verdict.ref.apps?.length
+          deliverable.workspaceFiles?.length || deliverable.apps?.length
             ? await seatNow()
             : undefined;
         // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
@@ -543,7 +665,7 @@ export function deliveryTools(options: {
           runId: run.runId,
           agentId,
           actor,
-          deliverable: verdict.ref,
+          deliverable,
           ...(seat ? { seat } : {}),
         });
         if (!merged)
@@ -552,7 +674,7 @@ export function deliveryTools(options: {
           taskId: card.id,
           eventId: deliveredLine,
           agentId,
-          deliverable: verdict.ref,
+          deliverable,
         });
         return JSON.stringify({
           delivered: true,

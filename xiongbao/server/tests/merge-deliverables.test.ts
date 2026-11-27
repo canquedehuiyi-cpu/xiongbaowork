@@ -83,3 +83,29 @@ describe("mergeDeliverables: seat", () => {
     ).toBeUndefined();
   });
 });
+
+describe("mergeDeliverables: reruns", () => {
+  test("each re-run check is kept once, as the latest hand-in that named it found it", () => {
+    const first = mergeDeliverables(undefined, {
+      kind: "deliverable",
+      notes: ["结论"],
+      reruns: [
+        { command: "bun test", result: "mismatch", why: "退出码从 0 变成了 1" },
+        { command: "wc -l a.csv", result: "passed" },
+      ],
+    });
+    const again = mergeDeliverables(first, {
+      kind: "deliverable",
+      notes: ["补充"],
+      reruns: [{ command: "bun test", result: "passed" }],
+    });
+    expect(again.reruns).toEqual([
+      { command: "bun test", result: "passed" },
+      { command: "wc -l a.csv", result: "passed" },
+    ]);
+    expect(
+      mergeDeliverables(undefined, { kind: "deliverable", notes: ["x"] })
+        .reruns,
+    ).toBeUndefined();
+  });
+});

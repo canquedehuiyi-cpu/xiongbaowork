@@ -284,6 +284,8 @@ export type Delivery = {
       actor: TaskEventActor;
       reason: string;
       missing?: string[];
+      /** Which of the later gates refused it (`rerun-gate.ts`'s keys); absent for the evidence gate. */
+      gate?: string;
       /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
       eventId?: string;
     },
@@ -802,6 +804,7 @@ export function createDelivery(database: Database): Delivery {
             runId: input.runId,
             reason: input.reason,
             ...(input.missing?.length ? { missing: input.missing } : {}),
+            ...(input.gate ? { gate: input.gate } : {}),
           },
         });
       }),
@@ -1730,6 +1733,11 @@ export function mergeDeliverables(
     (port) => !askedNow.has(port) && apps.some((app) => app.port === port),
   );
   if (unverifiedApps.length) merged.unverifiedApps = unverifiedApps;
+  // Each re-run check once, as the latest hand-in that named it found it (`rerun-gate.ts`).
+  const reruns = [
+    ...new Map(both("reruns").map((rerun) => [rerun.command, rerun])).values(),
+  ];
+  if (reruns.length) merged.reruns = reruns;
   // The computer of the latest hand-in that named one: the seat the server took that hand-in on.
   const seat = added.seat ?? held?.seat;
   if (seat) merged.seat = seat;

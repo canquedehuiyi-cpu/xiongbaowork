@@ -178,6 +178,16 @@ export type DeliverableRef = {
    * cards kept it, and on one with no file or program.
    */
   seat?: string;
+  /**
+   * What became of the check commands the coworker named for re-running (`deliver_task`'s `rerun`,
+   * `tasks/rerun-gate.ts`): each passed, did not match (the card's 「复核不一致」, accepted only after two
+   * bounces), or was not re-run, with why. Absent when none were named.
+   */
+  reruns?: {
+    command: string;
+    result: "passed" | "mismatch" | "unverified";
+    why?: string;
+  }[];
 };
 
 /**

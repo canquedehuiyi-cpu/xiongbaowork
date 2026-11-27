@@ -128,7 +128,7 @@ import {
 import { waitForReplyInTranscript } from "./approvals/reply-in-transcript";
 import { createApprovalResumeTick } from "./approvals/resume-sweep";
 import { loadRuleVocabulary } from "./approvals/rule-vocabulary";
-import { outsideRecheck } from "./approvals/service";
+import { outsideRecheck, withoutAsking } from "./approvals/service";
 import { createApprovalStore } from "./approvals/store";
 import {
   type ApprovalContinuation,
@@ -601,6 +601,7 @@ import {
 import { createEvidenceGate } from "./tasks/evidence-gate";
 import { createNudgeRuns } from "./tasks/nudge-run";
 import { createTaskProjector } from "./tasks/projector";
+import { createRerunRunner, rerunBouncesOf } from "./tasks/rerun-gate";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
 import { createTaskStore } from "./tasks/store";
@@ -2900,6 +2901,40 @@ await startupLifecycle.run(async (startup) => {
               ),
             )
         : undefined,
+      /*
+       * 交付时复跑核对命令（`tasks/rerun-gate.ts`）：在员工自己的座位上、以这一轮的人的身份执行，和电脑工具一样
+       * 先问这个人能不能用这台电脑；先用审批服务只读预判，真执行时也不开审批请求。没有电脑时都记「未复核」。
+       */
+      rerun: {
+        cardHistory: (tenantId, taskId) =>
+          evidenceGate.cardHistory(tenantId, taskId),
+        rerunBounces: (tenantId, taskId) =>
+          rerunBouncesOf(database, tenantId, taskId),
+        ...(computerGateway
+          ? createRerunRunner({
+              gateway: computerGateway,
+              resolve: () =>
+                runAsTenant(actorId, async () => {
+                  const actor = await actorFor(actorId);
+                  const profile = await agentProfileStore.get(actor, botId);
+                  if (!profile || !canUseComputer(profile, actor))
+                    return undefined;
+                  return {
+                    seat: await computerGateway.seatFor(botId, actor.id),
+                    actor: { id: actor.id, userId: actor.id, initiator },
+                  };
+                }),
+              wouldAllow: (candidate) => approvalService.wouldAllow(candidate),
+              withoutAsking,
+            })
+          : {
+              canExecute: async () => false,
+              wouldAllow: async () => false,
+              run: async () => {
+                throw new Error("这里没有电脑。");
+              },
+            }),
+      },
     }),
     // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*
