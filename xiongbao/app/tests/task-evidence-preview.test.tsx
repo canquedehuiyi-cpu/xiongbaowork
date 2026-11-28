@@ -1,7 +1,11 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, cleanup, render, waitFor, within } from "@testing-library/react";
-import { DeliveryEvidence } from "@/routes/_authed/_app/tasks.$taskId";
+import { PreviewTargetContext } from "@/lib/computers/preview";
+import {
+  DeliveryEvidence,
+  EvidenceLine,
+} from "@/routes/_authed/_app/tasks.$taskId";
 import { settleReactWork } from "./settle-react-work";
 
 /*
@@ -91,4 +95,42 @@ test("without the card's employee there is no 预览, as there is no download", 
   );
   expect(ui().queryByRole("button", { name: /^预览/ })).toBeNull();
   expect(ui().queryByRole("link", { name: "下载" })).toBeNull();
+});
+
+/*
+ * 「预览」和「下载」同一个条件（v0.2.17 修复评审）：路径不是工作区内的相对路径时，两个都不画。
+ */
+test("a path outside the workspace gets neither 预览 nor 下载", () => {
+  serve();
+  const controller = {
+    target: undefined,
+    open: () => {},
+    close: () => {},
+  };
+  for (const path of ["../secret.txt", "/etc/passwd.txt", "C:\\work\\x.txt"]) {
+    const view = render(
+      <PreviewTargetContext.Provider value={controller}>
+        <EvidenceLine
+          agentId="bot-1"
+          row={{ kind: "workspace_file", path, label: path }}
+          taskId="t1"
+        />
+      </PreviewTargetContext.Provider>,
+    );
+    expect(view.queryByRole("link", { name: "下载" })).toBeNull();
+    expect(view.queryByRole("button", { name: /^预览/ })).toBeNull();
+    cleanup();
+  }
+  // 对照：合法路径两个都有。
+  const ok = render(
+    <PreviewTargetContext.Provider value={controller}>
+      <EvidenceLine
+        agentId="bot-1"
+        row={{ kind: "workspace_file", path: "a.txt", label: "a.txt" }}
+        taskId="t1"
+      />
+    </PreviewTargetContext.Provider>,
+  );
+  expect(ok.getByRole("link", { name: "下载" })).toBeDefined();
+  expect(ok.getByRole("button", { name: "预览 a.txt" })).toBeDefined();
 });

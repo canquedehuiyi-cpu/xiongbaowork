@@ -247,8 +247,9 @@ export function EvidenceLine({
     <div className="flex flex-wrap items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
       <RowIcon kind={row.kind} />
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{label}</span>
-      {row.kind === "workspace_file" && agentId ? (
-        // 和对话里交付卡同一个按钮、同一个范围（这张卡）；页面没提供面板时不画。
+      {row.kind === "workspace_file" && agentId && download ? (
+        // 和对话里交付卡同一个按钮、同一个范围（这张卡）；和「下载」同一个条件（路径不在工作区内就两个
+        // 都没有），页面没提供面板时不画。
         <PreviewButton
           target={{ botId: agentId, path: row.path, scope: { task: taskId } }}
         />
