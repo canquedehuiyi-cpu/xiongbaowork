@@ -343,6 +343,7 @@ tests/i18n-accessible-names.test.ts
 tests/i18n-dom-scan.test.tsx
 tests/i18n-route-coverage.test.ts
 tests/index-boot.test.ts
+tests/inline-approval-decided.test.tsx
 tests/join-thread.test.ts
 tests/key-only-apps-directory.test.tsx
 tests/knowledge-screen.test.tsx
@@ -532,6 +533,7 @@ tests/subtask-step.test.tsx
 tests/summon-card-flip.test.tsx
 tests/take-the-wheel.test.ts
 tests/task-approval-buttons.test.tsx
+tests/task-evidence-preview.test.tsx
 tests/task-order.test.ts
 tests/tasks-actions.test.ts
 tests/tasks-approval-actions.test.tsx
