@@ -79,3 +79,11 @@ export function devicesQueryOptions() {
     refetchInterval: 10_000,
   });
 }
+
+/**
+ * 「我」菜单里「已配对 N 台」用的读数：与电脑与设备页同一个缓存项，读一次就够，不跟着设备页每十秒轮询
+ * （菜单一直挂在列表栏，轮询会一直打接口）。设备页自己的观察者照常轮询。
+ */
+export function devicesSummaryQueryOptions() {
+  return queryOptions({ ...devicesQueryOptions(), refetchInterval: false });
+}

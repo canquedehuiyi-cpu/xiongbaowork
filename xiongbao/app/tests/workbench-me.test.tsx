@@ -21,6 +21,10 @@ import {
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { authKeys } from "@/lib/auth/queries";
+import {
+  devicesQueryOptions,
+  devicesSummaryQueryOptions,
+} from "@/lib/devices/queries";
 import { userPreferencesQueryOptions } from "@/lib/settings/message-list";
 import { queryClient } from "@/query-client";
 import { routeTree } from "@/routeTree.gen";
@@ -302,6 +306,31 @@ describe("「我」页面", () => {
     // 数的是设备列表（电脑与设备页读的那份），不是套餐里的用量。
     const devices = view.getByRole("link", { name: "电脑与设备" });
     await waitFor(() => expect(describedBy(devices)).toBe("已配对 2 台"));
+  });
+
+  test("菜单读设备列表不轮询", () => {
+    expect(devicesSummaryQueryOptions().refetchInterval).toBe(false);
+    expect(devicesSummaryQueryOptions().queryKey).toEqual(
+      devicesQueryOptions().queryKey,
+    );
+  });
+
+  test("一台设备都没有时电脑与设备不写摘要", async () => {
+    answers.set("GET /api/devices", { devices: [] });
+    const { view } = renderPage();
+    const link = await view.findByRole("link", { name: "电脑与设备" });
+    await waitFor(() => expect(requests).toContain("GET /api/devices"));
+    await settleReactWork();
+    expect(link.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  test("设备列表读不到时电脑与设备不写摘要", async () => {
+    answers.delete("GET /api/devices");
+    const { view } = renderPage();
+    const link = await view.findByRole("link", { name: "电脑与设备" });
+    await waitFor(() => expect(requests).toContain("GET /api/devices"));
+    await settleReactWork();
+    expect(link.getAttribute("aria-describedby")).toBeNull();
   });
 
   test("点「电脑与设备」进电脑与设备页", async () => {

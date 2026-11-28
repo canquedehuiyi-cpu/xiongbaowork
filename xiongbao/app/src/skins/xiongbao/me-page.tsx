@@ -24,7 +24,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
-import { devicesQueryOptions } from "@/lib/devices/queries";
+import { devicesSummaryQueryOptions } from "@/lib/devices/queries";
 import {
   AVATAR_MENU_ITEM,
   type NavigationItem,
@@ -96,7 +96,8 @@ function navLink(item: NavigationItem, detail?: string): MeLink {
 /**
  * 「我」的内容，页面（`/me`）和工作台列表栏共用：个人卡的数据，加上取代原账户菜单的菜单。
  *
- * 套餐名和已配对几台电脑来自现在的套餐查询（`planSummaryQueryOptions`，和原账户菜单、套餐页共用缓存），
+ * 套餐名来自现在的套餐查询（`planSummaryQueryOptions`，和原账户菜单、套餐页共用缓存），已配对几台电脑来自设备列表
+ * （`devicesSummaryQueryOptions`，和电脑与设备页共用缓存但不轮询），
  * 员工数来自员工列表，「管理」只在导航清单给了这个人管理项时才有（按角色和版本筛过）。加入日期服务端不给，
  * 所以不写。
  */
@@ -104,7 +105,7 @@ export function useMeMenu(): MeMenu {
   const user = useQuery(currentUserQueryOptions()).data;
   const quota = useQuery(planSummaryQueryOptions()).data;
   const agents = useQuery(agentListQueryOptions()).data;
-  const devices = useQuery(devicesQueryOptions()).data;
+  const devices = useQuery(devicesSummaryQueryOptions()).data;
   const avatarAgentId = useAvatarAgentId();
   const navigation = useNavigationItems();
   const theme = useOptionalTheme();
