@@ -30,6 +30,22 @@ export type SettingsMove = {
 export const SETTINGS_MOVES: readonly SettingsMove[] = [
   // 服务端配额报错里的 `upgradeUrl`，前端 lib/client.ts 也按它走。
   { id: "U01", from: "/plans", to: "/settings/plans", kept: true },
+  // 部署清单（server/src/setup/checklist.ts）与动作推演（server/src/what-if-check.ts）发来的电脑页。
+  {
+    id: "U51",
+    from: "/admin/computers",
+    to: "/settings/devices",
+    hash: "team-computers",
+    kept: true,
+  },
+  // 部署清单发来的个人版电脑页。
+  {
+    id: "U52",
+    from: "/settings/computer",
+    to: "/settings/devices",
+    hash: "this-computer",
+    kept: true,
+  },
 ];
 
 type Params = { named: Record<string, string>; rest: string | null };

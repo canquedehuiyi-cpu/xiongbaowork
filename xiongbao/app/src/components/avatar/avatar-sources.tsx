@@ -441,11 +441,11 @@ function FolderPicker({
         <p className="text-muted-foreground">
           本地文件夹放在你自己的电脑上。先在电脑上安装{productName()}
           设备端，并在「设置 ›
-          我的设备」里配对；然后在设备端添加要交给分身的文件夹，再回到这里选择。你可以先保存文字声明。
+          电脑与设备」里配对；然后在设备端添加要交给分身的文件夹，再回到这里选择。你可以先保存文字声明。
         </p>
         {pairingHref ? (
           <a className="text-primary underline" href={pairingHref}>
-            前往「我的设备」配对电脑
+            前往「电脑与设备」配对电脑
           </a>
         ) : (
           <p className="text-muted-foreground">

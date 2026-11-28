@@ -6,13 +6,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
-import {
-  PageEmpty,
-  PageRows,
-  PageSection,
-  PageShell,
-} from "@/components/layout/page-shell";
+import { PageEmpty, PageRows } from "@/components/layout/page-shell";
 import { StaggerItem } from "@/components/layout/stagger";
+import { SettingsSection } from "@/components/settings/settings-section";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,27 +42,84 @@ import {
   type ComputerProfile,
   computerFleetQueryOptions,
 } from "@/lib/computers/queries";
-import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { useManagePaths } from "@/lib/manage-paths";
+import type { SectionAudience } from "@/lib/settings/audience";
 
 /** One row's identity: the computer, and on a shared computer the Bot's seat on it. */
 function rowId(computer: ComputerProfile): string {
   return `${computer.computer}|${computer.botId ?? ""}`;
 }
 
+const PERSONAL: SectionAudience = { who: "everyone", edition: "personal" };
+const TEAM_ADMIN: SectionAudience = { who: "team-admin", edition: "team" };
+
+const FOLDERS_DESCRIPTION = () =>
+  `选择员工可以读取的这台电脑上的文件夹。每次改文件或运行命令前，桌面应用都会先问你。退出${shortName()}后访问就结束。`;
+
 /**
- * `children` are sections only the team edition's Admin adds below the page's own (the admin's
- * controls for these). The personal edition's Settings renders this page with none.
+ * 电脑与设备（`/settings/devices`）里个人版的两节：◆ 你的员工的浏览器（`#this-computer`）和
+ * ◆ 这台电脑上的文件夹。个人版是一个人的一台电脑，团队才用得上的东西（给每人一台电脑的提示、一行是谁的座位、
+ * 从哪出网）不画；每位员工的浏览器留着「停止」和「重置」，这是这个人让员工退出所有登录的唯一地方。
  *
- * In the personal edition this is one person's one computer. What only a team can act on goes: the
- * notice about giving each person a computer of their own, whose seat a row is, and where its
- * traffic leaves. Each Bot's browser stays, with Stop and Reset, because this is the one place the
- * person can sign a Bot out of everything.
+ * 受众判断在 `SettingsSection` 里：读完受众之前、以及团队版，都不画，也不发读取。
  */
-export function ComputersPage({ children }: { children?: ReactNode } = {}) {
+export function ThisComputerSections() {
+  return (
+    <>
+      <SettingsSection
+        audience={PERSONAL}
+        description="你的员工共用一台电脑。每位员工在上面有自己的浏览器资料，所以能保持登录。但一位员工运行的命令仍能读到另一位员工的文件。"
+        id="this-computer"
+        title="你的员工的浏览器"
+      >
+        <ComputerList personal />
+      </SettingsSection>
+      <SettingsSection
+        audience={PERSONAL}
+        description={FOLDERS_DESCRIPTION()}
+        id="this-computer-folders"
+        title="这台电脑上的文件夹"
+      >
+        <HostFolders personal />
+      </SettingsSection>
+    </>
+  );
+}
+
+/**
+ * 电脑与设备里团队版管理员的一节：★ 团队的电脑（`#team-computers`）。这个部署里的电脑（停止浏览器、重置、
+ * 更新电脑），以及这台电脑上的文件夹（每位员工的授权）。原来是「管理 › 电脑」一整页。
+ */
+export function TeamComputersSection() {
+  return (
+    <SettingsSection
+      audience={TEAM_ADMIN}
+      description="每个人的电脑，以及每位独立员工的电脑。每位员工在上面有自己的浏览器资料，所以能保持登录。重置一台电脑会让上面每位员工退出所有登录。"
+      id="team-computers"
+      title="团队的电脑"
+    >
+      <SubHeading>这个部署里的电脑</SubHeading>
+      <ComputerList personal={false} />
+      <SubHeading>这台电脑上的文件夹</SubHeading>
+      <p className="mt-1 text-pretty text-muted-foreground text-sm leading-relaxed">
+        {FOLDERS_DESCRIPTION()}
+      </p>
+      <HostFolders personal={false} />
+    </SettingsSection>
+  );
+}
+
+/** 一节里的小标题：团队的电脑一节有两块，各自一个名字，不另开一节（一节一种受众，§5.1）。 */
+function SubHeading({ children }: { children: ReactNode }) {
+  return <h3 className="mt-8 font-medium text-sm">{children}</h3>;
+}
+
+/**
+ * The computers, each with Stop, Reset and (on an old image) Update. `personal` is the personal
+ * edition: one person's one computer, so a row is one of their Bots.
+ */
+function ComputerList({ personal }: { personal: boolean }) {
   const paths = useManagePaths();
-  const personal =
-    useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   /** The row currently running a stop/reset request. */
   const [busy, setBusy] = useState<string | null>(null);
   /** Reset deletes the browser profiles, so it requires confirmation. */
@@ -78,18 +131,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
   const nameFor = useBotNames();
 
   const fleet = useQuery(computerFleetQueryOptions());
-  const hostAccess = useQuery(hostAccessQueryOptions());
-  const agents = useQuery(agentListQueryOptions());
   const setState = useMutation(setComputerStateMutationOptions(queryClient));
-  const requestGrant = useMutation(
-    requestHostFolderGrantMutationOptions(queryClient),
-  );
-  const revokeGrant = useMutation(
-    revokeHostFolderGrantMutationOptions(queryClient),
-  );
-  const stopHostAccess = useMutation(
-    stopHostAccessMutationOptions(queryClient),
-  );
 
   const computers = fleet.data?.computers ?? null;
   const isolation = fleet.data?.isolation ?? null;
@@ -98,15 +140,6 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
    * instead, because the top of this page is a long scroll away from them.
    */
   const problem = fleet.error ? "读不到电脑列表。请刷新页面。" : null;
-  const hostProblem = hostAccess.error
-    ? hostAccess.error.message
-    : requestGrant.error
-      ? requestGrant.error.message
-      : revokeGrant.error
-        ? revokeGrant.error.message
-        : stopHostAccess.error
-          ? stopHostAccess.error.message
-          : null;
 
   const run = (
     computer: ComputerProfile,
@@ -134,8 +167,12 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
   const titleOf = (computer: ComputerProfile): string => {
     // One person, so a row is one of their Bots.
     if (personal) return computer.botId ? nameFor(computer.botId) : "电脑";
+    // fork 原有：一行没带这个人是谁时写「某个人」，不写出 undefined。
     const person =
-      computer.person?.name ?? computer.person?.email ?? computer.personId;
+      computer.person?.name ??
+      computer.person?.email ??
+      computer.personId ??
+      "某个人";
     if (computer.kind === "person") {
       return computer.botId
         ? `${person} · ${nameFor(computer.botId)}`
@@ -165,14 +202,7 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
   };
 
   return (
-    <PageShell
-      description={
-        personal
-          ? "你的员工共用一台电脑。每位员工在上面有自己的浏览器资料，所以能保持登录。但一位员工运行的命令仍能读到另一位员工的文件。"
-          : "每个人的电脑，以及每位独立员工的电脑。每位员工在上面有自己的浏览器资料，所以能保持登录。重置一台电脑会让上面每位员工退出所有登录。"
-      }
-      title="电脑"
-    >
+    <>
       {problem ? (
         <p
           className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
@@ -194,111 +224,83 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
         </p>
       ) : null}
 
-      <HostFoldersSection
-        connected={hostAccess.data?.connected ?? false}
-        desktop={hostAccess.data?.desktop !== false}
-        grants={hostAccess.data?.grants ?? []}
-        botIds={(agents.data ?? []).map((agent) => agent.id)}
-        loading={hostAccess.isPending || agents.isPending}
-        nameFor={nameFor}
-        onGrant={(botId) => requestGrant.mutate({ botId })}
-        onRevoke={(grantId) => revokeGrant.mutate({ grantId })}
-        onStop={() => stopHostAccess.mutate()}
-        pending={hostAccess.data?.pending ?? []}
-        personal={personal}
-        problem={hostProblem}
-        requestingBotId={
-          requestGrant.isPending
-            ? (requestGrant.variables?.botId ?? null)
-            : null
-        }
-        revokingGrantId={
-          revokeGrant.isPending
-            ? (revokeGrant.variables?.grantId ?? null)
-            : null
-        }
-        stopping={stopHostAccess.isPending}
-      />
-
-      <PageSection title={personal ? "你的员工的浏览器" : "这个部署里的电脑"}>
-        {setState.error ? (
-          <p
-            className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
-            role="alert"
-          >
-            {setState.error.message}
-          </p>
-        ) : null}
-        {computers === null && problem ? (
-          <PageEmpty icon={IconAlertTriangle} title="读不到列表" />
-        ) : computers === null ? null : computers.length === 0 ? (
-          <PageEmpty
-            icon={IconDeviceDesktop}
-            title={personal ? "还没有浏览器" : "还没有电脑"}
-          >
-            {personal
-              ? "员工第一次打开网页时会启动一个。"
-              : "员工第一次打开网页时会出现一台。"}
-          </PageEmpty>
-        ) : (
-          <PageRows>
-            {computers.map((computer, index) => (
-              <StaggerItem index={index} key={rowId(computer)}>
-                <Item size="sm">
-                  <ItemContent>
-                    <ItemTitle title={computer.computer}>
-                      {titleOf(computer)}
-                    </ItemTitle>
-                    <ItemDescription>
-                      {personal ? null : `${scopeOf(computer)} · `}
-                      {stateOf(computer)}
-                      {personal
-                        ? null
-                        : ` · ${
-                            computer.egress === undefined
-                              ? "没有报告出口"
-                              : computer.egress === null
-                                ? "直接出网"
-                                : `经 ${computer.egress} 出网`
-                          }`}
-                      {computer.updateAvailable ? " · 有可用更新" : ""}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    {computer.updateAvailable ? (
-                      <Button
-                        disabled={busy === rowId(computer)}
-                        onClick={() => setConfirmingUpdate(computer)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        更新电脑
-                      </Button>
-                    ) : null}
-                    <Button
-                      disabled={busy === rowId(computer) || !computer.running}
-                      onClick={() => void run(computer, "stop")}
-                      size="sm"
-                      variant="outline"
-                    >
-                      {busy === rowId(computer) ? "正在处理…" : "停止浏览器"}
-                    </Button>
+      {setState.error ? (
+        <p
+          className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+          role="alert"
+        >
+          {setState.error.message}
+        </p>
+      ) : null}
+      {computers === null && problem ? (
+        <PageEmpty icon={IconAlertTriangle} title="读不到列表" />
+      ) : computers === null ? null : computers.length === 0 ? (
+        <PageEmpty
+          icon={IconDeviceDesktop}
+          title={personal ? "还没有浏览器" : "还没有电脑"}
+        >
+          {personal
+            ? "员工第一次打开网页时会启动一个。"
+            : "员工第一次打开网页时会出现一台。"}
+        </PageEmpty>
+      ) : (
+        <PageRows>
+          {computers.map((computer, index) => (
+            <StaggerItem index={index} key={rowId(computer)}>
+              <Item size="sm">
+                <ItemContent>
+                  <ItemTitle title={computer.computer}>
+                    {titleOf(computer)}
+                  </ItemTitle>
+                  <ItemDescription>
+                    {personal ? null : `${scopeOf(computer)} · `}
+                    {stateOf(computer)}
+                    {personal
+                      ? null
+                      : ` · ${
+                          computer.egress === undefined
+                            ? "没有报告出口"
+                            : computer.egress === null
+                              ? "直接出网"
+                              : `经 ${computer.egress} 出网`
+                        }`}
+                    {computer.updateAvailable ? " · 有可用更新" : ""}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  {computer.updateAvailable ? (
                     <Button
                       disabled={busy === rowId(computer)}
-                      onClick={() => setConfirming(computer)}
+                      onClick={() => setConfirmingUpdate(computer)}
                       size="sm"
                       variant="outline"
                     >
-                      重置
+                      更新电脑
                     </Button>
-                  </ItemActions>
-                </Item>
-                {index !== computers.length - 1 && <Separator />}
-              </StaggerItem>
-            ))}
-          </PageRows>
-        )}
-      </PageSection>
+                  ) : null}
+                  <Button
+                    disabled={busy === rowId(computer) || !computer.running}
+                    onClick={() => void run(computer, "stop")}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {busy === rowId(computer) ? "正在处理…" : "停止浏览器"}
+                  </Button>
+                  <Button
+                    disabled={busy === rowId(computer)}
+                    onClick={() => setConfirming(computer)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    重置
+                  </Button>
+                </ItemActions>
+              </Item>
+              {index !== computers.length - 1 && <Separator />}
+            </StaggerItem>
+          ))}
+        </PageRows>
+      )}
 
       {/*
        * A DIALOG RATHER THAN AN INLINE CONFIRM. Resetting signs a Bot out of everything it has ever
@@ -417,8 +419,57 @@ export function ComputersPage({ children }: { children?: ReactNode } = {}) {
           里。
         </p>
       )}
-      {children}
-    </PageShell>
+    </>
+  );
+}
+
+/** The folders on this computer each Bot may read, with the reads and writes still open. */
+function HostFolders({ personal }: { personal: boolean }) {
+  const queryClient = useQueryClient();
+  const nameFor = useBotNames();
+  const hostAccess = useQuery(hostAccessQueryOptions());
+  const agents = useQuery(agentListQueryOptions());
+  const requestGrant = useMutation(
+    requestHostFolderGrantMutationOptions(queryClient),
+  );
+  const revokeGrant = useMutation(
+    revokeHostFolderGrantMutationOptions(queryClient),
+  );
+  const stopHostAccess = useMutation(
+    stopHostAccessMutationOptions(queryClient),
+  );
+  const hostProblem = hostAccess.error
+    ? hostAccess.error.message
+    : requestGrant.error
+      ? requestGrant.error.message
+      : revokeGrant.error
+        ? revokeGrant.error.message
+        : stopHostAccess.error
+          ? stopHostAccess.error.message
+          : null;
+
+  return (
+    <HostFoldersSection
+      connected={hostAccess.data?.connected ?? false}
+      desktop={hostAccess.data?.desktop !== false}
+      grants={hostAccess.data?.grants ?? []}
+      botIds={(agents.data ?? []).map((agent) => agent.id)}
+      loading={hostAccess.isPending || agents.isPending}
+      nameFor={nameFor}
+      onGrant={(botId) => requestGrant.mutate({ botId })}
+      onRevoke={(grantId) => revokeGrant.mutate({ grantId })}
+      onStop={() => stopHostAccess.mutate()}
+      pending={hostAccess.data?.pending ?? []}
+      personal={personal}
+      problem={hostProblem}
+      requestingBotId={
+        requestGrant.isPending ? (requestGrant.variables?.botId ?? null) : null
+      }
+      revokingGrantId={
+        revokeGrant.isPending ? (revokeGrant.variables?.grantId ?? null) : null
+      }
+      stopping={stopHostAccess.isPending}
+    />
   );
 }
 
@@ -473,13 +524,10 @@ function HostFoldersSection({
   ).sort((left, right) => nameFor(left).localeCompare(nameFor(right)));
 
   return (
-    <PageSection
-      description={`选择员工可以读取的这台电脑上的文件夹。每次改文件或运行命令前，桌面应用都会先问你。退出${shortName()}后访问就结束。`}
-      title="这台电脑上的文件夹"
-    >
+    <>
       {problem ? (
         <p
-          className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+          className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
           role="alert"
         >
           {problem}
@@ -487,7 +535,7 @@ function HostFoldersSection({
       ) : null}
 
       {desktop && !connected && !loading ? (
-        <p className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+        <p className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
           桌面应用不在线。打开它才能批准文件夹或运行命令。
         </p>
       ) : null}
@@ -555,7 +603,7 @@ function HostFoldersSection({
           </div>
         </div>
       ) : null}
-    </PageSection>
+    </>
   );
 }
 
@@ -610,6 +658,12 @@ function FolderGrantList({
           key={request.operationId}
         >
           {pendingSentence(request, personal)}
+          {/* fork 原有：写出这个请求涉及的文件夹、文件或命令，管理员才知道在等的是哪一件。 */}
+          {request.displayName ? (
+            <p className="truncate text-muted-foreground text-xs">
+              {request.displayName}
+            </p>
+          ) : null}
         </div>
       ))}
     </div>

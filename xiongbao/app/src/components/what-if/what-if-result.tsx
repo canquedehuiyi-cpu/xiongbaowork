@@ -72,7 +72,7 @@ const BASIS_WORDS: Record<WhatIfLayerId, string> = {
 const PAGE_WORDS: Record<NonNullable<WhatIfLayer["page"]>, string> = {
   "/admin/plugins": "打开插件",
   "/admin/permissions": "打开权限",
-  "/admin/computers": "打开电脑",
+  "/admin/computers": "打开电脑与设备",
   "/admin/boundaries": "打开边界规则",
   "/admin/approvals": "打开审批",
 };

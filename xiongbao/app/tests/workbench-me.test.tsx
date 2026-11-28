@@ -164,7 +164,7 @@ function renderPage(user: SignedIn = member) {
         component: MePage,
       }),
       page("/settings", "设置页内容"),
-      page("/settings/devices", "我的设备页内容"),
+      page("/settings/devices", "电脑与设备页内容"),
       page("/sign", "登录页内容"),
     ]),
     history: createMemoryHistory({ initialEntries: ["/me"] }),
@@ -179,7 +179,7 @@ function renderPage(user: SignedIn = member) {
 
 const MENU: readonly (readonly [string, string])[] = [
   ["个人资料", "/settings"],
-  ["我的电脑", "/settings/devices"],
+  ["电脑与设备", "/settings/devices"],
   ["通知", "/settings/notifications"],
   ["套餐与用量", "/settings/plans"],
   ["外观", "/settings"],
@@ -240,15 +240,15 @@ describe("「我」页面", () => {
       document.getElementById(link.getAttribute("aria-describedby") ?? "")
         ?.textContent;
     expect(describedBy(plans)).toBe("Pro");
-    expect(describedBy(view.getByRole("link", { name: "我的电脑" }))).toBe(
+    expect(describedBy(view.getByRole("link", { name: "电脑与设备" }))).toBe(
       "已配对 1 台",
     );
   });
 
-  test("点「我的电脑」进我的设备", async () => {
+  test("点「电脑与设备」进电脑与设备页", async () => {
     const { view, user, router } = renderPage();
-    await user.click(await view.findByRole("link", { name: "我的电脑" }));
-    await view.findByText("我的设备页内容");
+    await user.click(await view.findByRole("link", { name: "电脑与设备" }));
+    await view.findByText("电脑与设备页内容");
     expect(router.state.location.pathname).toBe("/settings/devices");
   });
 
@@ -332,7 +332,7 @@ function renderFrame(path: string, user: SignedIn = member) {
       createRoute({
         path: "/settings/devices",
         getParentRoute: () => root,
-        component: () => <p>我的设备页内容</p>,
+        component: () => <p>电脑与设备页内容</p>,
       }),
     ]),
     history: createMemoryHistory({ initialEntries: [path] }),
@@ -369,7 +369,7 @@ describe("工作台里的「我」", () => {
     expect(card.getAttribute("href")).toBe("/me");
     expect(card.getAttribute("aria-current")).toBe("page");
     expect(
-      (await list.findByRole("link", { name: "我的电脑" })).getAttribute(
+      (await list.findByRole("link", { name: "电脑与设备" })).getAttribute(
         "href",
       ),
     ).toBe("/settings/devices");
@@ -385,11 +385,11 @@ describe("工作台里的「我」", () => {
     expect(await list.findByRole("button", { name: "退出登录" })).toBeTruthy();
   });
 
-  test("在 /settings/devices 时列表栏只有「我的电脑」是当前项", async () => {
+  test("在 /settings/devices 时列表栏只有「电脑与设备」是当前项", async () => {
     const { view } = renderFrame("/settings/devices");
-    await view.findByText("我的设备页内容");
+    await view.findByText("电脑与设备页内容");
     const list = within(view.getByRole("complementary", { name: "列表栏" }));
-    await list.findByRole("link", { name: "我的电脑" });
+    await list.findByRole("link", { name: "电脑与设备" });
     const current = list
       .getAllByRole("link")
       .filter((link) => link.getAttribute("aria-current") === "page");

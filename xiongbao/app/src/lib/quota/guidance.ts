@@ -10,7 +10,7 @@ import { type QuotaErrorDetails, RequestError } from "@/lib/client";
  */
 
 /** The screens that free a slot. Every one is a registered route in `routeTree.gen.ts`. */
-/** M5b：员工列表在 /bots、我的设备在设置里自己的分区、模型库是「能力」的一个页签。 */
+/** M5b：员工列表在 /bots、电脑与设备在设置里自己的分区、模型库是「能力」的一个页签。 */
 export type QuotaCleanupHref =
   | "/bots"
   | "/settings/devices"
@@ -50,7 +50,7 @@ const COPY: Readonly<Record<QuotaErrorDetails["metric"], MetricCopy>> = {
     label: "设备",
     title: "设备数量已达套餐上限",
     hint: "移除不再使用的设备即可腾出名额，或升级套餐获得更多名额。",
-    // The count is `registered_devices`, which 设置 › 我的设备 lists and removes (DELETE /api/devices/:id).
+    // The count is `registered_devices`, which 设置 › 电脑与设备 lists and removes (DELETE /api/devices/:id).
     cleanup: { href: "/settings/devices", label: "管理设备" },
   },
   /*

@@ -10,15 +10,6 @@
     "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
   },
   {
-    "mutation": "setNetworkPolicyMutationOptions",
-    "key": "*",
-    "files": [
-      "app/src/components/admin/controls/computer-sections.tsx",
-      "app/src/routes/_authed/admin/enterprise.tsx"
-    ],
-    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
-  },
-  {
     "mutation": "setEnterpriseSettingMutationOptions",
     "key": "actionRecording",
     "files": [
@@ -62,11 +53,10 @@
     "mutation": "setEnterpriseSettingMutationOptions",
     "key": "inactiveComputerDays",
     "files": [
-      "app/src/components/admin/controls/computer-sections.tsx",
       "app/src/components/admin/controls/controls-section.tsx",
-      "app/src/routes/_authed/admin/enterprise.tsx"
+      "app/src/components/settings/team/idle-computers-section.tsx"
     ],
-    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+    "reason": "待并入：电脑与设备的闲置电脑一节已是唯一的字面量写入点（Task 6）；剩下的是 controls-section 的动态写入（键是变量，扫描器并入每个键），随 PR3-PR5 合并 controls-section 后删除本条"
   },
   {
     "mutation": "setCapabilityMutationOptions",

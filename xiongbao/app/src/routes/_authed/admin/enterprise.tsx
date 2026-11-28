@@ -1,16 +1,13 @@
 import {
   IconChartBar,
   IconChevronRight,
-  IconDeviceDesktop,
   IconFingerprint,
   IconKey,
-  IconNetwork,
   IconPlug,
   IconShieldLock,
   IconTerminal2,
   IconToggleRight,
   IconUsersGroup,
-  IconWorld,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -30,7 +27,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Item,
   ItemActions,
@@ -52,68 +48,24 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  removeNetworkPolicyMutationOptions,
   setCapabilityMutationOptions,
   setEnterpriseSettingMutationOptions,
-  setNetworkPolicyMutationOptions,
-  terminateInactiveComputersMutationOptions,
 } from "@/lib/enterprise/mutations";
 import {
   actionRecordsQueryOptions,
   type CapabilitySetting,
-  type EgressRule,
   type EnterpriseOverview,
   enterpriseOverviewQueryOptions,
   isMcpServerApproved,
   modelUsageQueryOptions,
-  type NetworkMode,
-  type NetworkPolicy,
   withMcpServerApproval,
 } from "@/lib/enterprise/queries";
 import { queryClient } from "@/query-client";
 
-// M4: 待接入 上游已把本页各分区拆到 权限/模型提供方/身份提供方/电脑/插件/自动学习/审计 页，并把 /admin/enterprise 重定向到 /admin；fork 保留本页，与新页有重复的设置项
+// M4: 待接入 上游已把本页各分区拆到 权限/模型提供方/身份提供方/电脑/插件/自动学习/审计 页，并把 /admin/enterprise 重定向到 /admin；fork 保留本页，与新页有重复的设置项（网络与闲置电脑已搬到 设置 › 电脑与设备）
 export const Route = createFileRoute("/_authed/admin/enterprise")({
   component: EnterprisePage,
 });
-
-const MODE_NAMES: Record<NetworkMode, string> = {
-  allow_all: "允许所有网络访问",
-  defaults_plus_allowlist: "默认目的地加团队白名单",
-  allowlist_only: "只允许团队白名单",
-};
-
-/** One rule per line: `example.com`, `*.corp.example`, or `10.0.0.0/8 443,8443`. */
-function rulesFromText(text: string): EgressRule[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [value = "", ports] = line.split(/\s+/, 2);
-      return /^[\d.:a-fA-F]+(\/\d+)?$/.test(value) &&
-        /[\d]/.test(value) &&
-        /[.:]/.test(value)
-        ? { type: "cidr" as const, value, ...(ports ? { ports } : {}) }
-        : { type: "domain" as const, value };
-    });
-}
-
-function rulesToText(rules: EgressRule[]): string {
-  return rules
-    .map((rule) =>
-      rule.type === "domain"
-        ? rule.value
-        : `${rule.value}${rule.ports ? ` ${rule.ports}` : ""}`,
-    )
-    .join("\n");
-}
-
-function summarizePolicy(policy: NetworkPolicy | undefined): string {
-  if (!policy) return "没有策略：员工的电脑可以访问集群允许的任何地方";
-  const count = policy.rules.length;
-  return `${MODE_NAMES[policy.mode]} · ${count} 条规则${policy.locked ? " · 已锁定" : ""}`;
-}
 
 function EnterprisePage() {
   const overview = useQuery(enterpriseOverviewQueryOptions());
@@ -125,7 +77,7 @@ function EnterprisePage() {
 
   return (
     <PageShell
-      description="成员能用什么、员工的电脑怎么访问网络、以及会记录哪些内容。每次改动都会进入审计记录。"
+      description="成员能用什么，以及会记录哪些内容。每次改动都会进入审计记录。"
       title="企业管控"
     >
       {failure ? (
@@ -174,11 +126,7 @@ function EnterpriseSections({
   saving: boolean;
 }) {
   const [overridesOpen, setOverridesOpen] = useState(false);
-  const [networkScope, setNetworkScope] = useState<
-    { scopeKind: "organization" | "group"; scopeId: string } | undefined
-  >();
   const [modelsOpen, setModelsOpen] = useState(false);
-  const [daysOpen, setDaysOpen] = useState(false);
   const { settings } = data;
   const overrideCount = data.capabilities.reduce(
     (count, capability) =>
@@ -187,10 +135,6 @@ function EnterpriseSections({
       Object.keys(capability.groups).length,
     0,
   );
-  const organizationPolicy = data.network.find(
-    (row) => row.scopeKind === "organization",
-  );
-  const groupPolicies = data.network.filter((row) => row.scopeKind === "group");
 
   return (
     <>
@@ -300,78 +244,6 @@ function EnterpriseSections({
             </ItemActions>
           </Item>
         </PageRows>
-      </PageSection>
-
-      <PageSection
-        description="员工的电脑可以连到哪里。几秒内应用到正在运行的电脑上，无需重启。分组策略会替换组织策略，除非组织策略已锁定。"
-        title="网络"
-      >
-        <PageRows>
-          <Item
-            render={
-              <button
-                onClick={() =>
-                  setNetworkScope({ scopeKind: "organization", scopeId: "" })
-                }
-                type="button"
-              />
-            }
-            size="sm"
-          >
-            <ItemMedia variant="icon">
-              <IconWorld />
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle>组织</ItemTitle>
-              <ItemDescription>
-                {summarizePolicy(organizationPolicy)}
-              </ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <IconChevronRight className="size-4 text-muted-foreground" />
-            </ItemActions>
-          </Item>
-          {groupPolicies.map((policy) => (
-            <div key={policy.scopeId}>
-              <Separator />
-              <Item
-                render={
-                  <button
-                    onClick={() =>
-                      setNetworkScope({
-                        scopeKind: "group",
-                        scopeId: policy.scopeId,
-                      })
-                    }
-                    type="button"
-                  />
-                }
-                size="sm"
-              >
-                <ItemMedia variant="icon">
-                  <IconNetwork />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle>分组：{policy.scopeId}</ItemTitle>
-                  <ItemDescription>{summarizePolicy(policy)}</ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <IconChevronRight className="size-4 text-muted-foreground" />
-                </ItemActions>
-              </Item>
-            </div>
-          ))}
-        </PageRows>
-        {data.groups.length > 0 ? (
-          <Button
-            className="mt-4"
-            onClick={() => setNetworkScope({ scopeKind: "group", scopeId: "" })}
-            size="sm"
-            variant="outline"
-          >
-            添加分组策略
-          </Button>
-        ) : null}
       </PageSection>
 
       <PageSection
@@ -553,46 +425,11 @@ function EnterpriseSections({
         {settings.actionRecording ? <RecordedActions /> : null}
       </PageSection>
 
-      <PageSection
-        description="停掉电脑会结束上面正在运行的员工，磁盘会保留；员工下次会话时会拿到一台新电脑。要停掉某个人的电脑，请到成员页操作。"
-        title="电脑"
-      >
-        <PageRows>
-          <Item
-            render={<button onClick={() => setDaysOpen(true)} type="button" />}
-            size="sm"
-          >
-            <ItemMedia variant="icon">
-              <IconDeviceDesktop />
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle>停掉闲置电脑</ItemTitle>
-              <ItemDescription>
-                {settings.inactiveComputerDays === 0
-                  ? "关"
-                  : `闲置 ${settings.inactiveComputerDays} 天后`}
-              </ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <IconChevronRight className="size-4 text-muted-foreground" />
-            </ItemActions>
-          </Item>
-        </PageRows>
-        <SweepNow />
-      </PageSection>
-
       <OverridesDialog
         data={data}
         onOpenChange={setOverridesOpen}
         open={overridesOpen}
       />
-      {networkScope ? (
-        <NetworkDialog
-          data={data}
-          initial={networkScope}
-          onClose={() => setNetworkScope(undefined)}
-        />
-      ) : null}
       <ListDialog
         description="每行一个模型，格式为 提供方/模型，例如 openai/gpt-5.6-terra。"
         initial={settings.modelAllowlist.models}
@@ -602,12 +439,6 @@ function EnterpriseSections({
         }
         open={modelsOpen}
         title="允许的模型"
-      />
-      <DaysDialog
-        initial={settings.inactiveComputerDays}
-        onClose={() => setDaysOpen(false)}
-        onSave={(days) => onSetting("inactiveComputerDays", days)}
-        open={daysOpen}
       />
     </>
   );
@@ -701,32 +532,6 @@ function RecordedActions() {
         </div>
       ))}
     </PageRows>
-  );
-}
-
-function SweepNow() {
-  const sweep = useMutation(terminateInactiveComputersMutationOptions());
-  return (
-    <div className="mt-4 flex items-center gap-3">
-      <Button
-        disabled={sweep.isPending}
-        onClick={() => sweep.mutate()}
-        size="sm"
-        variant="outline"
-      >
-        {sweep.isPending ? "正在停止…" : "立即停掉闲置电脑"}
-      </Button>
-      {sweep.data ? (
-        <span className="text-muted-foreground text-sm">
-          已停掉 {sweep.data.stopped.length} 台。
-        </span>
-      ) : null}
-      {sweep.error ? (
-        <span className="text-destructive text-sm" role="alert">
-          {sweep.error.message}
-        </span>
-      ) : null}
-    </div>
   );
 }
 
@@ -849,170 +654,6 @@ function OverridesDialog({
   );
 }
 
-function NetworkDialog({
-  data,
-  initial,
-  onClose,
-}: {
-  data: EnterpriseOverview;
-  initial: { scopeKind: "organization" | "group"; scopeId: string };
-  onClose: () => void;
-}) {
-  const existing = data.network.find(
-    (row) =>
-      row.scopeKind === initial.scopeKind && row.scopeId === initial.scopeId,
-  );
-  const [group, setGroup] = useState(initial.scopeId || data.groups[0] || "");
-  const [mode, setMode] = useState<NetworkMode>(
-    existing?.mode ?? "defaults_plus_allowlist",
-  );
-  const [rules, setRules] = useState(rulesToText(existing?.rules ?? []));
-  const [locked, setLocked] = useState(existing?.locked ?? false);
-  const save = useMutation(setNetworkPolicyMutationOptions(queryClient));
-  const remove = useMutation(removeNetworkPolicyMutationOptions(queryClient));
-  const scopeId = initial.scopeKind === "group" ? group : "";
-
-  return (
-    <Dialog onOpenChange={(open) => (open ? undefined : onClose())} open>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {initial.scopeKind === "organization"
-              ? "组织网络策略"
-              : "分组网络策略"}
-          </DialogTitle>
-        </DialogHeader>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate(
-              {
-                scopeKind: initial.scopeKind,
-                scopeId,
-                mode,
-                rules: rulesFromText(rules),
-                locked,
-              },
-              { onSuccess: onClose },
-            );
-          }}
-        >
-          <DialogBody className="mt-4 space-y-4 overflow-y-auto">
-            {initial.scopeKind === "group" && !initial.scopeId ? (
-              <div className="space-y-1.5">
-                <Label>分组</Label>
-                <Select
-                  onValueChange={(value) => setGroup(String(value))}
-                  value={group}
-                >
-                  <SelectTrigger aria-label="分组">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {data.groups.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <div className="space-y-1.5">
-              <Label>模式</Label>
-              <Select
-                onValueChange={(value) => setMode(value as NetworkMode)}
-                value={mode}
-              >
-                <SelectTrigger aria-label="模式">
-                  <SelectValue>{MODE_NAMES[mode]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {(Object.keys(MODE_NAMES) as NetworkMode[]).map(
-                      (candidate) => (
-                        <SelectItem key={candidate} value={candidate}>
-                          {MODE_NAMES[candidate]}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="network-rules">白名单</Label>
-              <Textarea
-                className="font-mono text-xs"
-                id="network-rules"
-                onChange={(event) => setRules(event.target.value)}
-                placeholder={"example.com\n*.corp.example\n10.0.0.0/8 443,5432"}
-                rows={8}
-                value={rules}
-              />
-              <p className="text-muted-foreground text-xs">
-                每行一条。域名会覆盖它的子域名；*.name 只覆盖子域名。IP
-                段可以带端口。默认目的地有{" "}
-                {data.defaultDestinations.slice(0, 4).join("、")} 等，另有{" "}
-                {data.defaultDestinations.length - 4} 个软件包和源码站点。
-              </p>
-            </div>
-            {initial.scopeKind === "organization" ? (
-              <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="network-locked">
-                  锁定：分组不能替换这条策略
-                </Label>
-                <Switch
-                  checked={locked}
-                  id="network-locked"
-                  onCheckedChange={setLocked}
-                />
-              </div>
-            ) : null}
-            {(save.error ?? remove.error) ? (
-              <p className="text-destructive text-sm" role="alert">
-                {(save.error ?? remove.error)?.message}
-              </p>
-            ) : null}
-          </DialogBody>
-          <DialogFooter className="mt-4">
-            {existing ? (
-              <Button
-                disabled={remove.isPending}
-                onClick={() =>
-                  remove.mutate(
-                    { scopeKind: initial.scopeKind, scopeId },
-                    { onSuccess: onClose },
-                  )
-                }
-                size="sm"
-                type="button"
-                variant="destructive"
-              >
-                移除策略
-              </Button>
-            ) : null}
-            <Button onClick={onClose} size="sm" type="button" variant="outline">
-              取消
-            </Button>
-            <Button
-              disabled={
-                save.isPending || (initial.scopeKind === "group" && !scopeId)
-              }
-              size="sm"
-              type="submit"
-            >
-              {save.isPending ? "正在保存…" : "保存"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function ListDialog({
   open,
   title,
@@ -1059,62 +700,6 @@ function ListDialog({
                   .map((line) => line.trim())
                   .filter(Boolean),
               );
-              onClose();
-            }}
-            size="sm"
-            type="button"
-          >
-            保存
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function DaysDialog({
-  open,
-  initial,
-  onSave,
-  onClose,
-}: {
-  open: boolean;
-  initial: number;
-  onSave: (days: number) => void;
-  onClose: () => void;
-}) {
-  const [days, setDays] = useState(String(initial));
-  const parsed = Number(days);
-  const valid = Number.isInteger(parsed) && parsed >= 0 && parsed <= 3650;
-  return (
-    <Dialog
-      onOpenChange={(next) => (next ? setDays(String(initial)) : onClose())}
-      open={open}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>停掉闲置电脑</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="mt-4 space-y-2">
-          <Label htmlFor="inactive-days">闲置天数</Label>
-          <Input
-            id="inactive-days"
-            inputMode="numeric"
-            onChange={(event) => setDays(event.target.value)}
-            value={days}
-          />
-          <p className="text-muted-foreground text-xs">
-            填 0 表示关闭。每小时检查一次。
-          </p>
-        </DialogBody>
-        <DialogFooter className="mt-4">
-          <Button onClick={onClose} size="sm" type="button" variant="outline">
-            取消
-          </Button>
-          <Button
-            disabled={!valid}
-            onClick={() => {
-              onSave(parsed);
               onClose();
             }}
             size="sm"

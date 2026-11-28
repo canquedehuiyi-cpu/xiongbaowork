@@ -43,7 +43,6 @@ import { Route as AuthedAdminSplatRouteImport } from './routes/_authed/admin/$'
 import { Route as AuthedAdminApprovalsRouteImport } from './routes/_authed/admin/approvals'
 import { Route as AuthedAdminAuditRouteImport } from './routes/_authed/admin/audit'
 import { Route as AuthedAdminBoundariesRouteImport } from './routes/_authed/admin/boundaries'
-import { Route as AuthedAdminComputersRouteImport } from './routes/_authed/admin/computers'
 import { Route as AuthedAdminCredentialsRouteImport } from './routes/_authed/admin/credentials'
 import { Route as AuthedAdminEnterpriseRouteImport } from './routes/_authed/admin/enterprise'
 import { Route as AuthedAdminIdentityProvidersRouteImport } from './routes/_authed/admin/identity-providers'
@@ -111,7 +110,6 @@ import { Route as AuthedAdminPluginsComposioRouteImport } from './routes/_authed
 import { Route as AuthedAdminSkillsSlugRouteImport } from './routes/_authed/admin/skills_.$slug'
 import { Route as AuthedAdminSkillsNewRouteImport } from './routes/_authed/admin/skills_.new'
 import { Route as AuthedSettingsPersonalActivityRouteImport } from './routes/_authed/settings/_personal/activity'
-import { Route as AuthedSettingsPersonalComputerRouteImport } from './routes/_authed/settings/_personal/computer'
 import { Route as AuthedSettingsPersonalCredentialsRouteImport } from './routes/_authed/settings/_personal/credentials'
 import { Route as AuthedSettingsPersonalSkillsRouteImport } from './routes/_authed/settings/_personal/skills'
 import { Route as AuthedSettingsComponentsGalleryIndexRouteImport } from './routes/_authed/settings/components-gallery/index'
@@ -307,11 +305,6 @@ const AuthedAdminAuditRoute = AuthedAdminAuditRouteImport.update({
 const AuthedAdminBoundariesRoute = AuthedAdminBoundariesRouteImport.update({
   id: '/boundaries',
   path: '/boundaries',
-  getParentRoute: () => AuthedAdminRouteRoute,
-} as any)
-const AuthedAdminComputersRoute = AuthedAdminComputersRouteImport.update({
-  id: '/computers',
-  path: '/computers',
   getParentRoute: () => AuthedAdminRouteRoute,
 } as any)
 const AuthedAdminCredentialsRoute = AuthedAdminCredentialsRouteImport.update({
@@ -677,12 +670,6 @@ const AuthedSettingsPersonalActivityRoute =
     path: '/activity',
     getParentRoute: () => AuthedSettingsPersonalRoute,
   } as any)
-const AuthedSettingsPersonalComputerRoute =
-  AuthedSettingsPersonalComputerRouteImport.update({
-    id: '/computer',
-    path: '/computer',
-    getParentRoute: () => AuthedSettingsPersonalRoute,
-  } as any)
 const AuthedSettingsPersonalCredentialsRoute =
   AuthedSettingsPersonalCredentialsRouteImport.update({
     id: '/credentials',
@@ -878,7 +865,6 @@ export interface FileRoutesByFullPath {
   '/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
-  '/admin/computers': typeof AuthedAdminComputersRoute
   '/admin/credentials': typeof AuthedAdminCredentialsRoute
   '/admin/enterprise': typeof AuthedAdminEnterpriseRoute
   '/admin/identity-providers': typeof AuthedAdminIdentityProvidersRoute
@@ -939,7 +925,6 @@ export interface FileRoutesByFullPath {
   '/admin/skills/$slug': typeof AuthedAdminSkillsSlugRoute
   '/admin/skills/new': typeof AuthedAdminSkillsNewRoute
   '/settings/activity': typeof AuthedSettingsPersonalActivityRoute
-  '/settings/computer': typeof AuthedSettingsPersonalComputerRoute
   '/settings/credentials': typeof AuthedSettingsPersonalCredentialsRoute
   '/settings/skills': typeof AuthedSettingsPersonalSkillsRoute
   '/settings/components-gallery/$name': typeof AuthedSettingsComponentsGalleryNameRoute
@@ -1004,7 +989,6 @@ export interface FileRoutesByTo {
   '/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
-  '/admin/computers': typeof AuthedAdminComputersRoute
   '/admin/credentials': typeof AuthedAdminCredentialsRoute
   '/admin/enterprise': typeof AuthedAdminEnterpriseRoute
   '/admin/identity-providers': typeof AuthedAdminIdentityProvidersRoute
@@ -1065,7 +1049,6 @@ export interface FileRoutesByTo {
   '/admin/skills/$slug': typeof AuthedAdminSkillsSlugRoute
   '/admin/skills/new': typeof AuthedAdminSkillsNewRoute
   '/settings/activity': typeof AuthedSettingsPersonalActivityRoute
-  '/settings/computer': typeof AuthedSettingsPersonalComputerRoute
   '/settings/credentials': typeof AuthedSettingsPersonalCredentialsRoute
   '/settings/skills': typeof AuthedSettingsPersonalSkillsRoute
   '/settings/components-gallery/$name': typeof AuthedSettingsComponentsGalleryNameRoute
@@ -1135,7 +1118,6 @@ export interface FileRoutesById {
   '/_authed/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/_authed/admin/audit': typeof AuthedAdminAuditRoute
   '/_authed/admin/boundaries': typeof AuthedAdminBoundariesRoute
-  '/_authed/admin/computers': typeof AuthedAdminComputersRoute
   '/_authed/admin/credentials': typeof AuthedAdminCredentialsRoute
   '/_authed/admin/enterprise': typeof AuthedAdminEnterpriseRoute
   '/_authed/admin/identity-providers': typeof AuthedAdminIdentityProvidersRoute
@@ -1198,7 +1180,6 @@ export interface FileRoutesById {
   '/_authed/admin/skills_/$slug': typeof AuthedAdminSkillsSlugRoute
   '/_authed/admin/skills_/new': typeof AuthedAdminSkillsNewRoute
   '/_authed/settings/_personal/activity': typeof AuthedSettingsPersonalActivityRoute
-  '/_authed/settings/_personal/computer': typeof AuthedSettingsPersonalComputerRoute
   '/_authed/settings/_personal/credentials': typeof AuthedSettingsPersonalCredentialsRoute
   '/_authed/settings/_personal/skills': typeof AuthedSettingsPersonalSkillsRoute
   '/_authed/settings/components-gallery/$name': typeof AuthedSettingsComponentsGalleryNameRoute
@@ -1268,7 +1249,6 @@ export interface FileRouteTypes {
     | '/admin/approvals'
     | '/admin/audit'
     | '/admin/boundaries'
-    | '/admin/computers'
     | '/admin/credentials'
     | '/admin/enterprise'
     | '/admin/identity-providers'
@@ -1329,7 +1309,6 @@ export interface FileRouteTypes {
     | '/admin/skills/$slug'
     | '/admin/skills/new'
     | '/settings/activity'
-    | '/settings/computer'
     | '/settings/credentials'
     | '/settings/skills'
     | '/settings/components-gallery/$name'
@@ -1394,7 +1373,6 @@ export interface FileRouteTypes {
     | '/admin/approvals'
     | '/admin/audit'
     | '/admin/boundaries'
-    | '/admin/computers'
     | '/admin/credentials'
     | '/admin/enterprise'
     | '/admin/identity-providers'
@@ -1455,7 +1433,6 @@ export interface FileRouteTypes {
     | '/admin/skills/$slug'
     | '/admin/skills/new'
     | '/settings/activity'
-    | '/settings/computer'
     | '/settings/credentials'
     | '/settings/skills'
     | '/settings/components-gallery/$name'
@@ -1524,7 +1501,6 @@ export interface FileRouteTypes {
     | '/_authed/admin/approvals'
     | '/_authed/admin/audit'
     | '/_authed/admin/boundaries'
-    | '/_authed/admin/computers'
     | '/_authed/admin/credentials'
     | '/_authed/admin/enterprise'
     | '/_authed/admin/identity-providers'
@@ -1587,7 +1563,6 @@ export interface FileRouteTypes {
     | '/_authed/admin/skills_/$slug'
     | '/_authed/admin/skills_/new'
     | '/_authed/settings/_personal/activity'
-    | '/_authed/settings/_personal/computer'
     | '/_authed/settings/_personal/credentials'
     | '/_authed/settings/_personal/skills'
     | '/_authed/settings/components-gallery/$name'
@@ -1867,13 +1842,6 @@ declare module '@tanstack/react-router' {
       path: '/boundaries'
       fullPath: '/admin/boundaries'
       preLoaderRoute: typeof AuthedAdminBoundariesRouteImport
-      parentRoute: typeof AuthedAdminRouteRoute
-    }
-    '/_authed/admin/computers': {
-      id: '/_authed/admin/computers'
-      path: '/computers'
-      fullPath: '/admin/computers'
-      preLoaderRoute: typeof AuthedAdminComputersRouteImport
       parentRoute: typeof AuthedAdminRouteRoute
     }
     '/_authed/admin/credentials': {
@@ -2345,13 +2313,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSettingsPersonalActivityRouteImport
       parentRoute: typeof AuthedSettingsPersonalRoute
     }
-    '/_authed/settings/_personal/computer': {
-      id: '/_authed/settings/_personal/computer'
-      path: '/computer'
-      fullPath: '/settings/computer'
-      preLoaderRoute: typeof AuthedSettingsPersonalComputerRouteImport
-      parentRoute: typeof AuthedSettingsPersonalRoute
-    }
     '/_authed/settings/_personal/credentials': {
       id: '/_authed/settings/_personal/credentials'
       path: '/credentials'
@@ -2549,7 +2510,6 @@ interface AuthedAdminRouteRouteChildren {
   AuthedAdminApprovalsRoute: typeof AuthedAdminApprovalsRoute
   AuthedAdminAuditRoute: typeof AuthedAdminAuditRoute
   AuthedAdminBoundariesRoute: typeof AuthedAdminBoundariesRoute
-  AuthedAdminComputersRoute: typeof AuthedAdminComputersRoute
   AuthedAdminCredentialsRoute: typeof AuthedAdminCredentialsRoute
   AuthedAdminEnterpriseRoute: typeof AuthedAdminEnterpriseRoute
   AuthedAdminIdentityProvidersRoute: typeof AuthedAdminIdentityProvidersRoute
@@ -2585,7 +2545,6 @@ const AuthedAdminRouteRouteChildren: AuthedAdminRouteRouteChildren = {
   AuthedAdminApprovalsRoute: AuthedAdminApprovalsRoute,
   AuthedAdminAuditRoute: AuthedAdminAuditRoute,
   AuthedAdminBoundariesRoute: AuthedAdminBoundariesRoute,
-  AuthedAdminComputersRoute: AuthedAdminComputersRoute,
   AuthedAdminCredentialsRoute: AuthedAdminCredentialsRoute,
   AuthedAdminEnterpriseRoute: AuthedAdminEnterpriseRoute,
   AuthedAdminIdentityProvidersRoute: AuthedAdminIdentityProvidersRoute,
@@ -2621,7 +2580,6 @@ const AuthedAdminRouteRouteWithChildren =
 
 interface AuthedSettingsPersonalRouteChildren {
   AuthedSettingsPersonalActivityRoute: typeof AuthedSettingsPersonalActivityRoute
-  AuthedSettingsPersonalComputerRoute: typeof AuthedSettingsPersonalComputerRoute
   AuthedSettingsPersonalCredentialsRoute: typeof AuthedSettingsPersonalCredentialsRoute
   AuthedSettingsPersonalSkillsRoute: typeof AuthedSettingsPersonalSkillsRoute
   AuthedSettingsPersonalCredentialsNewRoute: typeof AuthedSettingsPersonalCredentialsNewRoute
@@ -2633,7 +2591,6 @@ interface AuthedSettingsPersonalRouteChildren {
 const AuthedSettingsPersonalRouteChildren: AuthedSettingsPersonalRouteChildren =
   {
     AuthedSettingsPersonalActivityRoute: AuthedSettingsPersonalActivityRoute,
-    AuthedSettingsPersonalComputerRoute: AuthedSettingsPersonalComputerRoute,
     AuthedSettingsPersonalCredentialsRoute:
       AuthedSettingsPersonalCredentialsRoute,
     AuthedSettingsPersonalSkillsRoute: AuthedSettingsPersonalSkillsRoute,

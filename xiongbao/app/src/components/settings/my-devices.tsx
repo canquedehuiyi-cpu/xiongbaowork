@@ -16,9 +16,9 @@ import {
   reviewDeviceActionMutationOptions,
 } from "@/lib/devices/mutations";
 import {
+  type DeviceActionReview,
   deviceActionsQueryOptions,
   devicesQueryOptions,
-  type DeviceActionReview,
 } from "@/lib/devices/queries";
 import { relativeTime } from "@/lib/relative-time";
 
@@ -51,6 +51,7 @@ export function MyDevices() {
   return (
     <PageSection
       description="员工在上面干活的那些机器。每台都主动向外连接这个部署、自己不监听任何端口，所以既不用开入站端口，也就能在防火墙和网络地址转换后面正常工作。"
+      id="my-devices"
       title="我的设备"
     >
       <div className="mt-4 flex flex-col gap-3">

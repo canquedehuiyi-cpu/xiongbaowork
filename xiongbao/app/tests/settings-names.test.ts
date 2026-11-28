@@ -9,7 +9,7 @@ import { appSources, stripComments } from "./i18n-accessible";
  */
 
 /** 旧名。后续 PR 把自己改掉的名字追加到这里（§5.8 左列）。 */
-const RETIRED: readonly string[] = ["偏好设置"];
+const RETIRED: readonly string[] = ["偏好设置", "我的电脑", "我的设备"];
 
 type Kept = { file: string; text: string; reason: string };
 
@@ -17,7 +17,30 @@ type Kept = { file: string; text: string; reason: string };
  * 合法保留的说法：`text` 是含旧名的那段界面字符串的全文（去掉首尾空白）。
  * 例：节名「我的设备」、「从我的电脑招」（5.8：页与入口改叫电脑与设备，节名保留我的设备）。
  */
-const KEPT: readonly Kept[] = [];
+const KEPT: readonly Kept[] = [
+  {
+    file: "app/src/components/settings/my-devices.tsx",
+    text: "我的设备",
+    reason:
+      "§5.8：页与入口改叫电脑与设备，电脑与设备页第一节（#my-devices）的节名保留「我的设备」",
+  },
+  {
+    file: "app/src/components/bots/bots-page.tsx",
+    text: "从我的电脑招",
+    reason:
+      "招人页签的名字（?source=computer，外部员工 Task 10），说的是从本人电脑上招智能体，不是 我 菜单里改名的「我的电脑」入口",
+  },
+  {
+    file: "app/src/components/agents/external/hire-from-computer.tsx",
+    text: "现在请先在「从我的电脑招」里，把电脑上的智能体招进来。",
+    reason: "引用招人页签「从我的电脑招」的名字，同上",
+  },
+  {
+    file: "app/src/skins/xiongbao/contacts.tsx",
+    text: "人才市场 · 从我的电脑招",
+    reason: "引用招人页签「从我的电脑招」的名字，同上",
+  },
+];
 
 type UiString = { file: string; number: number; text: string };
 

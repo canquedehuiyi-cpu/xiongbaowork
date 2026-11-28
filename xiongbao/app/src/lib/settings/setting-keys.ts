@@ -15,4 +15,6 @@ export const SETTING_KEYS: readonly string[] = [
   "appearance.theme",
   "appearance.skin",
   "appearance.messageList",
+  "network.policy.organization",
+  "enterprise.inactiveComputerDays",
 ];

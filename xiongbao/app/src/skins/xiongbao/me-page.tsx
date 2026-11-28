@@ -139,7 +139,7 @@ export function useMeMenu(): MeMenu {
       : []),
     {
       id: "devices",
-      label: "我的电脑",
+      label: "电脑与设备",
       icon: IconDeviceLaptop,
       detail: quota ? `已配对 ${quota.usage.devices} 台` : undefined,
       link: { to: "/settings/devices" },
@@ -275,7 +275,7 @@ const menuClassName = cn(
 
 /**
  * 「我」页面（`/me`，设计稿「我」那一屏）：个人卡（头像、名字、套餐徽标、已召唤几位员工），下面分组的菜单
- * 取代原来的账户菜单——个人资料、我的分身、我的电脑、通知；套餐与用量、外观、设置，管理员多一行「管理」；
+ * 取代原来的账户菜单——个人资料、我的分身、电脑与设备、通知；套餐与用量、外观、设置，管理员多一行「管理」；
  * 最后是退出登录（只在有登录可退的部署上）。
  */
 export function MePage() {

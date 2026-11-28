@@ -67,7 +67,6 @@ export type Scanned = {
 export const SCANNED: readonly Scanned[] = [
   { at: "/admin", file: "_authed/admin/index.tsx" },
   { at: "/admin/boundaries/new", file: "_authed/admin/boundaries_.new.tsx" },
-  { at: "/admin/computers", file: "_authed/admin/computers.tsx" },
   { at: "/admin/credentials/new", file: "_authed/admin/credentials_.new.tsx" },
   // 加载时只有「插件」两个字和一行提示：实测 2 行。读完了是 12 行。
   {
@@ -119,7 +118,6 @@ export const SCANNED: readonly Scanned[] = [
   { at: "/pipelines", file: "_authed/_app/pipelines.tsx", minLines: 5 },
   { at: "/settings", file: "_authed/settings/index.tsx" },
   { at: "/settings/approvals", file: "_authed/settings/approvals.tsx" },
-  { at: "/settings/computer", file: "_authed/settings/_personal/computer.tsx" },
   {
     at: "/settings/credentials/new",
     file: "_authed/settings/_personal/credentials_.new.tsx",

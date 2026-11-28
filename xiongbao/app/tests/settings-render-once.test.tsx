@@ -16,7 +16,7 @@ import { settleReactWork } from "./settle-react-work";
  * 每个设置只渲染一处（spec §10.3）：每种受众下渲染所有话题页和子页，收集 `data-setting-key`，
  * 每个该看见的键恰好出现一次。后续 PR 往 PAGES 里加自己的话题页和子页、往 SETTING_KEYS 里加键。
  */
-const PAGES: readonly string[] = ["/settings"];
+const PAGES: readonly string[] = ["/settings", "/settings/devices"];
 
 const originalFetch = globalThis.fetch;
 const originalWebSocket = globalThis.WebSocket;
@@ -52,8 +52,13 @@ test("SETTING_KEYS 没有重复，也没有空键", () => {
   ).toBe(true);
 });
 
-test("keyVisibleFor：企业设置、能力开关、团队审批只有团队版管理员看得到", () => {
-  for (const key of ["enterprise.x", "capability.y", "approvals.team.z"]) {
+test("keyVisibleFor：企业设置、能力开关、团队审批、网络策略只有团队版管理员看得到", () => {
+  for (const key of [
+    "enterprise.x",
+    "capability.y",
+    "approvals.team.z",
+    "network.policy.organization",
+  ]) {
     expect(keyVisibleFor(key, "team-admin")).toBe(true);
     expect(keyVisibleFor(key, "unknown-edition")).toBe(true);
     expect(keyVisibleFor(key, "team-member")).toBe(false);

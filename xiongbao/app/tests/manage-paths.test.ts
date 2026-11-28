@@ -6,11 +6,16 @@ import {
 } from "@/lib/manage-paths";
 
 /** The address a link goes to: its route with the params put in. */
-function href(link: { to: string; params?: Record<string, string> }): string {
-  return Object.entries(link.params ?? {}).reduce(
+function href(link: {
+  to: string;
+  params?: Record<string, string>;
+  hash?: unknown;
+}): string {
+  const path = Object.entries(link.params ?? {}).reduce(
     (path, [name, value]) => path.replace(`$${name}`, value),
     link.to,
   );
+  return typeof link.hash === "string" ? `${path}#${link.hash}` : path;
 }
 
 /*
@@ -35,7 +40,8 @@ describe("where the pages a person manages live", () => {
     expect(href(paths.skill("triage"))).toBe("/admin/skills/triage");
     expect(href(paths.credentials())).toBe("/admin/credentials");
     expect(href(paths.newCredential())).toBe("/admin/credentials/new");
-    expect(href(paths.computers())).toBe("/admin/computers");
+    // 电脑与设备的团队的电脑一节，与 movedHref("/admin/computers") 同一处（U51）。
+    expect(href(paths.computers())).toBe("/settings/devices#team-computers");
     expect(href(paths.audit())).toBe("/admin/audit");
     expect(paths.pluginsLabel).toBe("插件");
   });
@@ -67,7 +73,8 @@ describe("where the pages a person manages live", () => {
     expect(href(paths.skill("triage"))).toBe("/settings/skills/triage");
     expect(href(paths.credentials())).toBe("/settings/credentials");
     expect(href(paths.newCredential())).toBe("/settings/credentials/new");
-    expect(href(paths.computers())).toBe("/settings/computer");
+    // 电脑与设备的你的员工的浏览器一节，与 movedHref("/settings/computer") 同一处（U52）。
+    expect(href(paths.computers())).toBe("/settings/devices#this-computer");
     expect(href(paths.audit())).toBe("/settings/activity");
   });
 
@@ -83,6 +90,8 @@ describe("where the pages a person manages live", () => {
       "/settings/credentials/new",
     );
     expect(personalAdminRedirect("/admin/audit")).toBe("/settings/activity");
+    // 电脑页的旧地址归 SETTINGS_MOVES（U51），这张表不再写它。
+    expect(personalAdminRedirect("/admin/computers")).toBe("/settings");
     expect(personalAdminRedirect("/admin/enterprise")).toBe("/settings");
     expect(personalAppsAddress("/arcade/")).toBe("/connections/browse/arcade");
   });

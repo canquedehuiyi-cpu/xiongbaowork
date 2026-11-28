@@ -86,7 +86,6 @@ const TOPICS: SettingsTopic[] = [
     title: "电脑与设备",
     icon: IconDevices,
     linkOptions: { to: "/settings/devices" },
-    owns: ["/settings/computer"],
   },
   {
     id: "notifications",

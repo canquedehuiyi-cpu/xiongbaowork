@@ -25,6 +25,7 @@ import {
 } from "@/lib/settings/moves";
 import { queryClient } from "@/query-client";
 import { routeTree } from "@/routeTree.gen";
+import { renderAt } from "./settings-audience-kit";
 import { settleReactWork } from "./settle-react-work";
 
 /*
@@ -316,3 +317,43 @@ test(
   },
   TEST_MS,
 );
+
+/* -------------------- U51、U52：电脑页并进电脑与设备（Task 6） -------------------- */
+
+test("U51 /admin/computers 对成员也先转走（admin 路由的预检），落在电脑与设备页顶，团队的电脑一节不画", async () => {
+  const { container, finalHref } = await renderAt(
+    "/admin/computers",
+    "team-member",
+  );
+  expect(finalHref()).toBe("/settings/devices#team-computers");
+  expect(container.querySelector("h1")?.textContent).toBe("电脑与设备");
+  expect(container.querySelector("#team-computers")).toBeNull();
+  expect(container.textContent).not.toContain("出了点问题");
+}, 60000);
+
+test("U51 /admin/computers 对管理员落到团队的电脑一节", async () => {
+  const { container, finalHref } = await renderAt(
+    "/admin/computers",
+    "team-admin",
+  );
+  expect(finalHref()).toBe("/settings/devices#team-computers");
+  expect(container.querySelector("section#team-computers")).not.toBeNull();
+}, 60000);
+
+test("U52 /settings/computer 在个人版落到你的员工的浏览器一节", async () => {
+  const { container, finalHref } = await renderAt(
+    "/settings/computer",
+    "personal",
+  );
+  expect(finalHref()).toBe("/settings/devices#this-computer");
+  expect(container.querySelector("section#this-computer")).not.toBeNull();
+}, 60000);
+
+test("服务器发来的电脑页旧地址换成新地址（部署清单、动作推演）", () => {
+  expect(movedHref("/admin/computers")).toBe(
+    "/settings/devices#team-computers",
+  );
+  expect(movedHref("/settings/computer")).toBe(
+    "/settings/devices#this-computer",
+  );
+});

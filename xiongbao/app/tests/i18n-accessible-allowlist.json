@@ -1,25 +1,5 @@
 [
   {
-    "file": "app/src/components/admin/controls/computer-sections.tsx",
-    "text": "Idle computers",
-    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
-  },
-  {
-    "file": "app/src/components/admin/controls/computer-sections.tsx",
-    "text": "Network",
-    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
-  },
-  {
-    "file": "app/src/components/admin/controls/computer-sections.tsx",
-    "text": "Group",
-    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
-  },
-  {
-    "file": "app/src/components/admin/controls/computer-sections.tsx",
-    "text": "Mode",
-    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
-  },
-  {
     "file": "app/src/components/admin/controls/mcp-allowlist-section.tsx",
     "text": "MCP servers",
     "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
@@ -27,11 +7,6 @@
   {
     "file": "app/src/components/admin/controls/mcp-allowlist-section.tsx",
     "text": "Only approved MCP servers",
-    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
-  },
-  {
-    "file": "app/src/components/admin/controls/network-describe.tsx",
-    "text": "Only Salesforce and Google Workspace",
     "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
   },
   {

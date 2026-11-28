@@ -40,7 +40,7 @@ const FIXTURE_AUDIENCE: Record<AudienceName, FixtureAudience> = {
   "unknown-edition": "admin",
 };
 
-/** parity 夹具没有的两个读取：套餐与用量、部署设置清单（两行待设置）。 */
+/** parity 夹具没有的两个读取：套餐与用量、部署设置清单（两行待设置）。另见下面的 `EXTRA_READS`。 */
 const QUOTA = {
   plan: { id: "team", name: "Team" },
   limits: { wakers: 10, tasksPerMonth: 100, devices: 5, customModels: true },
@@ -74,6 +74,64 @@ const SETUP_CHECKLIST = {
     { id: "model", title: "模型", ...NEEDS_SETUP },
     { id: "computer", title: "电脑", ...NEEDS_SETUP },
   ],
+};
+
+/** parity 夹具没有的三个读取：电脑列表、这台电脑上的文件夹、企业管控（网络策略与闲置天数）。 */
+const FLEET = {
+  isolation: "shared",
+  computers: [
+    {
+      computer: "person:dev-local-user",
+      kind: "person",
+      personId: "dev-local-user",
+      person: { name: "dev@xiongbao.local", email: "dev@xiongbao.local" },
+      botId: "agent-analyst",
+      running: true,
+      startedAt: "2026-11-07T04:21:42.051Z",
+      egress: "network policy filter",
+    },
+  ],
+};
+const HOST_ACCESS = {
+  connected: false,
+  desktop: true,
+  grants: [],
+  pending: [],
+};
+const POLICY = {
+  mode: "defaults_plus_allowlist",
+  rules: [{ type: "domain", value: "example.com" }],
+  locked: false,
+  updatedBy: null,
+  updatedAt: "2026-11-07T04:21:42.051Z",
+};
+const ENTERPRISE = {
+  capabilities: [],
+  settings: {
+    ssoRequired: false,
+    actionRecording: false,
+    inactiveComputerDays: 7,
+    modelAllowlist: { enabled: false, models: [] },
+    mcpAllowlist: { enabled: false, servers: [] },
+    proactiveDailyRuns: 24,
+    modelSelection: false,
+  },
+  groups: ["sales"],
+  network: [
+    { scopeKind: "organization", scopeId: "", ...POLICY },
+    { scopeKind: "group", scopeId: "sales", ...POLICY },
+  ],
+  defaultDestinations: ["github.com", "npmjs.org", "pypi.org", "bun.sh", "x.y"],
+  mcpServers: [],
+  builtInModel: null,
+  scim: { configured: false, connectionId: "", baseUrl: null, rotating: false },
+  otel: { configured: false },
+  actionRecordRetentionDays: 30,
+};
+const EXTRA_READS: Record<string, unknown> = {
+  "/api/computers/fleet": FLEET,
+  "/api/host-access": HOST_ACCESS,
+  "/api/admin/enterprise": ENTERPRISE,
 };
 
 export class OfflineWebSocket extends EventTarget {
@@ -121,6 +179,9 @@ export function stubFetchFor(audience: AudienceName): void {
       }
       if (method.toUpperCase() === "GET" && url.pathname === "/api/setup") {
         return Response.json({ checklist: SETUP_CHECKLIST });
+      }
+      if (method.toUpperCase() === "GET" && url.pathname in EXTRA_READS) {
+        return Response.json(EXTRA_READS[url.pathname]);
       }
       let body: unknown;
       if (typeof init?.body === "string") {
@@ -207,6 +268,7 @@ const TEAM_ADMIN_ONLY_PREFIXES = [
   "enterprise.",
   "capability.",
   "approvals.team.",
+  "network.policy.",
 ];
 
 export function keyVisibleFor(key: string, audience: AudienceName): boolean {

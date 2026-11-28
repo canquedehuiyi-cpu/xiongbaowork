@@ -28,7 +28,6 @@ tests/activity-report-reads-once.test.tsx
 tests/add-app-starts-sign-in.test.tsx
 tests/admin-brokered-row-provider.test.tsx
 tests/admin-install-listing.test.tsx
-tests/admin-network-describe.test.tsx
 tests/admin-plugin-crew-grant.test.tsx
 tests/admin-providers.test.tsx
 tests/admin-skill-crew-grant.test.tsx
@@ -475,6 +474,7 @@ tests/session-memory.test.ts
 tests/settings-about.test.tsx
 tests/settings-account-page.test.tsx
 tests/settings-audience.test.ts
+tests/settings-devices-page.test.tsx
 tests/settings-gating.test.tsx
 tests/settings-moves-links.test.ts
 tests/settings-moves.test.tsx

@@ -5,7 +5,6 @@ import {
   IconChecks,
   IconChevronRight,
   IconCode,
-  IconDeviceDesktop,
   IconKey,
   IconLayoutGrid,
   IconListDetails,
@@ -81,12 +80,6 @@ const SECTIONS: {
         icon: IconChecks,
         linkOptions: { to: "/admin/approvals" },
       },
-      {
-        title: "电脑",
-        description: "员工运行工具用的机器、空闲多久停下，以及它们能连到哪里。",
-        icon: IconDeviceDesktop,
-        linkOptions: { to: "/admin/computers" },
-      },
     ],
   },
   {
@@ -152,7 +145,7 @@ const SECTIONS: {
       {
         title: "企业管控",
         description:
-          "按角色和分组的能力、强制 SSO、SCIM、网络策略、MCP 与模型白名单、操作录制。",
+          "按角色和分组的能力、强制 SSO、SCIM、MCP 与模型白名单、操作录制。",
         icon: IconShieldCheck,
         linkOptions: { to: "/admin/enterprise" },
       },
