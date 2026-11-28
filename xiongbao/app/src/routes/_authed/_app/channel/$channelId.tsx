@@ -87,7 +87,8 @@ function RouteComponent() {
   const channel = useQuery(channelQueryOptions(channelId));
   const navigate = Route.useNavigate();
   // 预览是详情栏的第三种内容：和看电脑、员工资料互斥，开哪个就清掉另外两个的参数。
-  const preview = useRoutePreviewTarget();
+  // 单聊的老清单（没有本轮产物事件时）给的是不带范围的文件，这里认它。
+  const preview = useRoutePreviewTarget({ unscopedFiles: true });
   const previewing = preview.target !== undefined;
   const workbench = useSkinId() === "xiongbao";
   // 默认皮肤没有员工资料抽屉了：旧链接、浏览器历史里残留的 `?settings` 不读，不再压住自动看屏幕。

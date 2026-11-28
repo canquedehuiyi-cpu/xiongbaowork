@@ -61,8 +61,14 @@ type Search = {
   keep?: string;
 };
 
-function Page({ content }: { content: React.ReactNode }) {
-  const preview = useRoutePreviewTarget();
+function Page({
+  content,
+  unscopedFiles,
+}: {
+  content: React.ReactNode;
+  unscopedFiles: boolean;
+}) {
+  const preview = useRoutePreviewTarget({ unscopedFiles });
   return (
     <PreviewTargetContext.Provider value={preview}>
       <DetailPanel
@@ -85,6 +91,8 @@ async function openPage(
   content: React.ReactNode,
   serve: typeof fetch = (async () =>
     Response.json({}, { status: 404 })) as unknown as typeof fetch,
+  /** 单聊路由才认不带范围的文件；默认按群聊这类页面。 */
+  unscopedFiles = false,
 ) {
   globalThis.fetch = serve;
   const root = createRootRoute();
@@ -97,7 +105,7 @@ async function openPage(
       ...(raw.settings === true ? { settings: true } : {}),
       ...(typeof raw.keep === "string" ? { keep: raw.keep } : {}),
     }),
-    component: () => <Page content={content} />,
+    component: () => <Page content={content} unscopedFiles={unscopedFiles} />,
   });
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(search))
@@ -342,6 +350,7 @@ test("the plain list (no event) has 预览 too, unscoped like its download", asy
     {},
     notes.map((note) => <div key={note.key}>{note.node}</div>),
     serve,
+    true,
   );
   const button = await waitFor(() =>
     ui().getByRole("button", { name: "预览 测试-test.txt" }),
@@ -386,4 +395,22 @@ test("decodePreview keeps a file with no scope, and still refuses a program with
   expect(
     decodePreview(raw({ botId: "b1", path: "a.txt", scope: { channel: "c" } })),
   ).toBeUndefined();
+});
+
+/*
+ * 不带范围的文件目标只在单聊路由认（v0.2.17 修复评审）：群聊页地址里拼出这样一个 `?preview=`，面板不开，
+ * 否则会显示看的人自己电脑上恰好同名的文件。带范围的照常打开。
+ */
+test("only the one-to-one route opens an unscoped file from the address", async () => {
+  const unscoped = encodePreview({ botId: "b1", path: "out/报告.pdf" });
+  await openPage({ preview: unscoped }, <p>group</p>);
+  expect(panel()).toBeNull();
+  cleanup();
+
+  await openPage({ preview: encodePreview(TARGET) }, <p>group</p>);
+  expect(panel()).not.toBeNull();
+  cleanup();
+
+  await openPage({ preview: unscoped }, <p>chat</p>, undefined, true);
+  expect(panel()).not.toBeNull();
 });

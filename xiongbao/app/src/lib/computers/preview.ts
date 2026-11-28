@@ -150,11 +150,30 @@ export type PreviewController = {
  * 打开时清掉 `watch` / `settings`（右侧详情栏同一时间只放一种内容），关闭时只删 `preview`，其余参数不动。
  * 地址里的坏值读成没有目标：面板不开。
  */
-export function useRoutePreviewTarget(): PreviewController {
+export function useRoutePreviewTarget({
+  unscopedFiles = false,
+}: {
+  /**
+   * 认不认不带范围的文件目标。只有单聊路由给 true：不带范围的文件只出自单聊的老清单，按看的人自己的那台
+   * 电脑取。别的页面（群聊）地址里拼出这样一个目标时读成没有，面板不开：否则群聊里会显示看的人自己电脑上
+   * 恰好同名的文件，容易看混。
+   */
+  unscopedFiles?: boolean;
+} = {}): PreviewController {
   const search = useSearch({ strict: false }) as { preview?: unknown };
   const navigate = useNavigate();
   const raw = typeof search.preview === "string" ? search.preview : undefined;
-  const target = useMemo(() => decodePreview(raw), [raw]);
+  const target = useMemo(() => {
+    const decoded = decodePreview(raw);
+    if (
+      decoded !== undefined &&
+      !unscopedFiles &&
+      !isAppTarget(decoded) &&
+      decoded.scope === undefined
+    )
+      return undefined;
+    return decoded;
+  }, [raw, unscopedFiles]);
   return useMemo(
     () => ({
       target,
