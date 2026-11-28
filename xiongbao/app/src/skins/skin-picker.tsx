@@ -60,7 +60,7 @@ export function SkinPicker() {
               if (id && id !== skin) save.mutate(id);
             }}
           >
-            <SelectTrigger aria-label="皮肤">
+            <SelectTrigger aria-label="皮肤" data-setting-key="appearance.skin">
               <SelectValue>{SKINS[skin].name}</SelectValue>
             </SelectTrigger>
             {/* Wider than the trigger, so each skin's description has room to wrap. */}

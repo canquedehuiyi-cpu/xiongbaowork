@@ -9,4 +9,10 @@
  * 它们在所有话题页里恰好出现一次，`tests/settings-single-writer.test.ts` 检查写它们的
  * mutation 只被一个组件文件引用。
  */
-export const SETTING_KEYS: readonly string[] = [];
+export const SETTING_KEYS: readonly string[] = [
+  "account.name",
+  "account.instructions",
+  "appearance.theme",
+  "appearance.skin",
+  "appearance.messageList",
+];

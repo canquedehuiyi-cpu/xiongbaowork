@@ -32,6 +32,8 @@ function SetupSettingsPage() {
   return (
     <PageShell
       description="看看哪些已经就绪、哪些还要设置。改完设置并重启后，回到这里再检查一遍。"
+      // 过渡期一律回账户与外观；团队管理页（/settings/team）随后一个 PR 才有，到时按受众分流。
+      backButton={{ label: "账户与外观", linkProps: { to: "/settings" } }}
       title="部署设置"
     >
       <SetupChecklist

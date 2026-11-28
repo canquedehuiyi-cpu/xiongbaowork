@@ -48,7 +48,8 @@ export function PlansPage() {
   return (
     <PageShell
       description="每个套餐允许什么、这个月已经用了多少，以及它们之间怎么切换。这里不收钱：套餐由平台管理员切换，对这个工作空间立刻生效。"
-      title="套餐"
+      backButton={{ label: "账户与外观", linkProps: { to: "/settings" } }}
+      title="套餐与用量"
       width="workbench"
     >
       <PageSection className="mt-6" title="本工作空间">

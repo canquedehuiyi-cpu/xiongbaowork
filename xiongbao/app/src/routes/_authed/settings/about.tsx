@@ -26,13 +26,14 @@ function byName(a: Notice, b: Notice) {
 }
 
 /* 版本号取仓库根 package.json：应用本身没有单独的版本来源，发版时改的就是这一处。 */
-const APP_VERSION = version;
+export const APP_VERSION = version;
 
 /** 产品名、版本，和第三方依赖清单（含随仓库附带的 MIT 许可）。 */
 export function AboutPage() {
   const { productName, companyName } = appConfig.brand;
   return (
     <PageShell
+      backButton={{ label: "账户与外观", linkProps: { to: "/settings" } }}
       title="关于"
       description={`${productName} ${APP_VERSION}${companyName ? ` · © 2026 ${companyName}` : ""}`}
     >

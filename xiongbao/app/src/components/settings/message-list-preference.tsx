@@ -55,7 +55,10 @@ export function MessageListPreference() {
               }
             }}
           >
-            <SelectTrigger aria-label="消息列表突出显示">
+            <SelectTrigger
+              aria-label="消息列表突出显示"
+              data-setting-key="appearance.messageList"
+            >
               <SelectValue>
                 {emphasis
                   ? emphasis === "agent"

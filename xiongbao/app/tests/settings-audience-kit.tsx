@@ -40,6 +40,42 @@ const FIXTURE_AUDIENCE: Record<AudienceName, FixtureAudience> = {
   "unknown-edition": "admin",
 };
 
+/** parity 夹具没有的两个读取：套餐与用量、部署设置清单（两行待设置）。 */
+const QUOTA = {
+  plan: { id: "team", name: "Team" },
+  limits: { wakers: 10, tasksPerMonth: 100, devices: 5, customModels: true },
+  usage: { period: "2026-11", wakers: 2, tasks: 7, devices: 1, models: 0 },
+  tokens: {
+    period: "2026-11",
+    scope: "coworker-calls",
+    calls: 0,
+    reportedCalls: 0,
+    partialCalls: 0,
+    unknownUsageCalls: 0,
+    unsettledCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    complete: true,
+  },
+};
+
+const NEEDS_SETUP = {
+  scope: "deployment",
+  required: false,
+  status: "needs_setup",
+  ready: false,
+  detail: "还没设置。",
+  fix: { kind: "page", label: "去设置", path: "/settings/memory" },
+};
+const SETUP_CHECKLIST = {
+  audience: "admin",
+  rows: [
+    { id: "model", title: "模型", ...NEEDS_SETUP },
+    { id: "computer", title: "电脑", ...NEEDS_SETUP },
+  ],
+};
+
 export class OfflineWebSocket extends EventTarget {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
@@ -79,6 +115,12 @@ export function stubFetchFor(audience: AudienceName): void {
             { status: 500 },
           );
         }
+      }
+      if (method.toUpperCase() === "GET" && url.pathname === "/api/quota") {
+        return Response.json(QUOTA);
+      }
+      if (method.toUpperCase() === "GET" && url.pathname === "/api/setup") {
+        return Response.json({ checklist: SETUP_CHECKLIST });
       }
       let body: unknown;
       if (typeof init?.body === "string") {
