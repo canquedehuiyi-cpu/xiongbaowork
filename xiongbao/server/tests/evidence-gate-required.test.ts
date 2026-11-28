@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   passEvidenceIn,
+  refusedPathText,
   requiredItemMet,
   requiredItemsOf,
 } from "../src/tasks/evidence-gate";
@@ -112,4 +113,28 @@ test("passEvidenceIn", () => {
   expect(passEvidenceIn("vitest 全绿")).toBe(true);
   expect(passEvidenceIn("npm test：3 failed")).toBe(false);
   expect(passEvidenceIn("exit 0")).toBe(false);
+});
+
+/*
+ * 挡回原因里写被拒的路径本身，但只写前 200 个字（v0.2.17 修复评审）：ref 最长 4000 字，原样写进原因会
+ * 把一句话撑成一屏。超出的部分用「…」结尾；按字符截，不把一个汉字或表情切成半个。
+ */
+test("a refused path is quoted in full up to 200 characters, and cut with … past that", () => {
+  expect(refusedPathText("/workspace/测试-test.txt")).toBe(
+    "/workspace/测试-test.txt",
+  );
+  expect(refusedPathText(`  /a/b.txt  `)).toBe("/a/b.txt");
+  const exact = `/${"路".repeat(199)}`;
+  expect(refusedPathText(exact)).toBe(exact);
+  const long = `/${"径".repeat(3999)}`;
+  const cut = refusedPathText(long);
+  expect([...cut]).toHaveLength(201);
+  expect(cut.endsWith("…")).toBe(true);
+  expect(cut.startsWith(`/${"径".repeat(199)}`)).toBe(true);
+  // 表情是两个 UTF-16 单位：截在字符边界上，不留半个。
+  const emoji = `/${"😀".repeat(300)}`;
+  expect([...refusedPathText(emoji)]).toHaveLength(201);
+  expect(refusedPathText(emoji)).not.toMatch(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/,
+  );
 });

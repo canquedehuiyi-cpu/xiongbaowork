@@ -169,6 +169,20 @@ function httpAddress(ref: string): string | undefined {
 
 const nameOf = (item: DeliveryItem) => item.title?.trim() || item.ref.trim();
 
+/** 挡回原因里引用一个被拒路径时最多写这么多个字。 */
+const REFUSED_PATH_CHARS = 200;
+
+/**
+ * 挡回原因里写的那个被拒路径：原样，但最多 {@link REFUSED_PATH_CHARS} 个字，超出的用「…」结尾。ref 最长
+ * 4000 字，原样写进原因会把一句话撑成一屏。按字符（码点）截，不把一个字切成半个。
+ */
+export function refusedPathText(ref: string): string {
+  const chars = [...ref.trim()];
+  return chars.length > REFUSED_PATH_CHARS
+    ? `${chars.slice(0, REFUSED_PATH_CHARS).join("")}…`
+    : chars.join("");
+}
+
 /**
  * The path a `workspace_file` item names, relative to the coworker Bot's own workspace, or
  * undefined.
@@ -774,7 +788,7 @@ export function createEvidenceGate(
                 return {
                   ok: false,
                   // 写被拒的那个路径本身：标题看不出交错的是哪个路径。
-                  reason: `路径「${item.ref.trim()}」不是工作区内的相对路径，交不了。要写文件时用的那个路径本身；绝对路径和越出工作区的都不算。`,
+                  reason: `路径「${refusedPathText(item.ref)}」不是工作区内的相对路径，交不了。要写文件时用的那个路径本身；绝对路径和越出工作区的都不算。`,
                   missing: [name],
                 };
               workspaceFiles.push(path);
