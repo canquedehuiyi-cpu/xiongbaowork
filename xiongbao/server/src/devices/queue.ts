@@ -68,7 +68,7 @@ function originOf(value: unknown): QueuedOrigin | null {
 }
 /** What a paused device answers every new action with until its owner has checked and resumed it. */
 export const DEVICE_PAUSED =
-  "这台设备已暂停：有一项操作可能已经执行，但没有收到结果。请设备的主人先在「设置 › 我的设备」里核查并恢复，再让员工继续操作这台设备。";
+  "这台设备已暂停：有一项操作可能已经执行，但没有收到结果。请设备的主人先在「设置 › 电脑与设备」里核查并恢复，再让员工继续操作这台设备。";
 
 export class DeviceDeliveryError extends Error {
   constructor(

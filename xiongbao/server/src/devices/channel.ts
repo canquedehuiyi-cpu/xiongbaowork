@@ -450,7 +450,7 @@ export function createDeviceChannel(options?: {
               );
             if (await queue.uncertain(target))
               throw new DeviceDeliveryError(
-                "这台设备已暂停：有一项结果不明的操作等待核查。请设备的主人先在「设置 › 我的设备」里核查并恢复，之后才会接受新的操作。",
+                "这台设备已暂停：有一项结果不明的操作等待核查。请设备的主人先在「设置 › 电脑与设备」里核查并恢复，之后才会接受新的操作。",
               );
             return { queued: true, key } as T;
           })();
