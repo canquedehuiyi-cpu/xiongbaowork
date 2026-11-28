@@ -17,6 +17,7 @@ import { ArtifactPreview } from "@/components/channels/artifact-preview";
 import {
   EventArtifacts,
   GroupTurnArtifacts,
+  turnArtifactNotes,
 } from "@/components/channels/turn-artifacts";
 import { DetailPanel } from "@/components/layout/detail-panel";
 import {
@@ -79,9 +80,13 @@ function Page({ content }: { content: React.ReactNode }) {
   );
 }
 
-async function openPage(search: Search, content: React.ReactNode) {
-  globalThis.fetch = (async () =>
-    Response.json({}, { status: 404 })) as unknown as typeof fetch;
+async function openPage(
+  search: Search,
+  content: React.ReactNode,
+  serve: typeof fetch = (async () =>
+    Response.json({}, { status: 404 })) as unknown as typeof fetch,
+) {
+  globalThis.fetch = serve;
   const root = createRootRoute();
   const route = createRoute({
     getParentRoute: () => root,
@@ -280,4 +285,105 @@ test("without a pane to open it, the lists draw no 预览 button", () => {
   );
   expect(ui().queryByRole("button", { name: /预览/ })).toBeNull();
   expect(ui().getByRole("link", { name: "下载 a.pdf" })).toBeTruthy();
+});
+
+/*
+ * 没有 `computer.turn_artifacts` 事件时的老清单（审批开着时，获准的写入发生在每一段观察之外，就是这样）：
+ * 也有「预览」，开的是同一个面板、同一组文件路由。老清单的下载本来就不带范围（看的人自己的那台电脑），
+ * 预览也一样不带，不比下载放得更宽。下载链接不变。
+ */
+test("the plain list (no event) has 预览 too, unscoped like its download", async () => {
+  const asked: string[] = [];
+  const serve = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), "http://localhost/");
+    asked.push(`${url.pathname}${url.search}`);
+    if (url.pathname.endsWith("/local-tools"))
+      return Response.json({ machine: "workspace" });
+    if (url.pathname.endsWith("/files/list") && init?.method === "POST")
+      return Response.json({
+        ok: true,
+        entries: [{ path: "测试-test.txt", kind: "file", bytes: 1000 }],
+      });
+    if (url.pathname.endsWith("/files/text"))
+      return Response.json({ kind: "text", text: "你好", truncated: false });
+    return Response.json({}, { status: 404 });
+  }) as unknown as typeof fetch;
+  const written = [
+    { id: "u1", role: "user", content: "写个文件" },
+    {
+      id: "a1",
+      role: "assistant",
+      content: "",
+      toolCalls: [
+        {
+          id: "t1",
+          type: "function",
+          function: {
+            name: "computer_write_file",
+            arguments: JSON.stringify({ path: "测试-test.txt" }),
+          },
+        },
+      ],
+    },
+    {
+      id: "r1",
+      role: "tool",
+      toolCallId: "t1",
+      content: JSON.stringify({ ok: true, path: "测试-test.txt" }),
+    },
+  ] as never;
+  const notes = turnArtifactNotes({
+    messages: written,
+    botId: "b1",
+    events: [],
+    channelId: "c1",
+  });
+  const router = await openPage(
+    {},
+    notes.map((note) => <div key={note.key}>{note.node}</div>),
+    serve,
+  );
+  const button = await waitFor(() =>
+    ui().getByRole("button", { name: "预览 测试-test.txt" }),
+  );
+  // 下载链接照旧：不带范围的那一条。
+  expect(
+    document
+      .querySelector("[data-artifact-path='测试-test.txt'] a[download]")
+      ?.getAttribute("href"),
+  ).toBe("/api/computers/b1/files/download?path=%E6%B5%8B%E8%AF%95-test.txt");
+  await act(async () => {
+    button.click();
+  });
+  await waitFor(() => expect(searchOf(router).preview).toBeDefined());
+  expect(decodePreview(searchOf(router).preview)).toEqual({
+    botId: "b1",
+    path: "测试-test.txt",
+  });
+  await waitFor(() => expect(panel()).not.toBeNull());
+  await waitFor(() => expect(ui().getByText("你好")).toBeTruthy());
+  expect(asked).toContain(
+    "/api/computers/b1/files/text?path=%E6%B5%8B%E8%AF%95-test.txt",
+  );
+});
+
+test("decodePreview keeps a file with no scope, and still refuses a program with none or a broken scope", () => {
+  expect(decodePreview(encodePreview({ botId: "b1", path: "a.txt" }))).toEqual({
+    botId: "b1",
+    path: "a.txt",
+  });
+  const raw = (value: unknown) =>
+    btoa(JSON.stringify(value))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  expect(
+    decodePreview(raw({ botId: "b1", app: { port: 8000, path: "/" } })),
+  ).toBeUndefined();
+  expect(
+    decodePreview(raw({ botId: "b1", path: "a.txt", scope: null })),
+  ).toBeUndefined();
+  expect(
+    decodePreview(raw({ botId: "b1", path: "a.txt", scope: { channel: "c" } })),
+  ).toBeUndefined();
 });

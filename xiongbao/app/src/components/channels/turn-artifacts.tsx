@@ -29,8 +29,8 @@ import { previewKindOf } from "../../../../shared/preview-kind";
  * 一轮里存下的文件，摆在对话末尾成一页清单。
  *
  * 员工保存文件的那一行写的是它存的路径，一轮存三四个就要划好几屏；人要的又往往不是「你存了没」，
- * 而是「把它给我」。这一页把本轮写成功的文件收在一起，每个都是一条下载链接（为什么有的作用域不给
- * 链接，见 `lib/computers/artifact.ts`）。
+ * 而是「把它给我」。这一页把本轮写成功的文件收在一起，每个都是一条下载链接，能预览的类型旁边还有
+ * 「预览」（为什么有的作用域不给链接，见 `lib/computers/artifact.ts`）。
  *
  * 清单的来源是本轮的写入事件，不是工作区的目录：一个员工的工作区里有它历史上写过的所有东西，
  * 把那份列表说成「本轮产物」是假话。`POST /files/list` 只用来核文件还在不在、顺手报个大小——
@@ -189,23 +189,32 @@ function TurnArtifacts({
         const href = artifactDownloadHref(botId, row.path);
         if (href === undefined) return null;
         return (
-          <a
+          <div
             key={row.path}
-            className="inline-flex min-w-0 max-w-full items-baseline gap-1.5 rounded-[10px] border border-border bg-card px-[10px] py-[5px] underline-offset-4 hover:border-foreground/15 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            className="inline-flex min-w-0 max-w-full items-baseline gap-1.5 self-start rounded-[10px] border border-border bg-card px-[10px] py-[5px]"
             data-artifact-path={row.path}
-            // 空值：文件名由路由的 Content-Disposition 定（安全决策 A4——回来的是附件，不是这个源上的
-            // 一页）。写成 `download` 在 JSX 里等于 true，存下来会变成一个叫 true 的文件。
-            download=""
-            href={href}
-            rel="noopener"
           >
-            <span className="min-w-0 truncate">{row.path}</span>
-            {row.bytes === undefined ? null : (
-              <span className="shrink-0 opacity-70">
-                {formatBytes(row.bytes)}
-              </span>
-            )}
-          </a>
+            <a
+              className="inline-flex min-w-0 max-w-full items-baseline gap-1.5 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              // 空值：文件名由路由的 Content-Disposition 定（安全决策 A4——回来的是附件，不是这个源上的
+              // 一页）。写成 `download` 在 JSX 里等于 true，存下来会变成一个叫 true 的文件。
+              download=""
+              href={href}
+              rel="noopener"
+            >
+              <span className="min-w-0 truncate">{row.path}</span>
+              {row.bytes === undefined ? null : (
+                <span className="shrink-0 opacity-70">
+                  {formatBytes(row.bytes)}
+                </span>
+              )}
+            </a>
+            {/*
+             * 和事件版同一个按钮、同一个面板。不带范围：和这一行的下载一样，按看的人自己的那台电脑取
+             * （老清单只在单聊出现，看的人就是这段对话的主人），不比下载放得更宽。
+             */}
+            <PreviewButton target={{ botId, path: row.path }} />
+          </div>
         );
       })}
       {listed.data?.truncated === true ? (

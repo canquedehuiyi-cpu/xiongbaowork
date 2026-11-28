@@ -84,7 +84,11 @@ describe("preview param", () => {
       ),
     ).toBeUndefined();
     expect(decodePreview("bm90IGpzb24")).toBeUndefined(); // "not json"
-    expect(decodePreview(raw({ botId: "b", path: "p" }))).toBeUndefined();
+    // 没有 scope 的文件是单聊老清单里的（和它的下载一样按自己的电脑取），读得回来；给了坏 scope 的不行。
+    expect(decodePreview(raw({ botId: "b", path: "p" }))).toEqual({
+      botId: "b",
+      path: "p",
+    });
     expect(
       decodePreview(raw({ botId: "b", path: "p", scope: {} })),
     ).toBeUndefined();

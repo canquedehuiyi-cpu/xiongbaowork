@@ -10,11 +10,16 @@ import { normalizedArtifactPath, scopedFileHref } from "./artifact";
 
 export type PreviewScope = { channel: string; run: string } | { task: string };
 
-/** 一个要预览的文件：哪位员工的、哪个路径、在哪次对话的哪次 run（或哪张交付卡）里被宣布。 */
+/**
+ * 一个要预览的文件：哪位员工的、哪个路径、在哪次对话的哪次 run（或哪张交付卡）里被宣布。
+ *
+ * 没有 `scope` 的是单聊老清单里的文件（没有 `computer.turn_artifacts` 事件可依）：和它的下载链接一样，
+ * 文件路由按看的人自己的那台电脑取，不比下载放得更宽。
+ */
 export type FilePreviewTarget = {
   botId: string;
   path: string;
-  scope: PreviewScope;
+  scope?: PreviewScope;
 };
 
 /** 一个运行中的程序：哪位员工的、哪个端口与首页路径、在哪张交付卡（或哪次 run）里被宣布。 */
@@ -84,16 +89,19 @@ export function decodePreview(
     if (typeof parsed !== "object" || parsed === null) return undefined;
     const { botId, path, scope, app } = parsed as Record<string, unknown>;
     if (!nonEmpty(botId)) return undefined;
-    if (typeof scope !== "object" || scope === null) return undefined;
-    const { channel, run, task } = scope as Record<string, unknown>;
+    // 没有 scope 只给文件（单聊老清单，见 `FilePreviewTarget`）；给了就必须是两种之一。
+    const unscopedFile = scope === undefined && app === undefined;
+    if (!unscopedFile && (typeof scope !== "object" || scope === null))
+      return undefined;
+    const { channel, run, task } = (scope ?? {}) as Record<string, unknown>;
     const decodedScope: PreviewScope | undefined =
       nonEmpty(channel) && nonEmpty(run)
         ? { channel, run }
         : nonEmpty(task)
           ? { task }
           : undefined;
-    if (decodedScope === undefined) return undefined;
-    if (app !== undefined) {
+    if (decodedScope === undefined && !unscopedFile) return undefined;
+    if (app !== undefined && decodedScope !== undefined) {
       // 程序变体：不带文件路径，端口和首页路径各自严格校验。
       if (path !== undefined || typeof app !== "object" || app === null)
         return undefined;
@@ -108,7 +116,9 @@ export function decodePreview(
       };
     }
     if (!nonEmpty(path)) return undefined;
-    return { botId, path, scope: decodedScope };
+    return decodedScope === undefined
+      ? { botId, path }
+      : { botId, path, scope: decodedScope };
   } catch {
     return undefined;
   }
@@ -258,8 +268,9 @@ export type OpenResult =
 
 /** 把预览目标的归属（哪次 run 或哪张交付卡）写成打开请求里的字段。 */
 export function scopeFields(
-  scope: PreviewScope,
-): { channel: string; run: string } | { task: string } {
+  scope: PreviewScope | undefined,
+): { channel: string; run: string } | { task: string } | Record<never, never> {
+  if (scope === undefined) return {};
   return "task" in scope
     ? { task: scope.task }
     : { channel: scope.channel, run: scope.run };
