@@ -11,6 +11,7 @@ import { settleReactWork } from "./settle-react-work";
  * 以前卡片只在 pending 时画，决定以后把这一行交还给工具行；「已允许一次」只是点击那一刻组件里的状态，
  * 刷新就没了，批准过的那一步看起来和没问过一样。现在收件箱里那条请求已经有 `decision`，就在工具行上方
  * 画一行紧凑的结果：「已允许一次：保存文件 notes.txt」，不再有按钮。数据是收件箱里本来就有的字段。
+ * 被拒的不画：工具行本身已经说了没做成。
  */
 
 beforeAll(() => GlobalRegistrator.register());
@@ -105,14 +106,28 @@ test("an approved step still says it was allowed once after a reload, with no bu
   }
 });
 
-test("a rejected step still says it was rejected after a reload", async () => {
+/*
+ * 被拒的那一步只留一行：工具行自己已经写着「没有成功」（工具结果里是「你拒绝了这一步」），再画一行
+ * 「已拒绝」是重复（v0.2.17 验收评审，用户决定）。
+ */
+test("a rejected step keeps only its own tool line after a reload, no outcome line", async () => {
   serving();
   for (let reload = 0; reload < 2; reload++) {
     const view = drawFresh("call-denied");
-    expect(await view.findByText("已拒绝：保存文件 secret.txt")).toBeDefined();
+    expect(await view.findByText("保存了文件")).toBeDefined();
+    // 收件箱已经读回来了（同一页上批准过的那条照样画结果行），拒绝的这条仍然没有。
+    await settleReactWork();
+    expect(view.container.querySelector("[data-approval-outcome]")).toBeNull();
+    expect(view.queryByText(/已拒绝/)).toBeNull();
     expect(view.queryByRole("button")).toBeNull();
+    expect(view.queryByRole("region", { name: "等你批准" })).toBeNull();
     cleanup();
   }
+  // 对照：同样的数据，批准的那条有结果行。
+  const approved = drawFresh("call-approved");
+  expect(
+    await approved.findByText("已允许一次：保存文件 notes.txt"),
+  ).toBeDefined();
 });
 
 test("the standing answers name where they hold", async () => {
