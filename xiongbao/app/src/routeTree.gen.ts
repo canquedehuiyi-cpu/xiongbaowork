@@ -39,6 +39,7 @@ import { Route as AuthedAppTeamBotsRouteImport } from './routes/_authed/_app/tea
 import { Route as AuthedAppWakersRouteImport } from './routes/_authed/_app/wakers'
 import { Route as AuthedAppWorkbenchRouteImport } from './routes/_authed/_app/workbench'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedAdminSplatRouteImport } from './routes/_authed/admin/$'
 import { Route as AuthedAdminApprovalsRouteImport } from './routes/_authed/admin/approvals'
 import { Route as AuthedAdminAuditRouteImport } from './routes/_authed/admin/audit'
 import { Route as AuthedAdminBoundariesRouteImport } from './routes/_authed/admin/boundaries'
@@ -55,6 +56,7 @@ import { Route as AuthedAdminProvidersRouteImport } from './routes/_authed/admin
 import { Route as AuthedAdminSkillsRouteImport } from './routes/_authed/admin/skills'
 import { Route as AuthedAdminWhatIfRouteImport } from './routes/_authed/admin/what-if'
 import { Route as AuthedSettingsIndexRouteImport } from './routes/_authed/settings/index'
+import { Route as AuthedSettingsSplatRouteImport } from './routes/_authed/settings/$'
 import { Route as AuthedSettingsPersonalRouteImport } from './routes/_authed/settings/_personal'
 import { Route as AuthedSettingsAboutRouteImport } from './routes/_authed/settings/about'
 import { Route as AuthedSettingsApprovalsRouteImport } from './routes/_authed/settings/approvals'
@@ -287,6 +289,11 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRouteRoute,
 } as any)
+const AuthedAdminSplatRoute = AuthedAdminSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AuthedAdminRouteRoute,
+} as any)
 const AuthedAdminApprovalsRoute = AuthedAdminApprovalsRouteImport.update({
   id: '/approvals',
   path: '/approvals',
@@ -366,6 +373,11 @@ const AuthedAdminWhatIfRoute = AuthedAdminWhatIfRouteImport.update({
 const AuthedSettingsIndexRoute = AuthedSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthedSettingsRouteRoute,
+} as any)
+const AuthedSettingsSplatRoute = AuthedSettingsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AuthedSettingsRouteRoute,
 } as any)
 const AuthedSettingsPersonalRoute = AuthedSettingsPersonalRouteImport.update({
@@ -862,6 +874,7 @@ export interface FileRoutesByFullPath {
   '/team-bots': typeof AuthedAppTeamBotsRoute
   '/wakers': typeof AuthedAppWakersRoute
   '/workbench': typeof AuthedAppWorkbenchRoute
+  '/admin/$': typeof AuthedAdminSplatRoute
   '/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
@@ -877,6 +890,7 @@ export interface FileRoutesByFullPath {
   '/admin/providers': typeof AuthedAdminProvidersRoute
   '/admin/skills': typeof AuthedAdminSkillsRoute
   '/admin/what-if': typeof AuthedAdminWhatIfRoute
+  '/settings/$': typeof AuthedSettingsSplatRoute
   '/settings/about': typeof AuthedSettingsAboutRoute
   '/settings/approvals': typeof AuthedSettingsApprovalsRoute
   '/settings/devices': typeof AuthedSettingsDevicesRoute
@@ -986,6 +1000,7 @@ export interface FileRoutesByTo {
   '/team-bots': typeof AuthedAppTeamBotsRoute
   '/wakers': typeof AuthedAppWakersRoute
   '/workbench': typeof AuthedAppWorkbenchRoute
+  '/admin/$': typeof AuthedAdminSplatRoute
   '/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/admin/audit': typeof AuthedAdminAuditRoute
   '/admin/boundaries': typeof AuthedAdminBoundariesRoute
@@ -1001,6 +1016,7 @@ export interface FileRoutesByTo {
   '/admin/providers': typeof AuthedAdminProvidersRoute
   '/admin/skills': typeof AuthedAdminSkillsRoute
   '/admin/what-if': typeof AuthedAdminWhatIfRoute
+  '/settings/$': typeof AuthedSettingsSplatRoute
   '/settings': typeof AuthedSettingsIndexRoute
   '/settings/about': typeof AuthedSettingsAboutRoute
   '/settings/approvals': typeof AuthedSettingsApprovalsRoute
@@ -1115,6 +1131,7 @@ export interface FileRoutesById {
   '/_authed/_app/team-bots': typeof AuthedAppTeamBotsRoute
   '/_authed/_app/wakers': typeof AuthedAppWakersRoute
   '/_authed/_app/workbench': typeof AuthedAppWorkbenchRoute
+  '/_authed/admin/$': typeof AuthedAdminSplatRoute
   '/_authed/admin/approvals': typeof AuthedAdminApprovalsRoute
   '/_authed/admin/audit': typeof AuthedAdminAuditRoute
   '/_authed/admin/boundaries': typeof AuthedAdminBoundariesRoute
@@ -1130,6 +1147,7 @@ export interface FileRoutesById {
   '/_authed/admin/providers': typeof AuthedAdminProvidersRoute
   '/_authed/admin/skills': typeof AuthedAdminSkillsRoute
   '/_authed/admin/what-if': typeof AuthedAdminWhatIfRoute
+  '/_authed/settings/$': typeof AuthedSettingsSplatRoute
   '/_authed/settings/_personal': typeof AuthedSettingsPersonalRouteWithChildren
   '/_authed/settings/about': typeof AuthedSettingsAboutRoute
   '/_authed/settings/approvals': typeof AuthedSettingsApprovalsRoute
@@ -1246,6 +1264,7 @@ export interface FileRouteTypes {
     | '/team-bots'
     | '/wakers'
     | '/workbench'
+    | '/admin/$'
     | '/admin/approvals'
     | '/admin/audit'
     | '/admin/boundaries'
@@ -1261,6 +1280,7 @@ export interface FileRouteTypes {
     | '/admin/providers'
     | '/admin/skills'
     | '/admin/what-if'
+    | '/settings/$'
     | '/settings/about'
     | '/settings/approvals'
     | '/settings/devices'
@@ -1370,6 +1390,7 @@ export interface FileRouteTypes {
     | '/team-bots'
     | '/wakers'
     | '/workbench'
+    | '/admin/$'
     | '/admin/approvals'
     | '/admin/audit'
     | '/admin/boundaries'
@@ -1385,6 +1406,7 @@ export interface FileRouteTypes {
     | '/admin/providers'
     | '/admin/skills'
     | '/admin/what-if'
+    | '/settings/$'
     | '/settings'
     | '/settings/about'
     | '/settings/approvals'
@@ -1498,6 +1520,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/team-bots'
     | '/_authed/_app/wakers'
     | '/_authed/_app/workbench'
+    | '/_authed/admin/$'
     | '/_authed/admin/approvals'
     | '/_authed/admin/audit'
     | '/_authed/admin/boundaries'
@@ -1513,6 +1536,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/providers'
     | '/_authed/admin/skills'
     | '/_authed/admin/what-if'
+    | '/_authed/settings/$'
     | '/_authed/settings/_personal'
     | '/_authed/settings/about'
     | '/_authed/settings/approvals'
@@ -1817,6 +1841,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRouteRoute
     }
+    '/_authed/admin/$': {
+      id: '/_authed/admin/$'
+      path: '/$'
+      fullPath: '/admin/$'
+      preLoaderRoute: typeof AuthedAdminSplatRouteImport
+      parentRoute: typeof AuthedAdminRouteRoute
+    }
     '/_authed/admin/approvals': {
       id: '/_authed/admin/approvals'
       path: '/approvals'
@@ -1927,6 +1958,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof AuthedSettingsIndexRouteImport
+      parentRoute: typeof AuthedSettingsRouteRoute
+    }
+    '/_authed/settings/$': {
+      id: '/_authed/settings/$'
+      path: '/$'
+      fullPath: '/settings/$'
+      preLoaderRoute: typeof AuthedSettingsSplatRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
     '/_authed/settings/_personal': {
@@ -2507,6 +2545,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedAdminRouteRouteChildren {
+  AuthedAdminSplatRoute: typeof AuthedAdminSplatRoute
   AuthedAdminApprovalsRoute: typeof AuthedAdminApprovalsRoute
   AuthedAdminAuditRoute: typeof AuthedAdminAuditRoute
   AuthedAdminBoundariesRoute: typeof AuthedAdminBoundariesRoute
@@ -2542,6 +2581,7 @@ interface AuthedAdminRouteRouteChildren {
 }
 
 const AuthedAdminRouteRouteChildren: AuthedAdminRouteRouteChildren = {
+  AuthedAdminSplatRoute: AuthedAdminSplatRoute,
   AuthedAdminApprovalsRoute: AuthedAdminApprovalsRoute,
   AuthedAdminAuditRoute: AuthedAdminAuditRoute,
   AuthedAdminBoundariesRoute: AuthedAdminBoundariesRoute,
@@ -2612,6 +2652,7 @@ const AuthedSettingsPersonalRouteWithChildren =
   )
 
 interface AuthedSettingsRouteRouteChildren {
+  AuthedSettingsSplatRoute: typeof AuthedSettingsSplatRoute
   AuthedSettingsPersonalRoute: typeof AuthedSettingsPersonalRouteWithChildren
   AuthedSettingsAboutRoute: typeof AuthedSettingsAboutRoute
   AuthedSettingsApprovalsRoute: typeof AuthedSettingsApprovalsRoute
@@ -2630,6 +2671,7 @@ interface AuthedSettingsRouteRouteChildren {
 }
 
 const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
+  AuthedSettingsSplatRoute: AuthedSettingsSplatRoute,
   AuthedSettingsPersonalRoute: AuthedSettingsPersonalRouteWithChildren,
   AuthedSettingsAboutRoute: AuthedSettingsAboutRoute,
   AuthedSettingsApprovalsRoute: AuthedSettingsApprovalsRoute,

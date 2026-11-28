@@ -473,6 +473,8 @@ tests/server-run-chat.test.tsx
 tests/session-memory.test.ts
 tests/settings-about.test.tsx
 tests/settings-audience.test.ts
+tests/settings-moves-links.test.ts
+tests/settings-moves.test.tsx
 tests/settings-setup.test.tsx
 tests/settings-sidebar.test.ts
 tests/settled-args.test.ts

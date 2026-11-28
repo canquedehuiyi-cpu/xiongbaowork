@@ -3,6 +3,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { SetupChecklist } from "@/components/setup/setup-checklist";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
+import { movedHref } from "@/lib/settings/moves";
 import { mayOpenSetup } from "@/lib/setup/queries";
 
 /**
@@ -33,7 +34,9 @@ function SetupSettingsPage() {
       description="看看哪些已经就绪、哪些还要设置。改完设置并重启后，回到这里再检查一遍。"
       title="部署设置"
     >
-      <SetupChecklist openPage={(target) => navigate({ to: target.path })} />
+      <SetupChecklist
+        openPage={(target) => navigate({ href: movedHref(target.path) })}
+      />
     </PageShell>
   );
 }

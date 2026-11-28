@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
 import { appConfig } from "@/lib/generated/application-config";
+import { movedHref } from "@/lib/settings/moves";
 import { recheckSetupMutationOptions } from "@/lib/setup/mutations";
 import {
   type SetupFix,
@@ -261,7 +262,7 @@ function Fix({
   const page = (target: { label: string; path: string }) => (
     <a
       className={LINK}
-      href={target.path}
+      href={movedHref(target.path)}
       onClick={(event) => {
         event.preventDefault();
         openPage(target);

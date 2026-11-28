@@ -4,11 +4,14 @@ import { SidebarShell } from "@/components/layout/sidebar-shell";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { personalAdminRedirect } from "@/lib/manage-paths";
+import { redirectIfMoved } from "@/lib/settings/moves";
 import { useActiveSkin } from "@/skins/registry";
 import { currentUserQueryOptions } from "../../../lib/auth/queries";
 
 export const Route = createFileRoute("/_authed/admin")({
   beforeLoad: async ({ context, location }) => {
+    // 旧地址表先问：命中就走，不再看版本和角色（目标页自己决定画什么）。
+    redirectIfMoved({ location });
     /*
      * The personal edition has no Admin. An old address opens the same page under Settings, or
      * Settings itself, never an empty page.
