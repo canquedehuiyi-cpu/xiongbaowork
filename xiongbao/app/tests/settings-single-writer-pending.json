@@ -1,0 +1,66 @@
+[
+  {
+    "mutation": "setCapabilityMutationOptions",
+    "key": "(动态)",
+    "files": [
+      "app/src/components/admin/controls/capabilities-section.tsx",
+      "app/src/components/admin/controls/controls-section.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  },
+  {
+    "mutation": "setEnterpriseSettingMutationOptions",
+    "key": "actionRecording",
+    "files": [
+      "app/src/components/admin/controls/recording-section.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  },
+  {
+    "mutation": "setEnterpriseSettingMutationOptions",
+    "key": "modelAllowlist",
+    "files": [
+      "app/src/components/admin/controls/model-sections.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  },
+  {
+    "mutation": "setEnterpriseSettingMutationOptions",
+    "key": "ssoRequired",
+    "files": [
+      "app/src/components/admin/controls/sign-in-section.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  },
+  {
+    "mutation": "setEnterpriseSettingMutationOptions",
+    "key": "mcpAllowlist",
+    "files": [
+      "app/src/components/admin/controls/mcp-allowlist-section.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  },
+  {
+    "mutation": "setNetworkPolicyMutationOptions",
+    "key": "*",
+    "files": [
+      "app/src/components/admin/controls/computer-sections.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  },
+  {
+    "mutation": "setEnterpriseSettingMutationOptions",
+    "key": "inactiveComputerDays",
+    "files": [
+      "app/src/components/admin/controls/computer-sections.tsx",
+      "app/src/routes/_authed/admin/enterprise.tsx"
+    ],
+    "reason": "待并入：企业管控、管理页与组件各写一份（spec §5.4），随 PR3-PR5 合并后删除本条"
+  }
+]

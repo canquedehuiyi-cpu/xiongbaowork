@@ -2286,6 +2286,29 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
 ];
 
 /**
+ * Who is looking. `admin` is the dataset as written; `member` is the same team deployment seen by a
+ * non-admin (`/api/me` says `role: "user"`); `personal` is the personal edition (capabilities say
+ * `edition: "personal"`).
+ */
+export type FixtureAudience = "admin" | "member" | "personal";
+
+function forAudience(
+  audience: FixtureAudience,
+  method: string,
+  pathname: string,
+  response: FixtureResponse | undefined,
+): FixtureResponse | undefined {
+  if (!response || method !== "GET") return response;
+  if (audience === "member" && pathname === "/api/me") {
+    return { ...response, body: { user: { ...USER, role: "user" } } };
+  }
+  if (audience === "personal" && pathname === "/api/capabilities") {
+    return { ...response, body: { ...CAPABILITIES, edition: "personal" } };
+  }
+  return response;
+}
+
+/**
  * The fixture for one request, or `undefined` when the dataset has no answer for it (the runner then
  * logs the request as unmatched and answers 404 `{ error: "parity fixture missing" }`).
  */
@@ -2294,6 +2317,7 @@ export function resolveFixture(
   pathnameWithSearch: string,
   scenario: Scenario = "data",
   body?: unknown,
+  audience: FixtureAudience = "admin",
 ): FixtureResponse | undefined {
   const url = new URL(pathnameWithSearch, "http://parity.local");
   const upper = method.toUpperCase();
@@ -2301,15 +2325,20 @@ export function resolveFixture(
     if (routeMethod !== upper) continue;
     const match = url.pathname.match(pattern);
     if (!match) continue;
-    return handler({
-      method: upper,
-      url,
-      params: url.searchParams,
-      match,
-      scenario,
-      data: scenario === "data",
-      body,
-    });
+    return forAudience(
+      audience,
+      upper,
+      url.pathname,
+      handler({
+        method: upper,
+        url,
+        params: url.searchParams,
+        match,
+        scenario,
+        data: scenario === "data",
+        body,
+      }),
+    );
   }
   return undefined;
 }

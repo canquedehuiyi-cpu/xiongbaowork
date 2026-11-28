@@ -394,6 +394,7 @@ tests/paced-reveal.test.ts
 tests/page-empty.test.tsx
 tests/page-shell-workbench.test.tsx
 tests/parallel-answers-send.test.tsx
+tests/parity-fixture-audience.test.ts
 tests/permissions-describe.test.tsx
 tests/person-sent-message.test.ts
 tests/personal-app-page.test.tsx
@@ -473,10 +474,14 @@ tests/server-run-chat.test.tsx
 tests/session-memory.test.ts
 tests/settings-about.test.tsx
 tests/settings-audience.test.ts
+tests/settings-gating.test.tsx
 tests/settings-moves-links.test.ts
 tests/settings-moves.test.tsx
+tests/settings-names.test.ts
+tests/settings-render-once.test.tsx
 tests/settings-setup.test.tsx
 tests/settings-sidebar.test.ts
+tests/settings-single-writer.test.ts
 tests/settled-args.test.ts
 tests/setup-checklist-editions.test.tsx
 tests/setup-checklist.test.tsx
