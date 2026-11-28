@@ -358,7 +358,7 @@ test("the plain list (no event) has 预览 too, unscoped like its download", asy
   // 下载链接照旧：不带范围的那一条。
   expect(
     document
-      .querySelector("[data-artifact-path='测试-test.txt'] a[download]")
+      .querySelector("a[download][data-artifact-path='测试-test.txt']")
       ?.getAttribute("href"),
   ).toBe("/api/computers/b1/files/download?path=%E6%B5%8B%E8%AF%95-test.txt");
   await act(async () => {

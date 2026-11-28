@@ -192,10 +192,11 @@ function TurnArtifacts({
           <div
             key={row.path}
             className="inline-flex min-w-0 max-w-full items-baseline gap-1.5 self-start rounded-[10px] border border-border bg-card px-[10px] py-[5px]"
-            data-artifact-path={row.path}
           >
+            {/* 路径标在链接本身：老清单里「这一行」就是这条下载链接，端到端测试按它取 href。 */}
             <a
               className="inline-flex min-w-0 max-w-full items-baseline gap-1.5 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              data-artifact-path={row.path}
               // 空值：文件名由路由的 Content-Disposition 定（安全决策 A4——回来的是附件，不是这个源上的
               // 一页）。写成 `download` 在 JSX 里等于 true，存下来会变成一个叫 true 的文件。
               download=""
