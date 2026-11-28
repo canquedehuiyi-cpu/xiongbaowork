@@ -104,6 +104,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
+      # The manual-block tests read the server's own constants (the upgrade sheet's hashes and undo SQL come
+      # from the migration code), so the tagged tree needs its dependencies. This is the test harness only:
+      # the customer install below never sees source/.
+      - name: Dependencies for the manual-block tests
+        working-directory: source/xiongbao
+        run: bun install --frozen-lockfile
       - name: Manual block checks (tagged README and deployment manual)
         working-directory: source/xiongbao/scripts/ci
         run: bun test manual-blocks.test.mjs
