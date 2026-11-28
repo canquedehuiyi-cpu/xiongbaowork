@@ -1,3 +1,4 @@
+import { IconCheck, IconX } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { offersStandingRule } from "@xiongbao/shared/standing-rule";
 import { approvalPhrase } from "@xiongbao/shared/tool-name";
@@ -69,7 +70,7 @@ const CHOICE_WORDS: Record<
   allow_always: {
     label: "在这里总是允许",
     description: "员工现在就做，以后在这里不再问你。",
-    done: "已总是允许",
+    done: "已在这里总是允许",
     tone: "positive",
   },
   deny: {
@@ -218,8 +219,51 @@ export function InlineApproval({
           </motion.section>
         ) : null}
       </AnimatePresence>
-      {pending ? null : fallback}
+      {pending ? null : (
+        <>
+          {request?.decision && request.status !== "pending" ? (
+            <ApprovalOutcome decision={request.decision} title={title} />
+          ) : null}
+          {fallback}
+        </>
+      )}
     </>
+  );
+}
+
+/**
+ * 已经处理过的审批留下的一行：「已允许一次：保存文件 notes.txt」。
+ *
+ * 读的是收件箱里那条请求自己的 `decision`，所以刷新以后还在（收件箱只列最近 100 条，更早的退回只画工具行）。
+ * 没有按钮：决定已经做了，要改规则去审批页。
+ */
+function ApprovalOutcome({
+  decision,
+  title,
+}: {
+  decision: ApprovalDecision;
+  title: string;
+}) {
+  const words = CHOICE_WORDS[decision];
+  if (!words) return null;
+  const Icon = words.tone === "negative" ? IconX : IconCheck;
+  return (
+    <div
+      className="inline-flex min-w-0 max-w-full items-center gap-[7px] self-start rounded-[10px] border border-border bg-card px-[10px] py-[5px] text-muted-foreground text-sm"
+      data-approval-outcome={decision}
+    >
+      <Icon
+        aria-hidden
+        className={
+          words.tone === "negative"
+            ? "size-[14px] shrink-0 text-destructive"
+            : "size-[14px] shrink-0 text-emerald-600 dark:text-emerald-400"
+        }
+      />
+      <span className="min-w-0 truncate">
+        {title ? `${words.done}：${title}` : words.done}
+      </span>
+    </div>
   );
 }
 
