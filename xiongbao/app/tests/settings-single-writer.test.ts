@@ -12,6 +12,9 @@ import { appSources, stripComments } from "./i18n-accessible";
  *   `.mutate({ key: "k" … })` 的字面量；都没有字面量（键是变量）记为 `(动态)`。
  * - 能力开关按引用它的文件里 `.mutate({ capability: "k" … })` 的字面量，没有记 `(动态)`。
  *
+ * - 动态写入（键是变量）可能写到任何键，所以 `(动态)` 组的文件并入同一 mutation 的每个字面量组：
+ *   一处字面量写 + 一处动态写同一个 mutation，算两个写入点。
+ *
  * 今天不满足的组进 settings-single-writer-pending.json，后续 PR 每合并一处就删一条；
  * 清单**只收窄**：新增违规会红，已经不违规的条目也会红（逼着把它删掉）。
  */
@@ -126,6 +129,19 @@ function writersByGroup(
       }
     }
   }
+  // 键是变量的写入可能写到任何一个键，所以动态文件并入同一 mutation 的每个字面量组。
+  for (const mutation of MUTATIONS) {
+    const dynamic = groups.get(`${mutation.name} ${DYNAMIC}`);
+    if (!dynamic) continue;
+    for (const [group, files] of groups) {
+      if (
+        group.startsWith(`${mutation.name} `) &&
+        group !== `${mutation.name} ${DYNAMIC}`
+      ) {
+        for (const file of dynamic) files.add(file);
+      }
+    }
+  }
   return new Map(
     [...groups].map(([group, files]) => [group, [...files].sort()]),
   );
@@ -210,13 +226,30 @@ describe("量具自检：合成源码", () => {
     );
     expect(
       groups.get("setEnterpriseSettingMutationOptions modelAllowlist"),
-    ).toEqual(["app/src/components/a.tsx"]);
+    ).toEqual(["app/src/components/a.tsx", "app/src/components/c.tsx"]);
     expect(
       groups.get("setEnterpriseSettingMutationOptions ssoRequired"),
-    ).toEqual(["app/src/components/b.tsx"]);
+    ).toEqual(["app/src/components/b.tsx", "app/src/components/c.tsx"]);
     expect(
       groups.get(`setEnterpriseSettingMutationOptions ${DYNAMIC}`),
     ).toEqual(["app/src/components/c.tsx"]);
+  });
+
+  test("字面量写入加动态写入同一个 mutation：判为多写入点", () => {
+    const groups = writersByGroup(
+      sources({
+        "app/src/routes/lit.tsx": `
+          useMutation(setCapabilityMutationOptions(q));
+          set.mutate({ capability: "proactive" });`,
+        "app/src/components/dyn.tsx": `
+          useMutation(setCapabilityMutationOptions(q));
+          set.mutate({ capability: item.capability });`,
+      }),
+    );
+    expect(groups.get("setCapabilityMutationOptions proactive")).toEqual([
+      "app/src/components/dyn.tsx",
+      "app/src/routes/lit.tsx",
+    ]);
   });
 
   test("能力开关按 capability 字面量分组；固定例外文件不计", () => {
