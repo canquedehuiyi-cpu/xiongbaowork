@@ -340,6 +340,25 @@ test("U51 /admin/computers 对管理员落到团队的电脑一节", async () =>
   expect(container.querySelector("section#team-computers")).not.toBeNull();
 }, 60000);
 
+test("U51 /admin/computers 在个人版落到你的员工的浏览器一节（个人版没有团队的电脑）", async () => {
+  const { container, finalHref } = await renderAt(
+    "/admin/computers",
+    "personal",
+  );
+  expect(finalHref()).toBe("/settings/devices#this-computer");
+  expect(container.querySelector("section#this-computer")).not.toBeNull();
+  expect(container.querySelector("#team-computers")).toBeNull();
+}, 60000);
+
+test("U52 /settings/computer 对团队版管理员落到团队的电脑一节", async () => {
+  const { container, finalHref } = await renderAt(
+    "/settings/computer",
+    "team-admin",
+  );
+  expect(finalHref()).toBe("/settings/devices#team-computers");
+  expect(container.querySelector("section#team-computers")).not.toBeNull();
+}, 60000);
+
 test("U52 /settings/computer 在个人版落到你的员工的浏览器一节", async () => {
   const { container, finalHref } = await renderAt(
     "/settings/computer",

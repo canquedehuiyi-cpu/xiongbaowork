@@ -161,15 +161,16 @@ test(
     const settingsNav = within(main).getByRole("navigation", {
       name: "设置导航",
     });
+    // 套餐与用量不再是侧栏的一项，由「账户与外观」认领（spec §5.1 第 4 条），亮的是它。
     expect(
       within(settingsNav)
         .getAllByRole("link")
-        .find((link) => link.getAttribute("href") === "/settings/plans")
+        .find((link) => link.getAttribute("href") === "/settings")
         ?.getAttribute("data-status"),
     ).toBe("active");
     // 套餐页自己的标题。
     expect(
-      await within(main).findByRole("heading", { name: "套餐" }, LOAD),
+      await within(main).findByRole("heading", { name: "套餐与用量" }, LOAD),
     ).toBeTruthy();
     // 原来的侧栏外壳不在。
     expect(view.queryByRole("navigation", { name: "主导航" })).toBeNull();

@@ -298,6 +298,29 @@ test(
   TEST_MS,
 );
 
+describe("页面描述说得出这个人在这页能做什么", () => {
+  const OWN = "配对你自己的电脑，让员工在上面替你干活。";
+  const ADMIN = `${OWN}作为管理员，你还可以管理团队的电脑、员工的电脑能连到哪里，以及闲置多久后停掉。`;
+  const EXPECTED: Record<AudienceName, string> = {
+    "team-admin": ADMIN,
+    "unknown-edition": ADMIN,
+    "team-member": OWN,
+    "team-member-local": OWN,
+    personal: `${OWN}你也可以在这里停止或重置员工的浏览器，并选择员工能读取这台电脑上的哪些文件夹。`,
+  };
+  for (const audience of AUDIENCES) {
+    test(
+      audience,
+      async () => {
+        const { container } = await renderAt("/settings/devices", audience);
+        const description = container.querySelector("header p");
+        expect(description?.textContent).toBe(EXPECTED[audience]);
+      },
+      TEST_MS,
+    );
+  }
+});
+
 describe("锚点", () => {
   const scrolled: string[] = [];
   let original: typeof HTMLElement.prototype.scrollIntoView;

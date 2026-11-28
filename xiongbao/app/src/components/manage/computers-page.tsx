@@ -98,7 +98,7 @@ export function TeamComputersSection() {
       id="team-computers"
       title="团队的电脑"
     >
-      <SubHeading>这个部署里的电脑</SubHeading>
+      <SubHeading first>这个部署里的电脑</SubHeading>
       <ComputerList personal={false} />
       <SubHeading>这台电脑上的文件夹</SubHeading>
       <p className="mt-1 text-pretty text-muted-foreground text-sm leading-relaxed">
@@ -110,8 +110,26 @@ export function TeamComputersSection() {
 }
 
 /** 一节里的小标题：团队的电脑一节有两块，各自一个名字，不另开一节（一节一种受众，§5.1）。 */
-function SubHeading({ children }: { children: ReactNode }) {
-  return <h3 className="mt-8 font-medium text-sm">{children}</h3>;
+function SubHeading({
+  children,
+  first = false,
+}: {
+  children: ReactNode;
+  first?: boolean;
+}) {
+  /*
+   * 节奏表（xiongbao-screen-layout）：标题块到内容 16px，所以第一个小标题紧跟节的描述用 mt-4；第二块是另一组
+   * 互不相干的操作，取表里「节到节」的 48px，眼睛不会把两块连成一片。
+   */
+  return (
+    <h3
+      className={
+        first ? "mt-4 font-medium text-sm" : "mt-12 font-medium text-sm"
+      }
+    >
+      {children}
+    </h3>
+  );
 }
 
 /**
