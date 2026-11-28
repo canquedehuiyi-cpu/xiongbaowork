@@ -12,7 +12,7 @@ import {
   IconShieldCheck,
   IconWorld,
 } from "@tabler/icons-react";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import type {
   WhatIfLayer,
   WhatIfLayerId,
@@ -32,6 +32,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { movedHref } from "@/lib/settings/moves";
 import { cn } from "@/lib/utils";
 
 /**
@@ -71,7 +72,7 @@ const BASIS_WORDS: Record<WhatIfLayerId, string> = {
 const PAGE_WORDS: Record<NonNullable<WhatIfLayer["page"]>, string> = {
   "/admin/plugins": "打开插件",
   "/admin/permissions": "打开权限",
-  "/admin/computers": "打开电脑",
+  "/admin/computers": "打开电脑与设备",
   "/admin/boundaries": "打开边界规则",
   "/admin/approvals": "打开审批",
 };
@@ -154,6 +155,8 @@ export function VerdictPill({ verdict }: { verdict: WhatIfVerdict }) {
 }
 
 function LayerRow({ layer }: { layer: WhatIfLayer }) {
+  const navigate = useNavigate();
+  const pageHref = layer.page ? movedHref(layer.page) : undefined;
   const Icon = ICONS[layer.id];
   const hasFooter = layer.basis || layer.rule || layer.caveat || layer.page;
   return (
@@ -216,9 +219,27 @@ function LayerRow({ layer }: { layer: WhatIfLayer }) {
             </span>
           ) : null}
           {layer.page ? (
-            <Link className={LINK} to={layer.page}>
+            // 旧地址表可能给出带 `#锚点` 的新地址，它不是类型化的 `to`，所以按完整地址走。
+            <a
+              className={LINK}
+              href={pageHref}
+              onClick={(event) => {
+                if (
+                  event.defaultPrevented ||
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                if (pageHref) void navigate({ href: pageHref });
+              }}
+            >
               {PAGE_WORDS[layer.page]}
-            </Link>
+            </a>
           ) : null}
         </ItemFooter>
       ) : null}

@@ -104,7 +104,7 @@ export function ProjectsSection() {
         </p>
       ) : list.length === 0 ? (
         <TabEmpty
-          description="项目放在你自己的电脑上，请先在「我的设备」里配对一台电脑。"
+          description="项目放在你自己的电脑上，请先在「电脑与设备」里配对一台电脑。"
           title="还没有配对的设备。"
         />
       ) : device ? (

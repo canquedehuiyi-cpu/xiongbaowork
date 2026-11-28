@@ -8,7 +8,10 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { LICENCE_HOLDER } from "@xiongbao/shared/licence-paragraph";
-import { SETTINGS_SIDEBAR_ITEMS } from "@/components/settings/settings-sidebar";
+import {
+  activeTopic,
+  settingsTopics,
+} from "@/components/settings/settings-sidebar";
 import { appConfig } from "@/lib/generated/application-config";
 import { AboutPage, ThirdPartyNotices } from "@/routes/_authed/settings/about";
 import { settleReactWork } from "./settle-react-work";
@@ -111,8 +114,13 @@ test("依赖清单加载失败时，随仓库附带的许可行仍可展开，�
   expect(view.container.textContent).toContain("Permission is hereby granted");
 });
 
-test("设置侧栏有指向关于页的入口", () => {
-  expect(
-    SETTINGS_SIDEBAR_ITEMS.find((item) => item.title === "关于")?.linkOptions,
-  ).toEqual({ to: "/settings/about" });
+test("关于不是侧栏项，打开关于页时亮账户与外观", () => {
+  const topics = settingsTopics({
+    edition: "team",
+    isAdmin: true,
+    maySetUp: true,
+    ready: true,
+  });
+  expect(topics.map((t) => t.title)).not.toContain("关于");
+  expect(activeTopic(topics, "/settings/about")).toBe("account");
 });

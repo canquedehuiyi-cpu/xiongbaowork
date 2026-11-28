@@ -1,5 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { LEGACY_PAGES } from "@/lib/agents/legacy-routes";
+import { createFileRoute } from "@tanstack/react-router";
+import { redirectIfMoved } from "@/lib/settings/moves";
 
 /**
  * 套餐与用量搬进了设置（`/settings/plans`，M5b）。原页面剪到了 `components/quota/plans-page.tsx`。
@@ -8,7 +8,6 @@ import { LEGACY_PAGES } from "@/lib/agents/legacy-routes";
  * `lib/client.ts` 也按这个契约走，所以保留成重定向。
  */
 export const Route = createFileRoute("/_authed/_app/plans")({
-  beforeLoad: () => {
-    throw redirect({ to: LEGACY_PAGES["/plans"], replace: true });
-  },
+  // 去向在 `SETTINGS_MOVES`（U01）。
+  beforeLoad: redirectIfMoved,
 });

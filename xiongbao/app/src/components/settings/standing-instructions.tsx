@@ -50,7 +50,13 @@ export function StandingInstructionsRow() {
   return (
     <>
       <Item
-        render={<button onClick={() => setOpen(true)} type="button" />}
+        render={
+          <button
+            data-setting-key="account.instructions"
+            onClick={() => setOpen(true)}
+            type="button"
+          />
+        }
         size="sm"
       >
         <ItemMedia variant="icon">

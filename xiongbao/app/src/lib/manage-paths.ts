@@ -39,7 +39,9 @@ export function managePaths(edition: "team" | "personal") {
       credentialsLabel: "密钥",
       credentials: () => linkOptions({ to: "/settings/credentials" }),
       newCredential: () => linkOptions({ to: "/settings/credentials/new" }),
-      computers: () => linkOptions({ to: "/settings/computer" }),
+      // 电脑与设备里个人版的电脑一节；锚点与 SETTINGS_MOVES 的 U52 一致。
+      computers: () =>
+        linkOptions({ to: "/settings/devices", hash: "this-computer" }),
       /*
        * What the trail is called, on its page and wherever another page sends a person to it:
        * 活动 where one person reads what their own Bots did, 审计 under Admin, where an admin reviews
@@ -79,7 +81,9 @@ export function managePaths(edition: "team" | "personal") {
     credentialsLabel: "凭据",
     credentials: () => linkOptions({ to: "/admin/credentials" }),
     newCredential: () => linkOptions({ to: "/admin/credentials/new" }),
-    computers: () => linkOptions({ to: "/admin/computers" }),
+    // 电脑与设备里团队的电脑一节；锚点与 SETTINGS_MOVES 的 U51 一致。
+    computers: () =>
+      linkOptions({ to: "/settings/devices", hash: "team-computers" }),
     auditLabel: "审计",
     audit: () => linkOptions({ to: "/admin/audit" }),
     deploymentName: "本部署",
@@ -109,7 +113,6 @@ export function personalAppsAddress(rest: string): string {
 const MOVED: readonly (readonly [admin: string, settings: string])[] = [
   ["/admin/skills", "/settings/skills"],
   ["/admin/credentials", "/settings/credentials"],
-  ["/admin/computers", "/settings/computer"],
   ["/admin/audit", "/settings/activity"],
 ];
 

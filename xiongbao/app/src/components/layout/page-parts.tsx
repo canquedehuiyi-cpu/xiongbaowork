@@ -120,16 +120,19 @@ export function PageSection({
   children,
   className,
   description,
+  id,
   title,
 }: {
   action?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
   description?: React.ReactNode;
+  /** 锚点：落在 `<section>` 上，别的页面可以链到 `#id`。 */
+  id?: string;
   title?: string;
 }) {
   return (
-    <section className={cn("mt-12", className)}>
+    <section className={cn("mt-12", className)} id={id}>
       {title ? (
         <div className="flex min-h-8 flex-row items-center justify-between gap-4">
           {/*

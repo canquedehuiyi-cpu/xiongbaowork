@@ -208,11 +208,11 @@ test("the one person on a local install gets the page", async () => {
   expect(await view.findByRole("heading", { name: "部署设置" })).toBeTruthy();
 });
 
-test("the sidebar lists 部署设置 for an admin", async () => {
+test("部署设置 is no longer a sidebar item: it is reached from 账户与外观", async () => {
   const view = sidebar();
 
-  const link = await view.findByRole("link", { name: /^部署设置/ });
-  expect(link.getAttribute("href")).toBe("/settings/setup");
+  await view.findByRole("link", { name: /^账户与外观/ });
+  expect(view.queryByRole("link", { name: /^部署设置/ })).toBeNull();
 });
 
 /** A checklist row, needing setup unless told otherwise. */
@@ -229,11 +229,12 @@ const row = (id: string, over: Record<string, unknown> = {}) => ({
 });
 
 /**
- * The sidebar's 部署设置 link, once its name reads `text`, the count's words included. The count's
+ * The sidebar's 账户与外观 link (the to-do count hangs there until setup moves to 团队管理), once its name reads `text`, the count's words included. The count's
  * words are a span of their own, which the test DOM (no layout) names with a space before it.
  */
 const setupLink = (view: ReturnType<typeof render>, text: string) => {
-  const [title, count] = text.split("，");
+  const [, count] = text.split("，");
+  const title = "账户与外观";
   return waitFor(() =>
     view.getByRole("link", { name: new RegExp(`^${title}\\s*，${count}$`) }),
   );
@@ -252,7 +253,7 @@ test("an admin's sidebar counts beside Setup the rows they can fix", async () =>
   };
   const view = sidebar();
 
-  const link = await setupLink(view, "部署设置，2 项待设置");
+  const link = await setupLink(view, "账户与外观，2 项待设置");
   const badge = link.querySelector('[aria-hidden="true"]');
   expect(badge?.textContent).toBe("2");
   // Said once, in the link's name: the number on its own is hidden.
@@ -263,30 +264,29 @@ test("one row to fix is counted as one", async () => {
   checklist = { audience: "admin", rows: [row("model")] };
   const view = sidebar();
 
-  expect(await setupLink(view, "部署设置，1 项待设置")).toBeTruthy();
+  expect(await setupLink(view, "账户与外观，1 项待设置")).toBeTruthy();
 });
 
-test("an admin with nothing to fix sees 部署设置 without a count", async () => {
+test("an admin with nothing to fix sees 账户与外观 without a count", async () => {
   checklist = {
     audience: "admin",
     rows: [row("model", { status: "ready", ready: true })],
   };
   const view = sidebar();
 
-  await view.findByRole("link", { name: /^部署设置/ });
+  await view.findByRole("link", { name: /^账户与外观/ });
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
-  const link = view.getByRole("link", { name: /^部署设置/ });
-  expect(link.textContent).toBe("部署设置");
+  const link = view.getByRole("link", { name: /^账户与外观/ });
+  expect(link.textContent).toBe("账户与外观");
   expect(link.querySelector('[aria-hidden="true"]')).toBe(null);
 });
 
-test("the sidebar never offers 部署设置 to a member", async () => {
+test("the sidebar never counts setup for a member", async () => {
   role = "user";
   const view = sidebar();
 
-  await view.findByRole("link", { name: "通用" });
+  await view.findByRole("link", { name: "账户与外观" });
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
-  expect(view.queryByRole("link", { name: /^部署设置/ })).toBeNull();
   // Nor is the checklist asked for: there is nothing in it a member could fix.
   expect(requested).not.toContain("/api/setup");
   expect(view.container.textContent).not.toContain("项待设置");

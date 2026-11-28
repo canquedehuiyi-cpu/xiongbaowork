@@ -24,6 +24,7 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { useSignOutOffered } from "@/lib/auth/sign-out-offered";
 import { avatarSourcesQueryOptions } from "@/lib/avatar/sources";
+import { devicesSummaryQueryOptions } from "@/lib/devices/queries";
 import {
   AVATAR_MENU_ITEM,
   type NavigationItem,
@@ -95,7 +96,8 @@ function navLink(item: NavigationItem, detail?: string): MeLink {
 /**
  * 「我」的内容，页面（`/me`）和工作台列表栏共用：个人卡的数据，加上取代原账户菜单的菜单。
  *
- * 套餐名和已配对几台电脑来自现在的套餐查询（`planSummaryQueryOptions`，和原账户菜单、套餐页共用缓存），
+ * 套餐名来自现在的套餐查询（`planSummaryQueryOptions`，和原账户菜单、套餐页共用缓存），已配对几台电脑来自设备列表
+ * （`devicesSummaryQueryOptions`，和电脑与设备页共用缓存但不轮询），
  * 员工数来自员工列表，「管理」只在导航清单给了这个人管理项时才有（按角色和版本筛过）。加入日期服务端不给，
  * 所以不写。
  */
@@ -103,6 +105,7 @@ export function useMeMenu(): MeMenu {
   const user = useQuery(currentUserQueryOptions()).data;
   const quota = useQuery(planSummaryQueryOptions()).data;
   const agents = useQuery(agentListQueryOptions()).data;
+  const devices = useQuery(devicesSummaryQueryOptions()).data;
   const avatarAgentId = useAvatarAgentId();
   const navigation = useNavigationItems();
   const theme = useOptionalTheme();
@@ -121,7 +124,8 @@ export function useMeMenu(): MeMenu {
       label: "个人资料",
       icon: IconUserEdit,
       detail: "名字与长期指令",
-      link: { to: "/settings" },
+      // 设置页的「关于你」一段。
+      link: { to: "/settings", hash: "about-you" },
       path: "/settings",
       claims: false,
     },
@@ -139,16 +143,17 @@ export function useMeMenu(): MeMenu {
       : []),
     {
       id: "devices",
-      label: "我的电脑",
+      label: "电脑与设备",
       icon: IconDeviceLaptop,
-      detail: quota ? `已配对 ${quota.usage.devices} 台` : undefined,
+      // 数的是电脑与设备页读的那份设备列表；读不到或还没读到时不写，一台都没有时也不写数字。
+      detail: devices?.length ? `已配对 ${devices.length} 台` : undefined,
       link: { to: "/settings/devices" },
       path: "/settings/devices",
       claims: true,
     },
     {
       id: "notifications",
-      label: "通知",
+      label: "主动与通知",
       icon: IconBell,
       // 作息读到了就写作息（开工、收工清点按它发），读不到写这一页是做什么的。
       // 作息时区和这台设备的钟不一样时带上时区，免得当成本地时间。
@@ -172,11 +177,11 @@ export function useMeMenu(): MeMenu {
       icon: IconPalette,
       detail: theme ? (theme.dark ? "深色" : "浅色") : undefined,
       // 设置页的「外观」一段：深色主题和皮肤选择。
-      link: { to: "/settings" },
+      link: { to: "/settings", hash: "appearance" },
       path: "/settings",
       claims: false,
     },
-    ...(settings ? [navLink(settings, "全部高级设置")] : []),
+    ...(settings ? [navLink(settings, "全部设置")] : []),
     ...(adminItem ? [navLink(adminItem, "仅管理员")] : []),
   ];
 
@@ -275,7 +280,7 @@ const menuClassName = cn(
 
 /**
  * 「我」页面（`/me`，设计稿「我」那一屏）：个人卡（头像、名字、套餐徽标、已召唤几位员工），下面分组的菜单
- * 取代原来的账户菜单——个人资料、我的分身、我的电脑、通知；套餐与用量、外观、设置，管理员多一行「管理」；
+ * 取代原来的账户菜单——个人资料、我的分身、电脑与设备、主动与通知；套餐与用量、外观、设置，管理员多一行「管理」；
  * 最后是退出登录（只在有登录可退的部署上）。
  */
 export function MePage() {

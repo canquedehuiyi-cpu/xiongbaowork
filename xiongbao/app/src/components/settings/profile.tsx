@@ -106,7 +106,13 @@ export function NameRow() {
   return (
     <>
       <Item
-        render={<button onClick={() => setOpen(true)} type="button" />}
+        render={
+          <button
+            data-setting-key="account.name"
+            onClick={() => setOpen(true)}
+            type="button"
+          />
+        }
         size="sm"
       >
         <ItemMedia variant="icon">

@@ -3,6 +3,7 @@ import {
   afterEach,
   beforeAll,
   beforeEach,
+  describe,
   expect,
   test,
 } from "bun:test";
@@ -14,7 +15,13 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { queryClient } from "@/query-client";
 import { Route as SetupRoute } from "@/routes/_authed/settings/setup";
 import type { Edition } from "../../server/src/edition";
@@ -103,6 +110,7 @@ function serve(edition: Edition, facts: { moreApps: boolean }) {
 /** The Setup page, as Settings draws it. */
 async function draw() {
   const router = createRouter({
+    // 点链接时 navigate 会去新地址；这棵树只有根，落到哪里由 router.state.location 说。
     history: createMemoryHistory({ initialEntries: ["/"] }),
     routeTree: createRootRoute({ component: SetupRoute.options.component }),
   });
@@ -119,7 +127,7 @@ async function draw() {
     if (!found) throw new Error(`no ${id} row`);
     return within(found);
   };
-  return { view, row };
+  return { view, row, router };
 }
 
 const linkTo = (row: ReturnType<typeof within>, name: string) =>
@@ -136,7 +144,10 @@ test("the personal edition's Setup speaks of no memory and no admin", async () =
   ).toBeTruthy();
   // The pages it links are the ones its Settings sidebar names.
   expect(linkTo(row("model"), "Keys")).toBe("/settings/credentials");
-  expect(linkTo(row("computer"), "Computer")).toBe("/settings/computer");
+  // 服务器仍发 /settings/computer（§3.2），前端按 SETTINGS_MOVES 画新地址（U52）。
+  expect(linkTo(row("computer"), "Computer")).toBe(
+    "/settings/devices#this-computer",
+  );
   expect(view.container.textContent).not.toMatch(/remember|memory|admin/i);
   expect(view.container.innerHTML).not.toContain("/admin/");
 });
@@ -163,7 +174,10 @@ test("a team deployment's Setup keeps memory, its admin, and the Admin pages", a
     ),
   ).toBeTruthy();
   expect(linkTo(row("model"), "Credentials")).toBe("/admin/credentials");
-  expect(linkTo(row("computer"), "Computers")).toBe("/admin/computers");
+  // 服务器仍发 /admin/computers（§3.2），前端按 SETTINGS_MOVES 画新地址（U51）。
+  expect(linkTo(row("computer"), "Computers")).toBe(
+    "/settings/devices#team-computers",
+  );
 });
 
 test("a team deployment's gaps speak of the apps an admin adds", async () => {
@@ -175,4 +189,24 @@ test("a team deployment's gaps speak of the apps an admin adds", async () => {
       "Without it, people can connect only the apps an admin adds.",
     ),
   ).toBeTruthy();
+});
+
+describe("点电脑那一行的链接：去的是换过的新地址", () => {
+  const cases = [
+    ["personal", "Computer", "/settings/devices#this-computer"],
+    ["team", "Computers", "/settings/devices#team-computers"],
+  ] as const;
+  for (const [edition, name, href] of cases) {
+    test(edition, async () => {
+      serve(edition, { moreApps: true });
+      const { row, router } = await draw();
+      const link = row("computer").getByRole("link", { name });
+      expect(link.getAttribute("href")).toBe(href);
+      fireEvent.click(link);
+      await waitFor(() => {
+        const { pathname, hash } = router.state.location;
+        expect(`${pathname}#${hash}`).toBe(href);
+      });
+    });
+  }
 });

@@ -206,7 +206,7 @@ test("with no paired machine the panel shows how to pair one, links to My Device
 
   await user.click(button(view, "本地文件夹"));
   expect(await view.findByText("还没有配对的设备")).toBeTruthy();
-  const link = view.getByRole("link", { name: "前往「我的设备」配对电脑" });
+  const link = view.getByRole("link", { name: "前往「电脑与设备」配对电脑" });
   expect(link.getAttribute("href")).toBe("/settings");
   expect(view.queryByText("选择一个文件夹")).toBeNull();
 
@@ -307,7 +307,7 @@ test("in onboarding a folder can be picked and saved before moving on; with no m
   await second.user.click(button(second.view, "本地文件夹"));
   expect(await second.view.findByText("还没有配对的设备")).toBeTruthy();
   // The rest of the app opens after onboarding, so the step names the place rather than linking.
-  expect(second.view.getByText(/「设置 ›\s*我的设备」/)).toBeTruthy();
+  expect(second.view.getByText(/「设置 ›\s*电脑与设备」/)).toBeTruthy();
   expect(second.view.queryByRole("link")).toBeNull();
   expect(button(second.view, "保存并继续").disabled).toBeTrue();
   await second.user.click(button(second.view, "跳过，稍后在分身详情页配置"));

@@ -73,7 +73,6 @@ import { Route as AdminBoundaryDetail } from "@/routes/_authed/admin/boundaries_
 import { Route as AdminBoundariesNew } from "@/routes/_authed/admin/boundaries_.new";
 import { Route as AdminComponentDetail } from "@/routes/_authed/admin/components/$name";
 import { Route as AdminComponents } from "@/routes/_authed/admin/components/index";
-import { Route as AdminComputers } from "@/routes/_authed/admin/computers";
 import { Route as AdminCredentials } from "@/routes/_authed/admin/credentials";
 import { Route as AdminCredentialsNew } from "@/routes/_authed/admin/credentials_.new";
 import { Route as AdminIdentityProviders } from "@/routes/_authed/admin/identity-providers";
@@ -91,7 +90,6 @@ import { Route as AdminProviders } from "@/routes/_authed/admin/providers";
 import { Route as AdminSkills } from "@/routes/_authed/admin/skills";
 import { Route as AdminSkillDetail } from "@/routes/_authed/admin/skills_.$slug";
 import { Route as AdminSkillsNew } from "@/routes/_authed/admin/skills_.new";
-import { Route as SettingsComputer } from "@/routes/_authed/settings/_personal/computer";
 import { Route as SettingsCredentials } from "@/routes/_authed/settings/_personal/credentials";
 import { Route as SettingsCredentialsNew } from "@/routes/_authed/settings/_personal/credentials_.new";
 import { Route as SettingsSkills } from "@/routes/_authed/settings/_personal/skills";
@@ -169,7 +167,6 @@ const ROUTES = new Map<string, unknown>([
   ["/admin/boundaries", AdminBoundaries],
   ["/admin/boundaries/new", AdminBoundariesNew],
   ["/admin/components", AdminComponents],
-  ["/admin/computers", AdminComputers],
   ["/admin/credentials", AdminCredentials],
   ["/admin/credentials/new", AdminCredentialsNew],
   ["/admin/identity-providers", AdminIdentityProviders],
@@ -205,7 +202,6 @@ const ROUTES = new Map<string, unknown>([
   ["/settings", Settings],
   ["/settings/approvals", SettingsApprovals],
   ["/settings/components-gallery", SettingsComponentsGallery],
-  ["/settings/computer", SettingsComputer],
   ["/settings/credentials", SettingsCredentials],
   ["/settings/credentials/new", SettingsCredentialsNew],
   ["/settings/devices", SettingsDevices],

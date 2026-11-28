@@ -15,10 +15,13 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, within } from "@testing-library/react";
-import type { ComponentType } from "react";
-import { ComputersPage } from "@/components/manage/computers-page";
-import { SETTINGS_SIDEBAR_ITEMS } from "@/components/settings/settings-sidebar";
+import {
+  TeamComputersSection,
+  ThisComputerSections,
+} from "@/components/manage/computers-page";
+import { legacyTail } from "@/components/settings/settings-sidebar";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
+import { authKeys } from "@/lib/auth/queries";
 import {
   type HostAccessStatus,
   hostAccessKeys,
@@ -28,7 +31,6 @@ import {
   type DeploymentCapabilities,
   deploymentKeys,
 } from "@/lib/deployment/queries";
-import { Route as AdminComputersRoute } from "@/routes/_authed/admin/computers";
 import { Route as LearningRoute } from "@/routes/_authed/settings/learning";
 import { settleReactWork } from "./settle-react-work";
 
@@ -65,16 +67,23 @@ function clientFor(edition: "team" | "personal" | undefined) {
 
 describe("the Settings sidebar", () => {
   test("学习 shows in Settings, open to everyone", () => {
-    expect(SETTINGS_SIDEBAR_ITEMS.map((item) => item.title)).toContain("学习");
+    expect(
+      legacyTail({
+        edition: "team",
+        isAdmin: false,
+        maySetUp: false,
+        ready: true,
+      }).map((item) => item.title),
+    ).toContain("学习");
     expect(LearningRoute.options.beforeLoad).toBeUndefined();
   });
 });
 
 /*
- * Upstream's Computer page (`components/manage/computers-page.tsx`), in the team edition. This
- * deployment's Admin still draws its own page (`routes/_authed/admin/computers.tsx`), where these
- * upstream changes are marked M4 待接入, so the page is checked here as upstream wrote it; the last
- * test checks what this deployment's own page already shares with it.
+ * Upstream's Computer page (`components/manage/computers-page.tsx`), now the sections of
+ * 设置 › 电脑与设备: 团队的电脑 for a team admin, 你的员工的浏览器 and 这台电脑上的文件夹 in the
+ * personal edition. This deployment's own Admin › 电脑 (`routes/_authed/admin/computers.tsx`) was
+ * merged into it and deleted (Task 6, X12).
  */
 describe("the Computer page", () => {
   /** What the one shared computer answers once the Personal Assistant has opened a page. */
@@ -117,23 +126,41 @@ describe("the Computer page", () => {
     client.setQueryData(agentKeys.list(true), []);
     client.setQueryData(hostAccessKeys.status(), host);
     client.setQueryData(agentKeys.list(false), [assistant]);
+    // The one person on the personal edition is its admin, as a team's admin reads 团队的电脑.
+    client.setQueryData(authKeys.currentUser(), {
+      id: "dev-local-user",
+      name: "dev",
+      email: "dev@xiongbao.local",
+      role: "admin",
+      onboarding: null,
+    });
     const router = createRouter({
       history: createMemoryHistory({ initialEntries: ["/"] }),
-      routeTree: createRootRoute({ component: () => <ComputersPage /> }),
+      routeTree: createRootRoute({
+        component: () => (
+          <>
+            <ThisComputerSections />
+            <TeamComputersSection />
+          </>
+        ),
+      }),
     });
     const view = render(
       <QueryClientProvider client={client}>
         <RouterProvider router={router as never} />
       </QueryClientProvider>,
     );
-    await view.findByRole("heading", { name: "电脑" });
+    await view.findByRole("heading", {
+      name: edition === "personal" ? "你的员工的浏览器" : "团队的电脑",
+    });
     return view;
   }
 
   /** The section the desktop's folder picker is reached from. */
   function foldersSection(view: Awaited<ReturnType<typeof renderPage>>) {
-    return view.getByRole("heading", { name: "这台电脑上的文件夹" })
-      .parentElement?.parentElement as HTMLElement;
+    return view
+      .getByRole("heading", { name: "这台电脑上的文件夹" })
+      .closest("section") as HTMLElement;
   }
 
   // XiongBao Desktop gives its server a host, so a Bot's row offers the picker.
@@ -233,43 +260,108 @@ describe("the Computer page", () => {
   test("in the team edition still tells an admin how to give each person a computer", async () => {
     const view = await renderPage("team");
     const text = view.container.textContent ?? "";
-    expect(view.getByRole("heading", { name: "电脑" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "团队的电脑" })).toBeTruthy();
     expect(text).toContain("COMPUTER_SUPERVISOR_URL");
     expect(text).toContain("这个部署里的电脑");
     expect(text).toContain("dev@xiongbao.local · Personal Assistant");
     expect(text).toContain("经 network policy filter 出网");
   });
 
-  /** This deployment's own Admin › 电脑, with the same answers. */
-  async function renderAdminPage(computers: ComputerFleet = fleet) {
-    const client = clientFor("team");
-    client.setDefaultOptions({
-      queries: { retry: false, staleTime: Infinity },
+  /*
+   * Two things this deployment's own Admin › 电脑 did that upstream's page did not, carried over
+   * when that page was deleted (spec §11).
+   */
+  test("a waiting folder request says what it is about", async () => {
+    const view = await renderPage("team", {
+      ...granted,
+      pending: [{ ...waiting("write_file"), displayName: "report.xlsx" }],
     });
-    client.setQueryData(computerKeys.fleet(), computers);
+    expect(foldersSection(view).textContent).toContain("report.xlsx");
+  });
+
+  test("a person's computer whose person is unknown says 某个人, not undefined", async () => {
+    const view = await renderPage("team", hostAccess, {
+      isolation: "per-person",
+      computers: [
+        {
+          computer: "person:gone",
+          kind: "person",
+          running: false,
+          startedAt: null,
+        },
+      ],
+    });
+    const text = view.container.textContent ?? "";
+    expect(text).toContain("某个人 的电脑");
+    expect(text).not.toContain("undefined");
+  });
+});
+
+describe("the personal edition's computer sections", () => {
+  // Keep the personal edition's own sentences: one computer, one Bot to a row, no seat, no exit.
+  test("draw 你的员工的浏览器 and 这台电脑上的文件夹, and nothing of the team's", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    client.setQueryData(
+      deploymentKeys.capabilities(),
+      capabilities("personal"),
+    );
+    client.setQueryData(authKeys.currentUser(), {
+      id: "dev-local-user",
+      name: "dev",
+      email: "dev@xiongbao.local",
+      role: "admin",
+      onboarding: null,
+    });
+    client.setQueryData(computerKeys.fleet(), {
+      isolation: "shared",
+      computers: [
+        {
+          computer: "person:dev-local-user",
+          kind: "person",
+          personId: "dev-local-user",
+          botId: "personal-assistant",
+          running: false,
+          startedAt: null,
+          egress: "network policy filter",
+        },
+      ],
+    } satisfies ComputerFleet);
     client.setQueryData(agentKeys.list(true), []);
-    client.setQueryData(hostAccessKeys.status(), hostAccess);
-    client.setQueryData(agentKeys.list(false), [assistant]);
-    const Page = AdminComputersRoute.options.component as ComponentType;
+    client.setQueryData(agentKeys.list(false), [
+      { id: "personal-assistant", name: "Personal Assistant" } as AgentProfile,
+    ]);
+    client.setQueryData(hostAccessKeys.status(), {
+      connected: true,
+      desktop: true,
+      grants: [],
+      pending: [],
+    } satisfies HostAccessStatus);
     const router = createRouter({
       history: createMemoryHistory({ initialEntries: ["/"] }),
-      routeTree: createRootRoute({ component: () => <Page /> }),
+      routeTree: createRootRoute({
+        component: () => (
+          <>
+            <ThisComputerSections />
+            <TeamComputersSection />
+          </>
+        ),
+      }),
     });
     const view = render(
       <QueryClientProvider client={client}>
         <RouterProvider router={router as never} />
       </QueryClientProvider>,
     );
-    await view.findByRole("heading", { name: "电脑" });
-    return view;
-  }
-
-  test("Admin › 电脑 tells an admin how to give each person a computer", async () => {
-    const view = await renderAdminPage();
+    await view.findByRole("heading", { name: "你的员工的浏览器" });
     const text = view.container.textContent ?? "";
-    expect(text).toContain("COMPUTER_SUPERVISOR_URL");
-    expect(text).toContain("这个部署里的电脑");
-    expect(text).toContain("dev@xiongbao.local · Personal Assistant");
-    expect(text).toContain("经 network policy filter 出网");
+    expect(
+      view.getByRole("heading", { name: "这台电脑上的文件夹" }),
+    ).toBeTruthy();
+    expect(text).toContain("Personal Assistant");
+    expect(text).not.toContain("团队的电脑");
+    expect(text).not.toContain("COMPUTER_SUPERVISOR_URL");
+    expect(text).not.toContain("出网");
   });
 });

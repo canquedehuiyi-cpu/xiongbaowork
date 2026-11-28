@@ -142,7 +142,7 @@ test("guidanceFor names the plan, used/limit, /settings/plans and the cleanup sc
     sentence: "Team 套餐：设备已用 1/1",
     hint: "移除不再使用的设备即可腾出名额，或升级套餐获得更多名额。",
     upgradeHref: "/settings/plans",
-    // 设置 › 我的设备 is where a registered device (what the quota counts) is removed.
+    // 设置 › 电脑与设备 is where a registered device (what the quota counts) is removed.
     cleanup: { href: "/settings/devices", label: "管理设备" },
   });
   expect(guidanceFor(details("customModels", 5, 5))).toEqual({

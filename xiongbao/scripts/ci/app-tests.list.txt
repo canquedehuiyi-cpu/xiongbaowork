@@ -28,7 +28,6 @@ tests/activity-report-reads-once.test.tsx
 tests/add-app-starts-sign-in.test.tsx
 tests/admin-brokered-row-provider.test.tsx
 tests/admin-install-listing.test.tsx
-tests/admin-network-describe.test.tsx
 tests/admin-plugin-crew-grant.test.tsx
 tests/admin-providers.test.tsx
 tests/admin-skill-crew-grant.test.tsx
@@ -394,6 +393,8 @@ tests/paced-reveal.test.ts
 tests/page-empty.test.tsx
 tests/page-shell-workbench.test.tsx
 tests/parallel-answers-send.test.tsx
+tests/parity-capture-args.test.ts
+tests/parity-fixture-audience.test.ts
 tests/permissions-describe.test.tsx
 tests/person-sent-message.test.ts
 tests/personal-app-page.test.tsx
@@ -472,8 +473,17 @@ tests/server-computer-tools.test.tsx
 tests/server-run-chat.test.tsx
 tests/session-memory.test.ts
 tests/settings-about.test.tsx
+tests/settings-account-page.test.tsx
+tests/settings-audience.test.ts
+tests/settings-devices-page.test.tsx
+tests/settings-gating.test.tsx
+tests/settings-moves-links.test.ts
+tests/settings-moves.test.tsx
+tests/settings-names.test.ts
+tests/settings-render-once.test.tsx
 tests/settings-setup.test.tsx
 tests/settings-sidebar.test.ts
+tests/settings-single-writer.test.ts
 tests/settled-args.test.ts
 tests/setup-checklist-editions.test.tsx
 tests/setup-checklist.test.tsx
