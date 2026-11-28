@@ -383,8 +383,7 @@ const SAFETY_REQUIREMENTS: readonly {
 }[] = [
   {
     id: "credentials",
-    reason:
-      "Changing a password, passcode, two-factor setting, recovery code or other credential is always done by the person.",
+    reason: "改密码、验证码、两步验证、恢复码这类登录信息，总是由你本人来做。",
     pattern:
       /pass(word|code|phrase)|passwd|\b2fa\b|two[-_ ]?factor|\bmfa\b|one[-_ ]?time[-_ ]?code|\botp\b|recovery[-_ ]?(code|key|email|phone)|security[-_ ]?question|api[-_ ]?key|access[-_ ]?token|credential|sign[-_ ]?in[-_ ]?method/i,
     /*
@@ -408,14 +407,13 @@ const SAFETY_REQUIREMENTS: readonly {
   },
   {
     id: "security_settings",
-    reason:
-      "Changing security, sharing or access settings on an account is always done by the person.",
+    reason: "改账号的安全、分享或访问设置，总是由你本人来做。",
     pattern:
       /security[-_ ]?settings?|\/settings\/security|account[-_ ]?security|sharing[-_ ]?settings?|share[-_ ]?with[-_ ]?(anyone|public)|make[-_ ]?public|admin[-_ ]?role|grant[-_ ]?admin|permission[-_ ]?settings?|delete[-_ ]?(my[-_ ]?)?account|close[-_ ]?account/i,
   },
   {
     id: "payments",
-    reason: "Paying, purchasing or moving money is always done by the person.",
+    reason: "付款、购买或转账，总是由你本人来做。",
     pattern:
       // 退款也是动钱（上游 #904）。电汇是动钱，新闻通稿（Business Wire、news wire、press wire）不是：
       // Bot 填资料来源时写上它，不该因此交给本人（上游）。wire transfer 不管前面是什么都算。
@@ -1248,8 +1246,8 @@ export function securityFloor(
           hit.id === "unreadable" ||
           hit.id === "too_long" ||
           hit.id === "unclassifiable"
-            ? "This command could not be checked for dangerous operations, so it needs approval before it runs."
-            : "This command can delete data, change the system or hand the computer to someone else, so it needs approval before it runs.",
+            ? "这条命令没法检查有没有危险操作，运行前要你批准。"
+            : "这条命令可能删数据、改系统或把电脑交给别人，运行前要你批准。",
       };
   }
   if (security.sensitivePaths === "off") return undefined;
@@ -1262,7 +1260,7 @@ export function securityFloor(
       if (hit)
         return {
           source: "sensitive_path",
-          reason: `This touches a file that may hold secrets (${hit.pattern}), so it needs approval first.`,
+          reason: `这一步会动到可能存有密钥的文件（${hit.pattern}），要先经你批准。`,
         };
     }
   }
@@ -1270,15 +1268,14 @@ export function securityFloor(
     if (typeof command !== "string")
       return {
         source: "sensitive_path",
-        reason:
-          "This command could not be checked for files that hold secrets, so it needs approval before it runs.",
+        reason: "这条命令没法检查会不会动到存有密钥的文件，运行前要你批准。",
       };
     for (const word of commandWords(command)) {
       const hit = sensitivePath(word, patterns);
       if (hit)
         return {
           source: "sensitive_path",
-          reason: `This command names a file that may hold secrets (${hit.pattern}), so it needs approval before it runs.`,
+          reason: `这条命令提到了可能存有密钥的文件（${hit.pattern}），运行前要你批准。`,
         };
     }
   }
@@ -1337,11 +1334,10 @@ const verdictSchema = z.object({
 const SAFETY_REASONS: Record<(typeof SAFETY_CATEGORIES)[number], string> = {
   none: "",
   credentials:
-    "The reviewer found this changes a password, passcode, two-factor setting or other credential, which is always done by the person.",
+    "审查发现这一步会改密码、两步验证这类登录信息。这类事总是由你本人来做。",
   security_settings:
-    "The reviewer found this changes security, sharing or access settings, which is always done by the person.",
-  payments:
-    "The reviewer found this pays, purchases or moves money, which is always done by the person.",
+    "审查发现这一步会改安全、分享或访问设置。这类事总是由你本人来做。",
+  payments: "审查发现这一步会付款、购买或转账。这类事总是由你本人来做。",
 };
 
 /**
@@ -2200,8 +2196,7 @@ function stricterMatch(
 /** The team's cap of `ask` for a command on a paired computer, as a floor. */
 const HOST_COMMAND_CAP_ASK = {
   source: "host_command_cap",
-  reason:
-    "Your team asks before any command runs on a paired computer, so this needs approval.",
+  reason: "你的团队要求在配对电脑上运行任何命令前都先问，这一步要你批准。",
 } as const;
 
 /**
@@ -2311,7 +2306,7 @@ async function decideByRules(
       behaviour: "hand_off",
       source: matched.layer,
       ruleId: matched.rule.id,
-      reason: "A rule hands this kind of action to the person.",
+      reason: "有一条规则把这类操作交给你本人来做。",
     };
   const review =
     (input.autoReview && reviewable(candidate)) ||
@@ -2374,7 +2369,7 @@ async function decideByRules(
       behaviour: "ask",
       source: matched.layer,
       ruleId: matched.rule.id,
-      reason: "A rule asks before this kind of action.",
+      reason: "有一条规则要求这类操作先问你。",
       ...(review ? { review } : {}),
     };
   if (matched?.rule.behaviour === "pre_approved")
@@ -2383,7 +2378,7 @@ async function decideByRules(
           behaviour: "allow",
           source: matched.layer,
           ruleId: matched.rule.id,
-          reason: "The person asked for this exact action in this run.",
+          reason: "你在这一轮里明确要求过这个操作。",
           review,
         }
       : {
@@ -2391,7 +2386,7 @@ async function decideByRules(
           source: matched.layer,
           ruleId: matched.rule.id,
           reason:
-            "A rule allows this only when the person asked for it, and this run's request did not.",
+            "有一条规则只在你明确要求时才放行这类操作，这一轮你没有这样要求。",
           ...(review ? { review } : {}),
         };
   if (matched?.rule.behaviour === "allow")
@@ -2406,7 +2401,7 @@ async function decideByRules(
     return {
       behaviour: "ask",
       source: "default",
-      reason: "You asked to review changes before they happen.",
+      reason: "你设置了改动之前先问你。",
       ...(review ? { review } : {}),
     };
   /*
@@ -2430,14 +2425,13 @@ async function decideByRules(
     return {
       behaviour: "ask",
       source: "default",
-      reason:
-        "Nobody asked for this run, so handing work to another Bot waits for you.",
+      reason: "这一轮不是你发起的，把活交给别的员工要先等你同意。",
       ...(review ? { review } : {}),
     };
   return {
     behaviour: "allow",
     source: review ? "auto_review" : "default",
-    reason: review ? review.reason : "No rule or preference asks about this.",
+    reason: review ? review.reason : "没有规则或设置要求先问这一步。",
     ...(review ? { review } : {}),
   };
 }
@@ -2446,7 +2440,7 @@ async function decideByRules(
 function allowedReason(layer: RuleLayer): string {
   return layer === "conversation"
     ? "你在这段对话里允许过这样做。"
-    : "A rule allows this kind of action.";
+    : "有一条规则允许这类操作。";
 }
 
 const HOST_RANK: Record<HostCommandPolicy, number> = {

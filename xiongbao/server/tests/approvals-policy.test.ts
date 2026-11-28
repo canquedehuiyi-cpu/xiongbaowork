@@ -2320,7 +2320,7 @@ describe("device app discovery: enabling a local app", () => {
       }),
     ).toMatchObject({
       behaviour: "ask",
-      reason: "A rule asks before this kind of action.",
+      reason: "有一条规则要求这类操作先问你。",
     });
   });
   // --- end app discovery ---
@@ -2923,7 +2923,7 @@ describe("destructive tools always ask, once at a time", () => {
     });
     expect(asked.source).toBe("destructive_tool");
     expect(asked.reason).toContain(DESTRUCTIVE_TOOL_REASON);
-    expect(asked.reason).toContain("A rule asks before this kind of action.");
+    expect(asked.reason).toContain("有一条规则要求这类操作先问你。");
     const reviewed = await decideAction({
       ...base,
       candidate: app("gmail/GMAIL_DELETE_MESSAGE"),
@@ -3203,7 +3203,7 @@ describe("outbound sends always ask, once at a time", () => {
     });
     expect(outcome.source).toBe("outbound_send");
     expect(outcome.reason).toContain(OUTBOUND_SEND_REASON);
-    expect(outcome.reason).toContain("A rule asks before this kind of action.");
+    expect(outcome.reason).toContain("有一条规则要求这类操作先问你。");
     expect(offersStandingRule({ policy: outcome })).toBeFalse();
     expect(
       offersStandingRule({
@@ -3351,7 +3351,7 @@ describe("upstream floors: app tools", () => {
     ).toEqual({
       id: "credentials",
       reason:
-        "Changing a password, passcode, two-factor setting, recovery code or other credential is always done by the person.",
+        "改密码、验证码、两步验证、恢复码这类登录信息，总是由你本人来做。",
       behaviour: "hand_off",
     });
     expect(
@@ -4622,7 +4622,7 @@ describe("a delegation nobody asked for", () => {
   test("a run a routine started asks before handing work on", async () => {
     const outcome = await decide({ unattended: true });
     expect(outcome.behaviour).toBe("ask");
-    expect(outcome.reason).toContain("Nobody asked for this run");
+    expect(outcome.reason).toContain("这一轮不是你发起的");
   });
 
   test("a hand-off the person asked for still runs without a card", async () => {
@@ -4649,5 +4649,95 @@ describe("a delegation nobody asked for", () => {
       },
     );
     expect(outcome.behaviour).toBe("allow");
+  });
+});
+
+/*
+ * 审批卡、收件箱和审批详情把 `reason` 原样念给人听（`inline-approval.tsx` 的 caption），所以每一条
+ * 给人看的理由都是中文。v0.2.17 验收时卡面上出现了「You asked to review changes before they happen.」。
+ */
+describe("the reasons a person reads are in Chinese", () => {
+  const chinese = (reason: string) => {
+    expect(reason).toMatch(/[一-鿿]/);
+    // 路径、命令这类插进来的值之外，不该有英文句子。
+    expect(reason).not.toMatch(/[A-Za-z]{3,} [A-Za-z]{3,}/);
+  };
+
+  test("asking before changes says so in Chinese", async () => {
+    const outcome = await decideAction({
+      ...base,
+      candidate: candidate(),
+      askBeforeChanges: true,
+    });
+    expect(outcome).toMatchObject({ behaviour: "ask", source: "default" });
+    expect(outcome.reason).toBe("你设置了改动之前先问你。");
+  });
+
+  test("every rule layer, the defaults and the floors", async () => {
+    const decide = (extra: Partial<Parameters<typeof decideAction>[0]>) =>
+      decideAction({ ...base, candidate: candidate(), ...extra });
+    for (const behaviour of [
+      "allow",
+      "ask",
+      "hand_off",
+      "pre_approved",
+    ] as const)
+      chinese((await decide({ personal: [rule(behaviour)] })).reason);
+    chinese(
+      (
+        await decide({
+          personal: [rule("pre_approved")],
+          messages: said("Email Sam the notes."),
+          model: model({
+            verdict: "proceed",
+            preApproved: true,
+            reason: "Asked for.",
+          }),
+        })
+      ).reason,
+    );
+    chinese((await decide({})).reason);
+    chinese(
+      (
+        await decideAction({
+          ...base,
+          candidate: candidate({
+            toolRef: "bot/message_bot",
+            effect: DELEGATE_EFFECT,
+            scope: "researcher",
+            args: { bot: "researcher", task: "check" },
+            unattended: true,
+          }),
+        })
+      ).reason,
+    );
+    for (const args of [
+      { field: "New password" },
+      { field: "security settings" },
+      { button: "Pay now" },
+    ]) {
+      const floor = safetyRequirement(
+        candidate({ toolRef: "computer_type", args }),
+      );
+      expect(floor).toBeDefined();
+      chinese(floor?.reason ?? "");
+    }
+    // 危险命令、读不懂的命令、可能存有密钥的文件和提到它的命令。
+    for (const asked of [
+      command("rm -rf ~"),
+      command(undefined),
+      command("cat .env"),
+      candidate({
+        toolRef: "computer_read_file",
+        effect: "read",
+        scope: "workspace",
+        args: {},
+        target: { filePath: ".ssh/id_rsa" },
+      }),
+    ]) {
+      const outcome = await decideAction({ ...base, candidate: asked });
+      expect(outcome.behaviour).toBe("ask");
+      chinese(outcome.reason);
+    }
   });
 });
