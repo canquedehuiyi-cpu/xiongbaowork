@@ -7,7 +7,8 @@ import {
 import { useEffect, useRef } from "react";
 import { toast } from "@/components/ui/toast";
 import { type ApprovalInboxData, approvalInboxOptions } from "@/lib/approvals";
-import { client, tryClient } from "@/lib/client";
+import { client, RequestError, tryClient } from "@/lib/client";
+import { shouldRetryQuery } from "@/query-client";
 import type {
   ConversationSidebar,
   SidebarCompaction,
@@ -24,6 +25,21 @@ import type {
 export type SidebarSource = { threadId: string } | { channelId: string };
 
 export const SIDEBAR_REFRESH_MS = 15_000;
+
+/** 对话不在了（删了，或从来没有）：接口答 404。 */
+const isGone = (error: unknown) =>
+  error instanceof RequestError && error.status === 404;
+
+/**
+ * 侧栏的轮询：对话答过 404 就停下。已删除的群再问一百次也是 404，每 15 秒一次只是白白多两条请求；别的
+ * 失败（断网、服务器一时出错）照旧按 15 秒再读。
+ */
+const sidebarPolling = {
+  refetchInterval: (query: { state: { error: unknown } }) =>
+    isGone(query.state.error) ? false : SIDEBAR_REFRESH_MS,
+  retry: (failureCount: number, error: unknown) =>
+    !isGone(error) && shouldRetryQuery(failureCount, error),
+};
 
 export const sidebarKeys = {
   all: ["conversation-sidebar"] as const,
@@ -46,7 +62,7 @@ export function sidebarQueryOptions(source: SidebarSource) {
     queryKey: sidebarKeys.of(source),
     queryFn: async (): Promise<ConversationSidebar> =>
       (await client(path, { fallback: "读不到这个对话的侧栏。" })).json(),
-    refetchInterval: SIDEBAR_REFRESH_MS,
+    ...sidebarPolling,
   });
 }
 
@@ -63,7 +79,7 @@ export function sidebarAgentQueryOptions(
     queryKey: [...sidebarKeys.of(source), "agent", agentId] as const,
     queryFn: async (): Promise<ConversationSidebar> =>
       (await client(path, { fallback: "读不到这位员工的上下文。" })).json(),
-    refetchInterval: SIDEBAR_REFRESH_MS,
+    ...sidebarPolling,
   });
 }
 

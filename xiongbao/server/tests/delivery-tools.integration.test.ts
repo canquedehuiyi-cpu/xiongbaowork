@@ -2196,8 +2196,24 @@ describe("deliver_task and a workspace file", () => {
       });
       const answer = parsed(result);
       expect(answer.bounced).toBe(true);
-      expect(String(answer.reason)).toContain("工作区内的相对路径");
+      // 原因里写被拒的那个路径本身，不是标题：标题「文件」看不出交错了什么。
+      expect(String(answer.reason)).toContain(
+        `路径「${ref}」不是工作区内的相对路径`,
+      );
+      expect(String(answer.reason)).not.toContain("「文件」");
     }
+    // 很长的路径只写前 200 个字，用「…」结尾：原因不会被撑成一屏。
+    const long = `/${"x".repeat(3000)}.txt`;
+    const { result } = await deliverOnThread(card, {
+      items: [{ kind: "workspace_file", ref: long, title: "文件" }],
+      checks: ["查过了"],
+    });
+    const answer = parsed(result);
+    expect(answer.bounced).toBe(true);
+    expect(String(answer.reason)).toContain(
+      `路径「/${"x".repeat(199)}…」不是工作区内的相对路径`,
+    );
+    expect(String(answer.reason).length).toBeLessThan(400);
     expect(
       (await cardRow(card.tenantId, card.cardId))?.deliverableRef,
     ).toBeNull();

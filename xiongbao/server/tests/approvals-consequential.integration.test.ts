@@ -516,7 +516,7 @@ async function outcomes(
 
 /** M3: a once-only floor by the fork's source; a hand-off by its reason, as upstream has it. */
 const CATEGORY_OF: Record<string, string> = {
-  "Paying, purchasing or moving money is always done by the person.": "money",
+  "付款、购买或转账，总是由你本人来做。": "money",
   destructive_tool: "deleting",
   outbound_send: "sending",
   share_access: "sharing",

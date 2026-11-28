@@ -1,8 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { AppOpenButton } from "@/components/channels/app-open-button";
-import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
+import { ArtifactPreview } from "@/components/channels/artifact-preview";
+import {
+  ARTIFACT_DOWNLOAD_LINK,
+  PreviewButton,
+} from "@/components/channels/turn-artifacts";
 import {
   ApprovalActions,
   useApprovalDecision,
@@ -11,6 +15,11 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
 import { artifactHref } from "@/lib/computers/artifact";
+import {
+  type PreviewController,
+  type PreviewTarget,
+  PreviewTargetContext,
+} from "@/lib/computers/preview";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -238,21 +247,31 @@ export function EvidenceLine({
     <div className="flex flex-wrap items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
       <RowIcon kind={row.kind} />
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{label}</span>
+      {row.kind === "workspace_file" && agentId && download ? (
+        // 和对话里交付卡同一个按钮、同一个范围（这张卡）；和「下载」同一个条件（路径不在工作区内就两个
+        // 都没有），页面没提供面板时不画。
+        <PreviewButton
+          target={{ botId: agentId, path: row.path, scope: { task: taskId } }}
+        />
+      ) : null}
       {download ? (
         <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
           下载
         </a>
       ) : null}
       {row.kind === "app" && agentId ? (
-        <AppOpenButton
-          label={row.label}
-          target={{
-            botId: agentId,
-            app: { port: row.port, path: row.path },
-            label: row.label,
-            scope: { task: taskId },
-          }}
-        />
+        // 程序在任务页照旧开新标签页，不进预览面板（面板只给文件）。
+        <PreviewTargetContext.Provider value={undefined}>
+          <AppOpenButton
+            label={row.label}
+            target={{
+              botId: agentId,
+              app: { port: row.port, path: row.path },
+              label: row.label,
+              scope: { task: taskId },
+            }}
+          />
+        </PreviewTargetContext.Provider>
       ) : null}
       <span className="ml-auto shrink-0 text-(--wb-muted) text-[12px]">
         {row.kind === "diff"
@@ -341,47 +360,79 @@ export function DeliveryEvidence({
   const evidence = evidenceOf(deliverable);
   const reruns = rerunsOf(deliverable);
   const warning = rerunWarningOf(deliverable);
+  /*
+   * 预览面板：任务页本身已是从右边滑出的一层，文件预览再叠一层同宽的（手机上占满一屏），关上回到这张卡。
+   * 开关放在组件里，不进地址栏：任务页的地址只管哪张卡。
+   */
+  const [previewing, setPreviewing] = useState<PreviewTarget>();
+  const preview = useMemo<PreviewController>(
+    () => ({
+      target: previewing,
+      open: setPreviewing,
+      close: () => setPreviewing(undefined),
+    }),
+    [previewing],
+  );
   return (
-    <section aria-label="交付物与证据" className="flex flex-col gap-2">
-      <h3 className={SECTION_TITLE}>交付物与证据</h3>
-      {warning ? (
-        <p
-          className="m-0 rounded-[10px] bg-(--wb-amber-soft) px-3 py-2 font-medium text-(--wb-amber-fg) text-[13px]"
-          role="alert"
+    <PreviewTargetContext.Provider value={preview}>
+      <section aria-label="交付物与证据" className="flex flex-col gap-2">
+        <h3 className={SECTION_TITLE}>交付物与证据</h3>
+        {warning ? (
+          <p
+            className="m-0 rounded-[10px] bg-(--wb-amber-soft) px-3 py-2 font-medium text-(--wb-amber-fg) text-[13px]"
+            role="alert"
+          >
+            {warning}
+          </p>
+        ) : null}
+        {evidence.length > 0 ? (
+          evidence.map((row, index) => (
+            <EvidenceLine
+              agentId={agentId}
+              // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
+              key={index}
+              row={row}
+              taskId={taskId}
+            />
+          ))
+        ) : (
+          <p className="m-0 text-(--wb-muted) text-[13px]">还没交成果。</p>
+        )}
+        {reruns.length > 0 ? (
+          <ul
+            aria-label="服务器复核"
+            className="m-0 flex list-none flex-col gap-2 p-0"
+          >
+            {reruns.map((row, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付记录里的行，先后不会变。
+              <RerunLine key={index} row={row} />
+            ))}
+          </ul>
+        ) : null}
+        <span className="text-(--wb-muted) text-[12px] leading-[1.6]">
+          {criteria
+            ? `验收标准（派活时写下的）：${criteria}`
+            : "派活时没写验收标准。"}
+        </span>
+      </section>
+      <Sheet
+        onOpenChange={(open) => {
+          if (!open) preview.close();
+        }}
+        open={previewing !== undefined}
+      >
+        <SheetContent
+          className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-[560px]"
+          showCloseButton={false}
+          side="right"
         >
-          {warning}
-        </p>
-      ) : null}
-      {evidence.length > 0 ? (
-        evidence.map((row, index) => (
-          <EvidenceLine
-            agentId={agentId}
-            // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
-            key={index}
-            row={row}
-            taskId={taskId}
-          />
-        ))
-      ) : (
-        <p className="m-0 text-(--wb-muted) text-[13px]">还没交成果。</p>
-      )}
-      {reruns.length > 0 ? (
-        <ul
-          aria-label="服务器复核"
-          className="m-0 flex list-none flex-col gap-2 p-0"
-        >
-          {reruns.map((row, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付记录里的行，先后不会变。
-            <RerunLine key={index} row={row} />
-          ))}
-        </ul>
-      ) : null}
-      <span className="text-(--wb-muted) text-[12px] leading-[1.6]">
-        {criteria
-          ? `验收标准（派活时写下的）：${criteria}`
-          : "派活时没写验收标准。"}
-      </span>
-    </section>
+          <SheetTitle className="sr-only">预览</SheetTitle>
+          {previewing ? (
+            <ArtifactPreview onClose={preview.close} target={previewing} />
+          ) : null}
+        </SheetContent>
+      </Sheet>
+    </PreviewTargetContext.Provider>
   );
 }
 

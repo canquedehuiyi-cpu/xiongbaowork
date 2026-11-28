@@ -20,6 +20,7 @@ import type { Database } from "../db/client";
 import {
   channelAgents,
   channelMemberships,
+  channels,
   groupBotThreads,
   groupTaskRuns,
   intelligenceChannelMappings,
@@ -163,12 +164,33 @@ async function openTargetsFor(
     }
   }
 
+  /*
+   * Which of those conversations still exist. Deleting one is a soft delete (`channels/routes.ts`
+   * `softDelete` only stamps `deleted_at`) and leaves the membership and both mapping tables in place,
+   * so every lookup above still finds a deleted conversation. Its page answers 404, so it is not a
+   * target: the card answers null and the screen says the conversation is gone.
+   */
+  const resolved = [
+    ...new Set([...mine, ...byThread.values(), ...byGroupThread.values()]),
+  ];
+  const live = new Set<string>();
+  if (resolved.length > 0) {
+    for (const row of await database
+      .select({ id: channels.id })
+      .from(channels)
+      .where(and(inArray(channels.id, resolved), isNull(channels.deletedAt)))) {
+      live.add(row.id);
+    }
+  }
+
   /** Which of this caller's conversations a `channel_ref` names — a channel, or a thread that maps to one. */
   const channelOf = (row: OpenTargetRow): string | null => {
     const ref = row.channelRef;
     if (!ref) return null;
-    if (mine.has(ref)) return ref;
-    return byThread.get(ref) ?? byGroupThread.get(ref) ?? null;
+    const channelId = mine.has(ref)
+      ? ref
+      : (byThread.get(ref) ?? byGroupThread.get(ref) ?? null);
+    return channelId !== null && live.has(channelId) ? channelId : null;
   };
 
   /*

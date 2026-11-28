@@ -23,11 +23,15 @@ import userEvent from "@testing-library/user-event";
 import { type ReactNode, useState } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
 import { Toaster, toast } from "@/components/ui/toast";
+import { RequestError } from "@/lib/client";
 import {
   AUTO_COMPACTION_FAILED_NOTICE,
   compactionOutcomeOf,
   receiveCompactionOutcome,
+  SIDEBAR_REFRESH_MS,
   shouldNoticeCompactionFailure,
+  sidebarAgentQueryOptions,
+  sidebarQueryOptions,
   useGroupCompactionOutcomes,
 } from "@/lib/threads/sidebar";
 import {
@@ -1017,9 +1021,7 @@ test("phone: the full-screen page leaves the Toaster and live regions reachable"
   document.body.append(shell);
   try {
     const { view, user } = drawPhone("/");
-    await user.click(
-      await view.findByRole("button", { name: "查看对话侧栏" }),
-    );
+    await user.click(await view.findByRole("button", { name: "查看对话侧栏" }));
     await view.findByRole("dialog", { name: "产品官 · 这个对话" });
     expect(view.container.hasAttribute("inert")).toBe(true);
     const viewport = document.querySelector<HTMLElement>(
@@ -1077,4 +1079,72 @@ test("phone: a direct link to the sidebar page goes back to the conversation in 
   // 没有可退的历史：就地去掉参数，不后退到应用外面。
   expect(router.state.location.search).toEqual({});
   expect(router.history.location.state.__TSR_index).toBe(0);
+});
+
+/*
+ * 已删除的群：侧栏接口答 404，之后每 15 秒再问一次只会一直 404（v0.2.17 验收，A4 第 3 个标签页）。
+ * 收到 404 就停下轮询，也不重试；别的失败照旧按 15 秒再读。
+ */
+test("a sidebar that answers 404 stops polling, other failures keep it", async () => {
+  const source = { channelId: "channel_gone" };
+  const client = new QueryClient();
+  const run = async (status: number | null) => {
+    let calls = 0;
+    const originalFetch = global.fetch;
+    global.fetch = (async () => {
+      calls += 1;
+      return status === null
+        ? Response.json({ members: [] })
+        : Response.json(
+            { error: "Couldn't find that conversation." },
+            { status },
+          );
+    }) as unknown as typeof fetch;
+    try {
+      const options = sidebarQueryOptions(source);
+      const agent = sidebarAgentQueryOptions(source, "bot-1");
+      client.clear();
+      await client.prefetchQuery({
+        ...options,
+        retry: options.retry ?? 1,
+        retryDelay: 0,
+      });
+      await client.prefetchQuery({
+        ...agent,
+        retry: agent.retry ?? 1,
+        retryDelay: 0,
+      });
+      const query = client.getQueryCache().find({ queryKey: options.queryKey });
+      const agentQuery = client
+        .getQueryCache()
+        .find({ queryKey: agent.queryKey });
+      const interval = (o: typeof options | typeof agent, q: typeof query) =>
+        typeof o.refetchInterval === "function"
+          ? o.refetchInterval(q as never)
+          : o.refetchInterval;
+      return {
+        calls,
+        sidebar: interval(options, query),
+        agent: interval(agent, agentQuery),
+        error: query?.state.error,
+      };
+    } finally {
+      global.fetch = originalFetch;
+    }
+  };
+
+  const gone = await run(404);
+  expect(gone.error).toBeInstanceOf(RequestError);
+  expect(gone.sidebar).toBe(false);
+  expect(gone.agent).toBe(false);
+  // 404 不重试：两个查询各问一次。
+  expect(gone.calls).toBe(2);
+
+  const failing = await run(500);
+  expect(failing.sidebar).toBe(SIDEBAR_REFRESH_MS);
+  expect(failing.agent).toBe(SIDEBAR_REFRESH_MS);
+
+  const fine = await run(null);
+  expect(fine.sidebar).toBe(SIDEBAR_REFRESH_MS);
+  expect(fine.agent).toBe(SIDEBAR_REFRESH_MS);
 });

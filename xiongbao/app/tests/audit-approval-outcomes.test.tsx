@@ -44,7 +44,7 @@ const policy = {
 const asked = {
   behaviour: "ask",
   source: "default",
-  reason: "You asked to review changes before they happen.",
+  reason: "你设置了改动之前先问你。",
 };
 
 let clock = 0;
@@ -195,7 +195,7 @@ test("a denied write reads as refused, and the person's answer as a denial", asy
     {
       what: "保存文件",
       on: "refused.txt",
-      decision: "先问了人You asked to review changes before they happen.",
+      decision: "先问了人你设置了改动之前先问你。",
       outcome: "allowed",
     },
   ]);
@@ -208,7 +208,7 @@ test("an allowed write reads as allowed once, after the person allowed it", asyn
   expect(rows.map((entry) => entry.decision)).toEqual([
     "已放行",
     "有人允许了这一次",
-    "先问了人You asked to review changes before they happen.",
+    "先问了人你设置了改动之前先问你。",
   ]);
 });
 

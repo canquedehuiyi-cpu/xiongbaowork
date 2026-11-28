@@ -386,3 +386,31 @@ test("a crew whose run is gone opens nothing", async () => {
   const open = (await openByTask()).get(id);
   expect(open).toBeNull();
 });
+
+test("a card whose conversation was deleted answers null, for a thread ref and a channel ref alike", async () => {
+  const bot = await makeAgent("deleted-bot");
+  const thread = `thread_${randomUUID()}`;
+  const channelId = await makeChannel(tenant, [bot], thread);
+  const byThread = await openCard({ source: "chat", channelRef: thread });
+  const byChannel = await openCard({
+    source: "routine",
+    channelRef: channelId,
+  });
+  const before = await openByTask();
+  expect(before.get(byThread)).toEqual({ kind: "channel", id: channelId });
+  expect(before.get(byChannel)).toEqual({ kind: "channel", id: channelId });
+
+  /*
+   * 删对话是软删除（`channels/routes.ts` 的 `softDelete` 只写 `deleted_at`），成员关系和线程映射都留着。
+   * 看板不能再把它当成能打开的对话：点进去是 404，应该显示「对话已不在」。
+   */
+  await runAsTenant(tenant, async () => {
+    await database
+      .update(channels)
+      .set({ deletedAt: new Date() })
+      .where(eq(channels.id, channelId));
+  });
+  const after = await openByTask();
+  expect(after.get(byThread)).toBeNull();
+  expect(after.get(byChannel)).toBeNull();
+});
