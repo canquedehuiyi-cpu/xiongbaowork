@@ -5,9 +5,10 @@
  *     [--scenario data|empty|all] [--theme dark|light|all] [--only <route substring>]
  *     [--path <any app path, captured on its own, e.g. /channel/c-1>]
  *     [--viewport 1440x900] [--concurrency 3]
+ *     [--scale 2] [--audience admin|member|personal|all]
  *
  * Every `/api/**` request is answered from `fixtures.ts`; nothing reaches a backend. For each
- * route × viewport × theme × scenario it writes `<out>/<scenario>/<theme>/<WxH>/<slug>.png` plus a
+ * route × viewport × theme × scenario it writes `<out>/<audience>/<scenario>/<theme>/<WxH>/<slug>.png` plus a
  * `.json` of measurements, and finally `<out>/summary.md`.
  */
 
@@ -19,7 +20,20 @@ import {
   chromium,
   type Page,
 } from "playwright-core";
-import { resolveFixture, SCENARIOS, type Scenario } from "./fixtures";
+import {
+  type Options,
+  outputDir,
+  parseArgs,
+  type Theme,
+  VIEWPORTS,
+} from "./capture-args";
+import {
+  type FixtureAudience,
+  resolveFixture,
+  type Scenario,
+} from "./fixtures";
+
+export { VIEWPORTS };
 
 /* ------------------------------------------------------------------------------------------------ */
 /* What to capture                                                                                   */
@@ -75,6 +89,8 @@ export const ROUTES: RouteSpec[] = [
   { path: "/plans" },
   { path: "/platform" },
   { path: "/wakerflows/new" },
+  { path: "/settings/plans" },
+  { path: "/settings/about" },
   { path: "/settings/devices" },
   { path: "/settings/passwords" },
   { path: "/settings/connected-accounts" },
@@ -91,20 +107,8 @@ export const ROUTES: RouteSpec[] = [
   { path: "/admin/components" },
 ];
 
-export const VIEWPORTS = [
-  { width: 1696, height: 783 },
-  { width: 1440, height: 900 },
-  { width: 1280, height: 800 },
-  { width: 1024, height: 768 },
-] as const;
-
-type Theme = "dark" | "light";
-
 /** The page clock is pinned here so relative times ("3 小时前") read the same in every capture. */
 const FROZEN_NOW = new Date("2026-11-07T10:00:00+08:00");
-
-const DEFAULT_OUT =
-  "/tmp/claude-0/-home-user-xiongbaowork/87ff88c2-019b-516c-a0cd-6b2b65a63f7a/scratchpad/parity-shots";
 
 /**
  * No motion, no caret, and no agent SDK dev inspector: in a Vite dev build the agent SDK mounts its
@@ -117,51 +121,6 @@ const FREEZE_CSS =
 /* ------------------------------------------------------------------------------------------------ */
 /* Arguments                                                                                         */
 /* ------------------------------------------------------------------------------------------------ */
-
-type Options = {
-  base: string;
-  out: string;
-  scenarios: Scenario[];
-  themes: Theme[];
-  only: string | undefined;
-  /** One ad-hoc path to capture instead of the route list. */
-  path: string | undefined;
-  viewports: { width: number; height: number }[];
-  concurrency: number;
-};
-
-function parseArgs(argv: string[]): Options {
-  const value = (flag: string) => {
-    const index = argv.indexOf(flag);
-    return index >= 0 ? argv[index + 1] : undefined;
-  };
-  const scenario = value("--scenario") ?? "all";
-  const theme = value("--theme") ?? "dark";
-  const viewport = value("--viewport");
-  if (scenario !== "all" && !SCENARIOS.includes(scenario as Scenario)) {
-    throw new Error(`--scenario must be data, empty or all (got ${scenario})`);
-  }
-  if (!["dark", "light", "all"].includes(theme)) {
-    throw new Error(`--theme must be dark, light or all (got ${theme})`);
-  }
-  return {
-    base: (value("--base") ?? "http://127.0.0.1:3910").replace(/\/$/, ""),
-    out: value("--out") ?? DEFAULT_OUT,
-    scenarios: scenario === "all" ? [...SCENARIOS] : [scenario as Scenario],
-    themes: theme === "all" ? ["dark", "light"] : [theme as Theme],
-    only: value("--only"),
-    path: value("--path"),
-    viewports: viewport
-      ? [
-          {
-            width: Number(viewport.split("x")[0]),
-            height: Number(viewport.split("x")[1]),
-          },
-        ]
-      : VIEWPORTS.map((entry) => ({ ...entry })),
-    concurrency: Math.max(1, Number(value("--concurrency") ?? 3)),
-  };
-}
 
 export const slugOf = (route: RouteSpec) =>
   route.slug ??
@@ -191,6 +150,7 @@ type Box = {
 type Measurements = {
   route: string;
   slug: string;
+  audience: FixtureAudience;
   scenario: Scenario;
   theme: Theme;
   viewport: string;
@@ -284,10 +244,11 @@ export async function newContext(
   viewport: { width: number; height: number },
   unmatched: Set<string>,
   external: Set<string>,
+  audience: FixtureAudience = "admin",
 ): Promise<BrowserContext> {
   const context = await browser.newContext({
     viewport,
-    deviceScaleFactor: 1,
+    deviceScaleFactor: options.scale ?? 1,
     colorScheme: theme,
     reducedMotion: "reduce",
     locale: "zh-CN",
@@ -340,6 +301,7 @@ export async function newContext(
         pathWithSearch,
         scenario,
         body,
+        audience,
       );
       if (!fixture) {
         unmatched.add(`${request.method()} ${pathWithSearch}`);
@@ -367,6 +329,7 @@ async function captureOne(
   browser: Browser,
   options: Options,
   route: RouteSpec,
+  audience: FixtureAudience,
   scenario: Scenario,
   theme: Theme,
   viewport: { width: number; height: number },
@@ -381,6 +344,7 @@ async function captureOne(
     viewport,
     unmatched,
     external,
+    audience,
   );
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
@@ -400,7 +364,7 @@ async function captureOne(
 
   const slug = slugOf(route);
   const size = `${viewport.width}x${viewport.height}`;
-  const dir = join(options.out, scenario, theme, size);
+  const dir = outputDir(options.out, audience, scenario, theme, size);
   await mkdir(dir, { recursive: true });
 
   try {
@@ -441,6 +405,7 @@ async function captureOne(
   const result: Measurements = {
     route: route.path,
     slug,
+    audience,
     scenario,
     theme,
     viewport: size,
@@ -485,7 +450,7 @@ function summarise(results: Measurements[], options: Options): string {
   lines.push(
     mainProblems.length === 0
       ? "**Main routes clean:** no page errors and no unmatched API requests on /tasks /reachability /autonomous /wakers /resources."
-      : `**Main routes with problems:** ${mainProblems.map((result) => `${result.scenario}/${result.theme}/${result.viewport}/${result.slug}`).join(", ")}`,
+      : `**Main routes with problems:** ${mainProblems.map((result) => `${result.audience}/${result.scenario}/${result.theme}/${result.viewport}/${result.slug}`).join(", ")}`,
     "",
   );
   const allUnmatched = [
@@ -501,7 +466,7 @@ function summarise(results: Measurements[], options: Options): string {
   );
   const groups = new Map<string, Measurements[]>();
   for (const result of results) {
-    const key = `${result.scenario} / ${result.theme}`;
+    const key = `${result.audience} / ${result.scenario} / ${result.theme}`;
     groups.set(key, [...(groups.get(key) ?? []), result]);
   }
   for (const [key, rows] of groups) {
@@ -525,7 +490,7 @@ function summarise(results: Measurements[], options: Options): string {
     lines.push("## Error details", "");
     for (const row of errored) {
       lines.push(
-        `### ${row.scenario}/${row.theme}/${row.viewport}/${row.slug}`,
+        `### ${row.audience}/${row.scenario}/${row.theme}/${row.viewport}/${row.slug}`,
         "",
         ...row.pageErrors.map((entry) => `- pageerror: ${entry.slice(0, 300)}`),
         ...[...new Set(row.consoleErrors)].map(
@@ -556,13 +521,23 @@ async function main() {
   if (routes.length === 0) throw new Error(`no route matches ${options.only}`);
 
   const jobs: (() => Promise<Measurements>)[] = [];
-  for (const scenario of options.scenarios) {
-    for (const theme of options.themes) {
-      for (const viewport of options.viewports) {
-        for (const route of routes) {
-          jobs.push(() =>
-            captureOne(browser, options, route, scenario, theme, viewport),
-          );
+  for (const audience of options.audiences) {
+    for (const scenario of options.scenarios) {
+      for (const theme of options.themes) {
+        for (const viewport of options.viewports) {
+          for (const route of routes) {
+            jobs.push(() =>
+              captureOne(
+                browser,
+                options,
+                route,
+                audience,
+                scenario,
+                theme,
+                viewport,
+              ),
+            );
+          }
         }
       }
     }
@@ -591,7 +566,7 @@ async function main() {
         .filter(Boolean)
         .join(" ");
       console.log(
-        `[${results.length}/${jobs.length}] ${result.scenario}/${result.theme}/${result.viewport}/${result.slug} ${flags}`,
+        `[${results.length}/${jobs.length}] ${result.audience}/${result.scenario}/${result.theme}/${result.viewport}/${result.slug} ${flags}`,
       );
     }
   };
@@ -608,6 +583,7 @@ async function main() {
 
   const order = (result: Measurements) =>
     [
+      options.audiences.indexOf(result.audience),
       options.scenarios.indexOf(result.scenario),
       options.themes.indexOf(result.theme),
       options.viewports.findIndex(

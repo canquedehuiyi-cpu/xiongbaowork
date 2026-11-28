@@ -393,6 +393,7 @@ tests/paced-reveal.test.ts
 tests/page-empty.test.tsx
 tests/page-shell-workbench.test.tsx
 tests/parallel-answers-send.test.tsx
+tests/parity-capture-args.test.ts
 tests/parity-fixture-audience.test.ts
 tests/permissions-describe.test.tsx
 tests/person-sent-message.test.ts

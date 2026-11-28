@@ -34,6 +34,8 @@ bun tests/parity/capture.ts \
   [--theme dark|light|all]      # 默认 dark
   [--only <路由子串>]           # 例如 --only wakers
   [--viewport 1440x900]         # 默认四个视口：1696x783、1440x900、1280x800、1024x768
+  [--scale 2]                   # 设备像素比，默认 1；设置页截图用 2
+  [--audience admin|member|personal|all]  # 默认 admin；member 是普通成员，personal 是个人版，all 依次跑三种
   [--concurrency 3]
 ```
 
@@ -45,15 +47,15 @@ bun tests/parity/capture.ts \
 - 把页面时钟固定在 `2026-11-07T10:00:00+08:00`（`page.clock.setFixedTime`），时区 `Asia/Shanghai`，语言 `zh-CN`；
 - 注入 CSS 关闭动画、过渡与光标闪烁，并隐藏运行时库在开发模式下挂出的 `<cpk-web-inspector>` 浮层（生产构建没有它）；
 - 拦截所有对外部域名的请求（例如运行时库的公告源），本地返回 `{}`，记录在 `externalRequests`；
-- 等待网络空闲、`document.fonts.ready`，再等 500ms；`deviceScaleFactor` 为 1，只截视口范围。
+- 等待网络空闲、`document.fonts.ready`，再等 500ms；`deviceScaleFactor` 默认为 1（`--scale` 可改），只截视口范围。
 
 输出结构：
 
 ```
 <out>/
   summary.md                              # 每个路由 × 视口：错误数、未覆盖接口、横向溢出
-  <scenario>/<theme>/<WxH>/<route-slug>.png
-  <scenario>/<theme>/<WxH>/<route-slug>.json
+  <audience>/<scenario>/<theme>/<WxH>/<route-slug>.png
+  <audience>/<scenario>/<theme>/<WxH>/<route-slug>.json
 ```
 
 每个 `.json` 包含：`pageErrors`（页面异常）、`consoleErrors`、`websocketErrors`、`unmatchedRequests`、`externalRequests`、`horizontalOverflow`（`scrollWidth > innerWidth`），以及以下锚点的包围盒（x、y、w、h，取整）和计算后的 `font-size`、`color`、`background-color`：
@@ -64,6 +66,16 @@ bun tests/parity/capture.ts \
 - 前 12 个 `[data-sidebar="menu-button"]`
 - `main` 内前 12 个 `button`
 - `main` 内所有 `input`
+
+受众（`--audience`）决定夹具怎么答：`admin` 是团队版管理员（默认），`member` 把 `/api/me` 的角色改成普通成员，`personal` 把能力接口的版本改成个人版。输出路径多一级受众目录，不同受众的运行不会互相覆盖。参数解析与输出路径在 `capture-args.ts`，有单元测试 `tests/parity-capture-args.test.ts`。
+
+设置页截图集（设计 §10.7）：
+
+```sh
+bun tests/parity/capture.ts --scale 2 --viewport 1440x900 --theme light --audience all --only settings
+bun tests/parity/capture.ts --scale 2 --viewport 390x844 --theme light --audience all --only settings
+bun tests/parity/capture.ts --scale 2 --viewport 1440x900 --theme dark --audience all --only settings
+```
 
 路由清单在 `capture.ts` 的 `ROUTES` 中维护。`/wakers` 的“员工 / 群组”切换是组件内部状态而不是 URL 参数，所以 `wakers-groups` 这张图是打开 `/wakers` 后点击“群组”按钮得到的。
 
