@@ -1,5 +1,7 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { client } from "@/lib/client";
+import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 
 /**
  * The setup checklist, as the server decided it for the person asking. See
@@ -75,4 +77,23 @@ export function mayOpenSetup(
   capabilities: { localEvaluation: boolean } | undefined,
 ): boolean {
   return user?.role === "admin" || capabilities?.localEvaluation === true;
+}
+
+/**
+ * How many checklist rows an admin can act on: needing setup and saying how. Onboarding leaves the
+ * checklist out, so this is where somebody learns something waits on them. Zero, and the checklist
+ * is never asked for, when the person cannot open setup: they could not fix any of it.
+ */
+export function useSetupToFix(): number {
+  const user = useQuery(currentUserQueryOptions()).data;
+  const capabilities = useQuery(deploymentCapabilitiesQueryOptions()).data;
+  const checklist = useQuery({
+    ...setupChecklistQueryOptions(),
+    enabled: mayOpenSetup(user, capabilities),
+  }).data;
+  return checklist?.audience === "admin"
+    ? checklist.rows.filter(
+        (row) => row.status === "needs_setup" && row.fix !== null,
+      ).length
+    : 0;
 }

@@ -1,64 +1,121 @@
 import { describe, expect, test } from "bun:test";
 import {
-  SETTINGS_SIDEBAR_ITEMS,
-  settingsSidebarItems,
+  activeTopic,
+  legacyTail,
+  settingsTopics,
 } from "../src/components/settings/settings-sidebar";
+import type { SettingsAudience } from "../src/lib/settings/audience";
 
-/*
- * M5b：设置侧栏照上游 main 的分区，加上熊宝的「套餐与用量」「我的设备」。「已连接的账号」搬到了主导航的「连接」，
- * 所以原来「浏览器紧跟在已连接的账号后面」的断言改成按新分区的顺序校验。浏览器录制删除后，「浏览器」一项也随之去掉。
- */
-describe("settings sidebar", () => {
-  test("分区依次是 通用、通知、审批、套餐与用量、我的设备、学习、部署设置、密码、组件展示、关于", () => {
-    expect(SETTINGS_SIDEBAR_ITEMS.map((item) => item.title)).toEqual([
-      "通用",
-      "通知",
-      "审批",
-      "套餐与用量",
-      "我的设备",
-      "学习",
-      "部署设置",
-      "密码",
-      "组件展示",
-      "关于",
+const base: SettingsAudience = {
+  edition: "team",
+  isAdmin: false,
+  maySetUp: false,
+  ready: true,
+};
+const admin: SettingsAudience = { ...base, isAdmin: true, maySetUp: true };
+const member: SettingsAudience = base;
+const memberLocal: SettingsAudience = { ...base, maySetUp: true };
+const personal: SettingsAudience = {
+  ...base,
+  edition: "personal",
+  isAdmin: true,
+  maySetUp: true,
+};
+
+const titles = (a: SettingsAudience) => settingsTopics(a).map((t) => t.title);
+
+describe("设置侧栏的七个话题", () => {
+  test("团队版管理员依次是 账户与外观、员工与模型、审批与安全、连接与技能、电脑与设备、主动与通知、团队管理", () => {
+    expect(titles(admin)).toEqual([
+      "账户与外观",
+      "员工与模型",
+      "审批与安全",
+      "连接与技能",
+      "电脑与设备",
+      "主动与通知",
+      "团队管理",
     ]);
   });
 
-  test("已连接的账号不在设置里，它在「连接」", () => {
-    const titles = SETTINGS_SIDEBAR_ITEMS.map((item) => item.title);
-    expect(titles).not.toContain("已连接的账号");
-    expect(
-      SETTINGS_SIDEBAR_ITEMS.some(
-        (item) => item.linkOptions.to === "/settings/connected-accounts",
-      ),
-    ).toBeFalse();
+  test("成员和个人版没有团队管理", () => {
+    expect(titles(member)).not.toContain("团队管理");
+    expect(titles(personal)).not.toContain("团队管理");
+    expect(titles(personal)).toHaveLength(6);
   });
 
-  test("审批、套餐与用量、我的设备各自指向自己的设置页", () => {
-    const at = (title: string) =>
-      SETTINGS_SIDEBAR_ITEMS.find((item) => item.title === title)?.linkOptions;
-    expect(at("审批")).toEqual({ to: "/settings/approvals" });
-    expect(at("套餐与用量")).toEqual({ to: "/settings/plans" });
-    expect(at("我的设备")).toEqual({ to: "/settings/devices" });
+  test("版本和用户还没读到时不画团队管理", () => {
+    expect(titles({ ...admin, ready: false })).not.toContain("团队管理");
   });
 
-  test("学习 links to /settings/learning, right after 我的设备", () => {
-    const titles = SETTINGS_SIDEBAR_ITEMS.map((item) => item.title);
-    const learning = SETTINGS_SIDEBAR_ITEMS[titles.indexOf("学习")];
+  test("地址照 §5.2，过渡期仍指旧页", () => {
+    const to = (id: string) =>
+      settingsTopics(admin).find((t) => t.id === id)?.linkOptions;
+    expect(to("account")).toEqual({ to: "/settings" });
+    expect(to("models")).toEqual({ to: "/capabilities/models" });
+    expect(to("approvals")).toEqual({ to: "/settings/approvals" });
+    expect(to("connections")).toEqual({ to: "/connections" });
+    expect(to("devices")).toEqual({ to: "/settings/devices" });
+    expect(to("notifications")).toEqual({ to: "/settings/notifications" });
+    expect(to("team")).toEqual({ to: "/admin" });
+  });
+});
 
-    expect(learning?.linkOptions).toEqual({ to: "/settings/learning" });
-    expect(titles.indexOf("学习")).toBe(titles.indexOf("我的设备") + 1);
+describe("按归属亮灯", () => {
+  test("/settings/plans、/settings/about 亮账户与外观；/settings 只在精确匹配时亮", () => {
+    const topics = settingsTopics(admin);
+    expect(activeTopic(topics, "/settings/plans")).toBe("account");
+    expect(activeTopic(topics, "/settings/about")).toBe("account");
+    expect(activeTopic(topics, "/settings")).toBe("account");
+    expect(activeTopic(topics, "/settings/devices")).toBe("devices");
+    expect(activeTopic(topics, "/settings/passwords")).toBeNull();
+    expect(activeTopic(topics, "/settings/notifications")).toBe(
+      "notifications",
+    );
   });
 
-  test("个人版多出密钥、技能、电脑、活动，密码叫已保存的登录；团队版没有这些", () => {
-    const personal = settingsSidebarItems("personal").map((item) => item.title);
-    expect(personal).toContain("已保存的登录");
-    expect(personal).not.toContain("密码");
-    expect(personal.slice(-4)).toEqual(["密钥", "技能", "电脑", "活动"]);
-    expect(
-      settingsSidebarItems("personal").find((item) => item.title === "活动")
-        ?.linkOptions,
-    ).toEqual({ to: "/settings/activity" });
-    expect(settingsSidebarItems("team")).toBe(SETTINGS_SIDEBAR_ITEMS);
+  test("过渡期所有能打开部署设置的人，/settings/setup 都亮账户与外观", () => {
+    for (const a of [admin, memberLocal, personal]) {
+      expect(activeTopic(settingsTopics(a), "/settings/setup")).toBe("account");
+    }
+  });
+
+  test("待办数挂在账户与外观上，别的话题都不挂", () => {
+    for (const a of [admin, memberLocal, personal]) {
+      expect(
+        settingsTopics(a)
+          .filter((t) => t.setupBadge)
+          .map((t) => t.id),
+      ).toEqual(["account"]);
+    }
+  });
+});
+
+describe("套餐与用量、关于、部署设置、电脑不再是侧栏项", () => {
+  test("话题和过渡分组里都没有它们", () => {
+    for (const a of [admin, member, personal]) {
+      const all = [...titles(a), ...legacyTail(a).map((item) => item.title)];
+      for (const gone of ["套餐与用量", "关于", "部署设置", "电脑", "我的设备"])
+        expect(all).not.toContain(gone);
+    }
+  });
+});
+
+describe("过渡分组", () => {
+  test("团队版是 学习、密码、组件展示", () => {
+    expect(legacyTail(admin).map((i) => i.title)).toEqual([
+      "学习",
+      "密码",
+      "组件展示",
+    ]);
+  });
+  test("个人版另有密钥、技能、活动，密码叫已保存的登录", () => {
+    expect(legacyTail(personal).map((i) => i.title)).toEqual([
+      "学习",
+      "已保存的登录",
+      "组件展示",
+      "密钥",
+      "技能",
+      "活动",
+    ]);
   });
 });

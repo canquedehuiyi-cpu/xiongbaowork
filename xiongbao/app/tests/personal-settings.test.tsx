@@ -17,7 +17,7 @@ import {
 import { cleanup, render, within } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { ComputersPage } from "@/components/manage/computers-page";
-import { SETTINGS_SIDEBAR_ITEMS } from "@/components/settings/settings-sidebar";
+import { legacyTail } from "@/components/settings/settings-sidebar";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import {
   type HostAccessStatus,
@@ -65,7 +65,14 @@ function clientFor(edition: "team" | "personal" | undefined) {
 
 describe("the Settings sidebar", () => {
   test("学习 shows in Settings, open to everyone", () => {
-    expect(SETTINGS_SIDEBAR_ITEMS.map((item) => item.title)).toContain("学习");
+    expect(
+      legacyTail({
+        edition: "team",
+        isAdmin: false,
+        maySetUp: false,
+        ready: true,
+      }).map((item) => item.title),
+    ).toContain("学习");
     expect(LearningRoute.options.beforeLoad).toBeUndefined();
   });
 });
