@@ -773,7 +773,8 @@ export function createEvidenceGate(
               if (!path)
                 return {
                   ok: false,
-                  reason: `工作区文件「${name}」的路径不是工作区内的相对路径，交不了。要写文件时用的那个路径本身；绝对路径和越出工作区的都不算。`,
+                  // 写被拒的那个路径本身：标题看不出交错的是哪个路径。
+                  reason: `路径「${item.ref.trim()}」不是工作区内的相对路径，交不了。要写文件时用的那个路径本身；绝对路径和越出工作区的都不算。`,
                   missing: [name],
                 };
               workspaceFiles.push(path);
