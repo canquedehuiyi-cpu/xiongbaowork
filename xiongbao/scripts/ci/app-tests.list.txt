@@ -472,6 +472,7 @@ tests/server-computer-tools.test.tsx
 tests/server-run-chat.test.tsx
 tests/session-memory.test.ts
 tests/settings-about.test.tsx
+tests/settings-audience.test.ts
 tests/settings-setup.test.tsx
 tests/settings-sidebar.test.ts
 tests/settled-args.test.ts
