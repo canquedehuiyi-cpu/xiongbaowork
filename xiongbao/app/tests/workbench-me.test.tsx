@@ -116,6 +116,15 @@ beforeEach(() => {
     ["GET /api/agents", { agents: AGENTS }],
     ["GET /api/quota", QUOTA],
     ["GET /api/capabilities", { localEvaluation: false, edition: "team" }],
+    [
+      "GET /api/devices",
+      {
+        devices: [
+          { id: "d1", deviceId: "x1", name: "办公室电脑", online: true },
+          { id: "d2", deviceId: "x2", name: "家里电脑", online: false },
+        ],
+      },
+    ],
     ["GET /api/me/avatar/sources", { agentId: "avatar-alice" }],
     ["GET /api/channels", { channels: [], nextCursor: null }],
     ["GET /api/bots/attention", { bots: [], lastPingId: null }],
@@ -178,11 +187,11 @@ function renderPage(user: SignedIn = member) {
 }
 
 const MENU: readonly (readonly [string, string])[] = [
-  ["个人资料", "/settings"],
+  ["个人资料", "/settings#about-you"],
   ["电脑与设备", "/settings/devices"],
-  ["通知", "/settings/notifications"],
+  ["主动与通知", "/settings/notifications"],
   ["套餐与用量", "/settings/plans"],
-  ["外观", "/settings"],
+  ["外观", "/settings#appearance"],
   ["设置", "/settings"],
 ];
 
@@ -224,6 +233,56 @@ describe("「我」页面", () => {
     expect(link.getAttribute("href")).toBe(href);
   });
 
+  test("团队成员的菜单依次是 个人资料、我的分身、电脑与设备、主动与通知、套餐与用量、外观、设置", async () => {
+    const { view } = renderPage(member);
+    await view.findByRole("link", { name: "我的分身" });
+    await view.findByRole("link", { name: "设置" });
+    const menu = view.getByText("个人资料").closest("ul")?.parentElement;
+    const names = within(menu as HTMLElement)
+      .getAllByRole("link")
+      .map((link) => link.querySelector("span")?.textContent)
+      .filter((name) => name !== "Alice Park");
+    expect(names).toEqual([
+      "个人资料",
+      "我的分身",
+      "电脑与设备",
+      "主动与通知",
+      "套餐与用量",
+      "外观",
+      "设置",
+    ]);
+  });
+
+  test("团队管理员的菜单在最后多一行「管理」（Task 28 删）", async () => {
+    const { view } = renderPage(admin);
+    await view.findByRole("link", { name: "管理" });
+    const menu = view.getByText("个人资料").closest("ul")?.parentElement;
+    const names = within(menu as HTMLElement)
+      .getAllByRole("link")
+      .map((link) => link.querySelector("span")?.textContent);
+    expect(names.slice(-2)).toEqual(["设置", "管理"]);
+  });
+
+  test("个人资料、外观链到设置页的锚点", async () => {
+    const { view } = renderPage();
+    const profile = await view.findByRole("link", { name: "个人资料" });
+    expect(profile.getAttribute("href")).toBe("/settings#about-you");
+    const look = view.getByRole("link", { name: "外观" });
+    expect(look.getAttribute("href")).toBe("/settings#appearance");
+  });
+
+  test("设置行的摘要是「全部设置」", async () => {
+    const { view } = renderPage();
+    const row = await view.findByRole("link", { name: "设置" });
+    await waitFor(() =>
+      expect(row.getAttribute("aria-describedby")).toBeTruthy(),
+    );
+    expect(
+      document.getElementById(row.getAttribute("aria-describedby") ?? "")
+        ?.textContent,
+    ).toBe("全部设置");
+  });
+
   test("我的分身照旧够得到", async () => {
     const { view } = renderPage();
     const link = await view.findByRole("link", { name: "我的分身" });
@@ -240,9 +299,9 @@ describe("「我」页面", () => {
       document.getElementById(link.getAttribute("aria-describedby") ?? "")
         ?.textContent;
     expect(describedBy(plans)).toBe("Pro");
-    expect(describedBy(view.getByRole("link", { name: "电脑与设备" }))).toBe(
-      "已配对 1 台",
-    );
+    // 数的是设备列表（电脑与设备页读的那份），不是套餐里的用量。
+    const devices = view.getByRole("link", { name: "电脑与设备" });
+    await waitFor(() => expect(describedBy(devices)).toBe("已配对 2 台"));
   });
 
   test("点「电脑与设备」进电脑与设备页", async () => {
@@ -373,9 +432,9 @@ describe("工作台里的「我」", () => {
         "href",
       ),
     ).toBe("/settings/devices");
-    expect(list.getByRole("link", { name: "通知" }).getAttribute("href")).toBe(
-      "/settings/notifications",
-    );
+    expect(
+      list.getByRole("link", { name: "主动与通知" }).getAttribute("href"),
+    ).toBe("/settings/notifications");
     expect(
       list.getByRole("link", { name: "套餐与用量" }).getAttribute("href"),
     ).toBe("/settings/plans");

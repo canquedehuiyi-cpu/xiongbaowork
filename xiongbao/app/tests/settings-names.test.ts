@@ -9,7 +9,12 @@ import { appSources, stripComments } from "./i18n-accessible";
  */
 
 /** 旧名。后续 PR 把自己改掉的名字追加到这里（§5.8 左列）。 */
-const RETIRED: readonly string[] = ["偏好设置", "我的电脑", "我的设备"];
+const RETIRED: readonly string[] = [
+  "偏好设置",
+  "我的电脑",
+  "我的设备",
+  "全部高级设置",
+];
 
 type Kept = { file: string; text: string; reason: string };
 
