@@ -40,6 +40,11 @@ export type TurnArtifactsTurn = {
    * 会让一轮跨几个 run。不带 `carry`（无人值守轮）则 `RUN_FINISHED` 一定是这一轮的结尾。
    */
   wholeTurn?: boolean;
+  /**
+   * 这一轮在这个 run 之前已经记好的快照标记：批准后的那一次动作执行前记的（`markBeforeApprovedAction`），
+   * 续跑的 run 沿用它，动作写下的文件和续跑这段自己写的在一次比对里列出，同一个文件只出现一次。
+   */
+  handed?: { markId: string; marked: Promise<ComputerSeat | null> };
 };
 
 type TurnArtifactsGateway = Pick<ComputerGateway, "markTurn" | "turnChanges"> &
@@ -156,10 +161,12 @@ export function withTurnArtifacts(
         ? known
         : undefined;
     // 同一个电脑可能被好几个座位共用，快照名必须全局唯一。接着上一个 run 的一轮，沿用那一轮的标记。
-    const markId = earlier?.markId ?? `${turn.runId}:${turn.botId}`;
+    const markId =
+      earlier?.markId ?? turn.handed?.markId ?? `${turn.runId}:${turn.botId}`;
     /** 订阅时后台记快照，不挡第一个事件；成功答座位，失败或没有座位答 null。 */
     const marked: Promise<ComputerSeat | null> =
       earlier?.marked ??
+      turn.handed?.marked ??
       (async () => {
         try {
           const seat = await turn.seat();
@@ -332,6 +339,106 @@ export function configureTurnArtifacts(next: TurnArtifactsWiring | undefined) {
 }
 
 /**
+ * 「改动之前先问」打开时，员工写文件要等人批准。等人的那段 run 停下时就比对了（`waitsOnServer`），批准后的
+ * 那一次动作由审批的续跑循环（`approvals/resume-sweep.ts`）在任何一段流之外执行，续跑的 run 开始记快照时
+ * 文件已经写好：两头都看不见它，「本轮产物」里就少了这份文件。
+ *
+ * 所以续跑循环把一次审批的执行和续跑包在 `withApprovedActionTurn` 里：动作执行前先记快照
+ * （`markBeforeApprovedAction`），紧接着续跑的那个 run 沿用这个标记，而不是自己再记一份。动作写下的文件
+ * 和续跑这段写的在同一次比对里列出，同一个文件只出现一次。
+ *
+ * 和别处一样只是锦上添花：记不成就照常执行、照常续跑，只是少列这一份；续跑没发生（被拒、没有可续的对话），
+ * 退出时把电脑上这份待记的标记忘掉。标记只活在这一次执行里，进程在执行与续跑之间重启后重试的那次续跑
+ * 不再有它。
+ */
+type ApprovedActionScope = {
+  personId: string;
+  held?: {
+    botId: string;
+    markId: string;
+    marked: Promise<ComputerSeat | null>;
+    taken: boolean;
+  };
+};
+const approvedActionTurn = new AsyncLocalStorage<ApprovedActionScope>();
+
+/** 动作执行前等记快照最多等多久：取座位只是查库，超了就不记，动作照常执行。 */
+const APPROVED_MARK_DEADLINE_MS = 5_000;
+
+/**
+ * 一次审批的执行与续跑。`personId` 是审批的主人，也就是续跑那一轮的人。
+ */
+export async function withApprovedActionTurn<T>(
+  input: { personId: string },
+  work: () => Promise<T>,
+): Promise<T> {
+  const scope: ApprovedActionScope = { personId: input.personId };
+  try {
+    return await approvedActionTurn.run(scope, work);
+  } finally {
+    const held = scope.held;
+    const gateway = wiring?.gateway;
+    if (held && !held.taken && gateway?.forgetTurn)
+      void held.marked
+        .then((seat) => seat && gateway.forgetTurn?.(seat, held.markId))
+        .catch(() => undefined);
+  }
+}
+
+/**
+ * 批准的动作执行前调：给这位员工的电脑登记快照，动作第一次用电脑时先记下（网关的懒快照），
+ * 所以快照恰在动作写文件之前。不在 `withApprovedActionTurn` 里、没接电脑、员工不能用电脑，什么也不做。
+ */
+export async function markBeforeApprovedAction(input: {
+  approvalId: string;
+  botId: string;
+}): Promise<void> {
+  const scope = approvedActionTurn.getStore();
+  const current = wiring;
+  if (!scope || !current || scope.held) return;
+  const markId = `approval:${input.approvalId}:${input.botId}`;
+  const marked = (async (): Promise<ComputerSeat | null> => {
+    try {
+      const seat = await current.seatOf(input.botId, scope.personId);
+      if (!seat) return null;
+      await current.gateway.markTurn(seat, markId);
+      return seat;
+    } catch (error) {
+      warn("markTurn", markId, input.botId, error);
+      return null;
+    }
+  })();
+  scope.held = { botId: input.botId, markId, marked, taken: false };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    marked,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, APPROVED_MARK_DEADLINE_MS);
+    }),
+  ]);
+  clearTimeout(timer);
+}
+
+/** 续跑的 run 开始观察时取走批准前记的标记：同一位员工、同一个人，只取一次。 */
+function takeApprovedActionMark(
+  botId: string,
+  personId: string,
+): { markId: string; marked: Promise<ComputerSeat | null> } | undefined {
+  const scope = approvedActionTurn.getStore();
+  const held = scope?.held;
+  if (
+    !scope ||
+    !held ||
+    held.taken ||
+    held.botId !== botId ||
+    scope.personId !== personId
+  )
+    return undefined;
+  held.taken = true;
+  return { markId: held.markId, marked: held.marked };
+}
+
+/**
  * 内置员工每一轮的流，加上首尾记产物。单聊、群聊、看板卡、例行任务都从这里过（`copilot.ts` 的 `observe`）。
  * `personId` 是这一轮的人，由调用处在运行开始时取（流结束时请求上下文可能已经没了）。
  */
@@ -357,6 +464,7 @@ export function withConfiguredTurnArtifacts(
     wholeTurnOf.getStore() === `${turn.runId}\u0000${turn.botId}`
   )
     return stream;
+  const handed = takeApprovedActionMark(turn.botId, personId);
   return withTurnArtifacts(
     stream,
     {
@@ -364,6 +472,7 @@ export function withConfiguredTurnArtifacts(
       botId: turn.botId,
       seat: () => current.seatOf(turn.botId, personId),
       ...(turn.wholeTurn ? { wholeTurn: true } : {}),
+      ...(handed ? { handed } : {}),
       ...(turn.threadId !== undefined
         ? {
             carry: {

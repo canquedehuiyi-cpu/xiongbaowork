@@ -1,3 +1,4 @@
+import type { ApprovalGate } from "../../src/approvals/types";
 import type { AuditEventInput, AuditStore } from "../../src/audit";
 import { botSeat, type ComputerSeat } from "../../src/computer/computer-key";
 import { createComputerGateway } from "../../src/computer/gateway";
@@ -10,9 +11,15 @@ import type { ComputerProvider } from "../../src/computer/provider";
  * so what marks a turn (a snapshot recorded only when the computer is first used, dropped when it is
  * compared) is the product's, not a copy of it in a test.
  *
- * A command whose text is `write <path> <contents>` writes that file. Anything else only runs.
+ * A command whose text is `write <path> <contents>` writes that file, as does `/files/write`
+ * (`computer_write_file`). Anything else only runs.
+ *
+ * `approvalGate`, when given, is the gate every action meets, as the server's gateway is built with
+ * the approval service's.
  */
-export function workspaceComputer() {
+export function workspaceComputer(
+  options: { approvalGate?: ApprovalGate } = {},
+) {
   const files = new Map<string, { bytes: number; modifiedMs: number }>();
   const marks = new Map<
     string,
@@ -63,6 +70,17 @@ export function workspaceComputer() {
         omitted: 0,
       });
     }
+    if (path === "/files/write") {
+      const name = String(body.path);
+      const contents = String(body.contents ?? "");
+      clock += 1;
+      files.set(name, { bytes: contents.length, modifiedMs: clock });
+      return Response.json({
+        path: name,
+        bytes: contents.length,
+        appended: false,
+      });
+    }
     if (path === "/exec") {
       const [verb, name, ...rest] = String(body.command).split(" ");
       if (verb === "write" && name) {
@@ -96,6 +114,7 @@ export function workspaceComputer() {
     fetchImpl,
     auditStore,
     policy: () => allow,
+    ...(options.approvalGate ? { approvalGate: options.approvalGate } : {}),
   });
 
   return {

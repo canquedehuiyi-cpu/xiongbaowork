@@ -895,6 +895,7 @@ tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
 tests/tool-selection.integration.test.ts
 tests/toolkit-imports.test.ts
+tests/turn-artifacts-approval.integration.test.ts
 tests/turn-artifacts-chat.integration.test.ts
 tests/turn-artifacts-replay.integration.test.ts
 tests/turn-artifacts-turns.test.ts
